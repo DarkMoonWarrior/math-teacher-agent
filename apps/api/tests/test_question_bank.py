@@ -17,12 +17,14 @@ from app.modules.question_bank import (
 )
 
 
-PILOT_BATCH = PROJECT_ROOT / "data" / "pilot" / "batch-2026-08-001-30q.json"
-SET_CURATION = PROJECT_ROOT / "data" / "curated" / "set-10q-corrections-v1.json"
-PROBABILITY_CURATION = PROJECT_ROOT / "data" / "curated" / "probability-4q-corrections-v1.json"
-PROBABILITY_CURATION_2 = PROJECT_ROOT / "data" / "curated" / "probability-6q-corrections-v1.json"
-FUNCTION_PILOT = PROJECT_ROOT / "data" / "pilot" / "function-properties-5q-v1.json"
-FUNCTION_CURATION = PROJECT_ROOT / "data" / "curated" / "function-properties-5q-corrections-v1.json"
+# Synthetic commercial-safe fixtures (project-created content only).
+TEST_FIXTURES = PROJECT_ROOT / "data" / "test-fixtures" / "question-bank"
+PILOT_BATCH = TEST_FIXTURES / "pilot" / "batch-synthetic-set-probability-30q-v1.json"
+SET_CURATION = TEST_FIXTURES / "curated" / "set-10q-synthetic-corrections-v1.json"
+PROBABILITY_CURATION = TEST_FIXTURES / "curated" / "probability-4q-synthetic-corrections-v1.json"
+PROBABILITY_CURATION_2 = TEST_FIXTURES / "curated" / "probability-6q-synthetic-corrections-v1.json"
+FUNCTION_PILOT = TEST_FIXTURES / "pilot" / "function-properties-synthetic-5q-v1.json"
+FUNCTION_CURATION = TEST_FIXTURES / "curated" / "function-properties-5q-synthetic-corrections-v1.json"
 
 
 def make_bank(tmp_path: Path) -> QuestionBank:

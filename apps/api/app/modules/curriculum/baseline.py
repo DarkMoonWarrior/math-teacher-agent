@@ -24,7 +24,11 @@ class CurriculumBaseline:
             manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError) as exc:
             raise CurriculumBaselineError(f"课程基线清单无法读取：{exc}") from exc
-        actual = hashlib.sha256(catalog_path.read_bytes()).hexdigest()
+        # KMI-01: normalize line endings before hashing so the sealed baseline
+        # hash is platform-independent (LF and CRLF checkouts verify equal).
+        catalog_bytes = catalog_path.read_bytes()
+        canonical_bytes = catalog_bytes.replace(b"\r\n", b"\n").replace(b"\r", b"\n")
+        actual = hashlib.sha256(canonical_bytes).hexdigest()
         expected = str(manifest.get("catalog_sha256", "")).lower()
         if not expected or actual != expected:
             raise CurriculumBaselineError("人教 A 版课程目录已偏离封存基线，已拒绝用于教案生成")

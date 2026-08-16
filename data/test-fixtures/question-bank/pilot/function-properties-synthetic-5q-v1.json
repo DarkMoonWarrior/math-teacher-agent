@@ -1,0 +1,602 @@
+{
+  "batch_id": "batch-function-properties-5q-v1",
+  "schema_version": "1.0-synthetic-fixture",
+  "created_at": "2026-08-16T00:00:00+00:00",
+  "publication_status": "private_not_publishable",
+  "rights_boundary": {
+    "basis": "项目自建合成测试夹具：全部内容由 math-teacher-agent 项目自行创作，仅用于软件测试",
+    "included": [
+      "题干",
+      "选项",
+      "答案",
+      "解析",
+      "验证规格"
+    ],
+    "excluded": [],
+    "proof_document_id": "data/test-fixtures/MANIFEST.json"
+  },
+  "quality_gate": "合成夹具仅用于验证工作流与门禁逻辑，不构成商业题库内容",
+  "question_count": 5,
+  "questions": [
+    {
+      "id": "q_function_properties_01",
+      "status": "imported",
+      "visibility": "private",
+      "language": "zh-CN",
+      "stem": {
+        "plain_text": "已知定义在 R 上的函数 f(x) 满足 f(3+x)=f(1−x)，且在 (2,+∞) 上严格递减，则下列结论恒成立的是（ ）。",
+        "latex": null,
+        "assets": []
+      },
+      "question_type": "single_choice",
+      "options": [
+        {
+          "key": "A",
+          "plain_text": "f(4)<f(1)=f(3)，f(2) 无法确定",
+          "latex": null
+        },
+        {
+          "key": "B",
+          "plain_text": "f(4)<f(2)<f(3)",
+          "latex": null
+        },
+        {
+          "key": "C",
+          "plain_text": "f(1)<f(2)<f(3)",
+          "latex": null
+        },
+        {
+          "key": "D",
+          "plain_text": "f(4)<f(3)<f(2)",
+          "latex": null
+        }
+      ],
+      "answer": {
+        "type": "option",
+        "value": "B",
+        "status": "source_answer_extracted",
+        "alternatives": []
+      },
+      "solutions": [
+        {
+          "method": null,
+          "steps_latex": [],
+          "final_answer": null,
+          "author_type": "not_imported",
+          "review_status": "to_be_regenerated_and_verified"
+        }
+      ],
+      "curriculum": {
+        "curriculum_version": "CN-HS-MATH-2017-2020",
+        "textbook": "PEP-A",
+        "volume": "必修第一册",
+        "chapter": "第三章 函数的概念与性质",
+        "section": null,
+        "knowledge_point_ids": [
+          "kp_function_monotonicity",
+          "kp_function_symmetry"
+        ],
+        "prerequisite_ids": [],
+        "mapping_status": "pilot_candidate"
+      },
+      "exam": {
+        "paper_family": "synthetic-test-fixture",
+        "region": null,
+        "year": null,
+        "original_score": null,
+        "competency_tags": []
+      },
+      "pedagogy": {
+        "difficulty": 3,
+        "difficulty_confidence": 1.0,
+        "estimated_minutes": null,
+        "methods": [],
+        "common_errors": [],
+        "usage_scenarios": [
+          "测试夹具"
+        ]
+      },
+      "verification": {
+        "status": "needs_math_review",
+        "methods": [
+          "source_boundary_check"
+        ],
+        "details": [
+          "未导入原解析；解析须独立生成并验算",
+          "合成夹具：来源边界检查占位记录"
+        ]
+      },
+      "source": {
+        "source_id": "SYN-FIX-q_function_properties_01",
+        "document_path": null,
+        "source_reference": "项目自建合成测试题",
+        "source_page_start": 1,
+        "source_page_end": 1,
+        "license_status": "question_content_user_declared_usable",
+        "allowed_uses": [
+          "display_question",
+          "adapt_question"
+        ],
+        "excluded_material": [],
+        "attribution_required": "confirmed",
+        "proof_document_id": "data/test-fixtures/MANIFEST.json",
+        "document_name": "合成测试·函数性质（项目自建）v1.md"
+      },
+      "provenance": {
+        "created_by": "synthetic_fixture_generator",
+        "derived_from_question_ids": [],
+        "model_run_id": null,
+        "duplicate_cluster_id": null,
+        "extraction_method": "project_created",
+        "topic_heading": null
+      },
+      "reviews": [],
+      "created_at": "2026-08-16T00:00:00+00:00",
+      "updated_at": "2026-08-16T00:00:00+00:00"
+    },
+    {
+      "id": "q_function_properties_02",
+      "status": "imported",
+      "visibility": "private",
+      "language": "zh-CN",
+      "stem": {
+        "plain_text": "已知函数 f(x)=6x−x² 在开区间 (0,6) 上考虑最值，下列说法正确的是（ ）。",
+        "latex": null,
+        "assets": []
+      },
+      "question_type": "single_choice",
+      "options": [
+        {
+          "key": "A",
+          "plain_text": "最大值为 9",
+          "latex": null
+        },
+        {
+          "key": "B",
+          "plain_text": "最大值为 8",
+          "latex": null
+        },
+        {
+          "key": "C",
+          "plain_text": "最大值为 9 且最小值为 0",
+          "latex": null
+        },
+        {
+          "key": "D",
+          "plain_text": "不存在最大值",
+          "latex": null
+        }
+      ],
+      "answer": {
+        "type": "option",
+        "value": "A",
+        "status": "source_answer_extracted",
+        "alternatives": []
+      },
+      "solutions": [
+        {
+          "method": null,
+          "steps_latex": [],
+          "final_answer": null,
+          "author_type": "not_imported",
+          "review_status": "to_be_regenerated_and_verified"
+        }
+      ],
+      "curriculum": {
+        "curriculum_version": "CN-HS-MATH-2017-2020",
+        "textbook": "PEP-A",
+        "volume": "必修第一册",
+        "chapter": "第三章 函数的概念与性质",
+        "section": null,
+        "knowledge_point_ids": [
+          "kp_function_extrema",
+          "kp_quadratic_function"
+        ],
+        "prerequisite_ids": [],
+        "mapping_status": "pilot_candidate"
+      },
+      "exam": {
+        "paper_family": "synthetic-test-fixture",
+        "region": null,
+        "year": null,
+        "original_score": null,
+        "competency_tags": []
+      },
+      "pedagogy": {
+        "difficulty": 2,
+        "difficulty_confidence": 1.0,
+        "estimated_minutes": null,
+        "methods": [],
+        "common_errors": [],
+        "usage_scenarios": [
+          "测试夹具"
+        ]
+      },
+      "verification": {
+        "status": "needs_math_review",
+        "methods": [
+          "source_boundary_check"
+        ],
+        "details": [
+          "未导入原解析；解析须独立生成并验算",
+          "合成夹具：来源边界检查占位记录"
+        ]
+      },
+      "source": {
+        "source_id": "SYN-FIX-q_function_properties_02",
+        "document_path": null,
+        "source_reference": "项目自建合成测试题",
+        "source_page_start": 1,
+        "source_page_end": 1,
+        "license_status": "question_content_user_declared_usable",
+        "allowed_uses": [
+          "display_question",
+          "adapt_question"
+        ],
+        "excluded_material": [],
+        "attribution_required": "confirmed",
+        "proof_document_id": "data/test-fixtures/MANIFEST.json",
+        "document_name": "合成测试·函数性质（项目自建）v1.md"
+      },
+      "provenance": {
+        "created_by": "synthetic_fixture_generator",
+        "derived_from_question_ids": [],
+        "model_run_id": null,
+        "duplicate_cluster_id": null,
+        "extraction_method": "project_created",
+        "topic_heading": null
+      },
+      "reviews": [],
+      "created_at": "2026-08-16T00:00:00+00:00",
+      "updated_at": "2026-08-16T00:00:00+00:00"
+    },
+    {
+      "id": "q_function_properties_03",
+      "status": "imported",
+      "visibility": "private",
+      "language": "zh-CN",
+      "stem": {
+        "plain_text": "已知 f(x) 是定义在 R 上的奇函数，且为分段线性函数，解不等式 f(3x)>f(2x−1)。",
+        "latex": null,
+        "assets": []
+      },
+      "question_type": "single_choice",
+      "options": [
+        {
+          "key": "A",
+          "plain_text": "(−∞,−1/2)∪(0,1/6)",
+          "latex": null
+        },
+        {
+          "key": "B",
+          "plain_text": "(−∞,−1/2)",
+          "latex": null
+        },
+        {
+          "key": "C",
+          "plain_text": "(0,1/6)",
+          "latex": null
+        },
+        {
+          "key": "D",
+          "plain_text": "(−1/2,1/6)",
+          "latex": null
+        }
+      ],
+      "answer": {
+        "type": "option",
+        "value": "A",
+        "status": "source_answer_extracted",
+        "alternatives": []
+      },
+      "solutions": [
+        {
+          "method": null,
+          "steps_latex": [],
+          "final_answer": null,
+          "author_type": "not_imported",
+          "review_status": "to_be_regenerated_and_verified"
+        }
+      ],
+      "curriculum": {
+        "curriculum_version": "CN-HS-MATH-2017-2020",
+        "textbook": "PEP-A",
+        "volume": "必修第一册",
+        "chapter": "第三章 函数的概念与性质",
+        "section": null,
+        "knowledge_point_ids": [
+          "kp_function_parity",
+          "kp_function_inequality"
+        ],
+        "prerequisite_ids": [],
+        "mapping_status": "pilot_candidate"
+      },
+      "exam": {
+        "paper_family": "synthetic-test-fixture",
+        "region": null,
+        "year": null,
+        "original_score": null,
+        "competency_tags": []
+      },
+      "pedagogy": {
+        "difficulty": 3,
+        "difficulty_confidence": 1.0,
+        "estimated_minutes": null,
+        "methods": [],
+        "common_errors": [],
+        "usage_scenarios": [
+          "测试夹具"
+        ]
+      },
+      "verification": {
+        "status": "needs_math_review",
+        "methods": [
+          "source_boundary_check"
+        ],
+        "details": [
+          "未导入原解析；解析须独立生成并验算",
+          "合成夹具：来源边界检查占位记录"
+        ]
+      },
+      "source": {
+        "source_id": "SYN-FIX-q_function_properties_03",
+        "document_path": null,
+        "source_reference": "项目自建合成测试题",
+        "source_page_start": 1,
+        "source_page_end": 1,
+        "license_status": "question_content_user_declared_usable",
+        "allowed_uses": [
+          "display_question",
+          "adapt_question"
+        ],
+        "excluded_material": [],
+        "attribution_required": "confirmed",
+        "proof_document_id": "data/test-fixtures/MANIFEST.json",
+        "document_name": "合成测试·函数性质（项目自建）v1.md"
+      },
+      "provenance": {
+        "created_by": "synthetic_fixture_generator",
+        "derived_from_question_ids": [],
+        "model_run_id": null,
+        "duplicate_cluster_id": null,
+        "extraction_method": "project_created",
+        "topic_heading": null
+      },
+      "reviews": [],
+      "created_at": "2026-08-16T00:00:00+00:00",
+      "updated_at": "2026-08-16T00:00:00+00:00"
+    },
+    {
+      "id": "q_function_properties_04",
+      "status": "imported",
+      "visibility": "private",
+      "language": "zh-CN",
+      "stem": {
+        "plain_text": "已知函数 f 与 g 的图象关于某条直线对称，且满足给定的函数方程，求 (g∘f)(3) 的值。",
+        "latex": null,
+        "assets": []
+      },
+      "question_type": "single_choice",
+      "options": [
+        {
+          "key": "A",
+          "plain_text": "−9/2",
+          "latex": null
+        },
+        {
+          "key": "B",
+          "plain_text": "−9",
+          "latex": null
+        },
+        {
+          "key": "C",
+          "plain_text": "9/2",
+          "latex": null
+        },
+        {
+          "key": "D",
+          "plain_text": "9",
+          "latex": null
+        }
+      ],
+      "answer": {
+        "type": "option",
+        "value": "A",
+        "status": "source_answer_extracted",
+        "alternatives": []
+      },
+      "solutions": [
+        {
+          "method": null,
+          "steps_latex": [],
+          "final_answer": null,
+          "author_type": "not_imported",
+          "review_status": "to_be_regenerated_and_verified"
+        }
+      ],
+      "curriculum": {
+        "curriculum_version": "CN-HS-MATH-2017-2020",
+        "textbook": "PEP-A",
+        "volume": "必修第一册",
+        "chapter": "第三章 函数的概念与性质",
+        "section": null,
+        "knowledge_point_ids": [
+          "kp_function_symmetry",
+          "kp_graph_transformation"
+        ],
+        "prerequisite_ids": [],
+        "mapping_status": "pilot_candidate"
+      },
+      "exam": {
+        "paper_family": "synthetic-test-fixture",
+        "region": null,
+        "year": null,
+        "original_score": null,
+        "competency_tags": []
+      },
+      "pedagogy": {
+        "difficulty": 4,
+        "difficulty_confidence": 1.0,
+        "estimated_minutes": null,
+        "methods": [],
+        "common_errors": [],
+        "usage_scenarios": [
+          "测试夹具"
+        ]
+      },
+      "verification": {
+        "status": "needs_math_review",
+        "methods": [
+          "source_boundary_check"
+        ],
+        "details": [
+          "未导入原解析；解析须独立生成并验算",
+          "合成夹具：来源边界检查占位记录"
+        ]
+      },
+      "source": {
+        "source_id": "SYN-FIX-q_function_properties_04",
+        "document_path": null,
+        "source_reference": "项目自建合成测试题",
+        "source_page_start": 1,
+        "source_page_end": 1,
+        "license_status": "question_content_user_declared_usable",
+        "allowed_uses": [
+          "display_question",
+          "adapt_question"
+        ],
+        "excluded_material": [],
+        "attribution_required": "confirmed",
+        "proof_document_id": "data/test-fixtures/MANIFEST.json",
+        "document_name": "合成测试·函数性质（项目自建）v1.md"
+      },
+      "provenance": {
+        "created_by": "synthetic_fixture_generator",
+        "derived_from_question_ids": [],
+        "model_run_id": null,
+        "duplicate_cluster_id": null,
+        "extraction_method": "project_created",
+        "topic_heading": null
+      },
+      "reviews": [],
+      "created_at": "2026-08-16T00:00:00+00:00",
+      "updated_at": "2026-08-16T00:00:00+00:00"
+    },
+    {
+      "id": "q_function_properties_05",
+      "status": "imported",
+      "visibility": "private",
+      "language": "zh-CN",
+      "stem": {
+        "plain_text": "关于函数图象的对称性与周期性，给出四个命题，其中恒成立的命题个数是（ ）。",
+        "latex": null,
+        "assets": []
+      },
+      "question_type": "single_choice",
+      "options": [
+        {
+          "key": "A",
+          "plain_text": "3",
+          "latex": null
+        },
+        {
+          "key": "B",
+          "plain_text": "2",
+          "latex": null
+        },
+        {
+          "key": "C",
+          "plain_text": "4",
+          "latex": null
+        },
+        {
+          "key": "D",
+          "plain_text": "1",
+          "latex": null
+        }
+      ],
+      "answer": {
+        "type": "option",
+        "value": "A",
+        "status": "source_answer_extracted",
+        "alternatives": []
+      },
+      "solutions": [
+        {
+          "method": null,
+          "steps_latex": [],
+          "final_answer": null,
+          "author_type": "not_imported",
+          "review_status": "to_be_regenerated_and_verified"
+        }
+      ],
+      "curriculum": {
+        "curriculum_version": "CN-HS-MATH-2017-2020",
+        "textbook": "PEP-A",
+        "volume": "必修第一册",
+        "chapter": "第三章 函数的概念与性质",
+        "section": null,
+        "knowledge_point_ids": [
+          "kp_function_symmetry",
+          "kp_function_periodicity"
+        ],
+        "prerequisite_ids": [],
+        "mapping_status": "pilot_candidate"
+      },
+      "exam": {
+        "paper_family": "synthetic-test-fixture",
+        "region": null,
+        "year": null,
+        "original_score": null,
+        "competency_tags": []
+      },
+      "pedagogy": {
+        "difficulty": 4,
+        "difficulty_confidence": 1.0,
+        "estimated_minutes": null,
+        "methods": [],
+        "common_errors": [],
+        "usage_scenarios": [
+          "测试夹具"
+        ]
+      },
+      "verification": {
+        "status": "needs_math_review",
+        "methods": [
+          "source_boundary_check"
+        ],
+        "details": [
+          "未导入原解析；解析须独立生成并验算",
+          "合成夹具：来源边界检查占位记录"
+        ]
+      },
+      "source": {
+        "source_id": "SYN-FIX-q_function_properties_05",
+        "document_path": null,
+        "source_reference": "项目自建合成测试题",
+        "source_page_start": 1,
+        "source_page_end": 1,
+        "license_status": "question_content_user_declared_usable",
+        "allowed_uses": [
+          "display_question",
+          "adapt_question"
+        ],
+        "excluded_material": [],
+        "attribution_required": "confirmed",
+        "proof_document_id": "data/test-fixtures/MANIFEST.json",
+        "document_name": "合成测试·函数性质（项目自建）v1.md"
+      },
+      "provenance": {
+        "created_by": "synthetic_fixture_generator",
+        "derived_from_question_ids": [],
+        "model_run_id": null,
+        "duplicate_cluster_id": null,
+        "extraction_method": "project_created",
+        "topic_heading": null
+      },
+      "reviews": [],
+      "created_at": "2026-08-16T00:00:00+00:00",
+      "updated_at": "2026-08-16T00:00:00+00:00"
+    }
+  ]
+}

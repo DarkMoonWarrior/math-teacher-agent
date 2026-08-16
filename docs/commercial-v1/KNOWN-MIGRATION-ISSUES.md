@@ -7,7 +7,7 @@
 
 ## KMI-01 课程封存基线哈希受 CRLF/LF 影响（Prompt 0 发现）
 
-- 状态：**Open（已记录，未修复）**
+- 状态：**Fixed（Prompt 1.5 / stabilize/commercial-baseline-v1）**
 - 受影响文件：
   - `apps/api/app/modules/curriculum/baseline.py`（哈希计算未归一化行尾）
   - `docs/high-school-math-ai/curriculum/pep-a-sealed-baseline-v1.json`（`catalog_sha256` 与仓库文件不符）
@@ -29,16 +29,23 @@
 - 建议修复阶段：Prompt 1 建立商业仓库基线时，作为第一个独立小提交处理，并同步更新
   `COMMERCIAL-SNAPSHOT-WHITELIST.md` 中的迁移说明；修复后必须重新跑全量后端测试确认
   教案链路 158/158 全绿。
+- 实际修复（Prompt 1.5，独立 commit）：
+  1. `apps/api/app/modules/curriculum/baseline.py`：哈希前统一换行表示
+     （`bytes.replace(b"\r\n", b"\n").replace(b"\r", b"\n")`），LF/CRLF 检出得到同一 canonical hash。
+  2. `docs/high-school-math-ai/curriculum/pep-a-sealed-baseline-v1.json`：`catalog_sha256`
+     更新为 LF 哈希 `5c94961195771fc225133ba19d64b6771f228b15c1fe8af1358d59c308454bfa`。
+  3. 新增回归用例 `test_curriculum_baseline_hash_is_newline_stable`（LF 与 CRLF 文件均通过封存校验）。
+  4. 未关闭任何校验：hash 检查、偏离拒绝逻辑保持不变。
 - 安全影响：无。该问题不涉及数据损坏、密钥或权限；只影响教案功能在干净克隆上的可用性。
 - Commercial Baseline 实测：新仓库中 `test_http.py::test_lesson_plan_generation_and_update_endpoints`
   失败（Expected Baseline Failure，未修复）。
 
 ## KMI-02 测试依赖被排除的真实数据（Prompt 1 发现）
 
-- 状态：**Open（已记录，未绕过）**
+- 状态：**Fixed（Prompt 1.5 / stabilize/commercial-baseline-v1，synthetic fixtures 方案）**
 - 受影响文件：
-  - `apps/api/tests/test_question_bank.py`（16 个用例）
-  - `apps/api/tests/test_question_variants.py`（9 个用例）
+  - `apps/api/tests/test_question_bank.py`（15 个用例）
+  - `apps/api/tests/test_question_variants.py`（8 个用例）
   - `apps/api/tests/test_solution_assistant.py`（2 个用例）
   - `apps/api/tests/test_http.py::test_question_bank_stats_and_search_endpoints`（1 个用例）
 - 根因：这些测试直接读取 `data/pilot/batch-2026-08-001-30q.json` 与
@@ -53,3 +60,11 @@
   2. 或对数据依赖用例增加 `skipif`（fixture 缺失时跳过并输出明确原因）；
   3. 或把这些用例改为只在新数据审查流中随数据一起运行。
 - 建议修复阶段：Prompt 1 验收后，作为基线后的独立测试策略提交（见 POST-BASELINE-BACKLOG B-14）。
+- 实际修复（Prompt 1.5，独立 commit）：
+  1. 建立 `data/test-fixtures/question-bank/` synthetic fixtures（全部项目自建内容，见
+     `data/test-fixtures/README.md` 与 `MANIFEST.json`）；
+  2. 生成器 `scripts/generate_synthetic_test_fixtures.py` 内置与迁移测试断言一致的自检；
+  3. `apps/api/tests/conftest.py` 以 `MATH_AI_*` 环境变量把 Settings 数据路径覆盖到 fixtures，
+     `test_question_bank.py` / `test_question_variants.py` 常量改为 fixture 路径；
+  4. 未删除/跳过/xfail 任何用例，未降低任何断言，未绕过 RightsGate/MathVerifier/private 边界；
+  5. 详细失败矩阵见 `BASELINE-TEST-FAILURE-MATRIX.md`（26 个数据类失败 + 1 个 KMI-01）。
