@@ -66,3 +66,17 @@
 - 复制方式：按白名单逐文件复制并脱敏，非目录级拷贝。
 - Secret 扫描：见本阶段执行报告；未发现真实密钥。
 - 原公开仓库：只读，未做任何写操作。
+
+## 8. Stable Baseline
+
+- 建立日期：2026-08-16
+- Original Commercial Baseline SHA：`d88e7a5e0f24821d567aeb9311ab890f170ae16e`
+- 稳定化 PR：[#1 chore: stabilize commercial v1 baseline](https://github.com/DarkMoonWarrior/math-teacher-agent/pull/1)
+- Stabilization merge SHA：`46afdcadbd72fba547f4ce6d348453e86f8f1626`
+- Tag：`commercial-baseline-v1.0-stable`（annotated，指向 merge SHA）
+- 最终测试结果：后端 pytest **159 passed / 0 failed / 0 skipped / 0 xfailed**；
+  `pnpm typecheck:web` 通过；`pnpm build:web` 通过。
+- KMI-01 状态：Fixed（newline-stable canonical hashing，独立 commit `942c2dc`，含回归测试）。
+- KMI-02 状态：Fixed（26 个数据类失败以 synthetic commercial-safe fixtures 修复，独立 commit `d769021`；
+  `data/test-fixtures/` 全部为项目自建 synthetic 数据，无第三方真实题目）。
+- 该 tag 是 Teacher Agent / DeepSeek Harness 接入之前的正式回滚点，不得移动或覆盖。
