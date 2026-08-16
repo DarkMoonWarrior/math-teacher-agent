@@ -87,6 +87,30 @@
       "local_paths": false,
       "generator": "manual_project_created",
       "sha256": "81aecce8d9f1e5cc892e8dfb2e15c7c39bd89e2deef11075f637ca90925fa903"
+    },
+    {
+      "id": "search-agent/search-agent-synthetic-14q-v1.json",
+      "purpose": "synthetic backend test fixture (Search Agent grounding / ranking / dedup / diversity contracts)",
+      "synthetic": true,
+      "source": "project_created",
+      "commercial_safe": true,
+      "contains_personal_data": false,
+      "contains_third_party_content": false,
+      "local_paths": false,
+      "generator": "scripts/generate_search_agent_fixtures.py",
+      "sha256": "93cc5f488db5fd9f13420bd85777c5bcbe89f995a9315c1b47a58663a7b6fb10"
+    },
+    {
+      "id": "search-agent/eval-cases.json",
+      "purpose": "synthetic Search Agent evaluation queries (project-authored, no real teacher queries)",
+      "synthetic": true,
+      "source": "project_created",
+      "commercial_safe": true,
+      "contains_personal_data": false,
+      "contains_third_party_content": false,
+      "local_paths": false,
+      "generator": "manual_project_created",
+      "sha256": "e21cef0483b00a8565e74b1c2529a2ebef948b982fceb6de31337f4706f8b030"
     }
   ]
 }
