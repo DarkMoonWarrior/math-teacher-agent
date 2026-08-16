@@ -4,7 +4,7 @@
   "textbook_edition": "普通高中教科书 数学 A 版（2019）",
   "purpose": ["question_annotation", "lesson_plan_generation", "coverage_analysis"],
   "catalog_file": "pep-a-full-knowledge-tree-v1.csv",
-  "catalog_sha256": "f982b884c24f1e299d25b825c57a44833bdc8ccca66e5a2dfadf2704ec7f335a",
+  "catalog_sha256": "5c94961195771fc225133ba19d64b6771f228b15c1fe8af1358d59c308454bfa",
   "official_sources": [
     {
       "authority": "中华人民共和国教育部",

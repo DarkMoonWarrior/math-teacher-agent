@@ -7,7 +7,7 @@
 
 ## KMI-01 课程封存基线哈希受 CRLF/LF 影响（Prompt 0 发现）
 
-- 状态：**Open（已记录，未修复）**
+- 状态：**Fixed（Prompt 1.5 / stabilize/commercial-baseline-v1）**
 - 受影响文件：
   - `apps/api/app/modules/curriculum/baseline.py`（哈希计算未归一化行尾）
   - `docs/high-school-math-ai/curriculum/pep-a-sealed-baseline-v1.json`（`catalog_sha256` 与仓库文件不符）
@@ -29,6 +29,13 @@
 - 建议修复阶段：Prompt 1 建立商业仓库基线时，作为第一个独立小提交处理，并同步更新
   `COMMERCIAL-SNAPSHOT-WHITELIST.md` 中的迁移说明；修复后必须重新跑全量后端测试确认
   教案链路 158/158 全绿。
+- 实际修复（Prompt 1.5，独立 commit）：
+  1. `apps/api/app/modules/curriculum/baseline.py`：哈希前统一换行表示
+     （`bytes.replace(b"\r\n", b"\n").replace(b"\r", b"\n")`），LF/CRLF 检出得到同一 canonical hash。
+  2. `docs/high-school-math-ai/curriculum/pep-a-sealed-baseline-v1.json`：`catalog_sha256`
+     更新为 LF 哈希 `5c94961195771fc225133ba19d64b6771f228b15c1fe8af1358d59c308454bfa`。
+  3. 新增回归用例 `test_curriculum_baseline_hash_is_newline_stable`（LF 与 CRLF 文件均通过封存校验）。
+  4. 未关闭任何校验：hash 检查、偏离拒绝逻辑保持不变。
 - 安全影响：无。该问题不涉及数据损坏、密钥或权限；只影响教案功能在干净克隆上的可用性。
 - Commercial Baseline 实测：新仓库中 `test_http.py::test_lesson_plan_generation_and_update_endpoints`
   失败（Expected Baseline Failure，未修复）。
