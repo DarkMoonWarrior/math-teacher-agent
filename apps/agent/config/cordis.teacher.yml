@@ -1,0 +1,53 @@
+# Minimal least-capability DeepSeek Harness composition for the math teacher agent.
+#
+# SECURITY INVARIANT (Prompt 2 gate):
+#   - Only the core services below are mounted.
+#   - NEVER add bash / filesystem / web / subagent / workflow / terminal entries.
+#   - Model-visible tools are exclusively the 5 read-only teacher tools
+#     registered by the teacher-agent plugin (src/dsh/teacher-plugin.ts).
+#
+# Do not use the default `@deepseek-ai/dsh-base` bundle: it mounts shell,
+# filesystem, web search and subagent capabilities by default.
+
+- id: llm
+  name: './plugins/llm.mjs'
+
+- id: session
+  name: './plugins/session.mjs'
+
+- id: system-prompt
+  name: './plugins/system-prompt.mjs'
+  config:
+    persona: |-
+      你是中国高中数学教师的可信备课助手。
+      你只能通过已注册的只读工具查询题库、相似题、数学验证和教材知识点。
+      你绝不能执行命令、读写文件、上网浏览或访问数据库。
+      所有答案只依据工具返回的结构化结果；无法确定时必须明确说明，不得编造题目或答案。
+
+- id: tools
+  name: './plugins/tools.mjs'
+
+- id: agent
+  name: './plugins/agent.mjs'
+
+- id: agent-loop
+  name: './plugins/agent-loop.mjs'
+  config:
+    agents: []
+
+- id: session-persistence-jsonl
+  name: './plugins/session-persistence-jsonl.mjs'
+  config:
+    # root 由 TeacherAgentRuntime 通过官方 patch 机制覆盖为绝对路径
+    # （gitignored: data/runtime/agent-sessions）。
+    root: data/runtime/agent-sessions
+    compression: none
+
+# 官方 DeepSeek provider adapter：仅当存在真实 API Key 时启用。
+# 自动化测试绝不挂载该 adapter（无 key -> 禁用），测试统一走 test-mock。
+- id: llm-deepseek
+  name: './plugins/llm-deepseek.mjs'
+  disabled: !!js "!process.env.MATH_AI_DEEPSEEK_API_KEY"
+  config:
+    apiKeyEnv: MATH_AI_DEEPSEEK_API_KEY
+

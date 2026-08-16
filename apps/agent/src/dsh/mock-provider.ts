@@ -1,0 +1,111 @@
+/**
+ * Deterministic mock model provider（仅用于自动化测试）。
+ *
+ * 不调用任何真实模型 API；根据对话历史中已存在的 assistant 消息数选择
+ * 脚本步骤，保证同一会话内每轮输出完全确定。步骤索引按会话内 assistant
+ * 消息计数推导，天然支持并发会话互不干扰（只要每个会话顺序推进）。
+ *
+ * 自动化测试 / CI 绝不使用真实 DeepSeek API（Prompt 2 §28）。
+ */
+import {
+  CallId,
+  LlmAdapter,
+  type GenerateOptions,
+  type LlmModelInfo,
+  type LlmProviderInfo,
+  type LlmResolvedModelInfo,
+  type StreamChunk,
+  type ToolCallBlock,
+} from "@deepseek-ai/dsh-llm";
+import type { ContentBlock } from "@deepseek-ai/dsh-llm";
+
+export type MockStep =
+  | { kind: "tool"; toolName: string; arguments: Record<string, unknown> }
+  | { kind: "text"; text: string };
+
+export interface MockScript {
+  /** 按顺序执行的步骤；超出后返回 finalText。 */
+  steps: readonly MockStep[];
+  finalText: string;
+}
+
+export const DEFAULT_MOCK_SCRIPT: MockScript = {
+  steps: [
+    {
+      kind: "tool",
+      toolName: "search_questions",
+      arguments: { query: "x+2=5", limit: 5 },
+    },
+  ],
+  finalText: "已根据工具返回的结构化结果完成查询。",
+};
+
+const MOCK_MODEL_ID = "mock-model";
+
+function assistantMessageCount(messages: GenerateOptions["messages"]): number {
+  return messages.filter((message) => message.role === "assistant").length;
+}
+
+function textChunk(text: string): StreamChunk[] {
+  const block: ContentBlock = { type: "text", text };
+  return [
+    { type: "block-start", index: 0, blockType: "text" },
+    { type: "text-delta", index: 0, text },
+    { type: "block-end", index: 0, block },
+    { type: "usage", usage: { inputTokens: 1, outputTokens: 1 } },
+    { type: "finish", reason: { kind: "stop" } },
+  ];
+}
+
+function toolCallChunk(toolName: string, args: Record<string, unknown>, stepIndex: number): StreamChunk[] {
+  const id = CallId(`mock-call-${stepIndex}`);
+  const argumentsText = JSON.stringify(args);
+  const block: ToolCallBlock = { type: "tool-call", id, name: toolName, arguments: argumentsText };
+  return [
+    { type: "block-start", index: 0, blockType: "tool-call" },
+    { type: "tool-call-delta", index: 0, id, name: toolName, argumentsDelta: argumentsText },
+    { type: "block-end", index: 0, block },
+    { type: "finish", reason: { kind: "tool-calls" } },
+  ];
+}
+
+/**
+ * 只注册 provider route "test-mock"。
+ * stream() 决定：
+ *   - assistant 消息数 < steps.length：执行对应脚本步骤（tool call 或文本）。
+ *   - 否则：返回 finalText。
+ * 始终遵守 options.signal：中止后立即停止产出。
+ */
+export class MockLlmAdapter extends LlmAdapter {
+  constructor(readonly script: MockScript = DEFAULT_MOCK_SCRIPT) {
+    super();
+  }
+
+  providerInfo(provider: string): LlmProviderInfo {
+    return { id: provider, name: "Deterministic mock provider (tests only)" };
+  }
+
+  listModels(provider: string): Promise<readonly LlmModelInfo[]> {
+    return Promise.resolve([{ id: MOCK_MODEL_ID, name: "mock-model", provider }]);
+  }
+
+  resolveModel(provider: string, model: string): Promise<LlmResolvedModelInfo> {
+    return Promise.resolve({ id: model, name: model, provider });
+  }
+
+  async *stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
+    const stepIndex = assistantMessageCount(options.messages);
+    const step = stepIndex < this.script.steps.length ? this.script.steps[stepIndex] : undefined;
+    const chunks = step === undefined
+      ? textChunk(this.script.finalText)
+      : step.kind === "text"
+        ? textChunk(step.text)
+        : toolCallChunk(step.toolName, step.arguments, stepIndex);
+    for (const chunk of chunks) {
+      if (options.signal?.aborted) return;
+      yield chunk;
+    }
+  }
+}
+
+

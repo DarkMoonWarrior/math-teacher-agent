@@ -6,6 +6,10 @@
   "scripts": {
     "dev:web": "pnpm --filter @math-ai/web dev",
     "build:web": "pnpm --filter @math-ai/web build",
-    "typecheck:web": "pnpm --filter @math-ai/web typecheck"
+    "typecheck:web": "pnpm --filter @math-ai/web typecheck",
+    "dev:agent": "pnpm --filter @math-teacher-agent/agent dev",
+    "typecheck:agent": "pnpm --filter @math-teacher-agent/agent typecheck",
+    "test:agent": "pnpm --filter @math-teacher-agent/agent test",
+    "build:agent": "pnpm --filter @math-teacher-agent/agent build"
   }
 }
