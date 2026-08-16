@@ -17,12 +17,18 @@ from app.routes.library import router as library_router
 from app.routes.model_operations import router as model_operations_router
 from app.routes.questions import router as questions_router
 from app.routes.question_similarity import router as question_similarity_router
+from app.routes.search_agent import (
+    _SearchAgentHttpError,
+    router as search_agent_router,
+    search_agent_error_handler,
+)
 from app.routes.solutions import router as solutions_router
 
 
 settings = get_settings()
 app = FastAPI(title=settings.app_name, version="0.1.0")
 app.add_exception_handler(_GatewayHttpError, gateway_error_handler)
+app.add_exception_handler(_SearchAgentHttpError, search_agent_error_handler)
 
 app.add_middleware(
     CORSMiddleware,
@@ -47,6 +53,7 @@ app.include_router(exam_papers_router, prefix="/api/v1")
 app.include_router(solutions_router, prefix="/api/v1")
 app.include_router(library_router, prefix="/api/v1")
 app.include_router(model_operations_router, prefix="/api/v1")
+app.include_router(search_agent_router, prefix="/api/v1")
 # Internal-only Agent Tool Gateway（不进入公开 API 文档，M2M token 保护）
 app.include_router(internal_agent_tools_router)
 

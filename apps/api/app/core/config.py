@@ -122,6 +122,11 @@ class Settings(BaseSettings):
     tool_gateway_token: str = ""
     tool_gateway_timeout_seconds: float = 30.0
 
+    # -- Search Agent（Prompt 3） -------------------------------------------
+    # 默认关闭：现有传统搜索页面行为不变。dsh 编排 + Agent Service 就绪后开启。
+    search_agent_enabled: bool = False
+    search_agent_max_query_length: int = 2000
+
     @property
     def cors_origin_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
