@@ -27,6 +27,8 @@ export interface AgentServiceConfig {
   toolTimeoutMs: number;
   /** 单次 run 的硬性时间上限（毫秒），防止失控 run 永久占用进程。 */
   runHardTimeoutMs: number;
+  /** 单次 run 内 search_questions 工具调用硬上限，防止模型反复搜索形成无限循环。 */
+  searchToolCallLimit: number;
   /** HTTP 服务监听地址。 */
   host: string;
   /** HTTP 服务监听端口（0 = 随机端口，测试用）。 */
@@ -68,6 +70,7 @@ export function loadAgentServiceConfig(env: NodeJS.ProcessEnv = process.env): Ag
     sessionRoot: path.resolve(env.MATH_AI_AGENT_SESSION_ROOT ?? DEFAULT_SESSION_ROOT),
     toolTimeoutMs: positiveInt("MATH_AI_AGENT_TOOL_TIMEOUT_MS", 30_000),
     runHardTimeoutMs: positiveInt("MATH_AI_AGENT_RUN_HARD_TIMEOUT_MS", 120_000),
+    searchToolCallLimit: positiveInt("MATH_AI_SEARCH_TOOL_CALL_LIMIT", 6),
     host: env.MATH_AI_AGENT_HOST ?? "127.0.0.1",
     port: positiveInt("MATH_AI_AGENT_PORT", 4100),
     cwd: path.resolve(env.MATH_AI_AGENT_CWD ?? process.cwd()),

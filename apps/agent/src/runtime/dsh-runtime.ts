@@ -619,6 +619,21 @@ export class DeepSeekHarnessRuntime implements TeacherAgentRuntime {
                 finished_at: event.time,
               };
               runState.toolCalls.push(call);
+              // Tool Loop / Cost Gate（Prompt 3.5 §16）：模型反复调用 search_questions
+              // 达到硬上限时终止 run，返回产品级 SEARCH_PLAN_EXHAUSTED，而不是无限循环。
+              if (pending.toolName === "search_questions") {
+                const searchCalls = runState.toolCalls.filter(
+                  (item) => item.tool_name === "search_questions",
+                ).length;
+                if (searchCalls >= this.config.searchToolCallLimit) {
+                  runState.error = {
+                    code: "SEARCH_PLAN_EXHAUSTED",
+                    message: `搜索工具调用次数达到上限（${this.config.searchToolCallLimit}），搜索计划已终止`,
+                    request_id: runState.requestId,
+                  };
+                  this.sessions.get(sessionId)?.agent?.cancel({ kind: "user" });
+                }
+              }
               emit?.("tool_finished", {
                 tool_name: pending.toolName,
                 output: output ?? undefined,

@@ -554,3 +554,84 @@ h1 { margin: 0; font-family: "Noto Serif SC", "Songti SC", SimSun, serif; font-s
 @media (prefers-reduced-motion: reduce) { .app-toast { animation-duration: 120ms; animation-name: app-toast-fade; }.app-toast.is-leaving { animation-name: app-toast-fade-out; }.app-toast.tone-loading .app-toast-icon { animation-duration: 1.2s; } }
 @keyframes app-toast-fade { from { opacity: 0; } to { opacity: 1; } }
 @keyframes app-toast-fade-out { from { opacity: 1; } to { opacity: 0; } }
+
+/* Search Agent MVP · 自然语言搜题（Prompt 3） */
+.search-agent-page .page-title { margin-bottom: 20px; }
+.search-agent-input { display: grid; gap: 12px; border: 1px solid var(--line); border-radius: 15px; background: var(--paper); padding: 18px; box-shadow: var(--shadow); }
+.search-agent-input label { display: grid; gap: 7px; }
+.search-agent-input label span { color: var(--muted); font-size: 11px; font-weight: 700; }
+.search-agent-input input { width: 100%; min-height: 46px; border: 1px solid var(--line); border-radius: 10px; background: #f8fafc; color: var(--ink); padding: 10px 13px; font: inherit; font-size: 14px; }
+.search-agent-input input:focus { outline: var(--focus-ring); border-color: #9eafe9; background: white; }
+.search-agent-input-actions { display: flex; gap: 10px; }
+.search-agent-examples { display: flex; flex-wrap: wrap; gap: 7px; align-items: center; }
+.search-agent-examples > span { color: var(--muted); font-size: 10px; }
+.search-agent-examples button { border: 1px dashed #ccd4e2; border-radius: 999px; background: #f6f8fc; color: #58647a; padding: 5px 10px; font-size: 10px; cursor: pointer; }
+.search-agent-examples button:hover { border-color: var(--blue); color: var(--blue); }
+.search-agent-loading { display: flex; align-items: center; gap: 12px; margin-top: 20px; border: 1px solid var(--line); border-radius: 12px; background: #f7f9fd; color: var(--muted); padding: 18px; font-size: 12px; }
+.search-agent-spinner { width: 18px; height: 18px; border: 2px solid #cfd8ec; border-top-color: var(--blue); border-radius: 50%; animation: search-agent-spin .8s linear infinite; }
+@keyframes search-agent-spin { to { transform: rotate(360deg); } }
+.search-agent-error { margin-top: 20px; border: 1px solid #eccaca; border-radius: 12px; background: #fff7f7; color: #8f4a4a; padding: 18px; }
+.search-agent-error strong { font-size: 13px; }
+.search-agent-error p { margin: 8px 0 0; font-size: 12px; line-height: 1.6; }
+.search-agent-error-hint { color: #a2673f; }
+.search-agent-error > div { margin-top: 12px; }
+.search-agent-understood { margin-top: 20px; border: 1px solid var(--line); border-radius: 15px; background: var(--paper); padding: 16px 18px; box-shadow: var(--shadow); }
+.search-agent-understood > header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 11px; }
+.search-agent-understood > header strong { font-size: 12px; }
+.search-agent-understood > header span { color: var(--muted); font-size: 10px; }
+.search-agent-chips { display: flex; flex-wrap: wrap; gap: 7px; }
+.search-agent-chip { border-radius: 999px; background: #eef2fb; color: #3d55a8; padding: 5px 10px; font-size: 11px; }
+.search-agent-chip.must { border: 1px solid #c9d4f2; font-weight: 700; }
+.search-agent-chip.prefer { background: #fff7e8; color: #8a5b17; }
+.search-agent-chip.default { background: #f1f3f7; color: #66738b; }
+.search-agent-chip-legend { display: flex; flex-wrap: wrap; gap: 12px; margin: 10px 0 0; color: var(--muted); font-size: 9px; }
+.search-agent-chip-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.search-agent-chip-legend .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.dot.must { background: #3d55a8; }.dot.prefer { background: #d9a24b; }.dot.default { background: #9aa4b5; }
+.search-agent-summary { margin-top: 16px; border: 1px solid #d8e0ef; border-radius: 12px; background: #f7f9fe; padding: 14px 16px; }
+.search-agent-summary strong { font-size: 11px; color: #3556c8; }
+.search-agent-summary p { margin: 6px 0; color: #4a5568; font-size: 13px; line-height: 1.7; }
+.search-agent-confidence { color: var(--muted); font-size: 10px; }
+.search-agent-results { margin-top: 20px; }
+.search-agent-results > header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.search-agent-results > header strong { font-size: 13px; }
+.search-agent-results > header span { color: var(--muted); font-size: 10px; }
+.search-agent-result-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.search-agent-result { border: 1px solid var(--line); border-radius: 14px; background: var(--paper); padding: 16px 18px; box-shadow: var(--shadow); }
+.search-agent-result > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+.search-agent-result > header > div { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; min-width: 0; }
+.search-agent-result > header strong { font-size: 12px; }
+.search-agent-id { color: #8b95a6; font: 9px/1 ui-monospace, Consolas, monospace; }
+.search-agent-relaxed-badge { border-radius: 999px; background: #fff3dd; color: #9a671e; padding: 3px 8px; font-size: 9px; font-weight: 700; }
+.search-agent-difficulty { flex: none; border-radius: 999px; background: #eef1f7; color: #5a6577; padding: 4px 9px; font-size: 10px; }
+.search-agent-stem { color: #26303f; font-size: 14px; line-height: 1.8; }
+.search-agent-kps { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.search-agent-kps span { border: 1px solid #dde3ef; border-radius: 6px; background: #f6f8fc; color: #566176; padding: 3px 7px; font-size: 10px; }
+.search-agent-meta { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 10px; align-items: center; }
+.search-agent-meta > span { border-radius: 999px; background: #f1f3f7; color: #66738b; padding: 4px 9px; font-size: 10px; }
+.search-agent-trust.ok { background: #e6f6f1; color: #1d6e60; }
+.search-agent-trust.warn { background: #fff3dd; color: #8a5b17; }
+.search-agent-source { background: #f1f3f7; }
+.search-agent-reasons { list-style: none; margin: 10px 0 0; padding: 10px 12px; border-left: 3px solid #c9d4f2; background: #f7f9fd; border-radius: 0 8px 8px 0; display: grid; gap: 5px; }
+.search-agent-reasons li { color: #4a5568; font-size: 11px; }
+.search-agent-detail-link { display: inline-block; margin-top: 12px; color: var(--blue); font-size: 11px; text-decoration: none; }
+.search-agent-detail-link:hover { text-decoration: underline; }
+.search-agent-relaxation ul, .search-agent-unmet ul { margin: 8px 0 0 18px; padding: 0; }
+.search-agent-relaxation li, .search-agent-unmet li { font-size: 11px; line-height: 1.7; }
+.search-agent-relaxation p, .search-agent-unmet p, .search-agent-warnings p { margin: 8px 0 0; font-size: 10px; }
+.search-agent-unmet { border: 1px solid #eccaca !important; background: #fff7f7 !important; color: #8f4a4a !important; }
+.search-agent-suggestions { margin-top: 12px; text-align: left; display: inline-block; }
+.search-agent-suggestions strong { font-size: 11px; }
+.search-agent-suggestions ul { margin: 6px 0 0 18px; padding: 0; }
+.search-agent-suggestions li { color: #5d687c; font-size: 11px; line-height: 1.8; }
+.search-agent-explanation, .search-agent-plan { margin-top: 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--paper); padding: 13px 16px; box-shadow: var(--shadow); }
+.search-agent-explanation summary, .search-agent-plan summary { cursor: pointer; color: #4a5568; font-size: 11px; font-weight: 700; }
+.search-agent-explanation p { color: #4a5568; font-size: 12px; line-height: 1.8; }
+.search-agent-plan ol { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 7px; }
+.search-agent-plan li { display: flex; justify-content: space-between; gap: 12px; border-top: 1px solid #eef1f6; padding-top: 7px; color: #4a5568; font-size: 11px; }
+.search-agent-plan li strong { font-weight: 600; }
+.search-agent-plan li span { color: #8b95a6; font-size: 10px; }
+.search-agent-plan li.failed span { color: #b04747; }
+.search-agent-plan li p { margin: 4px 0 0; color: #8b95a6; font-size: 10px; }
+.search-agent-run-meta { margin: 12px 0 0; color: #8b95a6; font-size: 9px; }
+@media (max-width: 700px) { .search-agent-results > header, .search-agent-understood > header { align-items: flex-start; flex-direction: column; gap: 6px; } }

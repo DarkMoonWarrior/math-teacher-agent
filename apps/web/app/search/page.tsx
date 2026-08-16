@@ -1,6 +1,7 @@
 "use client";
 
 import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { MathText } from "../components/math-text";
 import { ResizableColumns } from "../components/resizable-columns";
 import { useToast } from "../components/toast-provider";
@@ -773,7 +774,11 @@ export default function SearchPage() {
     <div className="page-content question-workspace">
       <section className="page-title question-title">
         <div><p className="eyebrow">{isAdmin ? "智能搜题 · 题库管理台" : "智能搜题 · 教师使用台"}</p><h1>{isAdmin ? "先把每一道题变得可信。" : "从成型题库选题，并制作自己的变式。"}</h1><p className="subtle">{isAdmin ? "管理员修订题干、答案、解析和来源，并负责正式入库。" : "这里只展示已验证题目；修改会另存为私人变式，不会改变正式母题。"}</p></div>
-        {isAdmin && <button className="primary-button" type="button" onClick={showImportStatus}>导入记录</button>}
+        {isAdmin ? (
+          <button className="primary-button" type="button" onClick={showImportStatus}>导入记录</button>
+        ) : (
+          <Link className="primary-button" href="/search/agent">AI 搜题（自然语言）</Link>
+        )}
       </section>
 
 

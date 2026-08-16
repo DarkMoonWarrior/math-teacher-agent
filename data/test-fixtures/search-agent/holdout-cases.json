@@ -1,0 +1,444 @@
+{
+  "holdout_set_id": "search-agent-holdout-v1",
+  "created_at": "2026-08-16",
+  "policy": "Holdout 集合：全部 query 由 math-teacher-agent 项目自行编写（synthetic=true, source=project_created），不复制原 50 条 eval query，不包含真实教师搜索记录或第三方内容。expected 字段在冻结 SearchIntentParser 实现之后、运行测试之前，依据产品语义与真实 Curriculum Catalog 节点独立编写；第一轮直接记录真实成绩，不针对实现回写。",
+  "synthetic": true,
+  "source": "project_created",
+  "commercial_safe": true,
+  "contains_personal_data": false,
+  "contains_third_party_content": false,
+  "cases": [
+    {
+      "id": "h_001",
+      "category": "教学用途+模糊难度",
+      "query": "我明天讲椭圆焦点弦，挑五道稍难一点的例题",
+      "expected": {
+        "count": 5,
+        "knowledge_points_contains": [
+          "椭圆"
+        ],
+        "sub_knowledge_points_contains": [
+          "焦点弦"
+        ],
+        "chapter": "圆锥曲线的方程",
+        "difficulty": 4,
+        "teaching_usage": "classroom_example",
+        "kp_ids_grounded": true
+      }
+    },
+    {
+      "id": "h_002",
+      "category": "地区+题型+相对年份",
+      "query": "江苏地区近两年的导数选择题，给我六道，优先压轴难度",
+      "expected": {
+        "count": 6,
+        "question_types": [
+          "single_choice"
+        ],
+        "regions": [
+          "江苏"
+        ],
+        "difficulty": 5,
+        "year_from": null,
+        "year_to": null,
+        "knowledge_points_contains": [
+          "导数"
+        ],
+        "chapter": "一元函数的导数及其应用",
+        "soft_fields": [
+          "difficulty"
+        ]
+      }
+    },
+    {
+      "id": "h_003",
+      "category": "教学用途+模糊难度",
+      "query": "圆锥曲线来几道简单一点的课堂热身题",
+      "expected": {
+        "count": 5,
+        "knowledge_points_contains": [
+          "圆锥曲线"
+        ],
+        "chapter": "圆锥曲线的方程",
+        "difficulty": 1,
+        "teaching_usage": "warm_up",
+        "soft_fields": [
+          "teaching_usage"
+        ]
+      }
+    },
+    {
+      "id": "h_004",
+      "category": "负向约束+无数量",
+      "query": "只看2025年的，不要2024",
+      "expected": {
+        "count": 5,
+        "year_from": 2025,
+        "year_to": 2025,
+        "hard_fields": [
+          "year"
+        ]
+      }
+    },
+    {
+      "id": "h_005",
+      "category": "软偏好+多知识点",
+      "query": "最好覆盖椭圆定义和标准方程，五题左右",
+      "expected": {
+        "count": 5,
+        "knowledge_points_contains": [
+          "椭圆",
+          "标准方程",
+          "定义"
+        ],
+        "soft_fields": [
+          "knowledge_points"
+        ],
+        "kp_ids_grounded": true
+      }
+    },
+    {
+      "id": "h_006",
+      "category": "年级+教学用途",
+      "query": "高二集合题目，随便来三题，课后作业用",
+      "expected": {
+        "count": 3,
+        "grade": "高二",
+        "knowledge_points_contains": [
+          "集合"
+        ],
+        "chapter": "集合与常用逻辑用语",
+        "teaching_usage": "homework"
+      }
+    },
+    {
+      "id": "h_007",
+      "category": "硬条件组合",
+      "query": "只要2025年的江苏椭圆选择题，四道，必须选择题",
+      "expected": {
+        "count": 4,
+        "year_from": 2025,
+        "year_to": 2025,
+        "regions": [
+          "江苏"
+        ],
+        "question_types": [
+          "single_choice"
+        ],
+        "knowledge_points_contains": [
+          "椭圆"
+        ],
+        "chapter": "圆锥曲线的方程",
+        "hard_fields": [
+          "year",
+          "regions",
+          "question_types"
+        ]
+      }
+    },
+    {
+      "id": "h_008",
+      "category": "排除条件+省略主语",
+      "query": "排除 Q123 和 Q456，找几道函数题",
+      "expected": {
+        "count": 5,
+        "exclude_question_ids": [
+          "Q123",
+          "Q456"
+        ],
+        "exclude_similar_to": [
+          "Q123",
+          "Q456"
+        ],
+        "knowledge_points_contains": [
+          "函数"
+        ],
+        "kp_ids_grounded": true
+      }
+    },
+    {
+      "id": "h_009",
+      "category": "负向题型",
+      "query": "给我来五道题，不要填空题",
+      "expected": {
+        "count": 5,
+        "question_types": []
+      }
+    },
+    {
+      "id": "h_010",
+      "category": "多知识点+压轴",
+      "query": "导数压轴题，八道，覆盖构造函数",
+      "expected": {
+        "count": 8,
+        "difficulty": 5,
+        "knowledge_points_contains": [
+          "导数"
+        ],
+        "sub_knowledge_points_contains": [
+          "构造函数"
+        ],
+        "chapter": null,
+        "kp_ids_grounded": true
+      }
+    },
+    {
+      "id": "h_011",
+      "category": "硬难度",
+      "query": "椭圆基础题，来五道，只要中等难度",
+      "expected": {
+        "count": 5,
+        "difficulty": 3,
+        "knowledge_points_contains": [
+          "椭圆"
+        ],
+        "chapter": "圆锥曲线的方程",
+        "hard_fields": [
+          "difficulty"
+        ]
+      }
+    },
+    {
+      "id": "h_012",
+      "category": "地区+年份+教学用途",
+      "query": "山东 2024 的题目，来三道，适合随堂练习",
+      "expected": {
+        "count": 3,
+        "regions": [
+          "山东"
+        ],
+        "year_from": 2024,
+        "year_to": 2024,
+        "teaching_usage": "in_class_practice",
+        "hard_fields": [
+          "regions",
+          "year"
+        ]
+      }
+    },
+    {
+      "id": "h_013",
+      "category": "题型+口语",
+      "query": "帮我找几道多选题，江苏的",
+      "expected": {
+        "count": 5,
+        "question_types": [
+          "multiple_choice"
+        ],
+        "regions": [
+          "江苏"
+        ]
+      }
+    },
+    {
+      "id": "h_014",
+      "category": "排除相似题",
+      "query": "找几道椭圆题，不要出现和 Q789 雷同的",
+      "expected": {
+        "count": 5,
+        "exclude_question_ids": [
+          "Q789"
+        ],
+        "exclude_similar_to": [
+          "Q789"
+        ],
+        "knowledge_points_contains": [
+          "椭圆"
+        ],
+        "hard_fields": [
+          "exclude_question_ids",
+          "exclude_similar_to"
+        ]
+      }
+    },
+    {
+      "id": "h_015",
+      "category": "年级+模糊难度+教学用途",
+      "query": "高三复习用，来十道数列题，中等偏易",
+      "expected": {
+        "count": 10,
+        "grade": "高三",
+        "knowledge_points_contains": [
+          "数列"
+        ],
+        "chapter": "数列",
+        "difficulty": 3,
+        "teaching_usage": "exam_review"
+      }
+    },
+    {
+      "id": "h_016",
+      "category": "教材册次",
+      "query": "选必一的题，集合两题就行",
+      "expected": {
+        "count": 2,
+        "volume": "选择性必修第一册",
+        "knowledge_points_contains": [
+          "集合"
+        ],
+        "chapter": "集合与常用逻辑用语"
+      }
+    },
+    {
+      "id": "h_017",
+      "category": "年份区间",
+      "query": "2023到2024年之间的题，来四道",
+      "expected": {
+        "count": 4,
+        "year_from": 2023,
+        "year_to": 2024,
+        "hard_fields": [
+          "year"
+        ]
+      }
+    },
+    {
+      "id": "h_018",
+      "category": "硬条件+无数量+不满足场景",
+      "query": "只找2025年江苏的题目，没有就算了",
+      "expected": {
+        "count": 5,
+        "year_from": 2025,
+        "year_to": 2025,
+        "regions": [
+          "江苏"
+        ],
+        "allow_related_fallback": false,
+        "hard_fields": [
+          "year",
+          "regions"
+        ]
+      }
+    },
+    {
+      "id": "h_019",
+      "category": "多知识点",
+      "query": "随便找几道椭圆和导数的题",
+      "expected": {
+        "count": 5,
+        "knowledge_points_contains": [
+          "椭圆",
+          "导数"
+        ],
+        "chapter": null,
+        "kp_ids_grounded": true
+      }
+    },
+    {
+      "id": "h_020",
+      "category": "模糊难度",
+      "query": "我想找几道基础题，难度要低",
+      "expected": {
+        "count": 5,
+        "difficulty": 1
+      }
+    },
+    {
+      "id": "h_021",
+      "category": "多题型",
+      "query": "多选题、填空题都要，五道，江苏的",
+      "expected": {
+        "count": 5,
+        "question_types": [
+          "multiple_choice",
+          "fill_blank"
+        ],
+        "regions": [
+          "江苏"
+        ]
+      }
+    },
+    {
+      "id": "h_022",
+      "category": "地区+章节",
+      "query": "新高考一卷的圆锥曲线，来四道",
+      "expected": {
+        "count": 4,
+        "regions": [
+          "新高考Ⅰ卷"
+        ],
+        "knowledge_points_contains": [
+          "圆锥曲线"
+        ],
+        "chapter": "圆锥曲线的方程"
+      }
+    },
+    {
+      "id": "h_023",
+      "category": "排除条件+口语",
+      "query": "给我出五道题，Q001 不要",
+      "expected": {
+        "count": 5,
+        "exclude_question_ids": [
+          "Q001"
+        ]
+      }
+    },
+    {
+      "id": "h_024",
+      "category": "验证要求",
+      "query": "给我三道程序验证通过的椭圆题",
+      "expected": {
+        "count": 3,
+        "require_verified": true,
+        "hard_fields": [
+          "require_verified"
+        ],
+        "knowledge_points_contains": [
+          "椭圆"
+        ]
+      }
+    },
+    {
+      "id": "h_025",
+      "category": "软难度",
+      "query": "抛物线的题来两道，优先中等难度",
+      "expected": {
+        "count": 2,
+        "difficulty": 3,
+        "knowledge_points_contains": [
+          "抛物线"
+        ],
+        "chapter": "圆锥曲线的方程",
+        "soft_fields": [
+          "difficulty"
+        ]
+      }
+    },
+    {
+      "id": "h_026",
+      "category": "软放宽回退",
+      "query": "先找2025年的，实在没有2024的也行",
+      "expected": {
+        "year_from": 2025,
+        "year_to": 2025,
+        "allow_related_fallback": true,
+        "hard_fields": [
+          "year"
+        ]
+      }
+    },
+    {
+      "id": "h_027",
+      "category": "不满足条件场景",
+      "query": "只找2031年浙江的解答题，四道",
+      "expected": {
+        "count": 4,
+        "year_from": 2031,
+        "year_to": 2031,
+        "regions": [
+          "浙江"
+        ],
+        "question_types": [
+          "solution"
+        ],
+        "hard_fields": [
+          "year",
+          "regions",
+          "question_types"
+        ],
+        "outcome": "no_exact_match"
+      }
+    }
+  ]
+}
