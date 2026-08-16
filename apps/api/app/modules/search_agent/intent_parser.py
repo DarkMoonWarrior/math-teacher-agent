@@ -61,8 +61,8 @@ SOFT_MARKERS = (
 
 _CN_NUM = {"一": 1, "二": 2, "两": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9, "十": 10}
 _COUNT_PATTERN = re.compile(r"(\d+|[一二两三四五六七八九十]+)\s*[道题个]")
-_YEAR_RANGE_PATTERN = re.compile(r"(20[0-2]\d)\s*年?\s*(?:-|到|至)\s*(20[0-2]\d)\s*年?")
-_YEAR_SINGLE_PATTERN = re.compile(r"(20[0-2]\d)\s*年?")
+_YEAR_RANGE_PATTERN = re.compile(r"(20\d{2})\s*年?\s*(?:-|到|至)\s*(20\d{2})\s*年?")
+_YEAR_SINGLE_PATTERN = re.compile(r"(20\d{2})\s*年?")
 _ID_PATTERN = re.compile(r"[Qq][A-Za-z0-9_-]{2,}")
 
 _DIFFICULTY_WORDS: list[tuple[str, int | None, list[int] | None]] = [
@@ -274,6 +274,10 @@ class SearchIntentParser:
         if catalog is not None:
             try:
                 for node in catalog.list_nodes():
+                    # volume / textbook 是册次元数据，不是可检索主题；否则
+                    # “必修第一册”会泄漏成知识点词，生成错误的 hard 约束。
+                    if node.node_type in {"volume", "textbook"}:
+                        continue
                     names = [node.name]
                     names.extend(part for part in re.split(r"[与和及的、]", node.name) if len(part) >= 2)
                     for name in dict.fromkeys(names):
@@ -425,6 +429,7 @@ class SearchIntentParser:
         if self._catalog is None:
             return mapping
         matched_node_ids: list[str] = []
+        matched_paths: list[dict[str, str]] = []
         for term in self._curriculum_candidates(text):
             try:
                 # 优先知识节点；只有没有 kp 命中时才退回章/节，避免章节点抢占 kp。
@@ -441,9 +446,7 @@ class SearchIntentParser:
             matched_node_ids.append(best.node_id)
             node = self._catalog.get_node(best.node_id)
             path = self._catalog.path_for(best.node_id)
-            mapping.volume = mapping.volume or path.get("volume")
-            mapping.chapter = mapping.chapter or path.get("chapter")
-            mapping.section = mapping.section or path.get("section")
+            matched_paths.append(path)
             mapping.matched_nodes.append(
                 CurriculumNodeRef(
                     node_id=best.node_id, code=best.code, name=best.name, node_type=best.node_type
@@ -452,6 +455,17 @@ class SearchIntentParser:
             if best.node_type == "knowledge_point":
                 mapping.knowledge_point_ids.append(best.node_id)
                 mapping.knowledge_point_names.append(best.name)
+        # 多主题查询命中的节点可能横跨不同章/册：此时不臆造单一章/册，
+        # 避免把“函数”的章错误地设为“导数”查询的 hard 条件。
+        chapters = {path.get("chapter") for path in matched_paths if path.get("chapter")}
+        volumes = {path.get("volume") for path in matched_paths if path.get("volume")}
+        sections = {path.get("section") for path in matched_paths if path.get("section")}
+        if len(chapters) == 1:
+            mapping.chapter = chapters.pop()
+        if len(volumes) == 1:
+            mapping.volume = volumes.pop()
+        if len(sections) == 1:
+            mapping.section = sections.pop()
         return mapping
 
     def _curriculum_candidates(self, text: str) -> list[str]:

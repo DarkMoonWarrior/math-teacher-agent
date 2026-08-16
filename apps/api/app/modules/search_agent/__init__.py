@@ -15,6 +15,7 @@ from .domain import (
     UnmetConstraint,
 )
 from .intent_parser import SearchIntentParser
+from .pipeline import SearchAgentPipeline
 from .planner import build_search_plan
 
 __all__ = [
@@ -27,6 +28,7 @@ __all__ = [
     "SearchAgentRunRecord",
     "SearchConstraint",
     "SearchIntent",
+    "SearchAgentPipeline",
     "SearchIntentParser",
     "SearchPlan",
     "SearchPlanStep",
