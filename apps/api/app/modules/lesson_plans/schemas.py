@@ -1,0 +1,149 @@
+from __future__ import annotations
+
+from typing import Literal
+
+from pydantic import BaseModel, Field
+
+
+LessonType = Literal["new_lesson", "review", "exercise"]
+LessonPlanBlock = Literal[
+    "objectives",
+    "key_points",
+    "difficulties",
+    "teaching_flow",
+    "homework",
+    "board_plan",
+    "teacher_notes",
+]
+
+
+class LessonPlanGenerationRequest(BaseModel):
+    curriculum_node_id: str
+    lesson_type: LessonType = "new_lesson"
+    duration_minutes: int = Field(default=45, ge=20, le=120)
+    student_profile: str = Field(
+        default="基础中等，能够完成教材基础练习，抽象概括能力需要支架",
+        min_length=2,
+        max_length=500,
+    )
+    focus: str = Field(default="", max_length=500)
+    question_count: int = Field(default=3, ge=0, le=8)
+    teacher_id: str = Field(default="owner_teacher", min_length=1, max_length=120)
+
+
+class LessonCurriculumContext(BaseModel):
+    node_id: str
+    volume: str
+    chapter: str
+    section: str
+    topic: str
+    description: str
+    competencies: list[str]
+    common_errors: list[str]
+    knowledge_points: list[str]
+    baseline_id: str = "legacy-unversioned"
+    standard_title: str = "普通高中数学课程标准"
+    textbook_edition: str = "人教 A 版"
+
+
+class TeachingPhase(BaseModel):
+    phase: str
+    minutes: int = Field(ge=1, le=120)
+    teacher_activity: str
+    student_activity: str
+    assessment: str
+
+
+class RecommendedQuestion(BaseModel):
+    question_id: str
+    stem: str
+    difficulty: int
+    usage: str
+    verification_status: str
+
+
+class GeneratedLessonPlanContent(BaseModel):
+    title: str
+    objectives: list[str] = Field(min_length=1, max_length=8)
+    key_points: list[str] = Field(min_length=1, max_length=6)
+    difficulties: list[str] = Field(min_length=1, max_length=6)
+    teaching_flow: list[TeachingPhase] = Field(min_length=2, max_length=10)
+    homework: list[str] = Field(min_length=1, max_length=8)
+    board_plan: list[str] = Field(min_length=1, max_length=8)
+    teacher_notes: list[str] = Field(default_factory=list, max_length=8)
+
+
+class LessonPlanContent(GeneratedLessonPlanContent):
+    recommended_questions: list[RecommendedQuestion] = Field(default_factory=list)
+
+
+class LessonPlanGenerationMeta(BaseModel):
+    provider: str
+    model: str
+    mode: str
+    retrieved_question_ids: list[str]
+    warnings: list[str] = Field(default_factory=list)
+
+
+class LessonPlanView(BaseModel):
+    lesson_plan_id: str
+    status: str
+    version: int
+    created_at: str
+    updated_at: str
+    request: LessonPlanGenerationRequest
+    curriculum: LessonCurriculumContext
+    content: LessonPlanContent
+    generation: LessonPlanGenerationMeta
+    locked_blocks: list[LessonPlanBlock] = Field(default_factory=list, max_length=7)
+    lifecycle_state: Literal["active", "trashed"] = "active"
+    trashed_at: str | None = None
+
+
+class LessonPlanSummary(BaseModel):
+    lesson_plan_id: str
+    title: str
+    status: str
+    version: int
+    curriculum_node_id: str
+    topic: str
+    provider: str
+    updated_at: str
+    lifecycle_state: Literal["active", "trashed"] = "active"
+    trashed_at: str | None = None
+
+
+class LessonPlanLifecycleCommand(BaseModel):
+    action: Literal["trash", "restore"]
+    actor_id: str = Field(default="owner_teacher", min_length=1, max_length=120)
+    reason: str = Field(default="用户删除", max_length=2000)
+
+
+class LessonPlanList(BaseModel):
+    items: list[LessonPlanSummary]
+    total: int
+
+
+class LessonPlanUpdateCommand(BaseModel):
+    content: LessonPlanContent
+    editor_id: str = Field(default="owner_teacher", min_length=1, max_length=120)
+
+
+class LessonPlanBlockLockCommand(BaseModel):
+    locked: bool
+    editor_id: str = Field(default="owner_teacher", min_length=1, max_length=120)
+
+
+class LessonPlanBlockRewriteCommand(BaseModel):
+    instruction: str = Field(min_length=2, max_length=500)
+    content: LessonPlanContent
+    teacher_id: str = Field(default="owner_teacher", min_length=1, max_length=120)
+
+
+class LessonPlanBlockRewriteResult(BaseModel):
+    block: LessonPlanBlock
+    value: list[str] | list[TeachingPhase]
+    provider: str
+    model: str
+    mode: str
+    warnings: list[str] = Field(default_factory=list)

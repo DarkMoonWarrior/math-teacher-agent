@@ -1,0 +1,46 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+.venv/
+__pycache__/
+*.py[cod]
+
+# Build output
+.next/
+out/
+dist/
+build/
+/coverage/
+.pytest_cache/
+*.tsbuildinfo
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+
+# Databases (runtime state is never committed)
+*.db
+*.sqlite
+*.sqlite3
+
+# Runtime and private data
+data/runtime/
+data/private-runtime/
+uploads/
+
+# Exports and generated artifacts
+output/
+
+# Logs
+logs/
+*.log
+
+# OS and editor caches
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Scratch files
+tmp/
