@@ -13,6 +13,7 @@ export interface TestConfigOptions {
   provider?: string;
   model?: string;
   runHardTimeoutMs?: number;
+  searchToolCallLimit?: number;
 }
 
 export function makeTestConfig(options: TestConfigOptions = {}): AgentServiceConfig {
@@ -27,6 +28,7 @@ export function makeTestConfig(options: TestConfigOptions = {}): AgentServiceCon
     MATH_AI_AGENT_MODEL: options.model ?? "mock-model",
     MATH_AI_AGENT_SESSION_ROOT: sessionRoot,
     MATH_AI_AGENT_RUN_HARD_TIMEOUT_MS: String(options.runHardTimeoutMs ?? 60_000),
+    MATH_AI_SEARCH_TOOL_CALL_LIMIT: String(options.searchToolCallLimit ?? 6),
     MATH_AI_AGENT_PORT: "0",
   });
 }

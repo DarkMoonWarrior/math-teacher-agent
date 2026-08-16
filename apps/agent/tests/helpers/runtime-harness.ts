@@ -22,11 +22,12 @@ export interface RuntimeHarnessOptions {
   mockScript?: MockScript;
   sessionRoot?: string;
   sessionIdPrefix?: string;
+  searchToolCallLimit?: number;
 }
 
 export async function createRuntimeHarness(options: RuntimeHarnessOptions = {}): Promise<RuntimeHarness> {
   const stub = await createGatewayStub({ handlers: options.handlers });
-  const config = makeTestConfig();
+  const config = makeTestConfig({ searchToolCallLimit: options.searchToolCallLimit });
   if (options.sessionRoot) config.sessionRoot = options.sessionRoot;
   const gateway = new ToolGatewayClient({
     origin: stub.url,
