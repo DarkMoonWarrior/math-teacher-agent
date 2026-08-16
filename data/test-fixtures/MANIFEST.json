@@ -75,6 +75,18 @@
       "local_paths": false,
       "generator": "scripts/generate_synthetic_test_fixtures.py",
       "sha256": "02e06406ae4346cf1bb2be6cbf8bc69abe72ec70e5b22ef1fbf76aa2bb3adeca"
+    },
+    {
+      "id": "question-bank/pilot/similarity-pair-synthetic-2q-v1.json",
+      "purpose": "synthetic backend test fixture (question-similarity scan/variant logic)",
+      "synthetic": true,
+      "source": "project_created",
+      "commercial_safe": true,
+      "contains_personal_data": false,
+      "contains_third_party_content": false,
+      "local_paths": false,
+      "generator": "manual_project_created",
+      "sha256": "81aecce8d9f1e5cc892e8dfb2e15c7c39bd89e2deef11075f637ca90925fa903"
     }
   ]
 }
