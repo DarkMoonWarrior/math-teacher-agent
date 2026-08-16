@@ -110,6 +110,18 @@ class Settings(BaseSettings):
         default=PROJECT_ROOT / "data" / "curated" / "function-properties-5q-corrections-v1.json"
     )
 
+    # -- Teacher Agent Runtime --------------------------------------------
+    # legacy（默认）保持现有产品行为；dsh 通过独立 Agent Service 接入 Harness。
+    agent_runtime: str = "legacy"
+    # 默认禁止静默降级；启用后必须记录 fallback 审计日志。
+    agent_allow_legacy_fallback: bool = False
+    agent_service_url: str = "http://127.0.0.1:4100"
+    agent_service_token: str = ""
+    agent_request_timeout_seconds: int = 120
+    # Agent -> FastAPI internal tool gateway 的机器身份。
+    tool_gateway_token: str = ""
+    tool_gateway_timeout_seconds: float = 30.0
+
     @property
     def cors_origin_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
@@ -118,3 +130,4 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
+
