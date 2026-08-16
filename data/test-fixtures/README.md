@@ -19,6 +19,9 @@
 | `question-bank/curated/probability-4q-synthetic-corrections-v1.json` | 概率 4 题校正包（4/4 通过） | 项目自建 |
 | `question-bank/curated/probability-6q-synthetic-corrections-v1.json` | 概率 6 题校正包（5 通过 / 1 不一致） | 项目自建 |
 | `question-bank/curated/function-properties-5q-synthetic-corrections-v1.json` | 函数 5 题校正包（4 通过 / 1 不一致） | 项目自建 |
+| `search-agent/search-agent-synthetic-14q-v1.json` | 14 道 Search Agent 合成题（椭圆/集合/导数，全部 verification=passed、rights 自建声明） | 项目自建 |
+| `search-agent/eval-cases.json` | 50 条合成搜索评估 query（含 expected 字段） | 项目自建 |
+| `search-agent/holdout-cases.json` | 27 条独立 Holdout query（Prompt 3.5，与原 50 条不重复） | 项目自建 |
 
 ## 原则
 

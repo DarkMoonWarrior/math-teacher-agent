@@ -68,3 +68,34 @@
 - Live Smoke（真实 DeepSeek API）默认不运行：需 `MATH_AI_DEEPSEEK_API_KEY` +
   `MATH_AI_RUN_LIVE_SEARCH_SMOKE=true`，本阶段未执行、未产生费用。
 - teaching_usage 当前作为排序信号，未建立「用途→难度/题型」的 rating 权重集。
+## 5. Holdout Evaluation（Prompt 3.5 · 2026-08-16）
+
+- 文件：`data/test-fixtures/search-agent/holdout-cases.json`（27 条，与原 50 条 eval query 不重复）。
+- 编写方式：**先冻结 SearchIntentParser 实现**，再按产品语义 + 真实 Curriculum Catalog 节点独立编写 expected；
+  第一轮直接记录真实成绩，不针对实现回写（`tests/test_search_agent_holdout.py` 断言原 50 条与 holdout 无重复 query）。
+- 覆盖：同义表达 / 口语表达 / 省略主语 / 中文数量词 / hard / soft / negative / teaching usage /
+  多知识点 / 模糊难度 / 无年份 / 无数量 / 不满足条件场景 / 软放宽回退。
+
+### 5.1 实测结果（第一轮，冻结实现后）
+
+| 指标 | 结果 | 目标 |
+| --- | --- | --- |
+| Holdout Intent Field Accuracy | **270/278 = 0.971** | ≥ 0.90 ✅ |
+| Hard / Soft Interpretation Accuracy | 21/21 = 1.000 | 无静默误判 |
+| Count Accuracy | 26/26 = 1.000 | 1.000 |
+| Teaching Usage Accuracy | 3/5 = 0.600 | 记录真实弱点（见 5.2） |
+| Curriculum Mapping Accuracy | 39/39 = 1.000 | 1.000 |
+| Hard Constraint Silent Violation（outcome 用例） | 0/0（无放宽路径） | 强制 0 ✅ |
+| Fake Question ID / Source / Verification Hallucination | 0 | 强制 0 ✅ |
+| 不诚实无结果（no_exact_match 用例） | 0 | 强制 0 ✅ |
+
+### 5.2 已知解析弱点（真实成绩，不掩盖；进 POST-BASELINE-BACKLOG）
+
+1. `h_001`：`稍难一点` → 期望 difficulty=4（偏难档），实际=5（命中“难”）。**稍难/偏难粒度不足**。
+2. `h_001`：`讲…例题` → 期望 teaching_usage=classroom_example，实际=general。**“例题”裸词未映射课堂用途**。
+3. `h_009`：`不要填空题` → 期望 question_types=[]（当前 schema 不支持排除题型，正确行为是不产生正向约束），
+   实际=`['fill_blank']`（**语义反转：把“不要”解析成“只要”**）。这是信任风险最高的弱点，需独立 backlog 修复。
+4. `h_015`：`复习用` → 期望 teaching_usage=exam_review，实际=general。**“复习”裸词未映射备考用途**。
+
+结论：Holdout Gate 通过（≥90%），4 处弱点全部为 parser 通用规则缺口，无 query 级硬编码；
+修复前必须保持原 50 条 eval 与 27 条 holdout 全部重跑（见 Backlog B-16）。

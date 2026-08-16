@@ -19,3 +19,14 @@
 | B-13 | KMI-01 修复 | 课程封存哈希 CRLF/LF 归一化（见 KNOWN-MIGRATION-ISSUES） | 已完成（Prompt 1.5，commit 942c2dc） |
 | B-14 | KMI-02 测试数据策略 | 数据依赖测试的 synthetic fixture / 跳过策略（见 KNOWN-MIGRATION-ISSUES） | 已完成（Prompt 1.5，d769021） |
 | B-15 | 大文件模块渐进拆分 | `pdf_imports/studio.py`、`question_bank/bank.py` 接口内聚拆分，不重写 | 视维护成本决定 |
+
+
+## Prompt 3.5 新增（Search Agent 通用规则缺口，非 query 硬编码）
+
+| ID | 主题 | 说明 | 建议阶段 |
+| --- | --- | --- | --- |
+| B-16 | 负向题型语义反转 | `不要填空题` 被解析为 question_types=['fill_blank']（语义反转）。当前 SearchIntent 无排除题型字段；正确行为至少是“不产生正向类型约束 + warning”。修复需重跑原 50 eval + 27 holdout | Prompt 4（Solve Agent）之前或独立 hotfix，需项目所有者确认 |
+| B-17 | 难度粒度：稍难/偏难 | `稍难一点` 命中“难”→5，期望 4（偏难档）；需在 _DIFFICULTY_WORDS 增加“稍难”→4 等通用词条 | 与 B-16 同阶段 |
+| B-18 | 教学用途裸词 | `例题`→classroom_example、`复习`→exam_review 未映射（目前只映射 课堂例题/期末复习 等组合词） | 与 B-16 同阶段 |
+| B-19 | 相对年份 | `近两年` 未解析为年份（无基准日期语义）；当前诚实返回 year=null，需产品语义确认是否引入“相对当前年份”解析 | 产品语义确认后 |
+| B-20 | 解释文本自由格式实体消毒 | assistant_explanation 目前可机械消毒 题目ID/年份/验证声明；学校名/考试名等自由格式实体无法正则消毒（结构化结果仍是唯一事实源并优先展示） | 需要 NL 事实抽取能力时 |

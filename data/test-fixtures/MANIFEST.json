@@ -111,6 +111,18 @@
       "local_paths": false,
       "generator": "manual_project_created",
       "sha256": "e21cef0483b00a8565e74b1c2529a2ebef948b982fceb6de31337f4706f8b030"
+    },
+    {
+      "id": "search-agent/holdout-cases.json",
+      "purpose": "synthetic Search Agent holdout evaluation queries (Prompt 3.5; project-authored, disjoint from eval-cases.json)",
+      "synthetic": true,
+      "source": "project_created",
+      "commercial_safe": true,
+      "contains_personal_data": false,
+      "contains_third_party_content": false,
+      "local_paths": false,
+      "generator": "manual_project_created",
+      "sha256": "0fbd383fd4632d9bd09d034ace28027a295de6cef40afb653bf5f9e307e45ebb"
     }
   ]
 }
