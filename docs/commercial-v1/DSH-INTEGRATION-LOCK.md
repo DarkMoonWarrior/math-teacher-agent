@@ -46,6 +46,42 @@ DeepSeek Harness 集成版本锁定与升级策略。任何升级前必须重读
 - 禁止 pnpm/renovate 自动升级 rc 依赖；升级必须人工审查官方 changelog/release 后再改 lock。
 - Harness breaking-change 影响面必须保持在 `apps/agent/src/dsh/` 内。
 
+## npm 来源核验（Prompt 2.5，2026-08-16）
+
+全部直接依赖均来自**官方 npm namespace `@deepseek-ai`**（registry.npmjs.org），
+无第三方 fork、镜像重打包或非官方 tarball。
+
+| Package | Exact version | npm dist-tag | resolved tarball (registry.npmjs.org) | integrity (sha512) | license | upstream repository |
+| --- | --- | --- | --- | --- | --- | --- |
+| @deepseek-ai/dsh（CLI，仅版本参照） | 0.1.0-rc.6 | latest, next | .../dsh/-/dsh-0.1.0-rc.6.tgz | 已锁 | MIT | github.com/deepseek-ai/deepseek-harness |
+| @deepseek-ai/dsh-app-boot | 0.1.0-rc.6 | latest, next | .../dsh-app-boot/-/dsh-app-boot-0.1.0-rc.6.tgz | 已锁 | MIT | 同上 |
+| @deepseek-ai/dsh-agent / dsh-agent-loop | 0.1.0-rc.6 | latest, next | 官方 tarball | 已锁 | MIT | 同上 |
+| @deepseek-ai/dsh-llm / dsh-llm-deepseek | 0.1.0-rc.6 | next | 官方 tarball | 已锁 | MIT | 同上 |
+| @deepseek-ai/dsh-session / dsh-session-persistence / dsh-session-persistence-jsonl | 0.1.0-rc.6 | next | 官方 tarball | 已锁 | MIT | 同上 |
+| @deepseek-ai/dsh-system-prompt / dsh-tools | 0.1.0-rc.6 | next | 官方 tarball | 已锁 | MIT | 同上 |
+| @deepseek-ai/cordis | 4.0.1 | latest | 官方 tarball | 已锁 | MIT | 同上 |
+| @deepseek-ai/cordis-plugin-include / cordis-plugin-loader | 1.0.6 / 1.0.2 | latest | 官方 tarball | 已锁 | MIT | 同上 |
+| @deepseek-ai/schemastery | 3.18.1 | latest | 官方 tarball | 已锁 | MIT | 同上 |
+
+核验方式：`npm view <pkg> dist-tags/versions` + registry 元数据（name/version/dist.tarball/
+dist.integrity/license/repository/publish_time）。全部发布时间为 2026-08-13，
+maintainers 为 deepseek 官方账号（imccyu / tianyicui-deepseek）。
+lockfile 中 71 条 `@deepseek-ai/*` 条目全部精确版本、均含 sha512 integrity，
+无 `latest` / `*` / 不受控 git URL / `file:` / `link:` 来源（脚本核验，NO ISSUES）。
+
+### GitHub master 与 npm 发布差异（如实记录，不当作错误隐藏）
+
+- Published package version：**0.1.0-rc.6**（npm，2026-08-13 发布，latest+next 均为 rc.6）。
+- GitHub master（default branch `master`）`apps/cli/package.json` 观察版本：**0.1.0-rc.5**
+  （2026-08-16 通过 GitHub API 复核；最近一次触碰该文件的 commit abe560f，2026-08-13）。
+- 另外：`0.1.0-rc.5` 从未出现在 npm registry 版本列表中（registry 中只有 0.0.1-rc.5），
+  说明 GitHub master 与 npm 发布线当前不同步。
+- upstream source commit for rc.6 = **unresolved**（npm 包元数据未嵌入 git SHA，
+  无法可靠把 rc.6 映射到具体上游 commit；不猜测）。
+- Node engines：rc.6 发布元数据**未声明 engines**（已核验所有直接依赖）；
+  此前记录的 `^22.19.0 || >=24.0.0` 来自早期 DSH 发布资料，当前无法从元数据复核，
+  本仓库按自有的 `engines: >=24.0.0` 锁定并在 Node v24.17.0 实测通过（状态：REVIEW）。
+
 ## 官方扩展机制（我们只使用这些）
 
 - `boot(binName, absoluteConfigPath, patches?, prepare?)`：Cordis Loader 启动；runtime 通过官方 patch 覆盖 session root。
