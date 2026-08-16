@@ -49,6 +49,29 @@ pluggy（MIT）、iniconfig（MIT）。
 
 传递依赖（代表性）：sharp（Next 可选图像处理依赖，许可待核验）→ REVIEW。
 
+
+## Node Agent Service 依赖（apps/agent，Prompt 2 新增）
+
+DSH 全部直接依赖精确锁定 0.1.0-rc.6；以下许可来自已安装发行版的 package.json 元数据
+（pnpm licenses list，核验日期 2026-08-16）。
+
+| 包 | 版本 | 许可 | 状态 |
+| --- | --- | --- | --- |
+| @deepseek-ai/dsh-app-boot / dsh-agent / dsh-agent-loop / dsh-llm / dsh-llm-deepseek / dsh-session / dsh-session-persistence / dsh-session-persistence-jsonl / dsh-system-prompt / dsh-tools | 0.1.0-rc.6 | MIT | VERIFIED |
+| @deepseek-ai/cordis | 4.0.1 | MIT | VERIFIED |
+| @deepseek-ai/cordis-plugin-include / cordis-plugin-loader | 1.0.6 / 1.0.2 | MIT | VERIFIED |
+| @deepseek-ai/schemastery | 3.18.1 | MIT | VERIFIED |
+| tsx / vitest / typescript / @types/node（dev） | 4.23.12 / 4.1.10 / 5.9.2 / 24.x | MIT / MIT / Apache-2.0 / MIT | VERIFIED |
+
+传递依赖（dsh-attachment、dsh-brand、dsh-invariants、dsh-scope、dsh-timeout、
+dsh-code-runtime、dsh-anonymous-user-id、dsh-home-paths、dsh-launch-environment、
+dsh-settings、dsh-typert-protocol、dsh-user-approval、cosmokit、cordis-plugin-group 等）
+发布元数据同样为 MIT；esbuild/koffi 原生二进制为 MIT；其余为 Apache-2.0 / BSD-3-Clause / ISC。
+
+声明：以上核验基于发布包元数据，不构成对“所有依赖允许商业使用”的声明；
+商业发布前仍需法务复核许可证全文与 NOTICE/分发义务。DSH 为 Developer Preview，
+升级时需同步更新本清单与 DSH-INTEGRATION-LOCK.md。
+
 ## 待办（合规）
 
 - 对 `REVIEW` 项逐一下载许可证全文并归档到 `docs/legal/`，确认分发与 NOTICE 义务。
