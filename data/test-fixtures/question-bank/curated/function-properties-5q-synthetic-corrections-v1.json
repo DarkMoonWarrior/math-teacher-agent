@@ -1,0 +1,281 @@
+{
+  "package_id": "function-properties-5q-synthetic-corrections-v1",
+  "schema_version": "1.0-synthetic-fixture",
+  "source_document": "合成测试·函数性质（项目自建）v1.md",
+  "source_pages_reviewed": [
+    1
+  ],
+  "content_policy": "合成夹具仅用于验证工作流与门禁逻辑，不构成商业题库内容",
+  "candidates": [
+    {
+      "question_id": "q_function_properties_01",
+      "disposition": "source_inconsistency_detected",
+      "stem": {
+        "plain_text": "已知定义在 R 上的函数 f(x) 满足 f(3+x)=f(1−x)，且在 (2,+∞) 上严格递减，则下列结论恒成立的是（ ）。",
+        "latex": null
+      },
+      "options": [
+        {
+          "key": "A",
+          "plain_text": "f(4)<f(1)=f(3)，f(2) 无法确定",
+          "latex": null,
+          "canonical_value": "relation:f(4)<f(1)=f(3);f(2):undetermined"
+        },
+        {
+          "key": "B",
+          "plain_text": "f(4)<f(2)<f(3)",
+          "latex": null
+        },
+        {
+          "key": "C",
+          "plain_text": "f(1)<f(2)<f(3)",
+          "latex": null
+        },
+        {
+          "key": "D",
+          "plain_text": "f(4)<f(3)<f(2)",
+          "latex": null
+        }
+      ],
+      "source_answer": "B",
+      "expected_canonical_value": null,
+      "computed_answer_display": null,
+      "solution": {
+        "method": "函数对称性与单调性",
+        "steps_latex": [
+          "由条件得图象关于直线 x=2 对称",
+          "比较区间上的单调关系"
+        ],
+        "final_answer": "A",
+        "author_type": "independent_system_draft",
+        "review_status": "ready_for_teacher_review"
+      },
+      "verification_spec": {
+        "rule": "function_symmetry_monotonic_endpoint"
+      },
+      "source": {
+        "source_question_number": "q_function_properties_01",
+        "source_page_start": 1,
+        "source_page_end": 1,
+        "source_reference": "项目自建合成测试题",
+        "attribution_required": "confirmed"
+      }
+    },
+    {
+      "question_id": "q_function_properties_02",
+      "disposition": "verified_candidate",
+      "stem": {
+        "plain_text": "已知函数 f(x)=6x−x² 在开区间 (0,6) 上考虑最值，下列说法正确的是（ ）。",
+        "latex": null
+      },
+      "options": [
+        {
+          "key": "A",
+          "plain_text": "最大值为 9",
+          "latex": null,
+          "canonical_value": "claim:max=9"
+        },
+        {
+          "key": "B",
+          "plain_text": "最大值为 8",
+          "latex": null
+        },
+        {
+          "key": "C",
+          "plain_text": "最大值为 9 且最小值为 0",
+          "latex": null
+        },
+        {
+          "key": "D",
+          "plain_text": "不存在最大值",
+          "latex": null
+        }
+      ],
+      "source_answer": "A",
+      "expected_canonical_value": null,
+      "computed_answer_display": null,
+      "solution": {
+        "method": "开区间二次函数最值",
+        "steps_latex": [
+          "配方确定顶点",
+          "检查顶点是否位于开区间内"
+        ],
+        "final_answer": "A",
+        "author_type": "independent_system_draft",
+        "review_status": "ready_for_teacher_review"
+      },
+      "verification_spec": {
+        "rule": "open_interval_quadratic_maximum"
+      },
+      "source": {
+        "source_question_number": "q_function_properties_02",
+        "source_page_start": 1,
+        "source_page_end": 1,
+        "source_reference": "项目自建合成测试题",
+        "attribution_required": "confirmed"
+      }
+    },
+    {
+      "question_id": "q_function_properties_03",
+      "disposition": "verified_candidate",
+      "stem": {
+        "plain_text": "已知 f(x) 是定义在 R 上的奇函数，且为分段线性函数，解不等式 f(3x)>f(2x−1)。",
+        "latex": null
+      },
+      "options": [
+        {
+          "key": "A",
+          "plain_text": "(−∞,−1/2)∪(0,1/6)",
+          "latex": null,
+          "canonical_value": "interval:(-inf,-1/2)U(0,1/6)"
+        },
+        {
+          "key": "B",
+          "plain_text": "(−∞,−1/2)",
+          "latex": null
+        },
+        {
+          "key": "C",
+          "plain_text": "(0,1/6)",
+          "latex": null
+        },
+        {
+          "key": "D",
+          "plain_text": "(−1/2,1/6)",
+          "latex": null
+        }
+      ],
+      "source_answer": "A",
+      "expected_canonical_value": null,
+      "computed_answer_display": null,
+      "solution": {
+        "method": "奇函数分段线性不等式",
+        "steps_latex": [
+          "利用奇偶性化简不等式",
+          "分段讨论得到解集"
+        ],
+        "final_answer": "A",
+        "author_type": "independent_system_draft",
+        "review_status": "ready_for_teacher_review"
+      },
+      "verification_spec": {
+        "rule": "odd_piecewise_linear_inequality"
+      },
+      "source": {
+        "source_question_number": "q_function_properties_03",
+        "source_page_start": 1,
+        "source_page_end": 1,
+        "source_reference": "项目自建合成测试题",
+        "attribution_required": "confirmed"
+      }
+    },
+    {
+      "question_id": "q_function_properties_04",
+      "disposition": "verified_candidate",
+      "stem": {
+        "plain_text": "已知函数 f 与 g 的图象关于某条直线对称，且满足给定的函数方程，求 (g∘f)(3) 的值。",
+        "latex": null
+      },
+      "options": [
+        {
+          "key": "A",
+          "plain_text": "−9/2",
+          "latex": null,
+          "canonical_value": "number:-9/2"
+        },
+        {
+          "key": "B",
+          "plain_text": "−9",
+          "latex": null
+        },
+        {
+          "key": "C",
+          "plain_text": "9/2",
+          "latex": null
+        },
+        {
+          "key": "D",
+          "plain_text": "9",
+          "latex": null
+        }
+      ],
+      "source_answer": "A",
+      "expected_canonical_value": null,
+      "computed_answer_display": null,
+      "solution": {
+        "method": "对称性与复合求值",
+        "steps_latex": [
+          "由对称关系求函数值",
+          "代入复合运算"
+        ],
+        "final_answer": "A",
+        "author_type": "independent_system_draft",
+        "review_status": "ready_for_teacher_review"
+      },
+      "verification_spec": {
+        "rule": "graph_symmetry_composition_value"
+      },
+      "source": {
+        "source_question_number": "q_function_properties_04",
+        "source_page_start": 1,
+        "source_page_end": 1,
+        "source_reference": "项目自建合成测试题",
+        "attribution_required": "confirmed"
+      }
+    },
+    {
+      "question_id": "q_function_properties_05",
+      "disposition": "verified_candidate",
+      "stem": {
+        "plain_text": "关于函数图象的对称性与周期性，给出四个命题，其中恒成立的命题个数是（ ）。",
+        "latex": null
+      },
+      "options": [
+        {
+          "key": "A",
+          "plain_text": "3",
+          "latex": null,
+          "canonical_value": "number:3"
+        },
+        {
+          "key": "B",
+          "plain_text": "2",
+          "latex": null
+        },
+        {
+          "key": "C",
+          "plain_text": "4",
+          "latex": null
+        },
+        {
+          "key": "D",
+          "plain_text": "1",
+          "latex": null
+        }
+      ],
+      "source_answer": "A",
+      "expected_canonical_value": null,
+      "computed_answer_display": null,
+      "solution": {
+        "method": "命题判定",
+        "steps_latex": [
+          "逐个检验命题的充分性",
+          "统计恒成立命题个数"
+        ],
+        "final_answer": "A",
+        "author_type": "independent_system_draft",
+        "review_status": "ready_for_teacher_review"
+      },
+      "verification_spec": {
+        "rule": "symmetry_antiperiodic_statement_count"
+      },
+      "source": {
+        "source_question_number": "q_function_properties_05",
+        "source_page_start": 1,
+        "source_page_end": 1,
+        "source_reference": "项目自建合成测试题",
+        "attribution_required": "confirmed"
+      }
+    }
+  ]
+}

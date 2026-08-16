@@ -25,8 +25,10 @@ from app.modules.question_variants import (
 from app.routes import questions as question_routes
 
 
-PILOT_BATCH = PROJECT_ROOT / "data" / "pilot" / "batch-2026-08-001-30q.json"
-SET_CURATION = PROJECT_ROOT / "data" / "curated" / "set-10q-corrections-v1.json"
+# Synthetic commercial-safe fixtures (project-created content only).
+TEST_FIXTURES = PROJECT_ROOT / "data" / "test-fixtures" / "question-bank"
+PILOT_BATCH = TEST_FIXTURES / "pilot" / "batch-synthetic-set-probability-30q-v1.json"
+SET_CURATION = TEST_FIXTURES / "curated" / "set-10q-synthetic-corrections-v1.json"
 
 
 def make_service(tmp_path: Path) -> tuple[QuestionBank, QuestionVariantService]:

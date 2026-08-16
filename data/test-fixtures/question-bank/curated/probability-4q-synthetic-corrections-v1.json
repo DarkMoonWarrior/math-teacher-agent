@@ -1,0 +1,143 @@
+{
+  "package_id": "probability-4q-synthetic-corrections-v1",
+  "schema_version": "1.0-synthetic-fixture",
+  "source_document": "合成测试·概率与随机变量（项目自建）v1.md",
+  "source_pages_reviewed": [
+    1
+  ],
+  "content_policy": "合成夹具仅用于验证工作流与门禁逻辑，不构成商业题库内容",
+  "candidates": [
+    {
+      "question_id": "q_pilot_probability_01",
+      "disposition": "verified_candidate",
+      "stem": {
+        "plain_text": "甲、乙、丙三名选手按固定轮换进行公平淘汰赛，每局对战的两人获胜概率均为 1/2，先累计输两局者出局。求：(1) 甲连胜前两局并夺冠的概率；(2) 甲最终夺冠的概率；(3) 比赛恰好进行三局结束的概率。",
+        "latex": null
+      },
+      "options": [],
+      "source_answer": null,
+      "expected_canonical_value": "composite:{\"part1\":\"1/16\",\"part2\":\"3/4\",\"part3\":\"7/16\"}",
+      "computed_answer_display": "甲连胜夺冠概率为 1/16，甲最终夺冠概率为 3/4，恰好三局结束概率为 7/16",
+      "solution": {
+        "method": "枚举状态与期望计算",
+        "steps_latex": [
+          "按对局规则枚举所有可能状态转移",
+          "合并同类路径得到概率分布",
+          "按定义计算期望与条件概率"
+        ],
+        "final_answer": "见 computed_answer_display",
+        "author_type": "independent_system_draft",
+        "review_status": "ready_for_teacher_review"
+      },
+      "verification_spec": {
+        "rule": "fair_three_player_two_loss_tournament"
+      },
+      "source": {
+        "source_question_number": "q_pilot_probability_01",
+        "source_page_start": 1,
+        "source_page_end": 1,
+        "source_reference": "项目自建合成测试题",
+        "attribution_required": "confirmed"
+      }
+    },
+    {
+      "question_id": "q_pilot_probability_02",
+      "disposition": "verified_candidate",
+      "stem": {
+        "plain_text": "甲、乙进行发球计分对抗：甲发球时，甲得 1 分的概率为 3/5、乙得 2 分的概率为 2/5；乙发球时规则对称。达到约定终止条件后结束，求甲得分 X 的分布列、期望 E(X)，以及甲某关键组合事件的概率。",
+        "latex": null
+      },
+      "options": [],
+      "source_answer": null,
+      "expected_canonical_value": "composite:{\"distribution\":{\"2\":\"6/25\",\"3\":\"77/125\",\"4\":\"18/125\"},\"expectation\":\"363/125\",\"part1\":\"38/125\"}",
+      "computed_answer_display": "P(X=2)=6/25，P(X=3)=77/125，P(X=4)=18/125，E(X)=363/125",
+      "solution": {
+        "method": "枚举状态与期望计算",
+        "steps_latex": [
+          "按对局规则枚举所有可能状态转移",
+          "合并同类路径得到概率分布",
+          "按定义计算期望与条件概率"
+        ],
+        "final_answer": "见 computed_answer_display",
+        "author_type": "independent_system_draft",
+        "review_status": "ready_for_teacher_review"
+      },
+      "verification_spec": {
+        "rule": "server_scoring_threshold_game"
+      },
+      "source": {
+        "source_question_number": "q_pilot_probability_02",
+        "source_page_start": 1,
+        "source_page_end": 1,
+        "source_reference": "项目自建合成测试题",
+        "attribution_required": "confirmed"
+      }
+    },
+    {
+      "question_id": "q_pilot_probability_03",
+      "disposition": "verified_candidate",
+      "stem": {
+        "plain_text": "甲队与乙队进行五局三胜对抗，甲队每局获胜概率为 1/3。甲队 3:0 或 3:1 获胜得 3 分，3:2 获胜得 2 分，2:3 落败得 1 分，其余情形得 0 分。求甲队所得积分 X 的分布列、期望 E(X)，以及两队前两局战平的相关组合概率。",
+        "latex": null
+      },
+      "options": [],
+      "source_answer": null,
+      "expected_canonical_value": "composite:{\"distribution\":{\"0\":\"16/27\",\"1\":\"16/81\",\"2\":\"8/81\",\"3\":\"1/9\"},\"equal_after_two\":\"1120/6561\",\"expectation\":\"59/81\"}",
+      "computed_answer_display": "P(X=0)=16/27，P(X=1)=16/81，P(X=2)=8/81，P(X=3)=1/9，E(X)=59/81",
+      "solution": {
+        "method": "枚举状态与期望计算",
+        "steps_latex": [
+          "按对局规则枚举所有可能状态转移",
+          "合并同类路径得到概率分布",
+          "按定义计算期望与条件概率"
+        ],
+        "final_answer": "见 computed_answer_display",
+        "author_type": "independent_system_draft",
+        "review_status": "ready_for_teacher_review"
+      },
+      "verification_spec": {
+        "rule": "best_of_five_league_points"
+      },
+      "source": {
+        "source_question_number": "q_pilot_probability_03",
+        "source_page_start": 1,
+        "source_page_end": 1,
+        "source_reference": "项目自建合成测试题",
+        "attribution_required": "confirmed"
+      }
+    },
+    {
+      "question_id": "q_pilot_probability_04",
+      "disposition": "verified_candidate",
+      "stem": {
+        "plain_text": "慢棋和棋后进入快棋加赛：每局快棋和棋的概率为 1/3，前两局快棋仍和则进入超快棋，超快棋每局和棋概率同样为 1/3。求加赛总局数 X 的分布列与期望 E(X)，以及恰好三局内分出胜负的相关概率。",
+        "latex": null
+      },
+      "options": [],
+      "source_answer": null,
+      "expected_canonical_value": "composite:{\"advance_in_three\":\"1/27\",\"distribution\":{\"1\":\"2/3\",\"2\":\"2/9\",\"3\":\"2/27\",\"4\":\"1/27\"},\"expectation\":\"40/27\"}",
+      "computed_answer_display": "加赛局数 X 的分布为 P(X=1)=2/3，P(X=2)=2/9，P(X=3)=2/27，P(X=4)=1/27，期望 E(X)=40/27",
+      "solution": {
+        "method": "枚举状态与期望计算",
+        "steps_latex": [
+          "按对局规则枚举所有可能状态转移",
+          "合并同类路径得到概率分布",
+          "按定义计算期望与条件概率"
+        ],
+        "final_answer": "见 computed_answer_display",
+        "author_type": "independent_system_draft",
+        "review_status": "ready_for_teacher_review"
+      },
+      "verification_spec": {
+        "rule": "chess_tiebreak_game_count"
+      },
+      "source": {
+        "source_question_number": "q_pilot_probability_04",
+        "source_page_start": 1,
+        "source_page_end": 1,
+        "source_reference": "项目自建合成测试题",
+        "attribution_required": "confirmed"
+      }
+    }
+  ]
+}

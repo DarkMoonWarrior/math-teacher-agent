@@ -1,0 +1,209 @@
+{
+  "package_id": "probability-6q-synthetic-corrections-v1",
+  "schema_version": "1.0-synthetic-fixture",
+  "source_document": "合成测试·概率与随机变量（项目自建）v1.md",
+  "source_pages_reviewed": [
+    1
+  ],
+  "content_policy": "合成夹具仅用于验证工作流与门禁逻辑，不构成商业题库内容",
+  "candidates": [
+    {
+      "question_id": "q_pilot_probability_05",
+      "disposition": "verified_candidate",
+      "stem": {
+        "plain_text": "七局对抗赛中，甲在前三局发球局获胜概率为 3/5，接发球局获胜概率为 1/2。当甲已胜 2 局或乙已胜 4 局时比赛结束，求剩余比赛局数 X 的分布列、期望 E(X)，以及甲某关键组合事件的概率。",
+        "latex": null
+      },
+      "options": [],
+      "source_answer": null,
+      "expected_canonical_value": "composite:{\"distribution\":{\"2\":\"4/9\",\"3\":\"8/27\",\"4\":\"13/81\",\"5\":\"8/81\"},\"expectation\":\"236/81\",\"part1\":\"21/100\"}",
+      "computed_answer_display": "P(X=2)=4/9，P(X=3)=8/27，P(X=4)=13/81，P(X=5)=8/81，E(X)=236/81",
+      "solution": {
+        "method": "枚举状态与期望计算",
+        "steps_latex": [
+          "按对局规则枚举所有可能状态转移",
+          "合并同类路径得到概率分布",
+          "按定义计算期望与条件概率"
+        ],
+        "final_answer": "见 computed_answer_display",
+        "author_type": "independent_system_draft",
+        "review_status": "ready_for_teacher_review"
+      },
+      "verification_spec": {
+        "rule": "seven_game_match_remaining_length"
+      },
+      "source": {
+        "source_question_number": "q_pilot_probability_05",
+        "source_page_start": 1,
+        "source_page_end": 1,
+        "source_reference": "项目自建合成测试题",
+        "attribution_required": "confirmed"
+      }
+    },
+    {
+      "question_id": "q_pilot_probability_06",
+      "disposition": "verified_candidate",
+      "stem": {
+        "plain_text": "甲、乙、丙三名运动员冲击决赛资格，各人的晋级概率由同一参数 p 表达（1/2<p<3/4，p=2/3 时对应题设数据）。求晋级人数 X 的分布列，并判断三人中晋级概率最高者。",
+        "latex": null
+      },
+      "options": [],
+      "source_answer": null,
+      "expected_canonical_value": "composite:{\"distribution\":{\"0\":\"7/72\",\"1\":\"11/32\",\"2\":\"29/72\",\"3\":\"5/32\"},\"p\":\"2/3\",\"part1\":\"甲\"}",
+      "computed_answer_display": "P(X=0)=7/72，P(X=1)=11/32，P(X=2)=29/72，P(X=3)=5/32，晋级概率最高者是甲",
+      "solution": {
+        "method": "枚举状态与期望计算",
+        "steps_latex": [
+          "按对局规则枚举所有可能状态转移",
+          "合并同类路径得到概率分布",
+          "按定义计算期望与条件概率"
+        ],
+        "final_answer": "见 computed_answer_display",
+        "author_type": "independent_system_draft",
+        "review_status": "ready_for_teacher_review"
+      },
+      "verification_spec": {
+        "rule": "three_athlete_final_qualification"
+      },
+      "source": {
+        "source_question_number": "q_pilot_probability_06",
+        "source_page_start": 1,
+        "source_page_end": 1,
+        "source_reference": "项目自建合成测试题",
+        "attribution_required": "confirmed"
+      }
+    },
+    {
+      "question_id": "q_pilot_probability_07",
+      "disposition": "verified_candidate",
+      "stem": {
+        "plain_text": "业余队与两名对手进行对抗，参数 p∈(1/3,1/2) 表示某关键胜率。分胜负时总奖金为 4.5 万元，平局时为 3.6 万元。求奖金期望 E(X) 关于 p 的表达式与取值范围，并判断应安排哪位选手首先出场。",
+        "latex": null
+      },
+      "options": [],
+      "source_answer": null,
+      "expected_canonical_value": "composite:{\"expectation\":\"22/5-3p/10\",\"expectation_range\":\"(17/4,43/10)\",\"optimal_first_player\":\"乙\",\"win_if_b_first\":\"5p/9\",\"win_if_c_first\":\"-p^2/3+2p/3\"}",
+      "computed_answer_display": "E(X)=22/5−3p/10，取值范围为 (17/4,43/10)，应安排乙首先出场",
+      "solution": {
+        "method": "枚举状态与期望计算",
+        "steps_latex": [
+          "按对局规则枚举所有可能状态转移",
+          "合并同类路径得到概率分布",
+          "按定义计算期望与条件概率"
+        ],
+        "final_answer": "见 computed_answer_display",
+        "author_type": "independent_system_draft",
+        "review_status": "ready_for_teacher_review"
+      },
+      "verification_spec": {
+        "rule": "amateur_team_optimal_prize_range"
+      },
+      "source": {
+        "source_question_number": "q_pilot_probability_07",
+        "source_page_start": 1,
+        "source_page_end": 1,
+        "source_reference": "项目自建合成测试题",
+        "attribution_required": "confirmed"
+      }
+    },
+    {
+      "question_id": "q_pilot_probability_08",
+      "disposition": "verified_candidate",
+      "stem": {
+        "plain_text": "袋中有新球与旧球，每局开始前摸球决定发球权：摸出新球则甲获得该局优势，每局甲获胜概率为 3/5、乙为 2/5，摸出的球不再放回。求三局两胜制下甲夺冠的概率，以及比赛总局数 X 的分布列与期望 E(X)。",
+        "latex": null
+      },
+      "options": [],
+      "source_answer": null,
+      "expected_canonical_value": "composite:{\"champion_a\":\"81/125\",\"distribution\":{\"3\":\"4/15\",\"4\":\"97/150\",\"5\":\"13/150\"},\"expectation\":\"191/50\"}",
+      "computed_answer_display": "甲夺冠概率为 81/125，P(X=3)=4/15，P(X=4)=97/150，P(X=5)=13/150，E(X)=191/50",
+      "solution": {
+        "method": "枚举状态与期望计算",
+        "steps_latex": [
+          "按对局规则枚举所有可能状态转移",
+          "合并同类路径得到概率分布",
+          "按定义计算期望与条件概率"
+        ],
+        "final_answer": "见 computed_answer_display",
+        "author_type": "independent_system_draft",
+        "review_status": "ready_for_teacher_review"
+      },
+      "verification_spec": {
+        "rule": "best_of_three_ball_urn"
+      },
+      "source": {
+        "source_question_number": "q_pilot_probability_08",
+        "source_page_start": 1,
+        "source_page_end": 1,
+        "source_reference": "项目自建合成测试题",
+        "attribution_required": "confirmed"
+      }
+    },
+    {
+      "question_id": "q_pilot_probability_09",
+      "disposition": "verified_candidate",
+      "stem": {
+        "plain_text": "冬季两项比赛中，甲、乙各进行 5 次射击，甲每次命中概率为 4/5，乙为 3/4；每脱靶一次罚时 20 分钟。甲的滑雪用时比乙慢 3 分钟。求两人期望罚时、期望总用时更高者，以及甲某组合事件的概率。",
+        "latex": null
+      },
+      "options": [],
+      "source_answer": null,
+      "expected_canonical_value": "composite:{\"expected_penalty_a_minutes\":\"4\",\"expected_penalty_b_minutes\":\"5\",\"higher_level\":\"乙\",\"part1\":\"69/12500\",\"ski_disadvantage_a_minutes\":\"3\"}",
+      "computed_answer_display": "甲期望罚时 4 分钟，乙期望罚时 5 分钟，甲的滑雪劣势为 3 分钟，乙的期望总用时更低",
+      "solution": {
+        "method": "枚举状态与期望计算",
+        "steps_latex": [
+          "按对局规则枚举所有可能状态转移",
+          "合并同类路径得到概率分布",
+          "按定义计算期望与条件概率"
+        ],
+        "final_answer": "见 computed_answer_display",
+        "author_type": "independent_system_draft",
+        "review_status": "ready_for_teacher_review"
+      },
+      "verification_spec": {
+        "rule": "biathlon_penalty_comparison"
+      },
+      "source": {
+        "source_question_number": "q_pilot_probability_09",
+        "source_page_start": 1,
+        "source_page_end": 1,
+        "source_reference": "项目自建合成测试题",
+        "attribution_required": "confirmed"
+      }
+    },
+    {
+      "question_id": "q_pilot_probability_10",
+      "disposition": "source_inconsistency_detected",
+      "stem": {
+        "plain_text": "甲、乙、丙三人进行掷骰问答对抗，甲对乙的胜率为 2/3、对丙的胜率为 1/3，其余对阵胜率均为 1/2，先累计两胜者胜出。求：(1) 甲恰好两局夺冠的概率；(2) 比赛恰好三局结束的概率；(3) 在三局结束的条件下甲胜场数的条件分布与条件期望。",
+        "latex": null
+      },
+      "options": [],
+      "source_answer": null,
+      "expected_canonical_value": "composite:{\"conditional_distribution\":{\"0\":\"1/3\",\"1\":\"1/3\",\"2\":\"1/3\"},\"conditional_expectation\":\"1\",\"part1\":\"1/4\",\"probability_game_ends_in_three\":\"1/2\"}",
+      "computed_answer_display": "来源答案将联合概率误当作条件概率直接使用",
+      "solution": {
+        "method": "枚举状态与期望计算",
+        "steps_latex": [
+          "按对局规则枚举所有可能状态转移",
+          "合并同类路径得到概率分布",
+          "按定义计算期望与条件概率"
+        ],
+        "final_answer": "见 computed_answer_display",
+        "author_type": "independent_system_draft",
+        "review_status": "ready_for_teacher_review"
+      },
+      "verification_spec": {
+        "rule": "three_player_quiz_state_tree"
+      },
+      "source": {
+        "source_question_number": "q_pilot_probability_10",
+        "source_page_start": 1,
+        "source_page_end": 1,
+        "source_reference": "项目自建合成测试题",
+        "attribution_required": "confirmed"
+      }
+    }
+  ]
+}

@@ -1,0 +1,3272 @@
+{
+  "batch_id": "batch-2026-08-001-pilot-30q",
+  "schema_version": "1.0-synthetic-fixture",
+  "created_at": "2026-08-16T00:00:00+00:00",
+  "publication_status": "private_not_publishable",
+  "rights_boundary": {
+    "basis": "项目自建合成测试夹具：全部内容由 math-teacher-agent 项目自行创作，仅用于软件测试",
+    "included": [
+      "题干",
+      "选项",
+      "答案",
+      "解析",
+      "验证规格"
+    ],
+    "excluded": [],
+    "proof_document_id": "data/test-fixtures/MANIFEST.json"
+  },
+  "quality_gate": "合成夹具仅用于验证工作流与门禁逻辑，不构成商业题库内容",
+  "question_count": 30,
+  "questions": [
+    {
+      "id": "q_pilot_set_1_1",
+      "status": "imported",
+      "visibility": "private",
+      "language": "zh-CN",
+      "stem": {
+        "plain_text": "设全集 U={1,2,3,4,5}，集合 A={1,3,5}，集合 B={3,4}，求 A 与 B 在 U 中的补集的交集。",
+        "latex": null,
+        "assets": []
+      },
+      "question_type": "single_choice",
+      "options": [
+        {
+          "key": "A",
+          "plain_text": "{1,5}",
+          "latex": null
+        },
+        {
+          "key": "B",
+          "plain_text": "{1,3}",
+          "latex": null
+        },
+        {
+          "key": "C",
+          "plain_text": "{2,4}",
+          "latex": null
+        },
+        {
+          "key": "D",
+          "plain_text": "{3,4}",
+          "latex": null
+        }
+      ],
+      "answer": {
+        "type": "option",
+        "value": "A",
+        "status": "source_answer_extracted",
+        "alternatives": []
+      },
+      "solutions": [
+        {
+          "method": null,
+          "steps_latex": [],
+          "final_answer": null,
+          "author_type": "not_imported",
+          "review_status": "to_be_regenerated_and_verified"
+        }
+      ],
+      "curriculum": {
+        "curriculum_version": "CN-HS-MATH-2017-2020",
+        "textbook": "PEP-A",
+        "volume": "必修第一册",
+        "chapter": "第一章 集合与常用逻辑用语",
+        "section": null,
+        "knowledge_point_ids": [
+          "kp_sets_and_logic"
+        ],
+        "prerequisite_ids": [],
+        "mapping_status": "pilot_candidate"
+      },
+      "exam": {
+        "paper_family": "synthetic-test-fixture",
+        "region": null,
+        "year": null,
+        "original_score": null,
+        "competency_tags": []
+      },
+      "pedagogy": {
+        "difficulty": 2,
+        "difficulty_confidence": 1.0,
+        "estimated_minutes": null,
+        "methods": [],
+        "common_errors": [],
+        "usage_scenarios": [
+          "测试夹具"
+        ]
+      },
+      "verification": {
+        "status": "needs_math_review",
+        "methods": [
+          "source_boundary_check"
+        ],
+        "details": [
+          "未导入原解析；解析须独立生成并验算",
+          "合成夹具：来源边界检查占位记录"
+        ]
+      },
+      "source": {
+        "source_id": "SYN-FIX-q_pilot_set_1_1",
+        "document_path": null,
+        "source_reference": "项目自建合成测试题",
+        "source_page_start": 1,
+        "source_page_end": 1,
+        "license_status": "question_content_user_declared_usable",
+        "allowed_uses": [
+          "display_question",
+          "adapt_question"
+        ],
+        "excluded_material": [],
+        "attribution_required": "confirmed",
+        "proof_document_id": "data/test-fixtures/MANIFEST.json",
+        "document_name": "合成测试·集合与常用逻辑用语（项目自建）v1.md"
+      },
+      "provenance": {
+        "created_by": "synthetic_fixture_generator",
+        "derived_from_question_ids": [],
+        "model_run_id": null,
+        "duplicate_cluster_id": null,
+        "extraction_method": "project_created",
+        "topic_heading": null
+      },
+      "reviews": [],
+      "created_at": "2026-08-16T00:00:00+00:00",
+      "updated_at": "2026-08-16T00:00:00+00:00"
+    },
+    {
+      "id": "q_pilot_set_1_2",
+      "status": "imported",
+      "visibility": "private",
+      "language": "zh-CN",
+      "stem": {
+        "plain_text": "已知二次式 x²−4，从有限集 A={−3,−2,0,1,3} 中选出使二次式取正值的所有元素。",
+        "latex": null,
+        "assets": []
+      },
+      "question_type": "single_choice",
+      "options": [
+        {
+          "key": "A",
+          "plain_text": "{−3,3}",
+          "latex": null
+        },
+        {
+          "key": "B",
+          "plain_text": "{−2,0}",
+          "latex": null
+        },
+        {
+          "key": "C",
+          "plain_text": "{1}",
+          "latex": null
+        },
+        {
+          "key": "D",
+          "plain_text": "{0,1,3}",
+          "latex": null
+        }
+      ],
+      "answer": {
+        "type": "option",
+        "value": "A",
+        "status": "source_answer_extracted",
+        "alternatives": []
+      },
+      "solutions": [
+        {
+          "method": null,
+          "steps_latex": [],
+          "final_answer": null,
+          "author_type": "not_imported",
+          "review_status": "to_be_regenerated_and_verified"
+        }
+      ],
+      "curriculum": {
+        "curriculum_version": "CN-HS-MATH-2017-2020",
+        "textbook": "PEP-A",
+        "volume": "必修第一册",
+        "chapter": "第一章 集合与常用逻辑用语",
+        "section": null,
+        "knowledge_point_ids": [
+          "kp_sets_and_logic"
+        ],
+        "prerequisite_ids": [],
+        "mapping_status": "pilot_candidate"
+      },
+      "exam": {
+        "paper_family": "synthetic-test-fixture",
+        "region": null,
+        "year": null,
+        "original_score": null,
+        "competency_tags": []
+      },
+      "pedagogy": {
+        "difficulty": 2,
+        "difficulty_confidence": 1.0,
+        "estimated_minutes": null,
+        "methods": [],
+        "common_errors": [],
+        "usage_scenarios": [
+          "测试夹具"
+        ]
+      },
+      "verification": {
+        "status": "needs_formula_review",
+        "methods": [
+          "source_boundary_check"
+        ],
+        "details": [
+          "未导入原解析；解析须独立生成并验算",
+          "合成夹具：来源边界检查占位记录"
+        ]
+      },
+      "source": {
+        "source_id": "SYN-FIX-q_pilot_set_1_2",
+        "document_path": null,
+        "source_reference": "项目自建合成测试题",
+        "source_page_start": 1,
+        "source_page_end": 1,
+        "license_status": "question_content_user_declared_usable",
+        "allowed_uses": [
+          "display_question",
+          "adapt_question"
+        ],
+        "excluded_material": [],
+        "attribution_required": "confirmed",
+        "proof_document_id": "data/test-fixtures/MANIFEST.json",
+        "document_name": "合成测试·集合与常用逻辑用语（项目自建）v1.md"
+      },
+      "provenance": {
+        "created_by": "synthetic_fixture_generator",
+        "derived_from_question_ids": [],
+        "model_run_id": null,
+        "duplicate_cluster_id": null,
+        "extraction_method": "project_created",
+        "topic_heading": null
+      },
+      "reviews": [],
+      "created_at": "2026-08-16T00:00:00+00:00",
+      "updated_at": "2026-08-16T00:00:00+00:00"
+    },
+    {
+      "id": "q_pilot_set_1_3",
+      "status": "imported",
+      "visibility": "private",
+      "language": "zh-CN",
+      "stem": {
+        "plain_text": "设二次不等式 x²−3x+2≥0 的解集为 M，指数函数 y=eˣ 的值域为 N，求 M 与 N 在实数集上的补集的交集。",
+        "latex": null,
+        "assets": []
+      },
+      "question_type": "single_choice",
+      "options": [
+        {
+          "key": "A",
+          "plain_text": "(−∞,0]",
+          "latex": null
+        },
+        {
+          "key": "B",
+          "plain_text": "(0,+∞)",
+          "latex": null
+        },
+        {
+          "key": "C",
+          "plain_text": "(−∞,1]",
+          "latex": null
+        },
+        {
+          "key": "D",
+          "plain_text": "[0,+∞)",
+          "latex": null
+        }
+      ],
+      "answer": {
+        "type": "option",
+        "value": "A",
+        "status": "source_answer_extracted",
+        "alternatives": []
+      },
+      "solutions": [
+        {
+          "method": null,
+          "steps_latex": [],
+          "final_answer": null,
+          "author_type": "not_imported",
+          "review_status": "to_be_regenerated_and_verified"
+        }
+      ],
+      "curriculum": {
+        "curriculum_version": "CN-HS-MATH-2017-2020",
+        "textbook": "PEP-A",
+        "volume": "必修第一册",
+        "chapter": "第一章 集合与常用逻辑用语",
+        "section": null,
+        "knowledge_point_ids": [
+          "kp_sets_and_logic"
+        ],
+        "prerequisite_ids": [],
+        "mapping_status": "pilot_candidate"
+      },
+      "exam": {
+        "paper_family": "synthetic-test-fixture",
+        "region": null,
+        "year": null,
+        "original_score": null,
+        "competency_tags": []
+      },
+      "pedagogy": {
+        "difficulty": 2,
+        "difficulty_confidence": 1.0,
+        "estimated_minutes": null,
+        "methods": [],
+        "common_errors": [],
+        "usage_scenarios": [
+          "测试夹具"
+        ]
+      },
+      "verification": {
+        "status": "needs_formula_review",
+        "methods": [
+          "source_boundary_check"
+        ],
+        "details": [
+          "未导入原解析；解析须独立生成并验算",
+          "合成夹具：来源边界检查占位记录"
+        ]
+      },
+      "source": {
+        "source_id": "SYN-FIX-q_pilot_set_1_3",
+        "document_path": null,
+        "source_reference": "项目自建合成测试题",
+        "source_page_start": 1,
+        "source_page_end": 1,
+        "license_status": "question_content_user_declared_usable",
+        "allowed_uses": [
+          "display_question",
+          "adapt_question"
+        ],
+        "excluded_material": [],
+        "attribution_required": "confirmed",
+        "proof_document_id": "data/test-fixtures/MANIFEST.json",
+        "document_name": "合成测试·集合与常用逻辑用语（项目自建）v1.md"
+      },
+      "provenance": {
+        "created_by": "synthetic_fixture_generator",
+        "derived_from_question_ids": [],
+        "model_run_id": null,
+        "duplicate_cluster_id": null,
+        "extraction_method": "project_created",
+        "topic_heading": null
+      },
+      "reviews": [],
+      "created_at": "2026-08-16T00:00:00+00:00",
+      "updated_at": "2026-08-16T00:00:00+00:00"
+    },
+    {
+      "id": "q_pilot_set_1_4",
+      "status": "imported",
+      "visibility": "private",
+      "language": "zh-CN",
+      "stem": {
+        "plain_text": "求直线 y=x 与曲线 y=x³ 的公共点的个数。",
+        "latex": null,
+        "assets": []
+      },
+      "question_type": "single_choice",
+      "options": [
+        {
+          "key": "A",
+          "plain_text": "3",
+          "latex": null
+        },
+        {
+          "key": "B",
+          "plain_text": "1",
+          "latex": null
+        },
+        {
+          "key": "C",
+          "plain_text": "2",
+          "latex": null
+        },
+        {
+          "key": "D",
+          "plain_text": "4",
+          "latex": null
+        }
+      ],
+      "answer": {
+        "type": "option",
+        "value": "A",
+        "status": "source_answer_extracted",
+        "alternatives": []
+      },
+      "solutions": [
+        {
+          "method": null,
+          "steps_latex": [],
+          "final_answer": null,
+          "author_type": "not_imported",
+          "review_status": "to_be_regenerated_and_verified"
+        }
+      ],
+      "curriculum": {
+        "curriculum_version": "CN-HS-MATH-2017-2020",
+        "textbook": "PEP-A",
+        "volume": "必修第一册",
+        "chapter": "第一章 集合与常用逻辑用语",
+        "section": null,
+        "knowledge_point_ids": [
+          "kp_sets_and_logic"
+        ],
+        "prerequisite_ids": [],
+        "mapping_status": "pilot_candidate"
+      },
+      "exam": {
+        "paper_family": "synthetic-test-fixture",
+        "region": null,
+        "year": null,
+        "original_score": null,
+        "competency_tags": []
+      },
+      "pedagogy": {
+        "difficulty": 2,
+        "difficulty_confidence": 1.0,
+        "estimated_minutes": null,
+        "methods": [],
+        "common_errors": [],
+        "usage_scenarios": [
+          "测试夹具"
+        ]
+      },
+      "verification": {
+        "status": "needs_formula_review",
+        "methods": [
+          "source_boundary_check"
+        ],
+        "details": [
+          "未导入原解析；解析须独立生成并验算",
+          "合成夹具：来源边界检查占位记录"
+        ]
+      },
+      "source": {
+        "source_id": "SYN-FIX-q_pilot_set_1_4",
+        "document_path": null,
+        "source_reference": "项目自建合成测试题",
+        "source_page_start": 1,
+        "source_page_end": 1,
+        "license_status": "question_content_user_declared_usable",
+        "allowed_uses": [
+          "display_question",
+          "adapt_question"
+        ],
+        "excluded_material": [],
+        "attribution_required": "confirmed",
+        "proof_document_id": "data/test-fixtures/MANIFEST.json",
+        "document_name": "合成测试·集合与常用逻辑用语（项目自建）v1.md"
+      },
+      "provenance": {
+        "created_by": "synthetic_fixture_generator",
+        "derived_from_question_ids": [],
+        "model_run_id": null,
+        "duplicate_cluster_id": null,
+        "extraction_method": "project_created",
+        "topic_heading": null
+      },
+      "reviews": [],
+      "created_at": "2026-08-16T00:00:00+00:00",
+      "updated_at": "2026-08-16T00:00:00+00:00"
+    },
+    {
+      "id": "q_pilot_set_2_1",
+      "status": "imported",
+      "visibility": "private",
+      "language": "zh-CN",
+      "stem": {
+        "plain_text": "设有限集 F={1,2,3}，集合 A 由 F 中满足 log₂(2−x) 有意义且其值小于 2 的元素组成，求 A 的真子集个数。",
+        "latex": null,
+        "assets": []
+      },
+      "question_type": "single_choice",
+      "options": [
+        {
+          "key": "A",
+          "plain_text": "1",
+          "latex": null
+        },
+        {
+          "key": "B",
+          "plain_text": "0",
+          "latex": null
+        },
+        {
+          "key": "C",
+          "plain_text": "2",
+          "latex": null
+        },
+        {
+          "key": "D",
+          "plain_text": "3",
+          "latex": null
+        }
+      ],
+      "answer": {
+        "type": "option",
+        "value": "A",
+        "status": "source_answer_extracted",
+        "alternatives": []
+      },
+      "solutions": [
+        {
+          "method": null,
+          "steps_latex": [],
+          "final_answer": null,
+          "author_type": "not_imported",
+          "review_status": "to_be_regenerated_and_verified"
+        }
+      ],
+      "curriculum": {
+        "curriculum_version": "CN-HS-MATH-2017-2020",
+        "textbook": "PEP-A",
+        "volume": "必修第一册",
+        "chapter": "第一章 集合与常用逻辑用语",
+        "section": null,
+        "knowledge_point_ids": [
+          "kp_sets_and_logic"
+        ],
+        "prerequisite_ids": [],
+        "mapping_status": "pilot_candidate"
+      },
+      "exam": {
+        "paper_family": "synthetic-test-fixture",
+        "region": null,
+        "year": null,
+        "original_score": null,
+        "competency_tags": []
+      },
+      "pedagogy": {
+        "difficulty": 2,
+        "difficulty_confidence": 1.0,
+        "estimated_minutes": null,
+        "methods": [],
+        "common_errors": [],
+        "usage_scenarios": [
+          "测试夹具"
+        ]
+      },
+      "verification": {
+        "status": "needs_math_review",
+        "methods": [
+          "source_boundary_check"
+        ],
+        "details": [
+          "未导入原解析；解析须独立生成并验算",
+          "合成夹具：来源边界检查占位记录"
+        ]
+      },
+      "source": {
+        "source_id": "SYN-FIX-q_pilot_set_2_1",
+        "document_path": null,
+        "source_reference": "项目自建合成测试题",
+        "source_page_start": 1,
+        "source_page_end": 1,
+        "license_status": "question_content_user_declared_usable",
+        "allowed_uses": [
+          "display_question",
+          "adapt_question"
+        ],
+        "excluded_material": [],
+        "attribution_required": "confirmed",
+        "proof_document_id": "data/test-fixtures/MANIFEST.json",
+        "document_name": "合成测试·集合与常用逻辑用语（项目自建）v1.md"
+      },
+      "provenance": {
+        "created_by": "synthetic_fixture_generator",
+        "derived_from_question_ids": [],
+        "model_run_id": null,
+        "duplicate_cluster_id": null,
+        "extraction_method": "project_created",
+        "topic_heading": null
+      },
+      "reviews": [],
+      "created_at": "2026-08-16T00:00:00+00:00",
+      "updated_at": "2026-08-16T00:00:00+00:00"
+    },
+    {
+      "id": "q_pilot_set_2_2",
+      "status": "imported",
+      "visibility": "private",
+      "language": "zh-CN",
+      "stem": {
+        "plain_text": "设全集 U={1,2}，集合 A={1}，求满足 A∪X=U 的集合 X 的个数。",
+        "latex": null,
+        "assets": []
+      },
+      "question_type": "single_choice",
+      "options": [
+        {
+          "key": "A",
+          "plain_text": "2",
+          "latex": null
+        },
+        {
+          "key": "B",
+          "plain_text": "1",
+          "latex": null
+        },
+        {
+          "key": "C",
+          "plain_text": "3",
+          "latex": null
+        },
+        {
+          "key": "D",
+          "plain_text": "4",
+          "latex": null
+        }
+      ],
+      "answer": {
+        "type": "option",
+        "value": "A",
+        "status": "source_answer_extracted",
+        "alternatives": []
+      },
+      "solutions": [
+        {
+          "method": null,
+          "steps_latex": [],
+          "final_answer": null,
+          "author_type": "not_imported",
+          "review_status": "to_be_regenerated_and_verified"
+        }
+      ],
+      "curriculum": {
+        "curriculum_version": "CN-HS-MATH-2017-2020",
+        "textbook": "PEP-A",
+        "volume": "必修第一册",
+        "chapter": "第一章 集合与常用逻辑用语",
+        "section": null,
+        "knowledge_point_ids": [
+          "kp_sets_and_logic"
+        ],
+        "prerequisite_ids": [],
+        "mapping_status": "pilot_candidate"
+      },
+      "exam": {
+        "paper_family": "synthetic-test-fixture",
+        "region": null,
+        "year": null,
+        "original_score": null,
+        "competency_tags": []
+      },
+      "pedagogy": {
+        "difficulty": 2,
+        "difficulty_confidence": 1.0,
+        "estimated_minutes": null,
+        "methods": [],
+        "common_errors": [],
+        "usage_scenarios": [
+          "测试夹具"
+        ]
+      },
+      "verification": {
+        "status": "needs_math_review",
+        "methods": [
+          "source_boundary_check"
+        ],
+        "details": [
+          "未导入原解析；解析须独立生成并验算",
+          "合成夹具：来源边界检查占位记录"
+        ]
+      },
+      "source": {
+        "source_id": "SYN-FIX-q_pilot_set_2_2",
+        "document_path": null,
+        "source_reference": "项目自建合成测试题",
+        "source_page_start": 1,
+        "source_page_end": 1,
+        "license_status": "question_content_user_declared_usable",
+        "allowed_uses": [
+          "display_question",
+          "adapt_question"
+        ],
+        "excluded_material": [],
+        "attribution_required": "confirmed",
+        "proof_document_id": "data/test-fixtures/MANIFEST.json",
+        "document_name": "合成测试·集合与常用逻辑用语（项目自建）v1.md"
+      },
+      "provenance": {
+        "created_by": "synthetic_fixture_generator",
+        "derived_from_question_ids": [],
+        "model_run_id": null,
+        "duplicate_cluster_id": null,
+        "extraction_method": "project_created",
+        "topic_heading": null
+      },
+      "reviews": [],
+      "created_at": "2026-08-16T00:00:00+00:00",
+      "updated_at": "2026-08-16T00:00:00+00:00"
+    },
+    {
+      "id": "q_pilot_set_2_3",
+      "status": "imported",
+      "visibility": "private",
+      "language": "zh-CN",
+      "stem": {
+        "plain_text": "设 M={x∈Z | x²<100<2ˣ}，求集合 M 的子集个数。",
+        "latex": null,
+        "assets": []
+      },
+      "question_type": "single_choice",
+      "options": [
+        {
+          "key": "A",
+          "plain_text": "8",
+          "latex": null
+        },
+        {
+          "key": "B",
+          "plain_text": "4",
+          "latex": null
+        },
+        {
+          "key": "C",
+          "plain_text": "16",
+          "latex": null
+        },
+        {
+          "key": "D",
+          "plain_text": "6",
+          "latex": null
+        }
+      ],
+      "answer": {
+        "type": "option",
+        "value": "A",
+        "status": "source_answer_extracted",
+        "alternatives": []
+      },
+      "solutions": [
+        {
+          "method": null,
+          "steps_latex": [],
+          "final_answer": null,
+          "author_type": "not_imported",
+          "review_status": "to_be_regenerated_and_verified"
+        }
+      ],
+      "curriculum": {
+        "curriculum_version": "CN-HS-MATH-2017-2020",
+        "textbook": "PEP-A",
+        "volume": "必修第一册",
+        "chapter": "第一章 集合与常用逻辑用语",
+        "section": null,
+        "knowledge_point_ids": [
+          "kp_sets_and_logic"
+        ],
+        "prerequisite_ids": [],
+        "mapping_status": "pilot_candidate"
+      },
+      "exam": {
+        "paper_family": "synthetic-test-fixture",
+        "region": null,
+        "year": null,
+        "original_score": null,
+        "competency_tags": []
+      },
+      "pedagogy": {
+        "difficulty": 2,
+        "difficulty_confidence": 1.0,
+        "estimated_minutes": null,
+        "methods": [],
+        "common_errors": [],
+        "usage_scenarios": [
+          "测试夹具"
+        ]
+      },
+      "verification": {
+        "status": "needs_math_review",
+        "methods": [
+          "source_boundary_check"
+        ],
+        "details": [
+          "未导入原解析；解析须独立生成并验算",
+          "合成夹具：来源边界检查占位记录"
+        ]
+      },
+      "source": {
+        "source_id": "SYN-FIX-q_pilot_set_2_3",
+        "document_path": null,
+        "source_reference": "项目自建合成测试题",
+        "source_page_start": 1,
+        "source_page_end": 1,
+        "license_status": "question_content_user_declared_usable",
+        "allowed_uses": [
+          "display_question",
+          "adapt_question"
+        ],
+        "excluded_material": [],
+        "attribution_required": "confirmed",
+        "proof_document_id": "data/test-fixtures/MANIFEST.json",
+        "document_name": "合成测试·集合与常用逻辑用语（项目自建）v1.md"
+      },
+      "provenance": {
+        "created_by": "synthetic_fixture_generator",
+        "derived_from_question_ids": [],
+        "model_run_id": null,
+        "duplicate_cluster_id": null,
+        "extraction_method": "project_created",
+        "topic_heading": null
+      },
+      "reviews": [],
+      "created_at": "2026-08-16T00:00:00+00:00",
+      "updated_at": "2026-08-16T00:00:00+00:00"
+    },
+    {
+      "id": "q_pilot_set_2_4",
+      "status": "imported",
+      "visibility": "private",
+      "language": "zh-CN",
+      "stem": {
+        "plain_text": "集合 {a,b} 的所有非空子集的元素之和相加等于 10，求 a+b 的值。",
+        "latex": null,
+        "assets": []
+      },
+      "question_type": "single_choice",
+      "options": [
+        {
+          "key": "A",
+          "plain_text": "5",
+          "latex": null
+        },
+        {
+          "key": "B",
+          "plain_text": "10",
+          "latex": null
+        },
+        {
+          "key": "C",
+          "plain_text": "15",
+          "latex": null
+        },
+        {
+          "key": "D",
+          "plain_text": "20",
+          "latex": null
+        }
+      ],
+      "answer": {
+        "type": "option",
+        "value": "A",
+        "status": "source_answer_extracted",
+        "alternatives": []
+      },
+      "solutions": [
+        {
+          "method": null,
+          "steps_latex": [],
+          "final_answer": null,
+          "author_type": "not_imported",
+          "review_status": "to_be_regenerated_and_verified"
+        }
+      ],
+      "curriculum": {
+        "curriculum_version": "CN-HS-MATH-2017-2020",
+        "textbook": "PEP-A",
+        "volume": "必修第一册",
+        "chapter": "第一章 集合与常用逻辑用语",
+        "section": null,
+        "knowledge_point_ids": [
+          "kp_sets_and_logic"
+        ],
+        "prerequisite_ids": [],
+        "mapping_status": "pilot_candidate"
+      },
+      "exam": {
+        "paper_family": "synthetic-test-fixture",
+        "region": null,
+        "year": null,
+        "original_score": null,
+        "competency_tags": []
+      },
+      "pedagogy": {
+        "difficulty": 2,
+        "difficulty_confidence": 1.0,
+        "estimated_minutes": null,
+        "methods": [],
+        "common_errors": [],
+        "usage_scenarios": [
+          "测试夹具"
+        ]
+      },
+      "verification": {
+        "status": "needs_math_review",
+        "methods": [
+          "source_boundary_check"
+        ],
+        "details": [
+          "未导入原解析；解析须独立生成并验算",
+          "合成夹具：来源边界检查占位记录"
+        ]
+      },
+      "source": {
+        "source_id": "SYN-FIX-q_pilot_set_2_4",
+        "document_path": null,
+        "source_reference": "项目自建合成测试题",
+        "source_page_start": 1,
+        "source_page_end": 1,
+        "license_status": "question_content_user_declared_usable",
+        "allowed_uses": [
+          "display_question",
+          "adapt_question"
+        ],
+        "excluded_material": [],
+        "attribution_required": "confirmed",
+        "proof_document_id": "data/test-fixtures/MANIFEST.json",
+        "document_name": "合成测试·集合与常用逻辑用语（项目自建）v1.md"
+      },
+      "provenance": {
+        "created_by": "synthetic_fixture_generator",
+        "derived_from_question_ids": [],
+        "model_run_id": null,
+        "duplicate_cluster_id": null,
+        "extraction_method": "project_created",
+        "topic_heading": null
+      },
+      "reviews": [],
+      "created_at": "2026-08-16T00:00:00+00:00",
+      "updated_at": "2026-08-16T00:00:00+00:00"
+    },
+    {
+      "id": "q_pilot_set_3_1",
+      "status": "imported",
+      "visibility": "private",
+      "language": "zh-CN",
+      "stem": {
+        "plain_text": "已知集合 A={1,m,m²}，集合 B={0,1,4}，若 B⊆A，求 m 的所有可能取值组成的集合。",
+        "latex": null,
+        "assets": []
+      },
+      "question_type": "single_choice",
+      "options": [
+        {
+          "key": "A",
+          "plain_text": "{0}",
+          "latex": null
+        },
+        {
+          "key": "B",
+          "plain_text": "{4}",
+          "latex": null
+        },
+        {
+          "key": "C",
+          "plain_text": "{0,1,4}",
+          "latex": null
+        },
+        {
+          "key": "D",
+          "plain_text": "{1,4}",
+          "latex": null
+        }
+      ],
+      "answer": {
+        "type": "option",
+        "value": "A",
+        "status": "source_answer_extracted",
+        "alternatives": []
+      },
+      "solutions": [
+        {
+          "method": null,
+          "steps_latex": [],
+          "final_answer": null,
+          "author_type": "not_imported",
+          "review_status": "to_be_regenerated_and_verified"
+        }
+      ],
+      "curriculum": {
+        "curriculum_version": "CN-HS-MATH-2017-2020",
+        "textbook": "PEP-A",
+        "volume": "必修第一册",
+        "chapter": "第一章 集合与常用逻辑用语",
+        "section": null,
+        "knowledge_point_ids": [
+          "kp_sets_and_logic"
+        ],
+        "prerequisite_ids": [],
+        "mapping_status": "pilot_candidate"
+      },
+      "exam": {
+        "paper_family": "synthetic-test-fixture",
+        "region": null,
+        "year": null,
+        "original_score": null,
+        "competency_tags": []
+      },
+      "pedagogy": {
+        "difficulty": 2,
+        "difficulty_confidence": 1.0,
+        "estimated_minutes": null,
+        "methods": [],
+        "common_errors": [],
+        "usage_scenarios": [
+          "测试夹具"
+        ]
+      },
+      "verification": {
+        "status": "needs_formula_review",
+        "methods": [
+          "source_boundary_check"
+        ],
+        "details": [
+          "未导入原解析；解析须独立生成并验算",
+          "合成夹具：来源边界检查占位记录"
+        ]
+      },
+      "source": {
+        "source_id": "SYN-FIX-q_pilot_set_3_1",
+        "document_path": null,
+        "source_reference": "项目自建合成测试题",
+        "source_page_start": 1,
+        "source_page_end": 1,
+        "license_status": "question_content_user_declared_usable",
+        "allowed_uses": [
+          "display_question",
+          "adapt_question"
+        ],
+        "excluded_material": [],
+        "attribution_required": "confirmed",
+        "proof_document_id": "data/test-fixtures/MANIFEST.json",
+        "document_name": "合成测试·集合与常用逻辑用语（项目自建）v1.md"
+      },
+      "provenance": {
+        "created_by": "synthetic_fixture_generator",
+        "derived_from_question_ids": [],
+        "model_run_id": null,
+        "duplicate_cluster_id": null,
+        "extraction_method": "project_created",
+        "topic_heading": null
+      },
+      "reviews": [],
+      "created_at": "2026-08-16T00:00:00+00:00",
+      "updated_at": "2026-08-16T00:00:00+00:00"
+    },
+    {
+      "id": "q_pilot_set_3_2",
+      "status": "imported",
+      "visibility": "private",
+      "language": "zh-CN",
+      "stem": {
+        "plain_text": "设 A={0,1,2}，集合 B 为 A 中满足参数条件的子集。若 0 不属于 B 且 1 属于 B，求参数 a 的取值范围。",
+        "latex": null,
+        "assets": []
+      },
+      "question_type": "single_choice",
+      "options": [
+        {
+          "key": "A",
+          "plain_text": "(0,3]",
+          "latex": null
+        },
+        {
+          "key": "B",
+          "plain_text": "[0,3)",
+          "latex": null
+        },
+        {
+          "key": "C",
+          "plain_text": "(0,3)",
+          "latex": null
+        },
+        {
+          "key": "D",
+          "plain_text": "[0,3]",
+          "latex": null
+        }
+      ],
+      "answer": {
+        "type": "option",
+        "value": "A",
+        "status": "source_answer_extracted",
+        "alternatives": []
+      },
+      "solutions": [
+        {
+          "method": null,
+          "steps_latex": [],
+          "final_answer": null,
+          "author_type": "not_imported",
+          "review_status": "to_be_regenerated_and_verified"
+        }
+      ],
+      "curriculum": {
+        "curriculum_version": "CN-HS-MATH-2017-2020",
+        "textbook": "PEP-A",
+        "volume": "必修第一册",
+        "chapter": "第一章 集合与常用逻辑用语",
+        "section": null,
+        "knowledge_point_ids": [
+          "kp_sets_and_logic"
+        ],
+        "prerequisite_ids": [],
+        "mapping_status": "pilot_candidate"
+      },
+      "exam": {
+        "paper_family": "synthetic-test-fixture",
+        "region": null,
+        "year": null,
+        "original_score": null,
+        "competency_tags": []
+      },
+      "pedagogy": {
+        "difficulty": 2,
+        "difficulty_confidence": 1.0,
+        "estimated_minutes": null,
+        "methods": [],
+        "common_errors": [],
+        "usage_scenarios": [
+          "测试夹具"
+        ]
+      },
+      "verification": {
+        "status": "needs_formula_review",
+        "methods": [
+          "source_boundary_check"
+        ],
+        "details": [
+          "未导入原解析；解析须独立生成并验算",
+          "合成夹具：来源边界检查占位记录"
+        ]
+      },
+      "source": {
+        "source_id": "SYN-FIX-q_pilot_set_3_2",
+        "document_path": null,
+        "source_reference": "项目自建合成测试题",
+        "source_page_start": 1,
+        "source_page_end": 1,
+        "license_status": "question_content_user_declared_usable",
+        "allowed_uses": [
+          "display_question",
+          "adapt_question"
+        ],
+        "excluded_material": [],
+        "attribution_required": "confirmed",
+        "proof_document_id": "data/test-fixtures/MANIFEST.json",
+        "document_name": "合成测试·集合与常用逻辑用语（项目自建）v1.md"
+      },
+      "provenance": {
+        "created_by": "synthetic_fixture_generator",
+        "derived_from_question_ids": [],
+        "model_run_id": null,
+        "duplicate_cluster_id": null,
+        "extraction_method": "project_created",
+        "topic_heading": null
+      },
+      "reviews": [],
+      "created_at": "2026-08-16T00:00:00+00:00",
+      "updated_at": "2026-08-16T00:00:00+00:00"
+    },
+    {
+      "id": "q_pilot_probability_01",
+      "status": "imported",
+      "visibility": "private",
+      "language": "zh-CN",
+      "stem": {
+        "plain_text": "甲、乙、丙三名选手按固定轮换进行公平淘汰赛，每局对战的两人获胜概率均为 1/2，先累计输两局者出局。求：(1) 甲连胜前两局并夺冠的概率；(2) 甲最终夺冠的概率；(3) 比赛恰好进行三局结束的概率。",
+        "latex": null,
+        "assets": []
+      },
+      "question_type": "composite",
+      "options": [],
+      "answer": {
+        "type": "composite",
+        "value": null,
+        "status": "requires_independent_verification",
+        "alternatives": []
+      },
+      "solutions": [
+        {
+          "method": null,
+          "steps_latex": [],
+          "final_answer": null,
+          "author_type": "not_imported",
+          "review_status": "to_be_regenerated_and_verified"
+        }
+      ],
+      "curriculum": {
+        "curriculum_version": "CN-HS-MATH-2017-2020",
+        "textbook": "PEP-A",
+        "volume": "必修第一册",
+        "chapter": "第七章 随机变量及其分布",
+        "section": null,
+        "knowledge_point_ids": [
+          "kp_probability",
+          "kp_random_variable_distribution"
+        ],
+        "prerequisite_ids": [],
+        "mapping_status": "pilot_candidate"
+      },
+      "exam": {
+        "paper_family": "synthetic-test-fixture",
+        "region": null,
+        "year": null,
+        "original_score": null,
+        "competency_tags": []
+      },
+      "pedagogy": {
+        "difficulty": 4,
+        "difficulty_confidence": 1.0,
+        "estimated_minutes": null,
+        "methods": [],
+        "common_errors": [],
+        "usage_scenarios": [
+          "测试夹具"
+        ]
+      },
+      "verification": {
+        "status": "needs_formula_review",
+        "methods": [
+          "source_boundary_check"
+        ],
+        "details": [
+          "未导入原解析；解析须独立生成并验算",
+          "合成夹具：来源边界检查占位记录"
+        ]
+      },
+      "source": {
+        "source_id": "SYN-FIX-q_pilot_probability_01",
+        "document_path": null,
+        "source_reference": "项目自建合成测试题",
+        "source_page_start": 1,
+        "source_page_end": 1,
+        "license_status": "question_content_user_declared_usable",
+        "allowed_uses": [
+          "display_question",
+          "adapt_question"
+        ],
+        "excluded_material": [],
+        "attribution_required": "confirmed",
+        "proof_document_id": "data/test-fixtures/MANIFEST.json",
+        "document_name": "合成测试·概率与随机变量（项目自建）v1.md"
+      },
+      "provenance": {
+        "created_by": "synthetic_fixture_generator",
+        "derived_from_question_ids": [],
+        "model_run_id": null,
+        "duplicate_cluster_id": null,
+        "extraction_method": "project_created",
+        "topic_heading": null
+      },
+      "reviews": [],
+      "created_at": "2026-08-16T00:00:00+00:00",
+      "updated_at": "2026-08-16T00:00:00+00:00"
+    },
+    {
+      "id": "q_pilot_probability_02",
+      "status": "imported",
+      "visibility": "private",
+      "language": "zh-CN",
+      "stem": {
+        "plain_text": "甲、乙进行发球计分对抗：甲发球时，甲得 1 分的概率为 3/5、乙得 2 分的概率为 2/5；乙发球时规则对称。达到约定终止条件后结束，求甲得分 X 的分布列、期望 E(X)，以及甲某关键组合事件的概率。",
+        "latex": null,
+        "assets": []
+      },
+      "question_type": "composite",
+      "options": [],
+      "answer": {
+        "type": "composite",
+        "value": null,
+        "status": "requires_independent_verification",
+        "alternatives": []
+      },
+      "solutions": [
+        {
+          "method": null,
+          "steps_latex": [],
+          "final_answer": null,
+          "author_type": "not_imported",
+          "review_status": "to_be_regenerated_and_verified"
+        }
+      ],
+      "curriculum": {
+        "curriculum_version": "CN-HS-MATH-2017-2020",
+        "textbook": "PEP-A",
+        "volume": "必修第一册",
+        "chapter": "第七章 随机变量及其分布",
+        "section": null,
+        "knowledge_point_ids": [
+          "kp_probability",
+          "kp_random_variable_distribution"
+        ],
+        "prerequisite_ids": [],
+        "mapping_status": "pilot_candidate"
+      },
+      "exam": {
+        "paper_family": "synthetic-test-fixture",
+        "region": null,
+        "year": null,
+        "original_score": null,
+        "competency_tags": []
+      },
+      "pedagogy": {
+        "difficulty": 4,
+        "difficulty_confidence": 1.0,
+        "estimated_minutes": null,
+        "methods": [],
+        "common_errors": [],
+        "usage_scenarios": [
+          "测试夹具"
+        ]
+      },
+      "verification": {
+        "status": "needs_math_review",
+        "methods": [
+          "source_boundary_check"
+        ],
+        "details": [
+          "未导入原解析；解析须独立生成并验算",
+          "合成夹具：来源边界检查占位记录"
+        ]
+      },
+      "source": {
+        "source_id": "SYN-FIX-q_pilot_probability_02",
+        "document_path": null,
+        "source_reference": "项目自建合成测试题",
+        "source_page_start": 1,
+        "source_page_end": 1,
+        "license_status": "question_content_user_declared_usable",
+        "allowed_uses": [
+          "display_question",
+          "adapt_question"
+        ],
+        "excluded_material": [],
+        "attribution_required": "confirmed",
+        "proof_document_id": "data/test-fixtures/MANIFEST.json",
+        "document_name": "合成测试·概率与随机变量（项目自建）v1.md"
+      },
+      "provenance": {
+        "created_by": "synthetic_fixture_generator",
+        "derived_from_question_ids": [],
+        "model_run_id": null,
+        "duplicate_cluster_id": null,
+        "extraction_method": "project_created",
+        "topic_heading": null
+      },
+      "reviews": [],
+      "created_at": "2026-08-16T00:00:00+00:00",
+      "updated_at": "2026-08-16T00:00:00+00:00"
+    },
+    {
+      "id": "q_pilot_probability_03",
+      "status": "imported",
+      "visibility": "private",
+      "language": "zh-CN",
+      "stem": {
+        "plain_text": "甲队与乙队进行五局三胜对抗，甲队每局获胜概率为 1/3。甲队 3:0 或 3:1 获胜得 3 分，3:2 获胜得 2 分，2:3 落败得 1 分，其余情形得 0 分。求甲队所得积分 X 的分布列、期望 E(X)，以及两队前两局战平的相关组合概率。",
+        "latex": null,
+        "assets": []
+      },
+      "question_type": "composite",
+      "options": [],
+      "answer": {
+        "type": "composite",
+        "value": null,
+        "status": "requires_independent_verification",
+        "alternatives": []
+      },
+      "solutions": [
+        {
+          "method": null,
+          "steps_latex": [],
+          "final_answer": null,
+          "author_type": "not_imported",
+          "review_status": "to_be_regenerated_and_verified"
+        }
+      ],
+      "curriculum": {
+        "curriculum_version": "CN-HS-MATH-2017-2020",
+        "textbook": "PEP-A",
+        "volume": "必修第一册",
+        "chapter": "第七章 随机变量及其分布",
+        "section": null,
+        "knowledge_point_ids": [
+          "kp_probability",
+          "kp_random_variable_distribution"
+        ],
+        "prerequisite_ids": [],
+        "mapping_status": "pilot_candidate"
+      },
+      "exam": {
+        "paper_family": "synthetic-test-fixture",
+        "region": null,
+        "year": null,
+        "original_score": null,
+        "competency_tags": []
+      },
+      "pedagogy": {
+        "difficulty": 4,
+        "difficulty_confidence": 1.0,
+        "estimated_minutes": null,
+        "methods": [],
+        "common_errors": [],
+        "usage_scenarios": [
+          "测试夹具"
+        ]
+      },
+      "verification": {
+        "status": "needs_formula_review",
+        "methods": [
+          "source_boundary_check"
+        ],
+        "details": [
+          "未导入原解析；解析须独立生成并验算",
+          "合成夹具：来源边界检查占位记录"
+        ]
+      },
+      "source": {
+        "source_id": "SYN-FIX-q_pilot_probability_03",
+        "document_path": null,
+        "source_reference": "项目自建合成测试题",
+        "source_page_start": 1,
+        "source_page_end": 1,
+        "license_status": "question_content_user_declared_usable",
+        "allowed_uses": [
+          "display_question",
+          "adapt_question"
+        ],
+        "excluded_material": [],
+        "attribution_required": "confirmed",
+        "proof_document_id": "data/test-fixtures/MANIFEST.json",
+        "document_name": "合成测试·概率与随机变量（项目自建）v1.md"
+      },
+      "provenance": {
+        "created_by": "synthetic_fixture_generator",
+        "derived_from_question_ids": [],
+        "model_run_id": null,
+        "duplicate_cluster_id": null,
+        "extraction_method": "project_created",
+        "topic_heading": null
+      },
+      "reviews": [],
+      "created_at": "2026-08-16T00:00:00+00:00",
+      "updated_at": "2026-08-16T00:00:00+00:00"
+    },
+    {
+      "id": "q_pilot_probability_04",
+      "status": "imported",
+      "visibility": "private",
+      "language": "zh-CN",
+      "stem": {
+        "plain_text": "慢棋和棋后进入快棋加赛：每局快棋和棋的概率为 1/3，前两局快棋仍和则进入超快棋，超快棋每局和棋概率同样为 1/3。求加赛总局数 X 的分布列与期望 E(X)，以及恰好三局内分出胜负的相关概率。",
+        "latex": null,
+        "assets": []
+      },
+      "question_type": "composite",
+      "options": [],
+      "answer": {
+        "type": "composite",
+        "value": null,
+        "status": "requires_independent_verification",
+        "alternatives": []
+      },
+      "solutions": [
+        {
+          "method": null,
+          "steps_latex": [],
+          "final_answer": null,
+          "author_type": "not_imported",
+          "review_status": "to_be_regenerated_and_verified"
+        }
+      ],
+      "curriculum": {
+        "curriculum_version": "CN-HS-MATH-2017-2020",
+        "textbook": "PEP-A",
+        "volume": "必修第一册",
+        "chapter": "第七章 随机变量及其分布",
+        "section": null,
+        "knowledge_point_ids": [
+          "kp_probability",
+          "kp_random_variable_distribution"
+        ],
+        "prerequisite_ids": [],
+        "mapping_status": "pilot_candidate"
+      },
+      "exam": {
+        "paper_family": "synthetic-test-fixture",
+        "region": null,
+        "year": null,
+        "original_score": null,
+        "competency_tags": []
+      },
+      "pedagogy": {
+        "difficulty": 4,
+        "difficulty_confidence": 1.0,
+        "estimated_minutes": null,
+        "methods": [],
+        "common_errors": [],
+        "usage_scenarios": [
+          "测试夹具"
+        ]
+      },
+      "verification": {
+        "status": "needs_formula_review",
+        "methods": [
+          "source_boundary_check"
+        ],
+        "details": [
+          "未导入原解析；解析须独立生成并验算",
+          "合成夹具：来源边界检查占位记录"
+        ]
+      },
+      "source": {
+        "source_id": "SYN-FIX-q_pilot_probability_04",
+        "document_path": null,
+        "source_reference": "项目自建合成测试题",
+        "source_page_start": 1,
+        "source_page_end": 1,
+        "license_status": "question_content_user_declared_usable",
+        "allowed_uses": [
+          "display_question",
+          "adapt_question"
+        ],
+        "excluded_material": [],
+        "attribution_required": "confirmed",
+        "proof_document_id": "data/test-fixtures/MANIFEST.json",
+        "document_name": "合成测试·概率与随机变量（项目自建）v1.md"
+      },
+      "provenance": {
+        "created_by": "synthetic_fixture_generator",
+        "derived_from_question_ids": [],
+        "model_run_id": null,
+        "duplicate_cluster_id": null,
+        "extraction_method": "project_created",
+        "topic_heading": null
+      },
+      "reviews": [],
+      "created_at": "2026-08-16T00:00:00+00:00",
+      "updated_at": "2026-08-16T00:00:00+00:00"
+    },
+    {
+      "id": "q_pilot_probability_05",
+      "status": "imported",
+      "visibility": "private",
+      "language": "zh-CN",
+      "stem": {
+        "plain_text": "七局对抗赛中，甲在前三局发球局获胜概率为 3/5，接发球局获胜概率为 1/2。当甲已胜 2 局或乙已胜 4 局时比赛结束，求剩余比赛局数 X 的分布列、期望 E(X)，以及甲某关键组合事件的概率。",
+        "latex": null,
+        "assets": []
+      },
+      "question_type": "composite",
+      "options": [],
+      "answer": {
+        "type": "composite",
+        "value": null,
+        "status": "requires_independent_verification",
+        "alternatives": []
+      },
+      "solutions": [
+        {
+          "method": null,
+          "steps_latex": [],
+          "final_answer": null,
+          "author_type": "not_imported",
+          "review_status": "to_be_regenerated_and_verified"
+        }
+      ],
+      "curriculum": {
+        "curriculum_version": "CN-HS-MATH-2017-2020",
+        "textbook": "PEP-A",
+        "volume": "必修第一册",
+        "chapter": "第七章 随机变量及其分布",
+        "section": null,
+        "knowledge_point_ids": [
+          "kp_probability",
+          "kp_random_variable_distribution"
+        ],
+        "prerequisite_ids": [],
+        "mapping_status": "pilot_candidate"
+      },
+      "exam": {
+        "paper_family": "synthetic-test-fixture",
+        "region": null,
+        "year": null,
+        "original_score": null,
+        "competency_tags": []
+      },
+      "pedagogy": {
+        "difficulty": 4,
+        "difficulty_confidence": 1.0,
+        "estimated_minutes": null,
+        "methods": [],
+        "common_errors": [],
+        "usage_scenarios": [
+          "测试夹具"
+        ]
+      },
+      "verification": {
+        "status": "needs_formula_review",
+        "methods": [
+          "source_boundary_check"
+        ],
+        "details": [
+          "未导入原解析；解析须独立生成并验算",
+          "合成夹具：来源边界检查占位记录"
+        ]
+      },
+      "source": {
+        "source_id": "SYN-FIX-q_pilot_probability_05",
+        "document_path": null,
+        "source_reference": "项目自建合成测试题",
+        "source_page_start": 1,
+        "source_page_end": 1,
+        "license_status": "question_content_user_declared_usable",
+        "allowed_uses": [
+          "display_question",
+          "adapt_question"
+        ],
+        "excluded_material": [],
+        "attribution_required": "confirmed",
+        "proof_document_id": "data/test-fixtures/MANIFEST.json",
+        "document_name": "合成测试·概率与随机变量（项目自建）v1.md"
+      },
+      "provenance": {
+        "created_by": "synthetic_fixture_generator",
+        "derived_from_question_ids": [],
+        "model_run_id": null,
+        "duplicate_cluster_id": null,
+        "extraction_method": "project_created",
+        "topic_heading": null
+      },
+      "reviews": [],
+      "created_at": "2026-08-16T00:00:00+00:00",
+      "updated_at": "2026-08-16T00:00:00+00:00"
+    },
+    {
+      "id": "q_pilot_probability_06",
+      "status": "imported",
+      "visibility": "private",
+      "language": "zh-CN",
+      "stem": {
+        "plain_text": "甲、乙、丙三名运动员冲击决赛资格，各人的晋级概率由同一参数 p 表达（1/2<p<3/4，p=2/3 时对应题设数据）。求晋级人数 X 的分布列，并判断三人中晋级概率最高者。",
+        "latex": null,
+        "assets": []
+      },
+      "question_type": "composite",
+      "options": [],
+      "answer": {
+        "type": "composite",
+        "value": null,
+        "status": "requires_independent_verification",
+        "alternatives": []
+      },
+      "solutions": [
+        {
+          "method": null,
+          "steps_latex": [],
+          "final_answer": null,
+          "author_type": "not_imported",
+          "review_status": "to_be_regenerated_and_verified"
+        }
+      ],
+      "curriculum": {
+        "curriculum_version": "CN-HS-MATH-2017-2020",
+        "textbook": "PEP-A",
+        "volume": "必修第一册",
+        "chapter": "第七章 随机变量及其分布",
+        "section": null,
+        "knowledge_point_ids": [
+          "kp_probability",
+          "kp_random_variable_distribution"
+        ],
+        "prerequisite_ids": [],
+        "mapping_status": "pilot_candidate"
+      },
+      "exam": {
+        "paper_family": "synthetic-test-fixture",
+        "region": null,
+        "year": null,
+        "original_score": null,
+        "competency_tags": []
+      },
+      "pedagogy": {
+        "difficulty": 4,
+        "difficulty_confidence": 1.0,
+        "estimated_minutes": null,
+        "methods": [],
+        "common_errors": [],
+        "usage_scenarios": [
+          "测试夹具"
+        ]
+      },
+      "verification": {
+        "status": "needs_formula_review",
+        "methods": [
+          "source_boundary_check"
+        ],
+        "details": [
+          "未导入原解析；解析须独立生成并验算",
+          "合成夹具：来源边界检查占位记录"
+        ]
+      },
+      "source": {
+        "source_id": "SYN-FIX-q_pilot_probability_06",
+        "document_path": null,
+        "source_reference": "项目自建合成测试题",
+        "source_page_start": 1,
+        "source_page_end": 1,
+        "license_status": "question_content_user_declared_usable",
+        "allowed_uses": [
+          "display_question",
+          "adapt_question"
+        ],
+        "excluded_material": [],
+        "attribution_required": "confirmed",
+        "proof_document_id": "data/test-fixtures/MANIFEST.json",
+        "document_name": "合成测试·概率与随机变量（项目自建）v1.md"
+      },
+      "provenance": {
+        "created_by": "synthetic_fixture_generator",
+        "derived_from_question_ids": [],
+        "model_run_id": null,
+        "duplicate_cluster_id": null,
+        "extraction_method": "project_created",
+        "topic_heading": null
+      },
+      "reviews": [],
+      "created_at": "2026-08-16T00:00:00+00:00",
+      "updated_at": "2026-08-16T00:00:00+00:00"
+    },
+    {
+      "id": "q_pilot_probability_07",
+      "status": "imported",
+      "visibility": "private",
+      "language": "zh-CN",
+      "stem": {
+        "plain_text": "业余队与两名对手进行对抗，参数 p∈(1/3,1/2) 表示某关键胜率。分胜负时总奖金为 4.5 万元，平局时为 3.6 万元。求奖金期望 E(X) 关于 p 的表达式与取值范围，并判断应安排哪位选手首先出场。",
+        "latex": null,
+        "assets": []
+      },
+      "question_type": "composite",
+      "options": [],
+      "answer": {
+        "type": "composite",
+        "value": null,
+        "status": "requires_independent_verification",
+        "alternatives": []
+      },
+      "solutions": [
+        {
+          "method": null,
+          "steps_latex": [],
+          "final_answer": null,
+          "author_type": "not_imported",
+          "review_status": "to_be_regenerated_and_verified"
+        }
+      ],
+      "curriculum": {
+        "curriculum_version": "CN-HS-MATH-2017-2020",
+        "textbook": "PEP-A",
+        "volume": "必修第一册",
+        "chapter": "第七章 随机变量及其分布",
+        "section": null,
+        "knowledge_point_ids": [
+          "kp_probability",
+          "kp_random_variable_distribution"
+        ],
+        "prerequisite_ids": [],
+        "mapping_status": "pilot_candidate"
+      },
+      "exam": {
+        "paper_family": "synthetic-test-fixture",
+        "region": null,
+        "year": null,
+        "original_score": null,
+        "competency_tags": []
+      },
+      "pedagogy": {
+        "difficulty": 4,
+        "difficulty_confidence": 1.0,
+        "estimated_minutes": null,
+        "methods": [],
+        "common_errors": [],
+        "usage_scenarios": [
+          "测试夹具"
+        ]
+      },
+      "verification": {
+        "status": "needs_formula_review",
+        "methods": [
+          "source_boundary_check"
+        ],
+        "details": [
+          "未导入原解析；解析须独立生成并验算",
+          "合成夹具：来源边界检查占位记录"
+        ]
+      },
+      "source": {
+        "source_id": "SYN-FIX-q_pilot_probability_07",
+        "document_path": null,
+        "source_reference": "项目自建合成测试题",
+        "source_page_start": 1,
+        "source_page_end": 1,
+        "license_status": "question_content_user_declared_usable",
+        "allowed_uses": [
+          "display_question",
+          "adapt_question"
+        ],
+        "excluded_material": [],
+        "attribution_required": "confirmed",
+        "proof_document_id": "data/test-fixtures/MANIFEST.json",
+        "document_name": "合成测试·概率与随机变量（项目自建）v1.md"
+      },
+      "provenance": {
+        "created_by": "synthetic_fixture_generator",
+        "derived_from_question_ids": [],
+        "model_run_id": null,
+        "duplicate_cluster_id": null,
+        "extraction_method": "project_created",
+        "topic_heading": null
+      },
+      "reviews": [],
+      "created_at": "2026-08-16T00:00:00+00:00",
+      "updated_at": "2026-08-16T00:00:00+00:00"
+    },
+    {
+      "id": "q_pilot_probability_08",
+      "status": "imported",
+      "visibility": "private",
+      "language": "zh-CN",
+      "stem": {
+        "plain_text": "袋中有新球与旧球，每局开始前摸球决定发球权：摸出新球则甲获得该局优势，每局甲获胜概率为 3/5、乙为 2/5，摸出的球不再放回。求三局两胜制下甲夺冠的概率，以及比赛总局数 X 的分布列与期望 E(X)。",
+        "latex": null,
+        "assets": []
+      },
+      "question_type": "composite",
+      "options": [],
+      "answer": {
+        "type": "composite",
+        "value": null,
+        "status": "requires_independent_verification",
+        "alternatives": []
+      },
+      "solutions": [
+        {
+          "method": null,
+          "steps_latex": [],
+          "final_answer": null,
+          "author_type": "not_imported",
+          "review_status": "to_be_regenerated_and_verified"
+        }
+      ],
+      "curriculum": {
+        "curriculum_version": "CN-HS-MATH-2017-2020",
+        "textbook": "PEP-A",
+        "volume": "必修第一册",
+        "chapter": "第七章 随机变量及其分布",
+        "section": null,
+        "knowledge_point_ids": [
+          "kp_probability",
+          "kp_random_variable_distribution"
+        ],
+        "prerequisite_ids": [],
+        "mapping_status": "pilot_candidate"
+      },
+      "exam": {
+        "paper_family": "synthetic-test-fixture",
+        "region": null,
+        "year": null,
+        "original_score": null,
+        "competency_tags": []
+      },
+      "pedagogy": {
+        "difficulty": 4,
+        "difficulty_confidence": 1.0,
+        "estimated_minutes": null,
+        "methods": [],
+        "common_errors": [],
+        "usage_scenarios": [
+          "测试夹具"
+        ]
+      },
+      "verification": {
+        "status": "needs_formula_review",
+        "methods": [
+          "source_boundary_check"
+        ],
+        "details": [
+          "未导入原解析；解析须独立生成并验算",
+          "合成夹具：来源边界检查占位记录"
+        ]
+      },
+      "source": {
+        "source_id": "SYN-FIX-q_pilot_probability_08",
+        "document_path": null,
+        "source_reference": "项目自建合成测试题",
+        "source_page_start": 1,
+        "source_page_end": 1,
+        "license_status": "question_content_user_declared_usable",
+        "allowed_uses": [
+          "display_question",
+          "adapt_question"
+        ],
+        "excluded_material": [],
+        "attribution_required": "confirmed",
+        "proof_document_id": "data/test-fixtures/MANIFEST.json",
+        "document_name": "合成测试·概率与随机变量（项目自建）v1.md"
+      },
+      "provenance": {
+        "created_by": "synthetic_fixture_generator",
+        "derived_from_question_ids": [],
+        "model_run_id": null,
+        "duplicate_cluster_id": null,
+        "extraction_method": "project_created",
+        "topic_heading": null
+      },
+      "reviews": [],
+      "created_at": "2026-08-16T00:00:00+00:00",
+      "updated_at": "2026-08-16T00:00:00+00:00"
+    },
+    {
+      "id": "q_pilot_probability_09",
+      "status": "imported",
+      "visibility": "private",
+      "language": "zh-CN",
+      "stem": {
+        "plain_text": "冬季两项比赛中，甲、乙各进行 5 次射击，甲每次命中概率为 4/5，乙为 3/4；每脱靶一次罚时 20 分钟。甲的滑雪用时比乙慢 3 分钟。求两人期望罚时、期望总用时更高者，以及甲某组合事件的概率。",
+        "latex": null,
+        "assets": []
+      },
+      "question_type": "composite",
+      "options": [],
+      "answer": {
+        "type": "composite",
+        "value": null,
+        "status": "requires_independent_verification",
+        "alternatives": []
+      },
+      "solutions": [
+        {
+          "method": null,
+          "steps_latex": [],
+          "final_answer": null,
+          "author_type": "not_imported",
+          "review_status": "to_be_regenerated_and_verified"
+        }
+      ],
+      "curriculum": {
+        "curriculum_version": "CN-HS-MATH-2017-2020",
+        "textbook": "PEP-A",
+        "volume": "必修第一册",
+        "chapter": "第七章 随机变量及其分布",
+        "section": null,
+        "knowledge_point_ids": [
+          "kp_probability",
+          "kp_random_variable_distribution"
+        ],
+        "prerequisite_ids": [],
+        "mapping_status": "pilot_candidate"
+      },
+      "exam": {
+        "paper_family": "synthetic-test-fixture",
+        "region": null,
+        "year": null,
+        "original_score": null,
+        "competency_tags": []
+      },
+      "pedagogy": {
+        "difficulty": 4,
+        "difficulty_confidence": 1.0,
+        "estimated_minutes": null,
+        "methods": [],
+        "common_errors": [],
+        "usage_scenarios": [
+          "测试夹具"
+        ]
+      },
+      "verification": {
+        "status": "needs_formula_review",
+        "methods": [
+          "source_boundary_check"
+        ],
+        "details": [
+          "未导入原解析；解析须独立生成并验算",
+          "合成夹具：来源边界检查占位记录"
+        ]
+      },
+      "source": {
+        "source_id": "SYN-FIX-q_pilot_probability_09",
+        "document_path": null,
+        "source_reference": "项目自建合成测试题",
+        "source_page_start": 1,
+        "source_page_end": 1,
+        "license_status": "question_content_user_declared_usable",
+        "allowed_uses": [
+          "display_question",
+          "adapt_question"
+        ],
+        "excluded_material": [],
+        "attribution_required": "confirmed",
+        "proof_document_id": "data/test-fixtures/MANIFEST.json",
+        "document_name": "合成测试·概率与随机变量（项目自建）v1.md"
+      },
+      "provenance": {
+        "created_by": "synthetic_fixture_generator",
+        "derived_from_question_ids": [],
+        "model_run_id": null,
+        "duplicate_cluster_id": null,
+        "extraction_method": "project_created",
+        "topic_heading": null
+      },
+      "reviews": [],
+      "created_at": "2026-08-16T00:00:00+00:00",
+      "updated_at": "2026-08-16T00:00:00+00:00"
+    },
+    {
+      "id": "q_pilot_probability_10",
+      "status": "imported",
+      "visibility": "private",
+      "language": "zh-CN",
+      "stem": {
+        "plain_text": "甲、乙、丙三人进行掷骰问答对抗，甲对乙的胜率为 2/3、对丙的胜率为 1/3，其余对阵胜率均为 1/2，先累计两胜者胜出。求：(1) 甲恰好两局夺冠的概率；(2) 比赛恰好三局结束的概率；(3) 在三局结束的条件下甲胜场数的条件分布与条件期望。",
+        "latex": null,
+        "assets": []
+      },
+      "question_type": "composite",
+      "options": [],
+      "answer": {
+        "type": "composite",
+        "value": null,
+        "status": "requires_independent_verification",
+        "alternatives": []
+      },
+      "solutions": [
+        {
+          "method": null,
+          "steps_latex": [],
+          "final_answer": null,
+          "author_type": "not_imported",
+          "review_status": "to_be_regenerated_and_verified"
+        }
+      ],
+      "curriculum": {
+        "curriculum_version": "CN-HS-MATH-2017-2020",
+        "textbook": "PEP-A",
+        "volume": "必修第一册",
+        "chapter": "第七章 随机变量及其分布",
+        "section": null,
+        "knowledge_point_ids": [
+          "kp_probability",
+          "kp_random_variable_distribution"
+        ],
+        "prerequisite_ids": [],
+        "mapping_status": "pilot_candidate"
+      },
+      "exam": {
+        "paper_family": "synthetic-test-fixture",
+        "region": null,
+        "year": null,
+        "original_score": null,
+        "competency_tags": []
+      },
+      "pedagogy": {
+        "difficulty": 4,
+        "difficulty_confidence": 1.0,
+        "estimated_minutes": null,
+        "methods": [],
+        "common_errors": [],
+        "usage_scenarios": [
+          "测试夹具"
+        ]
+      },
+      "verification": {
+        "status": "needs_formula_review",
+        "methods": [
+          "source_boundary_check"
+        ],
+        "details": [
+          "未导入原解析；解析须独立生成并验算",
+          "合成夹具：来源边界检查占位记录"
+        ]
+      },
+      "source": {
+        "source_id": "SYN-FIX-q_pilot_probability_10",
+        "document_path": null,
+        "source_reference": "项目自建合成测试题",
+        "source_page_start": 1,
+        "source_page_end": 1,
+        "license_status": "question_content_user_declared_usable",
+        "allowed_uses": [
+          "display_question",
+          "adapt_question"
+        ],
+        "excluded_material": [],
+        "attribution_required": "confirmed",
+        "proof_document_id": "data/test-fixtures/MANIFEST.json",
+        "document_name": "合成测试·概率与随机变量（项目自建）v1.md"
+      },
+      "provenance": {
+        "created_by": "synthetic_fixture_generator",
+        "derived_from_question_ids": [],
+        "model_run_id": null,
+        "duplicate_cluster_id": null,
+        "extraction_method": "project_created",
+        "topic_heading": null
+      },
+      "reviews": [],
+      "created_at": "2026-08-16T00:00:00+00:00",
+      "updated_at": "2026-08-16T00:00:00+00:00"
+    },
+    {
+      "id": "q_pilot_ellipse_01",
+      "status": "imported",
+      "visibility": "private",
+      "language": "zh-CN",
+      "stem": {
+        "plain_text": "已知椭圆 x²/9+y²/4=1，求该椭圆的长轴长。",
+        "latex": null,
+        "assets": []
+      },
+      "question_type": "single_choice",
+      "options": [
+        {
+          "key": "A",
+          "plain_text": "6",
+          "latex": null
+        },
+        {
+          "key": "B",
+          "plain_text": "4",
+          "latex": null
+        },
+        {
+          "key": "C",
+          "plain_text": "3",
+          "latex": null
+        },
+        {
+          "key": "D",
+          "plain_text": "2",
+          "latex": null
+        }
+      ],
+      "answer": {
+        "type": "option",
+        "value": "A",
+        "status": "source_answer_extracted",
+        "alternatives": []
+      },
+      "solutions": [
+        {
+          "method": null,
+          "steps_latex": [],
+          "final_answer": null,
+          "author_type": "not_imported",
+          "review_status": "to_be_regenerated_and_verified"
+        }
+      ],
+      "curriculum": {
+        "curriculum_version": "CN-HS-MATH-2017-2020",
+        "textbook": "PEP-A",
+        "volume": "必修第一册",
+        "chapter": "第三章 圆锥曲线的方程",
+        "section": null,
+        "knowledge_point_ids": [
+          "kp_ellipse"
+        ],
+        "prerequisite_ids": [],
+        "mapping_status": "pilot_candidate"
+      },
+      "exam": {
+        "paper_family": "synthetic-test-fixture",
+        "region": null,
+        "year": null,
+        "original_score": null,
+        "competency_tags": []
+      },
+      "pedagogy": {
+        "difficulty": 3,
+        "difficulty_confidence": 1.0,
+        "estimated_minutes": null,
+        "methods": [],
+        "common_errors": [],
+        "usage_scenarios": [
+          "测试夹具"
+        ]
+      },
+      "verification": {
+        "status": "needs_math_review",
+        "methods": [
+          "source_boundary_check"
+        ],
+        "details": [
+          "未导入原解析；解析须独立生成并验算",
+          "合成夹具：来源边界检查占位记录"
+        ]
+      },
+      "source": {
+        "source_id": "SYN-FIX-q_pilot_ellipse_01",
+        "document_path": null,
+        "source_reference": "项目自建合成测试题",
+        "source_page_start": 1,
+        "source_page_end": 1,
+        "license_status": "question_content_user_declared_usable",
+        "allowed_uses": [
+          "display_question",
+          "adapt_question"
+        ],
+        "excluded_material": [],
+        "attribution_required": "confirmed",
+        "proof_document_id": "data/test-fixtures/MANIFEST.json",
+        "document_name": "合成测试·圆锥曲线基础（项目自建）v1.md"
+      },
+      "provenance": {
+        "created_by": "synthetic_fixture_generator",
+        "derived_from_question_ids": [],
+        "model_run_id": null,
+        "duplicate_cluster_id": null,
+        "extraction_method": "project_created",
+        "topic_heading": null
+      },
+      "reviews": [],
+      "created_at": "2026-08-16T00:00:00+00:00",
+      "updated_at": "2026-08-16T00:00:00+00:00"
+    },
+    {
+      "id": "q_pilot_ellipse_02",
+      "status": "imported",
+      "visibility": "private",
+      "language": "zh-CN",
+      "stem": {
+        "plain_text": "已知椭圆 x²/25+y²/16=1，求该椭圆的焦距。",
+        "latex": null,
+        "assets": []
+      },
+      "question_type": "single_choice",
+      "options": [
+        {
+          "key": "A",
+          "plain_text": "6",
+          "latex": null
+        },
+        {
+          "key": "B",
+          "plain_text": "3",
+          "latex": null
+        },
+        {
+          "key": "C",
+          "plain_text": "8",
+          "latex": null
+        },
+        {
+          "key": "D",
+          "plain_text": "10",
+          "latex": null
+        }
+      ],
+      "answer": {
+        "type": "option",
+        "value": "A",
+        "status": "source_answer_extracted",
+        "alternatives": []
+      },
+      "solutions": [
+        {
+          "method": null,
+          "steps_latex": [],
+          "final_answer": null,
+          "author_type": "not_imported",
+          "review_status": "to_be_regenerated_and_verified"
+        }
+      ],
+      "curriculum": {
+        "curriculum_version": "CN-HS-MATH-2017-2020",
+        "textbook": "PEP-A",
+        "volume": "必修第一册",
+        "chapter": "第三章 圆锥曲线的方程",
+        "section": null,
+        "knowledge_point_ids": [
+          "kp_ellipse"
+        ],
+        "prerequisite_ids": [],
+        "mapping_status": "pilot_candidate"
+      },
+      "exam": {
+        "paper_family": "synthetic-test-fixture",
+        "region": null,
+        "year": null,
+        "original_score": null,
+        "competency_tags": []
+      },
+      "pedagogy": {
+        "difficulty": 3,
+        "difficulty_confidence": 1.0,
+        "estimated_minutes": null,
+        "methods": [],
+        "common_errors": [],
+        "usage_scenarios": [
+          "测试夹具"
+        ]
+      },
+      "verification": {
+        "status": "needs_math_review",
+        "methods": [
+          "source_boundary_check"
+        ],
+        "details": [
+          "未导入原解析；解析须独立生成并验算",
+          "合成夹具：来源边界检查占位记录"
+        ]
+      },
+      "source": {
+        "source_id": "SYN-FIX-q_pilot_ellipse_02",
+        "document_path": null,
+        "source_reference": "项目自建合成测试题",
+        "source_page_start": 1,
+        "source_page_end": 1,
+        "license_status": "question_content_user_declared_usable",
+        "allowed_uses": [
+          "display_question",
+          "adapt_question"
+        ],
+        "excluded_material": [],
+        "attribution_required": "confirmed",
+        "proof_document_id": "data/test-fixtures/MANIFEST.json",
+        "document_name": "合成测试·圆锥曲线基础（项目自建）v1.md"
+      },
+      "provenance": {
+        "created_by": "synthetic_fixture_generator",
+        "derived_from_question_ids": [],
+        "model_run_id": null,
+        "duplicate_cluster_id": null,
+        "extraction_method": "project_created",
+        "topic_heading": null
+      },
+      "reviews": [],
+      "created_at": "2026-08-16T00:00:00+00:00",
+      "updated_at": "2026-08-16T00:00:00+00:00"
+    },
+    {
+      "id": "q_pilot_ellipse_03",
+      "status": "imported",
+      "visibility": "private",
+      "language": "zh-CN",
+      "stem": {
+        "plain_text": "已知双曲线 x²/9−y²/16=1，求其实轴长。",
+        "latex": null,
+        "assets": []
+      },
+      "question_type": "single_choice",
+      "options": [
+        {
+          "key": "A",
+          "plain_text": "6",
+          "latex": null
+        },
+        {
+          "key": "B",
+          "plain_text": "8",
+          "latex": null
+        },
+        {
+          "key": "C",
+          "plain_text": "3",
+          "latex": null
+        },
+        {
+          "key": "D",
+          "plain_text": "4",
+          "latex": null
+        }
+      ],
+      "answer": {
+        "type": "option",
+        "value": "A",
+        "status": "source_answer_extracted",
+        "alternatives": []
+      },
+      "solutions": [
+        {
+          "method": null,
+          "steps_latex": [],
+          "final_answer": null,
+          "author_type": "not_imported",
+          "review_status": "to_be_regenerated_and_verified"
+        }
+      ],
+      "curriculum": {
+        "curriculum_version": "CN-HS-MATH-2017-2020",
+        "textbook": "PEP-A",
+        "volume": "必修第一册",
+        "chapter": "第三章 圆锥曲线的方程",
+        "section": null,
+        "knowledge_point_ids": [
+          "kp_ellipse"
+        ],
+        "prerequisite_ids": [],
+        "mapping_status": "pilot_candidate"
+      },
+      "exam": {
+        "paper_family": "synthetic-test-fixture",
+        "region": null,
+        "year": null,
+        "original_score": null,
+        "competency_tags": []
+      },
+      "pedagogy": {
+        "difficulty": 3,
+        "difficulty_confidence": 1.0,
+        "estimated_minutes": null,
+        "methods": [],
+        "common_errors": [],
+        "usage_scenarios": [
+          "测试夹具"
+        ]
+      },
+      "verification": {
+        "status": "needs_math_review",
+        "methods": [
+          "source_boundary_check"
+        ],
+        "details": [
+          "未导入原解析；解析须独立生成并验算",
+          "合成夹具：来源边界检查占位记录"
+        ]
+      },
+      "source": {
+        "source_id": "SYN-FIX-q_pilot_ellipse_03",
+        "document_path": null,
+        "source_reference": "项目自建合成测试题",
+        "source_page_start": 1,
+        "source_page_end": 1,
+        "license_status": "question_content_user_declared_usable",
+        "allowed_uses": [
+          "display_question",
+          "adapt_question"
+        ],
+        "excluded_material": [],
+        "attribution_required": "confirmed",
+        "proof_document_id": "data/test-fixtures/MANIFEST.json",
+        "document_name": "合成测试·圆锥曲线基础（项目自建）v1.md"
+      },
+      "provenance": {
+        "created_by": "synthetic_fixture_generator",
+        "derived_from_question_ids": [],
+        "model_run_id": null,
+        "duplicate_cluster_id": null,
+        "extraction_method": "project_created",
+        "topic_heading": null
+      },
+      "reviews": [],
+      "created_at": "2026-08-16T00:00:00+00:00",
+      "updated_at": "2026-08-16T00:00:00+00:00"
+    },
+    {
+      "id": "q_pilot_ellipse_04",
+      "status": "imported",
+      "visibility": "private",
+      "language": "zh-CN",
+      "stem": {
+        "plain_text": "已知抛物线 y²=8x，求其焦点到准线的距离。",
+        "latex": null,
+        "assets": []
+      },
+      "question_type": "single_choice",
+      "options": [
+        {
+          "key": "A",
+          "plain_text": "4",
+          "latex": null
+        },
+        {
+          "key": "B",
+          "plain_text": "8",
+          "latex": null
+        },
+        {
+          "key": "C",
+          "plain_text": "2",
+          "latex": null
+        },
+        {
+          "key": "D",
+          "plain_text": "16",
+          "latex": null
+        }
+      ],
+      "answer": {
+        "type": "option",
+        "value": "A",
+        "status": "source_answer_extracted",
+        "alternatives": []
+      },
+      "solutions": [
+        {
+          "method": null,
+          "steps_latex": [],
+          "final_answer": null,
+          "author_type": "not_imported",
+          "review_status": "to_be_regenerated_and_verified"
+        }
+      ],
+      "curriculum": {
+        "curriculum_version": "CN-HS-MATH-2017-2020",
+        "textbook": "PEP-A",
+        "volume": "必修第一册",
+        "chapter": "第三章 圆锥曲线的方程",
+        "section": null,
+        "knowledge_point_ids": [
+          "kp_ellipse"
+        ],
+        "prerequisite_ids": [],
+        "mapping_status": "pilot_candidate"
+      },
+      "exam": {
+        "paper_family": "synthetic-test-fixture",
+        "region": null,
+        "year": null,
+        "original_score": null,
+        "competency_tags": []
+      },
+      "pedagogy": {
+        "difficulty": 3,
+        "difficulty_confidence": 1.0,
+        "estimated_minutes": null,
+        "methods": [],
+        "common_errors": [],
+        "usage_scenarios": [
+          "测试夹具"
+        ]
+      },
+      "verification": {
+        "status": "needs_math_review",
+        "methods": [
+          "source_boundary_check"
+        ],
+        "details": [
+          "未导入原解析；解析须独立生成并验算",
+          "合成夹具：来源边界检查占位记录"
+        ]
+      },
+      "source": {
+        "source_id": "SYN-FIX-q_pilot_ellipse_04",
+        "document_path": null,
+        "source_reference": "项目自建合成测试题",
+        "source_page_start": 1,
+        "source_page_end": 1,
+        "license_status": "question_content_user_declared_usable",
+        "allowed_uses": [
+          "display_question",
+          "adapt_question"
+        ],
+        "excluded_material": [],
+        "attribution_required": "confirmed",
+        "proof_document_id": "data/test-fixtures/MANIFEST.json",
+        "document_name": "合成测试·圆锥曲线基础（项目自建）v1.md"
+      },
+      "provenance": {
+        "created_by": "synthetic_fixture_generator",
+        "derived_from_question_ids": [],
+        "model_run_id": null,
+        "duplicate_cluster_id": null,
+        "extraction_method": "project_created",
+        "topic_heading": null
+      },
+      "reviews": [],
+      "created_at": "2026-08-16T00:00:00+00:00",
+      "updated_at": "2026-08-16T00:00:00+00:00"
+    },
+    {
+      "id": "q_pilot_ellipse_05",
+      "status": "imported",
+      "visibility": "private",
+      "language": "zh-CN",
+      "stem": {
+        "plain_text": "已知椭圆 x²/16+y²/9=1，求其离心率。",
+        "latex": null,
+        "assets": []
+      },
+      "question_type": "single_choice",
+      "options": [
+        {
+          "key": "A",
+          "plain_text": "3/5",
+          "latex": null
+        },
+        {
+          "key": "B",
+          "plain_text": "√7/4",
+          "latex": null
+        },
+        {
+          "key": "C",
+          "plain_text": "4/5",
+          "latex": null
+        },
+        {
+          "key": "D",
+          "plain_text": "√7/3",
+          "latex": null
+        }
+      ],
+      "answer": {
+        "type": "option",
+        "value": "B",
+        "status": "source_answer_extracted",
+        "alternatives": []
+      },
+      "solutions": [
+        {
+          "method": null,
+          "steps_latex": [],
+          "final_answer": null,
+          "author_type": "not_imported",
+          "review_status": "to_be_regenerated_and_verified"
+        }
+      ],
+      "curriculum": {
+        "curriculum_version": "CN-HS-MATH-2017-2020",
+        "textbook": "PEP-A",
+        "volume": "必修第一册",
+        "chapter": "第三章 圆锥曲线的方程",
+        "section": null,
+        "knowledge_point_ids": [
+          "kp_ellipse"
+        ],
+        "prerequisite_ids": [],
+        "mapping_status": "pilot_candidate"
+      },
+      "exam": {
+        "paper_family": "synthetic-test-fixture",
+        "region": null,
+        "year": null,
+        "original_score": null,
+        "competency_tags": []
+      },
+      "pedagogy": {
+        "difficulty": 3,
+        "difficulty_confidence": 1.0,
+        "estimated_minutes": null,
+        "methods": [],
+        "common_errors": [],
+        "usage_scenarios": [
+          "测试夹具"
+        ]
+      },
+      "verification": {
+        "status": "source_inconsistency_detected",
+        "methods": [
+          "source_boundary_check"
+        ],
+        "details": [
+          "合成夹具样例：来源答案栏与详解结论不一致（模拟 PDF 边界提取问题）",
+          "未导入原解析；解析须独立生成并验算"
+        ]
+      },
+      "source": {
+        "source_id": "SYN-FIX-q_pilot_ellipse_05",
+        "document_path": null,
+        "source_reference": "项目自建合成测试题",
+        "source_page_start": 1,
+        "source_page_end": 1,
+        "license_status": "question_content_user_declared_usable",
+        "allowed_uses": [
+          "display_question",
+          "adapt_question"
+        ],
+        "excluded_material": [],
+        "attribution_required": "confirmed",
+        "proof_document_id": "data/test-fixtures/MANIFEST.json",
+        "document_name": "合成测试·圆锥曲线基础（项目自建）v1.md"
+      },
+      "provenance": {
+        "created_by": "synthetic_fixture_generator",
+        "derived_from_question_ids": [],
+        "model_run_id": null,
+        "duplicate_cluster_id": null,
+        "extraction_method": "project_created",
+        "topic_heading": null
+      },
+      "reviews": [],
+      "created_at": "2026-08-16T00:00:00+00:00",
+      "updated_at": "2026-08-16T00:00:00+00:00"
+    },
+    {
+      "id": "q_pilot_ellipse_06",
+      "status": "imported",
+      "visibility": "private",
+      "language": "zh-CN",
+      "stem": {
+        "plain_text": "已知椭圆 x²/a²+y²/b²=1 (a>b>0) 的焦距为 2c，求其离心率公式。",
+        "latex": null,
+        "assets": []
+      },
+      "question_type": "single_choice",
+      "options": [
+        {
+          "key": "A",
+          "plain_text": "c/a",
+          "latex": null
+        },
+        {
+          "key": "B",
+          "plain_text": "a/c",
+          "latex": null
+        },
+        {
+          "key": "C",
+          "plain_text": "b/a",
+          "latex": null
+        },
+        {
+          "key": "D",
+          "plain_text": "c/b",
+          "latex": null
+        }
+      ],
+      "answer": {
+        "type": "option",
+        "value": "A",
+        "status": "source_answer_extracted",
+        "alternatives": []
+      },
+      "solutions": [
+        {
+          "method": null,
+          "steps_latex": [],
+          "final_answer": null,
+          "author_type": "not_imported",
+          "review_status": "to_be_regenerated_and_verified"
+        }
+      ],
+      "curriculum": {
+        "curriculum_version": "CN-HS-MATH-2017-2020",
+        "textbook": "PEP-A",
+        "volume": "必修第一册",
+        "chapter": "第三章 圆锥曲线的方程",
+        "section": null,
+        "knowledge_point_ids": [
+          "kp_ellipse"
+        ],
+        "prerequisite_ids": [],
+        "mapping_status": "pilot_candidate"
+      },
+      "exam": {
+        "paper_family": "synthetic-test-fixture",
+        "region": null,
+        "year": null,
+        "original_score": null,
+        "competency_tags": []
+      },
+      "pedagogy": {
+        "difficulty": 3,
+        "difficulty_confidence": 1.0,
+        "estimated_minutes": null,
+        "methods": [],
+        "common_errors": [],
+        "usage_scenarios": [
+          "测试夹具"
+        ]
+      },
+      "verification": {
+        "status": "needs_formula_review",
+        "methods": [
+          "source_boundary_check"
+        ],
+        "details": [
+          "未导入原解析；解析须独立生成并验算",
+          "合成夹具：来源边界检查占位记录"
+        ]
+      },
+      "source": {
+        "source_id": "SYN-FIX-q_pilot_ellipse_06",
+        "document_path": null,
+        "source_reference": "项目自建合成测试题",
+        "source_page_start": 1,
+        "source_page_end": 1,
+        "license_status": "question_content_user_declared_usable",
+        "allowed_uses": [
+          "display_question",
+          "adapt_question"
+        ],
+        "excluded_material": [],
+        "attribution_required": "confirmed",
+        "proof_document_id": "data/test-fixtures/MANIFEST.json",
+        "document_name": "合成测试·圆锥曲线基础（项目自建）v1.md"
+      },
+      "provenance": {
+        "created_by": "synthetic_fixture_generator",
+        "derived_from_question_ids": [],
+        "model_run_id": null,
+        "duplicate_cluster_id": null,
+        "extraction_method": "project_created",
+        "topic_heading": null
+      },
+      "reviews": [],
+      "created_at": "2026-08-16T00:00:00+00:00",
+      "updated_at": "2026-08-16T00:00:00+00:00"
+    },
+    {
+      "id": "q_pilot_ellipse_07",
+      "status": "imported",
+      "visibility": "private",
+      "language": "zh-CN",
+      "stem": {
+        "plain_text": "已知椭圆 x²/16+y²/9=1，求其短轴长。",
+        "latex": null,
+        "assets": []
+      },
+      "question_type": "single_choice",
+      "options": [
+        {
+          "key": "A",
+          "plain_text": "6",
+          "latex": null
+        },
+        {
+          "key": "B",
+          "plain_text": "8",
+          "latex": null
+        },
+        {
+          "key": "C",
+          "plain_text": "3",
+          "latex": null
+        },
+        {
+          "key": "D",
+          "plain_text": "4",
+          "latex": null
+        }
+      ],
+      "answer": {
+        "type": "option",
+        "value": "A",
+        "status": "source_answer_extracted",
+        "alternatives": []
+      },
+      "solutions": [
+        {
+          "method": null,
+          "steps_latex": [],
+          "final_answer": null,
+          "author_type": "not_imported",
+          "review_status": "to_be_regenerated_and_verified"
+        }
+      ],
+      "curriculum": {
+        "curriculum_version": "CN-HS-MATH-2017-2020",
+        "textbook": "PEP-A",
+        "volume": "必修第一册",
+        "chapter": "第三章 圆锥曲线的方程",
+        "section": null,
+        "knowledge_point_ids": [
+          "kp_ellipse"
+        ],
+        "prerequisite_ids": [],
+        "mapping_status": "pilot_candidate"
+      },
+      "exam": {
+        "paper_family": "synthetic-test-fixture",
+        "region": null,
+        "year": null,
+        "original_score": null,
+        "competency_tags": []
+      },
+      "pedagogy": {
+        "difficulty": 3,
+        "difficulty_confidence": 1.0,
+        "estimated_minutes": null,
+        "methods": [],
+        "common_errors": [],
+        "usage_scenarios": [
+          "测试夹具"
+        ]
+      },
+      "verification": {
+        "status": "needs_formula_review",
+        "methods": [
+          "source_boundary_check"
+        ],
+        "details": [
+          "未导入原解析；解析须独立生成并验算",
+          "合成夹具：来源边界检查占位记录"
+        ]
+      },
+      "source": {
+        "source_id": "SYN-FIX-q_pilot_ellipse_07",
+        "document_path": null,
+        "source_reference": "项目自建合成测试题",
+        "source_page_start": 1,
+        "source_page_end": 1,
+        "license_status": "question_content_user_declared_usable",
+        "allowed_uses": [
+          "display_question",
+          "adapt_question"
+        ],
+        "excluded_material": [],
+        "attribution_required": "confirmed",
+        "proof_document_id": "data/test-fixtures/MANIFEST.json",
+        "document_name": "合成测试·圆锥曲线基础（项目自建）v1.md"
+      },
+      "provenance": {
+        "created_by": "synthetic_fixture_generator",
+        "derived_from_question_ids": [],
+        "model_run_id": null,
+        "duplicate_cluster_id": null,
+        "extraction_method": "project_created",
+        "topic_heading": null
+      },
+      "reviews": [],
+      "created_at": "2026-08-16T00:00:00+00:00",
+      "updated_at": "2026-08-16T00:00:00+00:00"
+    },
+    {
+      "id": "q_pilot_ellipse_08",
+      "status": "imported",
+      "visibility": "private",
+      "language": "zh-CN",
+      "stem": {
+        "plain_text": "已知椭圆 x²/25+y²/9=1 上一点到左焦点的距离为 3，求该点到右焦点的距离。",
+        "latex": null,
+        "assets": []
+      },
+      "question_type": "single_choice",
+      "options": [
+        {
+          "key": "A",
+          "plain_text": "7",
+          "latex": null
+        },
+        {
+          "key": "B",
+          "plain_text": "5",
+          "latex": null
+        },
+        {
+          "key": "C",
+          "plain_text": "3",
+          "latex": null
+        },
+        {
+          "key": "D",
+          "plain_text": "10",
+          "latex": null
+        }
+      ],
+      "answer": {
+        "type": "option",
+        "value": "A",
+        "status": "source_answer_extracted",
+        "alternatives": []
+      },
+      "solutions": [
+        {
+          "method": null,
+          "steps_latex": [],
+          "final_answer": null,
+          "author_type": "not_imported",
+          "review_status": "to_be_regenerated_and_verified"
+        }
+      ],
+      "curriculum": {
+        "curriculum_version": "CN-HS-MATH-2017-2020",
+        "textbook": "PEP-A",
+        "volume": "必修第一册",
+        "chapter": "第三章 圆锥曲线的方程",
+        "section": null,
+        "knowledge_point_ids": [
+          "kp_ellipse"
+        ],
+        "prerequisite_ids": [],
+        "mapping_status": "pilot_candidate"
+      },
+      "exam": {
+        "paper_family": "synthetic-test-fixture",
+        "region": null,
+        "year": null,
+        "original_score": null,
+        "competency_tags": []
+      },
+      "pedagogy": {
+        "difficulty": 3,
+        "difficulty_confidence": 1.0,
+        "estimated_minutes": null,
+        "methods": [],
+        "common_errors": [],
+        "usage_scenarios": [
+          "测试夹具"
+        ]
+      },
+      "verification": {
+        "status": "needs_formula_review",
+        "methods": [
+          "source_boundary_check"
+        ],
+        "details": [
+          "未导入原解析；解析须独立生成并验算",
+          "合成夹具：来源边界检查占位记录"
+        ]
+      },
+      "source": {
+        "source_id": "SYN-FIX-q_pilot_ellipse_08",
+        "document_path": null,
+        "source_reference": "项目自建合成测试题",
+        "source_page_start": 1,
+        "source_page_end": 1,
+        "license_status": "question_content_user_declared_usable",
+        "allowed_uses": [
+          "display_question",
+          "adapt_question"
+        ],
+        "excluded_material": [],
+        "attribution_required": "confirmed",
+        "proof_document_id": "data/test-fixtures/MANIFEST.json",
+        "document_name": "合成测试·圆锥曲线基础（项目自建）v1.md"
+      },
+      "provenance": {
+        "created_by": "synthetic_fixture_generator",
+        "derived_from_question_ids": [],
+        "model_run_id": null,
+        "duplicate_cluster_id": null,
+        "extraction_method": "project_created",
+        "topic_heading": null
+      },
+      "reviews": [],
+      "created_at": "2026-08-16T00:00:00+00:00",
+      "updated_at": "2026-08-16T00:00:00+00:00"
+    },
+    {
+      "id": "q_pilot_ellipse_09",
+      "status": "imported",
+      "visibility": "private",
+      "language": "zh-CN",
+      "stem": {
+        "plain_text": "已知椭圆的焦点为 (−3,0) 和 (3,0)，且经过点 (4,0)，求椭圆的标准方程。",
+        "latex": null,
+        "assets": []
+      },
+      "question_type": "single_choice",
+      "options": [
+        {
+          "key": "A",
+          "plain_text": "x²/16+y²/7=1",
+          "latex": null
+        },
+        {
+          "key": "B",
+          "plain_text": "x²/16+y²/9=1",
+          "latex": null
+        },
+        {
+          "key": "C",
+          "plain_text": "x²/25+y²/16=1",
+          "latex": null
+        },
+        {
+          "key": "D",
+          "plain_text": "x²/9+y²/7=1",
+          "latex": null
+        }
+      ],
+      "answer": {
+        "type": "option",
+        "value": "A",
+        "status": "source_answer_extracted",
+        "alternatives": []
+      },
+      "solutions": [
+        {
+          "method": null,
+          "steps_latex": [],
+          "final_answer": null,
+          "author_type": "not_imported",
+          "review_status": "to_be_regenerated_and_verified"
+        }
+      ],
+      "curriculum": {
+        "curriculum_version": "CN-HS-MATH-2017-2020",
+        "textbook": "PEP-A",
+        "volume": "必修第一册",
+        "chapter": "第三章 圆锥曲线的方程",
+        "section": null,
+        "knowledge_point_ids": [
+          "kp_ellipse"
+        ],
+        "prerequisite_ids": [],
+        "mapping_status": "pilot_candidate"
+      },
+      "exam": {
+        "paper_family": "synthetic-test-fixture",
+        "region": null,
+        "year": null,
+        "original_score": null,
+        "competency_tags": []
+      },
+      "pedagogy": {
+        "difficulty": 3,
+        "difficulty_confidence": 1.0,
+        "estimated_minutes": null,
+        "methods": [],
+        "common_errors": [],
+        "usage_scenarios": [
+          "测试夹具"
+        ]
+      },
+      "verification": {
+        "status": "needs_formula_review",
+        "methods": [
+          "source_boundary_check"
+        ],
+        "details": [
+          "未导入原解析；解析须独立生成并验算",
+          "合成夹具：来源边界检查占位记录"
+        ]
+      },
+      "source": {
+        "source_id": "SYN-FIX-q_pilot_ellipse_09",
+        "document_path": null,
+        "source_reference": "项目自建合成测试题",
+        "source_page_start": 1,
+        "source_page_end": 1,
+        "license_status": "question_content_user_declared_usable",
+        "allowed_uses": [
+          "display_question",
+          "adapt_question"
+        ],
+        "excluded_material": [],
+        "attribution_required": "confirmed",
+        "proof_document_id": "data/test-fixtures/MANIFEST.json",
+        "document_name": "合成测试·圆锥曲线基础（项目自建）v1.md"
+      },
+      "provenance": {
+        "created_by": "synthetic_fixture_generator",
+        "derived_from_question_ids": [],
+        "model_run_id": null,
+        "duplicate_cluster_id": null,
+        "extraction_method": "project_created",
+        "topic_heading": null
+      },
+      "reviews": [],
+      "created_at": "2026-08-16T00:00:00+00:00",
+      "updated_at": "2026-08-16T00:00:00+00:00"
+    },
+    {
+      "id": "q_pilot_ellipse_10",
+      "status": "imported",
+      "visibility": "private",
+      "language": "zh-CN",
+      "stem": {
+        "plain_text": "已知椭圆 x²/12+y²/4=1，求其焦点坐标。",
+        "latex": null,
+        "assets": []
+      },
+      "question_type": "single_choice",
+      "options": [
+        {
+          "key": "A",
+          "plain_text": "(±2√2,0)",
+          "latex": null
+        },
+        {
+          "key": "B",
+          "plain_text": "(±4,0)",
+          "latex": null
+        },
+        {
+          "key": "C",
+          "plain_text": "(0,±2√2)",
+          "latex": null
+        },
+        {
+          "key": "D",
+          "plain_text": "(±2,0)",
+          "latex": null
+        }
+      ],
+      "answer": {
+        "type": "option",
+        "value": "A",
+        "status": "source_answer_extracted",
+        "alternatives": []
+      },
+      "solutions": [
+        {
+          "method": null,
+          "steps_latex": [],
+          "final_answer": null,
+          "author_type": "not_imported",
+          "review_status": "to_be_regenerated_and_verified"
+        }
+      ],
+      "curriculum": {
+        "curriculum_version": "CN-HS-MATH-2017-2020",
+        "textbook": "PEP-A",
+        "volume": "必修第一册",
+        "chapter": "第三章 圆锥曲线的方程",
+        "section": null,
+        "knowledge_point_ids": [
+          "kp_ellipse"
+        ],
+        "prerequisite_ids": [],
+        "mapping_status": "pilot_candidate"
+      },
+      "exam": {
+        "paper_family": "synthetic-test-fixture",
+        "region": null,
+        "year": null,
+        "original_score": null,
+        "competency_tags": []
+      },
+      "pedagogy": {
+        "difficulty": 3,
+        "difficulty_confidence": 1.0,
+        "estimated_minutes": null,
+        "methods": [],
+        "common_errors": [],
+        "usage_scenarios": [
+          "测试夹具"
+        ]
+      },
+      "verification": {
+        "status": "needs_math_review",
+        "methods": [
+          "source_boundary_check"
+        ],
+        "details": [
+          "未导入原解析；解析须独立生成并验算",
+          "合成夹具：来源边界检查占位记录"
+        ]
+      },
+      "source": {
+        "source_id": "SYN-FIX-q_pilot_ellipse_10",
+        "document_path": null,
+        "source_reference": "项目自建合成测试题",
+        "source_page_start": 1,
+        "source_page_end": 1,
+        "license_status": "question_content_user_declared_usable",
+        "allowed_uses": [
+          "display_question",
+          "adapt_question"
+        ],
+        "excluded_material": [],
+        "attribution_required": "confirmed",
+        "proof_document_id": "data/test-fixtures/MANIFEST.json",
+        "document_name": "合成测试·圆锥曲线基础（项目自建）v1.md"
+      },
+      "provenance": {
+        "created_by": "synthetic_fixture_generator",
+        "derived_from_question_ids": [],
+        "model_run_id": null,
+        "duplicate_cluster_id": null,
+        "extraction_method": "project_created",
+        "topic_heading": null
+      },
+      "reviews": [],
+      "created_at": "2026-08-16T00:00:00+00:00",
+      "updated_at": "2026-08-16T00:00:00+00:00"
+    }
+  ]
+}

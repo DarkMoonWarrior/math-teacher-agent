@@ -57,6 +57,9 @@
 - 前端：`pnpm typecheck:web` 通过；`pnpm build:web` 通过（13 个路由）。
 - 无 lint 配置，未运行 lint。
 - 对照：原仓库含数据时 158/158 通过；KMI-01 在干净克隆上始终失败（原仓库同样存在）。
+- Prompt 1.5 稳定化（`stabilize/commercial-baseline-v1`）：26 个数据类失败以 synthetic fixtures 修复，
+  KMI-01 以独立 commit 修复；最终后端 pytest **159 passed / 0 failed / 0 skipped / 0 xfailed**。
+  明细见 `BASELINE-TEST-FAILURE-MATRIX.md`。
 
 ## 7. 迁移执行记录
 

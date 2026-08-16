@@ -1,0 +1,80 @@
+{
+  "manifest_id": "test-fixtures-manifest-v1",
+  "created_at": "2026-08-16",
+  "policy": "data/test-fixtures 只允许项目自行创作（synthetic=true, source=project_created）的测试数据。禁止复制真实第三方题目、试卷原文、教师私人资料或任何权利未确认内容。",
+  "commercial_approved_note": "这些夹具仅用于软件测试，不属于商业题库内容；data/commercial-approved/ 不因本清单获得任何内容。",
+  "fixtures": [
+    {
+      "id": "question-bank/curated/function-properties-5q-synthetic-corrections-v1.json",
+      "purpose": "synthetic backend test fixture (question-bank workflow contracts)",
+      "synthetic": true,
+      "source": "project_created",
+      "commercial_safe": true,
+      "contains_personal_data": false,
+      "contains_third_party_content": false,
+      "local_paths": false,
+      "generator": "scripts/generate_synthetic_test_fixtures.py",
+      "sha256": "fe4b78a9d9d28d10a7bb2bfd2f2a4d87b9ccd4ddb403f390ad139cf8de61ea6d"
+    },
+    {
+      "id": "question-bank/curated/probability-4q-synthetic-corrections-v1.json",
+      "purpose": "synthetic backend test fixture (question-bank workflow contracts)",
+      "synthetic": true,
+      "source": "project_created",
+      "commercial_safe": true,
+      "contains_personal_data": false,
+      "contains_third_party_content": false,
+      "local_paths": false,
+      "generator": "scripts/generate_synthetic_test_fixtures.py",
+      "sha256": "5fed3bf79d4f3927f5f9a9f4f2a50e6d8cf0ed4d42e6a23f519e24219bc38bc7"
+    },
+    {
+      "id": "question-bank/curated/probability-6q-synthetic-corrections-v1.json",
+      "purpose": "synthetic backend test fixture (question-bank workflow contracts)",
+      "synthetic": true,
+      "source": "project_created",
+      "commercial_safe": true,
+      "contains_personal_data": false,
+      "contains_third_party_content": false,
+      "local_paths": false,
+      "generator": "scripts/generate_synthetic_test_fixtures.py",
+      "sha256": "252f5cba70b0454e9f6f0686256dc6d5694b0d700777b3b80515715836caa2f0"
+    },
+    {
+      "id": "question-bank/curated/set-10q-synthetic-corrections-v1.json",
+      "purpose": "synthetic backend test fixture (question-bank workflow contracts)",
+      "synthetic": true,
+      "source": "project_created",
+      "commercial_safe": true,
+      "contains_personal_data": false,
+      "contains_third_party_content": false,
+      "local_paths": false,
+      "generator": "scripts/generate_synthetic_test_fixtures.py",
+      "sha256": "9ffe456fbdc113bf9b53d2afb9058eb20d4c8f619aa3c9ed0ea58d1608f9e657"
+    },
+    {
+      "id": "question-bank/pilot/batch-synthetic-set-probability-30q-v1.json",
+      "purpose": "synthetic backend test fixture (question-bank workflow contracts)",
+      "synthetic": true,
+      "source": "project_created",
+      "commercial_safe": true,
+      "contains_personal_data": false,
+      "contains_third_party_content": false,
+      "local_paths": false,
+      "generator": "scripts/generate_synthetic_test_fixtures.py",
+      "sha256": "422af230086345cd541b06b465b93dde1f964b821e997fb25aaf214a444c2cd8"
+    },
+    {
+      "id": "question-bank/pilot/function-properties-synthetic-5q-v1.json",
+      "purpose": "synthetic backend test fixture (question-bank workflow contracts)",
+      "synthetic": true,
+      "source": "project_created",
+      "commercial_safe": true,
+      "contains_personal_data": false,
+      "contains_third_party_content": false,
+      "local_paths": false,
+      "generator": "scripts/generate_synthetic_test_fixtures.py",
+      "sha256": "02e06406ae4346cf1bb2be6cbf8bc69abe72ec70e5b22ef1fbf76aa2bb3adeca"
+    }
+  ]
+}

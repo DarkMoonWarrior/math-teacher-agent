@@ -35,10 +35,10 @@
 
 ## KMI-02 测试依赖被排除的真实数据（Prompt 1 发现）
 
-- 状态：**Open（已记录，未绕过）**
+- 状态：**Fixed（Prompt 1.5 / stabilize/commercial-baseline-v1，synthetic fixtures 方案）**
 - 受影响文件：
-  - `apps/api/tests/test_question_bank.py`（16 个用例）
-  - `apps/api/tests/test_question_variants.py`（9 个用例）
+  - `apps/api/tests/test_question_bank.py`（15 个用例）
+  - `apps/api/tests/test_question_variants.py`（8 个用例）
   - `apps/api/tests/test_solution_assistant.py`（2 个用例）
   - `apps/api/tests/test_http.py::test_question_bank_stats_and_search_endpoints`（1 个用例）
 - 根因：这些测试直接读取 `data/pilot/batch-2026-08-001-30q.json` 与
@@ -53,3 +53,11 @@
   2. 或对数据依赖用例增加 `skipif`（fixture 缺失时跳过并输出明确原因）；
   3. 或把这些用例改为只在新数据审查流中随数据一起运行。
 - 建议修复阶段：Prompt 1 验收后，作为基线后的独立测试策略提交（见 POST-BASELINE-BACKLOG B-14）。
+- 实际修复（Prompt 1.5，独立 commit）：
+  1. 建立 `data/test-fixtures/question-bank/` synthetic fixtures（全部项目自建内容，见
+     `data/test-fixtures/README.md` 与 `MANIFEST.json`）；
+  2. 生成器 `scripts/generate_synthetic_test_fixtures.py` 内置与迁移测试断言一致的自检；
+  3. `apps/api/tests/conftest.py` 以 `MATH_AI_*` 环境变量把 Settings 数据路径覆盖到 fixtures，
+     `test_question_bank.py` / `test_question_variants.py` 常量改为 fixture 路径；
+  4. 未删除/跳过/xfail 任何用例，未降低任何断言，未绕过 RightsGate/MathVerifier/private 边界；
+  5. 详细失败矩阵见 `BASELINE-TEST-FAILURE-MATRIX.md`（26 个数据类失败 + 1 个 KMI-01）。
