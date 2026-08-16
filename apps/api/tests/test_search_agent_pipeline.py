@@ -397,3 +397,54 @@ def test_prompt_injection_cannot_expand_evidence(sa_bank, catalog) -> None:
     )
     for secret in ("bash", "sqlite3", "SELECT ", "D:\\", "Bearer", "sk-"):
         assert secret not in system_text
+
+def test_assistant_explanation_grounded_facts_only(sa_bank, catalog) -> None:
+    """Prompt 3.5 §5：assistant_explanation 不得携带结构化结果中不存在的事实。
+
+    模型声称“2024 年山东统考、尚未通过验证”，但结构化结果（bank 真值）是
+    2025 年江苏、verification=passed -> 年份与验证声明必须被消毒，
+    answer_summary / match_reasons 完全由结构化结果生成，不得出现 2024/山东/统考。
+    """
+    runtime = FakeRuntime(_result(
+        [_search_call([_search_item("q_sa_focus_01")])],
+        final_text="推荐 q_sa_focus_01：来自2024年山东统考，尚未通过验证。",
+    ))
+    response = _run(_pipeline(sa_bank, catalog, runtime).run("给我找椭圆题"))
+    explanation = response.assistant_explanation or ""
+    assert "2024" not in explanation
+    assert "尚未通过验证" not in explanation
+    assert "［年份无法核实］" in explanation
+    assert "［验证状态无法核实］" in explanation
+    assert "q_sa_focus_01" in explanation
+    # answer_summary / match_reasons：结构化结果唯一事实源。
+    assert "2024" not in response.answer_summary
+    assert "山东" not in response.answer_summary
+    serialized = str([item.model_dump(mode="json") for item in response.results])
+    assert "2024" not in serialized
+    assert "山东" not in serialized
+    # 结构化结果本身的真值不受影响（2025 江苏 passed）。
+    assert response.results[0].year == 2025
+    assert response.results[0].region == "江苏"
+    assert response.results[0].verification_status == "passed"
+
+
+def test_sanitize_assistant_text_scrubs_unverifiable_facts() -> None:
+    from app.modules.search_agent.grounding import sanitize_assistant_text
+
+    text = "q_ok 与 q_bad 都来自2024年山东统考，程序验证通过。"
+    out = sanitize_assistant_text(
+        text, {"q_ok"}, allowed_years={2025}, verification_supported=False
+    )
+    assert "q_ok" in out
+    assert "q_bad" not in out
+    assert "题目ID无法核实" in out
+    assert "2024" not in out
+    assert "年份无法核实" in out
+    assert "程序验证通过" not in out
+    assert "验证状态无法核实" in out
+    # 支持验证时反向消毒“未验证”类表述。
+    negative = sanitize_assistant_text(
+        "q_ok 尚未通过验证。", {"q_ok"}, verification_supported=True
+    )
+    assert "尚未通过验证" not in negative
+    assert "验证状态无法核实" in negative

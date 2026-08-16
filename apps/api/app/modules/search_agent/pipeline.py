@@ -604,6 +604,12 @@ class SearchAgentPipeline:
         )
 
         grounded_ids = evidence.record_ids() & set(records)
+        # 解释文本消毒：结构化结果（records）是唯一事实来源。年份与验证状态
+        # 声明只有在结果实际支持时才允许出现在 assistant 解释中。
+        allowed_years = {record.year for record in records.values() if record.year}
+        verification_supported = bool(records) and all(
+            record.verification_status in VERIFIED_STATUSES for record in records.values()
+        )
         warnings = list(intent.parse_warnings) + list(evidence.warnings)
 
         return SearchAgentResponse(
@@ -625,7 +631,10 @@ class SearchAgentPipeline:
             warnings=warnings,
             answer_summary=answer_summary,
             assistant_explanation=sanitize_assistant_text(
-                run_result.final_text, grounded_ids
+                run_result.final_text,
+                grounded_ids,
+                allowed_years=allowed_years or None,
+                verification_supported=verification_supported,
             ),
             search_confidence=confidence,
             suggestions=suggestions,
