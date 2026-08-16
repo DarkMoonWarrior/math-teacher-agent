@@ -116,3 +116,12 @@ DSH import 只允许出现在 `apps/agent` 内（`src/dsh/`、runtime 适配层�
   persistence 保存，Prompt 2 不要求跨进程聚合）。
 - 尚未实现 UI streaming、Search Agent、写工具、教师账号体系（均属后续 Prompt）。
 - DSH 升级风险与政策见 `DSH-INTEGRATION-LOCK.md`。
+
+## Prompt 2.5 合并状态（2026-08-16）
+
+- 已合并到 main：merge commit `ce05c69`（PR #2，merge commit，保留 7 个逻辑 commit）。
+- Tag：`teacher-agent-runtime-v1.0`（annotated），作为 Teacher Agent 层正式回滚点。
+- 合并后全量复验通过：Backend 184 passed；Agent typecheck / 28 tests / build 全绿；
+  Frontend typecheck / build 全绿。
+- DSH 来源核验与版本锁定详见 `DSH-INTEGRATION-LOCK.md`（rc.6 精确 pin、npm provenance、
+  GitHub master 差异、Node engines REVIEW）。

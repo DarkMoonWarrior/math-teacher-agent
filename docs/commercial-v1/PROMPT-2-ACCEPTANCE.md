@@ -30,7 +30,7 @@
 ## 测试结果
 
 - Backend pytest：184 passed（原 159 + 新增 25），0 failed / 0 skipped / 0 xfailed。
-- apps/agent：typecheck passed；vitest 22 passed（5 个测试文件）。
+- apps/agent：typecheck passed；vitest 28 passed（6 个测试文件，含 HTTP 认证门禁 6 项）。
 - Frontend：typecheck passed；build passed。
 
 ## 能力矩阵
@@ -60,3 +60,22 @@
 - Search Agent MVP（在 5 个只读工具之上编排搜索工作流）。
 - 第二批写工具（create_paper_draft / create_lesson_draft / create_question_variant /
   import_private_resource）仍为 draft，且不得绕过 RightsGate / MathVerifier / Teacher Review。
+
+## Prompt 2.5 最终合并验收（2026-08-16）
+
+- PR：#2 feat: establish teacher agent runtime foundation（draft -> ready -> merged）
+- 合并方式：merge commit（保留 7 个逻辑 commit，未 squash）
+- Merge commit：`ce05c69`（main HEAD = origin/main）
+- Tag：`teacher-agent-runtime-v1.0`（annotated，指向 ce05c69，已 push）
+- DSH 锁定：`0.1.0-rc.6` 精确 pin；npm dist-tag latest+next 均为 rc.6（2026-08-13 发布）；
+  GitHub master 观察版本为 0.1.0-rc.5（发布线不同步，已如实记录，不隐藏）；
+  rc.6 上游 source commit 未解析（npm 元数据无 git SHA，不猜测）；Node engines 状态 REVIEW
+  （rc.6 元数据未声明 engines，本仓库按自锁 `>=24.0.0`，Node v24.17.0 实测通过）。
+- Lockfile 审计：71 条 `@deepseek-ai/*` 全部精确版本 + sha512 integrity，无不受控来源。
+- 合并后 main 全量复验：Backend 184 passed；Agent 28 passed / typecheck / build 全绿；
+  Frontend typecheck / build 全绿；working tree clean。
+- HTTP 认证门禁新增 6 项测试（missing / wrong / correct / 未配置 token fail closed /
+  payload 校验 / 未知路由），全部通过。
+- Secret / data / path rescan：无 API key、无 token 值、无 PDF/DOCX/SQLite/.env、
+  无本机绝对路径；`data/commercial-approved/` 仍仅含 README（保持为空）。
+- 下一个回滚点：tag `teacher-agent-runtime-v1.0`。
