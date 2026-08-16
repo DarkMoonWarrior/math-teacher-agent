@@ -122,7 +122,7 @@ export function TopbarTools() {
     <header className="topbar">
       <form className="global-search" role="search" onSubmit={submitSearch}>
         <span aria-hidden="true">⌕</span>
-        <input ref={searchRef} value={query} onChange={(event) => setQuery(event.target.value)} aria-label="全局搜索" placeholder="搜索知识点、题型或直接描述你要找的题目" />
+        <input ref={searchRef} value={query} onChange={(event) => setQuery(event.target.value)} aria-label="全局搜索" placeholder="搜索全站知识点、题目或内容" />
         {query && <button className="global-search-clear" type="button" aria-label="清空搜索" onClick={() => { setQuery(""); searchRef.current?.focus(); }}>×</button>}
         <button className="global-search-submit" type="submit">搜索</button>
       </form>

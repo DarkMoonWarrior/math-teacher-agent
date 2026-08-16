@@ -157,7 +157,7 @@ export default function DashboardPage() {
 
       <section className="quick-grid" aria-label="快捷操作">
         <Link href="/lesson-plans/new" className="quick-card accent-blue"><span>备</span><div><h2>生成一份教案</h2><p>按章节、课型和学情生成可编辑初稿</p></div><b>→</b></Link>
-        <Link href="/search" className="quick-card accent-teal"><span>题</span><div><h2>搜索与挑选题目</h2><p>自然语言、知识点和公式混合检索</p></div><b>→</b></Link>
+        <Link href="/search" className="quick-card accent-teal"><span>题</span><div><h2>AI 智能搜题</h2><p>描述教学需求，自动匹配知识点、难度与题型</p></div><b>→</b></Link>
         <Link href="/papers?create=new" className="quick-card accent-amber"><span>卷</span><div><h2>创建一份试卷</h2><p>控制知识点、题型、难度和分值</p></div><b>→</b></Link>
         <Link href="/solve" className="quick-card accent-purple"><span>解</span><div><h2>分析一道题目</h2><p>查看标准解法、易错点与可信度证据</p></div><b>→</b></Link>
       </section>

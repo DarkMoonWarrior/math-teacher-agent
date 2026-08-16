@@ -46,7 +46,7 @@ export function AppSidebar() {
     <div className="sidebar-mode-label">{role === "admin" ? "平台管理" : "教师工作区"}</div>
     <nav aria-label="主导航">
       {navItems.map(([label, href]) => {
-        const matched = href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(`${href}/`);
+        const matched = href === "/" ? pathname === "/" : href === "/search" ? pathname === href || pathname.startsWith("/search/") : pathname === href || pathname.startsWith(`${href}/`);
         const shadowedBySpecificItem = navItems.some(([, candidate]) => candidate !== href && candidate.startsWith(`${href}/`) && (pathname === candidate || pathname.startsWith(`${candidate}/`)));
         const active = matched && !shadowedBySpecificItem;
         return <Link className={active ? "active" : ""} key={href} href={href}>{label}</Link>;
