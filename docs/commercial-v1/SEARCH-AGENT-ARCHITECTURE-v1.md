@@ -1,5 +1,8 @@
 # Search Agent — Architecture v1
 
+> 历史架构记录：Search Agent 业务 seam 仍有效；文中的 `apps/web` 页面为最初接入点。
+> 当前主 UI adapter 位于 `apps/teacher-web/lib/teacher-workspace`，总体依赖方向见 `docs/ARCHITECTURE.md`。
+
 > Prompt 3 交付文档 · 说明 Search Agent MVP 如何复用 Prompt 2 的 TeacherAgentRuntime 边界，
 > 以及所有可信/安全门禁的实现位置。
 

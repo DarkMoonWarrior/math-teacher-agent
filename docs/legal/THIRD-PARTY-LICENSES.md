@@ -1,6 +1,6 @@
 # 第三方依赖许可清单（Commercial V1）
 
-核验日期：2026-08-16
+核验日期：2026-08-20（新增 `apps/teacher-web` 入口复核；依赖版本未变化）
 核验方式：已安装发行版的包元数据（Python: `importlib.metadata`；Node: 各包 `package.json` 的 `license` 字段）。
 
 状态定义：
@@ -37,7 +37,7 @@ pluggy（MIT）、iniconfig（MIT）。
 | --- | --- | --- | --- |
 | pix2text（math-ocr extra） | 本地数学公式 OCR | PyPI 声明待核验 | REVIEW |
 
-## Node 前端依赖（apps/web）
+## Node 前端依赖（apps/teacher-web 与 apps/web）
 
 | 包 | 版本 | 许可 | 状态 |
 | --- | --- | --- | --- |
@@ -50,7 +50,9 @@ pluggy（MIT）、iniconfig（MIT）。
 传递依赖（代表性）：sharp（Next 可选图像处理依赖，许可待核验）→ REVIEW。
 
 
-## Node Agent Service 依赖（apps/agent，Prompt 2 新增）
+`apps/teacher-web/public/images/math-atlas.png` 为本项目生成的 UI 视觉资产，不是迁入的第三方题库或教材图片。
+
+## Node Agent Service 依赖（apps/agent）
 
 DSH 全部直接依赖精确锁定 0.1.0-rc.6；以下许可来自已安装发行版的 package.json 元数据
 （pnpm licenses list，核验日期 2026-08-16）。

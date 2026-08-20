@@ -19,7 +19,10 @@ class Settings(BaseSettings):
 
     app_name: str = "高中数学 AI 备课工作台"
     environment: str = "development"
-    cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
+    cors_origins: str = (
+        "http://localhost:3000,http://127.0.0.1:3000,"
+        "http://localhost:3001,http://127.0.0.1:3001"
+    )
     curriculum_csv: Path = Field(
         default=PROJECT_ROOT
         / "docs"
@@ -135,4 +138,3 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
-

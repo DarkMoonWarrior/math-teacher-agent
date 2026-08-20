@@ -1,5 +1,9 @@
 # Teacher Agent Runtime 实现说明 v1（Prompt 2）
 
+> 历史实现记录：Runtime 基础层仍有效，但其中“现有 UI”指迁移阶段的 `apps/web`。
+> 当前主产品 UI 为 `apps/teacher-web`；最新 seam 与能力状态见 `docs/ARCHITECTURE.md` 和
+> `docs/PROJECT-STATUS.md`。
+
 ## 目标
 
 证明：现有高中数学业务系统可以通过稳定、可替换、安全的 `TeacherAgentRuntime` 驱动

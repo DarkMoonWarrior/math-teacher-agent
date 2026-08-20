@@ -60,6 +60,12 @@ def test_difficulty_range():
     assert intent.difficulty_range == [3, 4]
 
 
+def test_slightly_hard_maps_to_difficulty_four():
+    intent = _parser().parse("找几道稍难一点的导数题")
+    assert intent.difficulty == 4
+    assert intent.difficulty_range == []
+
+
 def test_teaching_usage_is_soft_and_mapped():
     intent = _parser().parse("适合课堂例题的椭圆题")
     assert intent.teaching_usage == "classroom_example"
@@ -67,6 +73,18 @@ def test_teaching_usage_is_soft_and_mapped():
     assert usage.strength == "soft"
     homework = _parser().parse("给学生课后练习的函数题")
     assert homework.teaching_usage == "homework"
+    assert _parser().parse("找三道例题").teaching_usage == "classroom_example"
+    assert _parser().parse("找一组函数复习题").teaching_usage == "exam_review"
+
+
+def test_negative_question_type_is_not_reversed_into_positive_constraint():
+    intent = _parser().parse("找 5 道函数题，不要填空题")
+    assert intent.question_types == []
+    assert not any(c.field == "question_types" for c in intent.constraints)
+    assert any("排除题型" in warning for warning in intent.parse_warnings)
+
+    mixed = _parser().parse("不要填空题，只要选择题")
+    assert mixed.question_types == ["single_choice"]
 
 
 def test_exclude_ids_and_similar():

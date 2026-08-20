@@ -1,8 +1,8 @@
-# Agent Service（apps/agent）
+# Teacher Agent Runtime（apps/agent）
 
 独立 Node / TypeScript Agent Service，负责驱动 DeepSeek Harness 执行 Teacher Agent。
 
-安全边界（Prompt 2）：
+安全边界：
 
 - 本服务**不直接访问任何数据库**；题目/课程数据只能通过 FastAPI Internal Tool Gateway 获取。
 - 模型可见工具**恰好只有 5 个只读工具**：`search_questions`、`get_question`、
@@ -19,15 +19,23 @@
 
 ```bash
 # 在仓库根目录
-pnpm dev:agent        # 启动 Agent Service（默认 127.0.0.1:4100）
-pnpm typecheck:agent  # TypeScript 类型检查
-pnpm test:agent       # vitest：transport / E2E / cancel / resume / 安全门禁
-pnpm build:agent      # 编译到 dist/
+pnpm setup:env      # 首次运行；生成本地 token，并启用 dsh + test-mock
+pnpm dev:agent      # 启动 Agent Service（默认 127.0.0.1:4100）
+pnpm typecheck:agent # TypeScript 类型检查
+pnpm test:agent      # vitest：transport / E2E / cancel / resume / 安全门禁
+pnpm build:agent     # 编译到 dist/
 ```
 
 测试全部使用 deterministic mock model（`test-mock`），绝不调用真实 DeepSeek API。
-真实模型接入需要同时配置 `MATH_AI_DEEPSEEK_API_KEY` 与
+`pnpm dev:agent` 从仓库根 `.env` 加载配置。真实模型接入需要同时配置 `MATH_AI_DEEPSEEK_API_KEY` 与
 `MATH_AI_AGENT_PROVIDER=deepseek-official`（见仓库根 `.env.example`）。
+
+## 当前状态
+
+- 产品自有 Runtime interface 与 DeepSeek Harness adapter 已实现。
+- Search Agent 场景、取消、恢复、tool-loop 上限和最小权限均有自动测试。
+- 目前模型可见能力仍严格限制为 5 个只读 Tool；Lesson/Paper 写工具尚未接入。
+- 默认 `test-mock` 不调用真实模型；生产密钥只存在于本服务环境。
 
 ## HTTP 接口（machine-to-machine）
 

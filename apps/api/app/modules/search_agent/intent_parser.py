@@ -67,6 +67,7 @@ _ID_PATTERN = re.compile(r"[Qq][A-Za-z0-9_-]{2,}")
 
 _DIFFICULTY_WORDS: list[tuple[str, int | None, list[int] | None]] = [
     ("压轴", 5, None),
+    ("稍难", 4, None),
     ("较难", 4, None),
     ("偏难", 4, None),
     ("中等偏难", None, [3, 4]),
@@ -95,6 +96,16 @@ _QUESTION_TYPES = [
     ("应用题", "application"),
 ]
 _QUESTION_TYPES.sort(key=lambda item: -len(item[0]))
+
+_QUESTION_TYPE_NEGATION_MARKERS = (
+    "不要",
+    "不需要",
+    "不含",
+    "不包括",
+    "排除",
+    "避开",
+    "去掉",
+)
 
 _REGIONS = [
     ("新高考一卷", "新高考Ⅰ卷"),
@@ -127,6 +138,7 @@ _USAGE_WORDS: list[tuple[str, str]] = [
     ("课堂讲解", "classroom_example"),
     ("课堂示范", "classroom_example"),
     ("板书例题", "classroom_example"),
+    ("例题", "classroom_example"),
     ("随堂练习", "in_class_practice"),
     ("当堂练习", "in_class_practice"),
     ("当堂训练", "in_class_practice"),
@@ -137,6 +149,7 @@ _USAGE_WORDS: list[tuple[str, str]] = [
     ("期末复习", "exam_review"),
     ("期中复习", "exam_review"),
     ("复习课", "exam_review"),
+    ("复习", "exam_review"),
     ("备考", "exam_review"),
     ("摸底", "diagnostic"),
     ("诊断", "diagnostic"),
@@ -234,15 +247,37 @@ def _parse_difficulty(text: str) -> tuple[int | None, list[int], str]:
     return None, [], ""
 
 
-def _parse_question_types(text: str) -> list[str]:
+def _parse_question_types(text: str, clauses: list[str]) -> tuple[list[str], list[str]]:
     found: list[str] = []
+    ignored_negated: list[str] = []
     for word, mapped in _QUESTION_TYPES:
-        if word in text and mapped not in found:
-            # “多选题”比“选择题”长，先匹配；避免把多选题重复计为单选。
-            if mapped == "single_choice" and "多选" in text:
-                continue
+        matching_clauses: list[str] = []
+        for clause in clauses:
+            candidate = clause.replace("多选题", "") if word == "选择题" else clause
+            if word in candidate:
+                matching_clauses.append(candidate)
+        if not matching_clauses:
+            continue
+        negated_clauses = [
+            clause
+            for clause in matching_clauses
+            if any(marker in clause for marker in _QUESTION_TYPE_NEGATION_MARKERS)
+        ]
+        if negated_clauses:
+            ignored_negated.append(word)
+        positive_clauses = [
+            clause
+            for clause in matching_clauses
+            if not any(
+                marker in clause
+                for marker in _QUESTION_TYPE_NEGATION_MARKERS
+            )
+        ]
+        if not positive_clauses:
+            continue
+        if mapped not in found:
             found.append(mapped)
-    return found
+    return found, list(dict.fromkeys(ignored_negated))
 
 
 def _parse_regions(text: str) -> list[str]:
@@ -300,7 +335,10 @@ class SearchIntentParser:
         grade = next((mapped for word, mapped in _GRADES if word in text), None)
         volume = next((mapped for word, mapped in _VOLUMES if word in text), None)
         difficulty, difficulty_range, difficulty_word = _parse_difficulty(text)
-        question_types = _parse_question_types(text)
+        question_types, ignored_negative_question_types = _parse_question_types(text, clauses)
+        if ignored_negative_question_types:
+            ignored = "、".join(ignored_negative_question_types)
+            warnings.append(f"已识别排除题型“{ignored}”；当前版本不会把它误作正向题型条件。")
         regions = _parse_regions(text)
         usage = _parse_usage(text)
         year_from, year_to = _parse_years(text)
