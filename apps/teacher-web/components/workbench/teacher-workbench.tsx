@@ -352,6 +352,7 @@ export function TeacherWorkbench() {
   const sessionRef = useRef("");
   const abortRef = useRef<AbortController | null>(null);
   const turnTimerRef = useRef<number | null>(null);
+  const resultRegionRef = useRef<HTMLElement | null>(null);
 
   const definition = CAPABILITIES[capability];
   const query = drafts[capability];
@@ -371,6 +372,22 @@ export function TeacherWorkbench() {
 
   function updateQuery(value: string) {
     setDrafts((current) => ({ ...current, [capability]: value }));
+  }
+
+  function scrollToResultRegion() {
+    window.requestAnimationFrame(() => {
+      const target = resultRegionRef.current;
+      if (!target) return;
+
+      const navHeight = document.querySelector<HTMLElement>(".app-nav")?.offsetHeight ?? 0;
+      const top = window.scrollY + target.getBoundingClientRect().top - navHeight - 16;
+      const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+      window.scrollTo({
+        behavior: reducedMotion ? "auto" : "smooth",
+        top: Math.max(0, top),
+      });
+    });
   }
 
   useEffect(() => {
@@ -400,6 +417,7 @@ export function TeacherWorkbench() {
     setPhase("running");
     setError(null);
     setQuestionPage(0);
+    scrollToResultRegion();
 
     try {
       const nextResult = await teacherWorkspace.searchQuestions(
@@ -600,7 +618,7 @@ export function TeacherWorkbench() {
           </section>
         </section>
 
-        <section className="visual-pane" aria-live="polite">
+        <section className="visual-pane" aria-live="polite" ref={resultRegionRef}>
           <header className="visual-pane__head">
             <div>
               <span>{searchVisible && phase === "success" ? "检索结果" : definition.stageLabel}</span>

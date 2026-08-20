@@ -1,6 +1,6 @@
 # Repository instructions for development agents
 
-This file is the short, operational source of truth for agents working in this repository. Read it before changing code. Product details live in `docs/DEVELOPMENT-BOUNDARY.md`; current implementation status lives in `docs/PROJECT-STATUS.md`.
+This file is the short, operational source of truth for agents working in this repository. Read it before changing code. Product details live in `docs/DEVELOPMENT-BOUNDARY.md`; the current route and gates live in `docs/ROADMAP.md` and `docs/PRODUCT-GATES.md`; implementation status lives in `docs/PROJECT-STATUS.md`.
 
 ## Product
 
@@ -17,6 +17,7 @@ The current product line is the new `apps/teacher-web` experience. `apps/web` is
 5. AI output starts as `draft` or `needs_teacher_review`. Agent code cannot publish, approve rights, approve verification, permanently delete, or silently relax a hard constraint.
 6. DeepSeek Harness is replaceable infrastructure. Business code depends on the product-owned `TeacherAgentRuntime` interface, not Harness types.
 7. Do not broaden the audience beyond Chinese high-school mathematics teachers or add student, parent, LMS, ERP, community, payment, or multi-tenant scope ahead of the roadmap.
+8. Work on one milestone at a time. A legacy REST module, visible navigation item, or model-generated draft does not prove that the corresponding Agent workflow is complete.
 
 ## Current product state
 
@@ -25,6 +26,7 @@ The current product line is the new `apps/teacher-web` experience. `apps/web` is
 - `Lesson Agent` and `Paper Agent`: navigation and requirement-drafting previews only in `apps/teacher-web`; their Agent runtimes/tools are not connected.
 - Mature lesson-plan, paper, import, library, solution, curriculum, question-bank, and verification modules exist in the migrated backend/legacy UI. Existing REST workflows do not mean the corresponding new Agent capability is complete.
 - Teacher identity, cloud isolation, billing, and public commercial operation are not implemented.
+- M0-M3 are complete. M4 Search integration stabilization is the only active milestone; M5 and later require the current Gate and owner confirmation before starting.
 
 ## Repository seams
 
@@ -46,8 +48,9 @@ Do not invent requirements to finish a task. When old documents conflict with th
 
 1. explicit owner instruction;
 2. `docs/DEVELOPMENT-BOUNDARY.md`;
-3. `docs/PROJECT-STATUS.md` and `docs/ARCHITECTURE.md`;
-4. historical documents under `docs/commercial-v1` and `docs/high-school-math-ai`.
+3. `docs/ROADMAP.md` and `docs/PRODUCT-GATES.md`;
+4. `docs/PROJECT-STATUS.md` and `docs/ARCHITECTURE.md`;
+5. historical documents under `docs/commercial-v1`, `docs/high-school-math-ai`, and the planning PDF.
 
 ## Verification
 
@@ -59,3 +62,5 @@ Run checks proportional to the changed seam:
 - Legacy UI only when touched: `pnpm typecheck:legacy-web` and `pnpm build:legacy-web`.
 
 Never use real model credentials in automated tests. Never commit `.env`, databases, uploads, exports, private resources, or third-party question content.
+
+Before declaring a milestone complete, apply Gate E from `docs/PRODUCT-GATES.md`, record what is complete/partial/unstarted, and do not begin the next milestone until the owner confirms the transition.
