@@ -22,8 +22,9 @@
 4. Agent 不直接访问数据库，只能调用受控 Tool 和 FastAPI 业务模块。
 5. AI 产物默认 draft；发布必须经过 RightsGate、MathVerifier 与 Teacher Review。
 6. DeepSeek Harness 是可替换运行时，业务系统只依赖产品自有接口。
+7. 每个阶段必须通过功能、可信、隐私/权利和工程 Gate；真实 Beta 验证前不把支付当作主要工程。
 
-完整边界见 [`docs/DEVELOPMENT-BOUNDARY.md`](docs/DEVELOPMENT-BOUNDARY.md)。
+完整边界见 [`docs/DEVELOPMENT-BOUNDARY.md`](docs/DEVELOPMENT-BOUNDARY.md)，量化验证和商业发布条件见 [`docs/PRODUCT-GATES.md`](docs/PRODUCT-GATES.md)。
 
 ## 仓库结构
 
@@ -97,9 +98,9 @@ pnpm build:agent
 
 ## 当前开发顺序
 
-`Search 稳定化 → Solve Agent → Private Library Agent → Paper Agent → Lesson Agent → Teacher Memory → Closed Beta`
+`Search 稳定化 → Solve → Private Library → Paper → Lesson → Memory → Beta 准备 → Beta 验证 → 商业基础 → Teacher Pro → 教研组 → 学校`
 
-不要并行铺开后续阶段。路线图与每阶段启动门禁见 [`docs/ROADMAP.md`](docs/ROADMAP.md)。
+不要并行铺开后续阶段。最新版 M0-M15 路线见 [`docs/ROADMAP.md`](docs/ROADMAP.md)，每阶段和商业发布门禁见 [`docs/PRODUCT-GATES.md`](docs/PRODUCT-GATES.md)。
 
 ## 数据与密钥
 
