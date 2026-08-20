@@ -1,0 +1,22 @@
+{
+  "scannedAt": "2026-08-20",
+  "framework": "Next.js 16 with React 19",
+  "genre": "atmospheric product interface",
+  "macrostructure": "Feature Stack",
+  "theme": "studied-DNA: OpenAI restraint, Gemini motion, Anthropic warmth",
+  "fontPair": "Chinese editorial serif display with Segoe UI Variable and Microsoft YaHei UI body",
+  "palette": "warm paper, charcoal, restrained vermilion and mineral teal",
+  "motion": "three purposeful primitives: page turn, atlas drift, orbit loader",
+  "spacing": "4pt scale",
+  "preserve": [
+    "FastAPI business API contracts",
+    "Search Agent trust semantics",
+    "TeacherWorkspace adapter boundary",
+    "Next.js and React infrastructure"
+  ],
+  "replace": [
+    "persistent side navigation",
+    "repeated result cards",
+    "austere control-panel visual language"
+  ]
+}

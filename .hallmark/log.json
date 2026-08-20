@@ -1,0 +1,36 @@
+[
+  {
+    "date": "2026-08-20",
+    "scope": "app",
+    "macrostructure": "Marquee Hero",
+    "theme": "custom",
+    "theme_axes": "warm-paper / Chinese editorial serif / vermilion-mineral-teal",
+    "vibe": "vertical multi-agent studio with a living paper theatre",
+    "enrichment": "E generated still · mathematical paper atlas",
+    "nav": "N1b capability navigation",
+    "footer": "Ft2 Inline single line",
+    "brief": "Stack the task composer above an Agent-switchable paper workspace and remove the redundant trust summary."
+  },
+  {
+    "date": "2026-08-20",
+    "scope": "app",
+    "macrostructure": "Feature Stack",
+    "theme": "custom",
+    "theme_axes": "warm-paper / Chinese editorial serif / vermilion-mineral-teal",
+    "vibe": "quiet scholarly floating paper theatre",
+    "enrichment": "E generated still · mathematical paper atlas",
+    "nav": "N5 Floating pill",
+    "footer": "Ft5 Statement",
+    "brief": "Redesign the teacher Search Agent as a floating, page-turning mathematical work surface."
+  },
+  {
+    "date": "2026-08-20",
+    "scope": "app",
+    "macrostructure": "Workbench",
+    "theme": "Coral",
+    "enrichment": "none",
+    "nav": "N3 Utility bar",
+    "footer": "Ft2 Utility",
+    "brief": "Initial austere teacher workbench inferred from the previous CSS stamp."
+  }
+]

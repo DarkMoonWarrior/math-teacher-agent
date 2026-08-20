@@ -1,0 +1,42 @@
+[
+  {
+    "date": "2026-08-20",
+    "scope": "app",
+    "genre": "atmospheric",
+    "macrostructure": "Marquee Hero",
+    "theme": "studied-DNA",
+    "theme_axes": "warm-paper / Chinese editorial serif / vermilion-mineral-teal",
+    "navigation": "N1b capability navigation",
+    "footer": "Ft2 inline single line",
+    "enrichment": "E generated still · mathematical paper atlas",
+    "tone": "vertical multi-agent studio with a living paper theatre",
+    "audience": "Chinese high-school math teachers",
+    "primaryAction": "switch Agent, describe a teaching task, and inspect the work surface"
+  },
+  {
+    "date": "2026-08-20",
+    "scope": "app",
+    "genre": "atmospheric",
+    "macrostructure": "Feature Stack",
+    "theme": "studied-DNA",
+    "theme_axes": "warm-paper / Chinese editorial serif / vermilion-mineral-teal",
+    "navigation": "N5 floating pill",
+    "footer": "Ft5 statement",
+    "enrichment": "E generated still · mathematical paper atlas",
+    "tone": "quiet scholarly floating paper theatre",
+    "audience": "Chinese high-school math teachers",
+    "primaryAction": "describe a teaching task and run Search Agent"
+  },
+  {
+    "date": "2026-08-20",
+    "genre": "modern-minimal",
+    "macrostructure": "Workbench",
+    "theme": "Coral",
+    "navigation": "N3 side rail adapted for an authenticated product",
+    "footer": "Ft2 inline status line",
+    "enrichment": "none",
+    "tone": "austere and utilitarian",
+    "audience": "Chinese high-school math teachers",
+    "primaryAction": "describe a teaching task and start Teacher Agent"
+  }
+]
