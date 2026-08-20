@@ -1,5 +1,8 @@
 # Prompt 3 Acceptance
 
+> 历史验收记录：Search Agent 已合并并迁移到新的 `apps/teacher-web` 主入口。
+> 后续修复与当前未决项以 `docs/PROJECT-STATUS.md` 和 `POST-BASELINE-BACKLOG.md` 为准。
+
 > Search Agent MVP 验收记录 · 生成日期 2026-08-16 · 分支 feat/search-agent-mvp-v1（Draft PR，未合并）
 
 ## 1. 验收 Gate（Prompt 3 §65 A–M）

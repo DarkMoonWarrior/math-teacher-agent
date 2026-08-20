@@ -10,12 +10,8 @@ const SEARCH_ENDPOINT = "/api/v1/agent/search";
 function apiUrl(path: string): string {
   const configured = process.env.NEXT_PUBLIC_MATH_AI_API_URL?.replace(/\/$/, "");
   if (configured) return `${configured}${path}`;
-  if (
-    typeof window !== "undefined" &&
-    ["localhost", "127.0.0.1"].includes(window.location.hostname)
-  ) {
-    return `http://${window.location.hostname}:8000${path}`;
-  }
+  // Keep the browser on the Teacher Web origin. next.config.ts owns the
+  // server-side FastAPI rewrite, so local development does not depend on CORS.
   return path;
 }
 

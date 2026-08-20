@@ -1,5 +1,8 @@
 # 商业 V1 迁移 · 产品与技术基线
 
+> 历史基线：本文描述迁移审计时的 `apps/web` 原型。当前主 UI、能力状态与架构请以
+> `docs/PROJECT-STATUS.md`、`docs/ARCHITECTURE.md` 和根 README 为准。
+
 - 文档编号：COMMERCIAL-V1 / DOC-01
 - 审计日期：2026-08-16
 - 审计基线：`DarkMoonWarrior/high-school-math-ai` @ `1de7d4a`（main，共 57 个提交）

@@ -239,7 +239,7 @@ const CAPABILITIES: Record<CapabilityId, CapabilityDefinition> = {
 };
 
 function createSessionId(): string {
-  return `teacher_web_${crypto.randomUUID()}`;
+  return `tch_${crypto.randomUUID().replaceAll("-", "")}`;
 }
 
 function querySummary(query: string): string {

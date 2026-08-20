@@ -53,6 +53,20 @@ class DeepSeekHarnessRuntime(TeacherAgentRuntime):
             headers["Authorization"] = f"Bearer {self._token}"
         return headers
 
+    def _new_client(self, timeout: httpx.Timeout | None = None) -> httpx.AsyncClient:
+        """Create the owned M2M client without inheriting workstation proxies.
+
+        The Agent Service URL is a trusted, operator-configured internal boundary.
+        Letting HTTP(S)_PROXY rewrite that route can make a healthy local service
+        look unavailable or send its bearer token to an unintended proxy.
+        Injected clients remain untouched so tests and callers keep full control.
+        """
+
+        return httpx.AsyncClient(
+            timeout=timeout or self._request_timeout,
+            trust_env=False,
+        )
+
     def _parse_error(self, body: str, request_id: str) -> TeacherAgentError:
         try:
             payload = json.loads(body)
@@ -75,7 +89,7 @@ class DeepSeekHarnessRuntime(TeacherAgentRuntime):
         self, path: str, payload: dict[str, Any], request_id: str
     ) -> tuple[int, Any | None, TeacherAgentError | None]:
         try:
-            client = self._client or httpx.AsyncClient(timeout=self._request_timeout)
+            client = self._client or self._new_client()
             owns_client = self._client is None
             try:
                 response = await client.post(
@@ -151,7 +165,7 @@ class DeepSeekHarnessRuntime(TeacherAgentRuntime):
         self, request: TeacherAgentRunRequest
     ) -> AsyncIterator[TeacherAgentEvent]:
         request_id = request.request_id or f"req_{uuid.uuid4().hex}"
-        client = self._client or httpx.AsyncClient(timeout=httpx.Timeout(None))
+        client = self._client or self._new_client(httpx.Timeout(None))
         owns_client = self._client is None
         try:
             try:
@@ -278,7 +292,7 @@ class DeepSeekHarnessRuntime(TeacherAgentRuntime):
     async def get_session(self, session_id: str) -> TeacherAgentSession:
         request_id = f"req_{uuid.uuid4().hex}"
         try:
-            client = self._client or httpx.AsyncClient(timeout=self._request_timeout)
+            client = self._client or self._new_client()
             owns_client = self._client is None
             try:
                 response = await client.get(
@@ -302,7 +316,7 @@ class DeepSeekHarnessRuntime(TeacherAgentRuntime):
     async def health(self) -> TeacherAgentHealth:
         request_id = f"req_{uuid.uuid4().hex}"
         try:
-            client = self._client or httpx.AsyncClient(timeout=self._request_timeout)
+            client = self._client or self._new_client()
             owns_client = self._client is None
             try:
                 response = await client.get(
@@ -347,7 +361,7 @@ class DeepSeekHarnessRuntime(TeacherAgentRuntime):
     async def capabilities(self) -> TeacherAgentCapabilities:
         request_id = f"req_{uuid.uuid4().hex}"
         try:
-            client = self._client or httpx.AsyncClient(timeout=self._request_timeout)
+            client = self._client or self._new_client()
             owns_client = self._client is None
             try:
                 response = await client.get(

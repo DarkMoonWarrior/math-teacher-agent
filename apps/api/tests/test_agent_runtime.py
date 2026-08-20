@@ -14,6 +14,7 @@ from typing import Any
 import httpx
 import pytest
 
+import app.agent_runtime.dsh as dsh_module
 from app.agent_runtime import (
     DeepSeekHarnessRuntime,
     LegacyTeacherAgentRuntime,
@@ -228,6 +229,32 @@ def test_dsh_run_maps_result_and_sends_service_token(dsh_settings) -> None:
         assert result.runtime == "dsh"
 
     _run(scenario())
+
+
+def test_dsh_owned_client_ignores_environment_proxy(
+    dsh_settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    original_async_client = httpx.AsyncClient
+    captured_options: dict[str, Any] = {}
+
+    def client_factory(*args: Any, **kwargs: Any) -> httpx.AsyncClient:
+        captured_options.update(kwargs)
+        return original_async_client(
+            transport=httpx.MockTransport(_auth_ok),
+            base_url="http://127.0.0.1:4100",
+            **kwargs,
+        )
+
+    async def scenario() -> None:
+        runtime = DeepSeekHarnessRuntime()
+        result = await runtime.run(
+            TeacherAgentRunRequest(user_message="搜索集合题", request_id="req_proxy")
+        )
+        assert result.status == TeacherAgentRunStatus.COMPLETED
+
+    monkeypatch.setattr(dsh_module.httpx, "AsyncClient", client_factory)
+    _run(scenario())
+    assert captured_options["trust_env"] is False
 
 
 def test_dsh_unreachable_returns_runtime_unavailable(dsh_settings) -> None:

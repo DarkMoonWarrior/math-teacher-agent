@@ -1,7 +1,7 @@
 # Search Agent MVP — Product Spec v1
 
-> Prompt 3 交付文档 · Commercial Repository: DarkMoonWarrior/math-teacher-agent
-> 状态：MVP 已实现（分支 feat/search-agent-mvp-v1，等待验收）
+> Prompt 3 历史交付文档 · Commercial Repository: DarkMoonWarrior/math-teacher-agent
+> 状态：MVP 已合并并接入 `apps/teacher-web`；当前稳定化状态见 `docs/PROJECT-STATUS.md`。
 
 ## 1. 定位
 
