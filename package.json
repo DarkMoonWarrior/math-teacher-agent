@@ -1,9 +1,12 @@
 {
-  "name": "high-school-math-ai",
+  "name": "math-teacher-agent",
   "version": "0.1.0",
   "private": true,
   "packageManager": "pnpm@10.15.0",
   "scripts": {
+    "dev:teacher": "pnpm --filter @math-teacher-agent/teacher-web dev",
+    "build:teacher": "pnpm --filter @math-teacher-agent/teacher-web build",
+    "typecheck:teacher": "pnpm --filter @math-teacher-agent/teacher-web typecheck",
     "dev:web": "pnpm --filter @math-ai/web dev",
     "build:web": "pnpm --filter @math-ai/web build",
     "typecheck:web": "pnpm --filter @math-ai/web typecheck",

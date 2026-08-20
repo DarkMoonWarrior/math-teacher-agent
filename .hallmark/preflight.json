@@ -1,0 +1,29 @@
+{
+  "scanned_at": "2026-08-20T19:55:00+08:00",
+  "project_root": "D:\\math-teacher-agent",
+  "framework": "Next.js 16 App Router with React 19 and TypeScript",
+  "target_route": "/",
+  "target_app": "apps/teacher-web",
+  "style_entry": "apps/teacher-web/app/globals.css",
+  "token_entry": "apps/teacher-web/tokens.css",
+  "existing_business_boundary": "TeacherWorkspace adapter calling FastAPI POST /api/v1/agent/search",
+  "preserved_paths": [
+    "apps/teacher-web/lib/teacher-workspace/contracts.ts",
+    "apps/teacher-web/lib/teacher-workspace/http-adapter.ts",
+    "apps/api",
+    "apps/web"
+  ],
+  "available_assets": [
+    "apps/teacher-web/public/images/math-atlas.png"
+  ],
+  "package_mtimes_utc": {
+    "package.json": "2026-08-20T10:44:20Z",
+    "apps/teacher-web/package.json": "2026-08-20T10:31:12Z"
+  },
+  "constraints": [
+    "Chinese high-school mathematics teachers only",
+    "Search Agent is the only currently usable teacher workflow on this page",
+    "source, rights, and verification statuses must remain explicit",
+    "private and public data boundaries are not changed by this redesign"
+  ]
+}
