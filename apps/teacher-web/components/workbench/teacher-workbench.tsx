@@ -353,6 +353,9 @@ export function TeacherWorkbench() {
   const abortRef = useRef<AbortController | null>(null);
   const turnTimerRef = useRef<number | null>(null);
   const resultRegionRef = useRef<HTMLElement | null>(null);
+  const historyTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const historyDrawerRef = useRef<HTMLElement | null>(null);
+  const historyCloseRef = useRef<HTMLButtonElement | null>(null);
 
   const definition = CAPABILITIES[capability];
   const query = drafts[capability];
@@ -397,12 +400,48 @@ export function TeacherWorkbench() {
   }, []);
 
   useEffect(() => {
-    function closeOnEscape(event: globalThis.KeyboardEvent) {
-      if (event.key === "Escape") setHistoryOpen(false);
+    if (!historyOpen) return;
+    const previousFocus = document.activeElement;
+    historyCloseRef.current?.focus();
+
+    function manageDialogFocus(event: globalThis.KeyboardEvent) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setHistoryOpen(false);
+        return;
+      }
+      if (event.key !== "Tab") return;
+
+      const drawer = historyDrawerRef.current;
+      if (!drawer) return;
+      const focusable = Array.from(drawer.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), [href], input:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      )).filter((element) => !element.hasAttribute("hidden"));
+      if (focusable.length === 0) {
+        event.preventDefault();
+        return;
+      }
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
     }
-    window.addEventListener("keydown", closeOnEscape);
-    return () => window.removeEventListener("keydown", closeOnEscape);
-  }, []);
+
+    window.addEventListener("keydown", manageDialogFocus);
+    return () => {
+      window.removeEventListener("keydown", manageDialogFocus);
+      if (previousFocus instanceof HTMLElement && document.contains(previousFocus)) {
+        previousFocus.focus();
+      } else {
+        historyTriggerRef.current?.focus();
+      }
+    };
+  }, [historyOpen]);
 
   async function runTask(event?: FormEvent<HTMLFormElement>) {
     event?.preventDefault();
@@ -547,7 +586,7 @@ export function TeacherWorkbench() {
           </nav>
 
           <div className="nav-actions">
-            <button className="icon-button" type="button" onClick={() => setHistoryOpen(true)} aria-label="查看搜题记录">
+            <button ref={historyTriggerRef} className="icon-button" type="button" onClick={() => setHistoryOpen(true)} aria-label="查看搜题记录">
               <HistoryIcon />
               {history.length > 0 && <span>{history.length}</span>}
             </button>
@@ -707,11 +746,19 @@ export function TeacherWorkbench() {
         <span>高中数学 · 私有工作区</span>
       </footer>
 
-      <button className={`drawer-backdrop${historyOpen ? " is-open" : ""}`} type="button" onClick={() => setHistoryOpen(false)} aria-label="关闭任务记录" tabIndex={historyOpen ? 0 : -1} />
-      <aside className={`history-drawer${historyOpen ? " is-open" : ""}`} aria-hidden={!historyOpen} aria-label="本次会话搜题记录">
+      <button className={`drawer-backdrop${historyOpen ? " is-open" : ""}`} type="button" onClick={() => setHistoryOpen(false)} aria-hidden="true" tabIndex={-1} />
+      <aside
+        ref={historyDrawerRef}
+        className={`history-drawer${historyOpen ? " is-open" : ""}`}
+        aria-hidden={!historyOpen}
+        aria-labelledby="history-drawer-title"
+        aria-modal="true"
+        inert={!historyOpen}
+        role="dialog"
+      >
         <header>
-          <div><span>本次会话</span><h2>搜题记录</h2></div>
-          <button className="icon-button" type="button" onClick={() => setHistoryOpen(false)} aria-label="关闭"><CloseIcon /></button>
+          <div><span>本次会话</span><h2 id="history-drawer-title">搜题记录</h2></div>
+          <button ref={historyCloseRef} className="icon-button" type="button" onClick={() => setHistoryOpen(false)} aria-label="关闭"><CloseIcon /></button>
         </header>
         {history.length === 0 ? (
           <div className="history-empty"><ClockIcon /><p>完成的检索会暂存在这里。</p><span>刷新页面后清空。</span></div>

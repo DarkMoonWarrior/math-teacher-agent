@@ -758,12 +758,21 @@ svg { flex: 0 0 auto; }
   right: 0;
   top: 0;
   transform: translateX(105%);
-  transition: transform var(--duration-short) var(--ease-out);
+  transition:
+    transform var(--duration-short) var(--ease-out),
+    visibility 0s linear var(--duration-short);
+  visibility: hidden;
   width: calc(100% - 2rem);
   z-index: var(--z-drawer);
 }
 
-.history-drawer.is-open { transform: translateX(0); }
+.history-drawer.is-open {
+  transform: translateX(0);
+  transition:
+    transform var(--duration-short) var(--ease-out),
+    visibility 0s;
+  visibility: visible;
+}
 
 .history-drawer > header {
   align-items: start;

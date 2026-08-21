@@ -5,7 +5,7 @@
 ## 当前能力
 
 - 搜题、教案、组卷三项 Agent 能力导航；
-- Search Agent 真实请求、加载/取消/错误/空结果/可信状态；
+- Search Agent 单次真实流式请求、服务端取消、错误/空结果/可信状态；
 - 教案与组卷需求草稿及工作流预览（运行时尚未接入，提交按钮禁用）；
 - 桌面与手机响应式动态纸张画布。
 
@@ -32,7 +32,7 @@ MATH_AI_AGENT_PROVIDER=test-mock
 ## 模块 seam
 
 - `lib/teacher-workspace/contracts.ts`：UI 可见的稳定接口和结果模型。
-- `lib/teacher-workspace/http-adapter.ts`：同源 FastAPI adapter。
+- `lib/teacher-workspace/http-adapter.ts`：同源 FastAPI adapter；内部处理 SSE 和服务端取消，不向 React 泄漏传输细节。
 - `components/workbench/teacher-workbench.tsx`：视图与交互状态。
 
 React 代码不得依赖数据库、Harness 类型、供应商响应或后端内部存储字段。
@@ -41,5 +41,6 @@ React 代码不得依赖数据库、Harness 类型、供应商响应或后端内
 
 ```powershell
 pnpm typecheck:teacher
+pnpm test:teacher
 pnpm build:teacher
 ```

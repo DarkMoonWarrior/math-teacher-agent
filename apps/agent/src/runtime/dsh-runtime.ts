@@ -636,6 +636,7 @@ export class DeepSeekHarnessRuntime implements TeacherAgentRuntime {
               }
               emit?.("tool_finished", {
                 tool_name: pending.toolName,
+                input: pending.input,
                 output: output ?? undefined,
                 status: call.status,
                 error: call.error ?? undefined,
@@ -670,5 +671,4 @@ export class DeepSeekHarnessRuntime implements TeacherAgentRuntime {
     if (!state.runIds.includes(runId)) state.runIds.push(runId);
   }
 }
-
 

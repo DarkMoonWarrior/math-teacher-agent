@@ -9,7 +9,7 @@
  * 同时覆盖：错误响应不包含 token、payload 校验、未知路由。
  * 测试不启动真实 Harness（fake runtime），只验证 HTTP 边界。
  */
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { Server } from "node:http";
 import { createAgentService, listenAgentService, type AgentService } from "../../src/index.js";
 import type { DeepSeekHarnessRuntime } from "../../src/runtime/dsh-runtime.js";
@@ -160,6 +160,76 @@ describe("Agent Service HTTP 认证门禁（MATH_AI_AGENT_SERVICE_TOKEN）", () 
     expect(good.status).toBe(200);
     const payload = (await good.json()) as { status: string };
     expect(payload.status).toBe("completed");
+  });
+
+  it("stream 客户端断开会取消同一个在途 run", async () => {
+    let release: () => void = () => undefined;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const cancelledRuns: string[] = [];
+    const runtime = fakeRuntime();
+    runtime.stream = async function* () {
+      yield {
+        type: "run_started",
+        run_id: "run_stream_close",
+        session_id: "tch_stream_close",
+        request_id: "req_stream_close",
+        data: {},
+        sequence: 0,
+        created_at: Date.now(),
+      };
+      await held;
+    };
+    runtime.cancel = async (runId: string) => {
+      cancelledRuns.push(runId);
+      release();
+      return {
+        run_id: runId,
+        session_id: "tch_stream_close",
+        request_id: "req_stream_close",
+        runtime: "dsh",
+        status: "cancelled",
+        final_text: "",
+        tool_calls: [],
+        error: null,
+      };
+    };
+    const cancellable = createAgentService({
+      env: {
+        ...process.env,
+        MATH_AI_AGENT_SERVICE_TOKEN: SERVICE_TOKEN,
+        MATH_AI_TOOL_GATEWAY_TOKEN: "gateway-token-http-test",
+        MATH_AI_AGENT_PROVIDER: "test-mock",
+        MATH_AI_AGENT_MODEL: "mock-model",
+        MATH_AI_AGENT_PORT: "0",
+      },
+      runtime,
+    });
+    const cancellableUrl = await listenAgentService(cancellable);
+    const controller = new AbortController();
+    try {
+      const response = await fetch(`${cancellableUrl}/v1/stream`, {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${SERVICE_TOKEN}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ user_message: "找题", request_id: "req_stream_close" }),
+        signal: controller.signal,
+      });
+      const reader = response.body?.getReader();
+      expect(reader).toBeDefined();
+      const first = await reader!.read();
+      expect(new TextDecoder().decode(first.value)).toContain("run_stream_close");
+      controller.abort();
+      await reader!.closed.catch(() => undefined);
+      await vi.waitFor(() => expect(cancelledRuns).toEqual(["run_stream_close"]));
+    } finally {
+      controller.abort();
+      release();
+      await cancellable.close();
+    }
   });
 
   it("未知路由 -> 404 结构化错误", async () => {

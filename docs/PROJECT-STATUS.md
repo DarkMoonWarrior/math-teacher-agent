@@ -23,7 +23,7 @@
 | 能力 | 状态 | 当前事实 |
 | --- | --- | --- |
 | 新教师工作台 | 可用 | `apps/teacher-web`，端口 3001；新 UI、Agent 导航、任务输入、动态纸张与 Search 结果状态。 |
-| Search Agent | 可用 | FastAPI SearchAgentPipeline + `/api/v1/agent/search`；真实题库结果、可信标签、放宽披露与空结果。需启用 Search、选择 DSH runtime 并启动 Agent Service。 |
+| Search Agent | 可用 | FastAPI SearchAgentPipeline + `/api/v1/agent/search/stream`；单次真实流式执行、在途 run 登记、服务端取消、可信标签、放宽披露与空结果。需启用 Search、选择 DSH runtime 并启动 Agent Service。 |
 | TeacherAgentRuntime | 可用 | Python 产品接口、Legacy adapter、DSH HTTP adapter；默认 legacy，DSH 不可达时默认不静默降级。 |
 | DeepSeek Harness Service | 可用（开发/测试） | `apps/agent`；五个只读工具、mock provider、取消/恢复/安全测试。真实模型需私有环境变量。 |
 | QuestionBank / MathVerifier / Curriculum | 后端已有 | 核心业务资产继续复用，不因新 UI 重写。 |
@@ -35,13 +35,14 @@
 | 账号/多租户/支付 | 未开始 | 当前教师/管理员模式不是认证或授权系统。 |
 | 商业公共题库 | 未开始填充 | `data/commercial-approved` 保持为空；只允许通过完整门禁的内容进入。 |
 
-## 2026-08-20 验证快照
+## 2026-08-21 验证快照
 
-- FastAPI：236 项测试通过；另有 1 条来自 Starlette TestClient 的依赖弃用提示。
-- Agent Runtime：类型检查、30 项测试和生产构建通过。
-- 新教师工作台：类型检查和生产构建通过。
+- FastAPI：238 项测试通过；另有 1 条来自 Starlette TestClient 的依赖弃用提示。
+- Agent Runtime：类型检查、31 项测试和生产构建通过（含 SSE 客户端断开取消）。
+- 新教师工作台：类型检查、3 项 TeacherWorkspace stream/cancel 测试和生产构建通过。
+- 新教师工作台浏览器验收：320px 无关键横向溢出；记录抽屉的初始焦点、Tab 约束、Escape 关闭、焦点返回和关闭态 `inert` 通过。
 - 旧界面：类型检查和生产构建通过，确保地基能力未被整理工作破坏。
-- 本机 `test-mock` 真实链路：Teacher Web → FastAPI → DeepSeek Harness Runtime → 受控 `search_questions` Tool 调用成功；空商业题库返回可信的 0 结果，不生成假题。
+- 2026-08-20 本机 `test-mock` 真实链路：Teacher Web → FastAPI → DeepSeek Harness Runtime → 受控 `search_questions` Tool 调用成功；空商业题库返回可信的 0 结果，不生成假题。
 
 ## 已知未决项
 

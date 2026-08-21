@@ -222,21 +222,34 @@ export function createAgentService(options: AgentServiceOptions = {}): AgentServ
         res.setHeader("cache-control", "no-cache");
         res.setHeader("connection", "keep-alive");
         res.flushHeaders?.();
-        let cancelled = false;
+        let clientClosed = false;
+        let streamFinished = false;
+        let cancelRequested = false;
         let currentRunId = "";
-        const onClose = () => {
-          if (!cancelled && currentRunId) {
-            void runtime.cancel(currentRunId);
-          }
+        const cancelCurrentRun = async () => {
+          if (!currentRunId || cancelRequested) return;
+          cancelRequested = true;
+          await runtime.cancel(currentRunId);
         };
-        req.on("close", onClose);
+        const onClose = () => {
+          if (streamFinished) return;
+          clientClosed = true;
+          void cancelCurrentRun();
+        };
+        res.on("close", onClose);
         try {
           for await (const event of runtime.stream(parsed.request)) {
             if (event.run_id) currentRunId = event.run_id;
+            if (clientClosed) {
+              await cancelCurrentRun();
+              break;
+            }
             res.write(`data: ${JSON.stringify(event)}\n\n`);
           }
-          res.end();
+          streamFinished = true;
+          if (!res.destroyed) res.end();
         } catch (cause) {
+          if (clientClosed) return;
           const error: TeacherAgentError = {
             code: "INTERNAL_ERROR",
             message: "stream 处理失败",
@@ -252,9 +265,10 @@ export function createAgentService(options: AgentServiceOptions = {}): AgentServ
             created_at: Date.now(),
           };
           res.write(`data: ${JSON.stringify(failedEvent)}\n\n`);
+          streamFinished = true;
           res.end();
         } finally {
-          req.off("close", onClose);
+          res.off("close", onClose);
         }
         return;
       }
@@ -330,4 +344,3 @@ if (isMain) {
     process.exit(1);
   });
 }
-
