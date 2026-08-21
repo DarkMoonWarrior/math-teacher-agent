@@ -1,0 +1,108 @@
+{
+  "schema_version": "1.0",
+  "evaluation_id": "solve-agent-synthetic-v1",
+  "synthetic": true,
+  "source": "project_created",
+  "rights_note": "All prompts and expected outcomes are project-created synthetic evaluation material.",
+  "cases": [
+    {
+      "id": "verified_exact_standard",
+      "question_text": "已知函数 f(x)=6x−x² 在开区间 (0,6) 上考虑最值，下列说法正确的是（ ）。",
+      "solution_mode": "standard",
+      "provider": false,
+      "expected": {
+        "outcome": "success",
+        "mode": "verified_bank",
+        "confidence_status": "program_verified",
+        "verification_status": "passed",
+        "verification_capability": "supported",
+        "verification_scope": "question_answer",
+        "evidence_source": "math_verifier",
+        "matched_question_id": "q_function_properties_02",
+        "revision_required": true
+      }
+    },
+    {
+      "id": "verified_exact_alternative_without_provider",
+      "question_text": "已知函数 f(x)=6x−x² 在开区间 (0,6) 上考虑最值，下列说法正确的是（ ）。",
+      "solution_mode": "alternative",
+      "provider": false,
+      "expected": { "outcome": "error", "error_code": "MODEL_UNAVAILABLE" }
+    },
+    {
+      "id": "verified_text_modified_cannot_inherit",
+      "question_text": "已知函数 f(x)=6x−x² 在开区间 (0,6) 上考虑最值，下列说法正确的是（ ）。另加条件 x>100。",
+      "solution_mode": "standard",
+      "provider": false,
+      "expected": { "outcome": "error", "error_code": "MODEL_UNAVAILABLE" }
+    },
+    {
+      "id": "unknown_question_without_provider",
+      "question_text": "求一个当前合成题库中不存在的函数复合问题 987654321。",
+      "solution_mode": "standard",
+      "provider": false,
+      "expected": { "outcome": "error", "error_code": "MODEL_UNAVAILABLE" }
+    },
+    {
+      "id": "unknown_question_with_provider",
+      "question_text": "解方程 2x-4=0。",
+      "solution_mode": "standard",
+      "provider": true,
+      "expected": {
+        "outcome": "success",
+        "mode": "live_ai",
+        "confidence_status": "teacher_review_required",
+        "verification_status": "inconclusive",
+        "verification_capability": "unsupported",
+        "verification_scope": "generated_solution",
+        "evidence_source": "none",
+        "matched_question_id": null,
+        "revision_required": false
+      }
+    },
+    {
+      "id": "failed_bank_record_without_provider",
+      "selector": { "verification_status": "source_inconsistency_detected" },
+      "solution_mode": "standard",
+      "provider": false,
+      "expected": { "outcome": "error", "error_code": "VERIFICATION_FAILED" }
+    },
+    {
+      "id": "failed_bank_record_with_provider",
+      "selector": { "verification_status": "source_inconsistency_detected" },
+      "solution_mode": "standard",
+      "provider": true,
+      "expected": {
+        "outcome": "success",
+        "mode": "live_ai",
+        "confidence_status": "teacher_review_required",
+        "verification_status": "failed",
+        "verification_capability": "supported",
+        "verification_scope": "matched_question_record",
+        "revision_required": true
+      }
+    },
+    {
+      "id": "inconclusive_bank_record_without_provider",
+      "selector": { "verification_status": "needs_math_review" },
+      "solution_mode": "standard",
+      "provider": false,
+      "expected": { "outcome": "error", "error_code": "VERIFICATION_INCONCLUSIVE" }
+    },
+    {
+      "id": "inconclusive_bank_record_with_provider",
+      "selector": { "verification_status": "needs_math_review" },
+      "solution_mode": "standard",
+      "provider": true,
+      "expected": {
+        "outcome": "success",
+        "mode": "live_ai",
+        "confidence_status": "teacher_review_required",
+        "verification_status": "inconclusive",
+        "verification_capability": "supported",
+        "verification_scope": "matched_question_record",
+        "revision_required": true
+      }
+    }
+  ]
+}

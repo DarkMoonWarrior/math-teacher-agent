@@ -21,7 +21,7 @@
 - 认证：`Authorization: Bearer <MATH_AI_TOOL_GATEWAY_TOKEN>`
 - 请求：`question_text`、`solution_mode=standard|alternative`、可选 `teacher_instruction`
 - 业务接口：`SolutionAssistant.solve(SolutionRequest) -> SolutionResult`
-- 成功响应：结构化解法、最终答案、知识点、易错点、教学提示、`confidence_status`、`math_verification`、`verification_evidence`、provider/model、mode、匹配题目与 warnings
+- 成功响应：结构化解法、最终答案、知识点、易错点、教学提示、`confidence_status`、`math_verification`、`verification_evidence`、provider/model、mode、匹配题目 ID、题库修订计数与 warnings
 - `math_verification`：包含 `status=passed|failed|inconclusive`、`capability=supported|unsupported`、验证 `scope`、证据来源、方法、独立答案、来源答案、明细与 verifier 版本
 - 已验证题库解析：`mode=verified_bank`、`confidence_status=program_verified`
 - 模型新解答：`mode=live_ai`、`confidence_status=teacher_review_required`

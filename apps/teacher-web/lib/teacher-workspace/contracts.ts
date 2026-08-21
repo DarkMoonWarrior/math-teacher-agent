@@ -126,6 +126,7 @@ export type SolveTaskSolution = {
   model: string;
   mode: "verified_bank" | "live_ai";
   matched_question_id: string | null;
+  matched_question_revision_count: number | null;
   match_score: number | null;
   alternative_available: boolean;
   warnings: string[];

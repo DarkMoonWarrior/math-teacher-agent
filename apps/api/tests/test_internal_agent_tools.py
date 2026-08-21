@@ -245,6 +245,7 @@ def test_solve_question_prefers_verified_bank_solution(gateway_client: TestClien
     payload = response.json()
     assert payload["request_id"] == "req_test_001"
     assert payload["matched_question_id"] == source["question_id"]
+    assert payload["matched_question_revision_count"] >= 0
     assert payload["mode"] == "verified_bank"
     assert payload["confidence_status"] == "program_verified"
     assert payload["math_verification"]["status"] == "passed"

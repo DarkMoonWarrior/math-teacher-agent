@@ -47,6 +47,10 @@ def test_solve_exact_verified_bank_question() -> None:
     assert response.status_code == 200
     result = response.json()
     assert result["matched_question_id"] == source.question_id
+    assert (
+        result["matched_question_revision_count"]
+        == bank.get_question(source.question_id).revision_count
+    )
     assert result["confidence_status"] == "program_verified"
     assert result["math_verification"]["status"] == "passed"
     assert result["math_verification"]["capability"] == "supported"

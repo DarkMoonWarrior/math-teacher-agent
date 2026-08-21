@@ -27,9 +27,9 @@
 
 完整量化门禁见 [`PRODUCT-GATES.md`](PRODUCT-GATES.md)。
 
-## 3. 当前里程碑：M5 Solve Agent
+## 3. 当前阶段：M5 完成后的转换等待
 
-M0-M4 已完成，项目所有者已确认进入 M5。当前只建设可信解题工作流，不启动 Private Library、Paper、Lesson 或 Memory。
+M0-M5 已完成，M5 Gate E 于 2026-08-21 严格通过。当前不继续扩展 Solve，也不启动 Private Library、Paper、Lesson 或 Memory；只有项目所有者明确确认后才进入 M6。
 
 本阶段允许：
 
@@ -55,7 +55,7 @@ M0-M4 已完成，项目所有者已确认进入 M5。当前只建设可信解�
 
 ## 4. M5 完成 Gate
 
-M5 只有同时满足以下条件才完成：
+M5 已同时满足以下完成条件，逐项证据见 [`M5-GATE-REVIEW.md`](M5-GATE-REVIEW.md)：
 
 1. 精确匹配的已验证题库解析优先返回，并携带 question/revision/验证证据；
 2. 新题或新解法的模型结果始终为 `teacher_review_required`，不自动升级可信等级；

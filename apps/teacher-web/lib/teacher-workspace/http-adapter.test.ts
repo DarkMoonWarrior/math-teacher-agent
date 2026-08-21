@@ -96,6 +96,7 @@ function solveResultFixture(): SolveTaskResult {
       model: "fake-solver-v1",
       mode: "live_ai",
       matched_question_id: null,
+      matched_question_revision_count: null,
       match_score: null,
       alternative_available: true,
       warnings: ["请由教师复核"],

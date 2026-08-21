@@ -93,6 +93,9 @@ class SolutionAssistant:
                 model=self.provider.model,
                 mode="live_ai",
                 matched_question_id=match.question_id if match else None,
+                matched_question_revision_count=(
+                    match.revision_count if match else None
+                ),
                 match_score=score if match else None,
                 alternative_available=True,
                 warnings=warnings,
@@ -180,6 +183,7 @@ class SolutionAssistant:
             model="independent-math-verifier",
             mode="verified_bank",
             matched_question_id=question.question_id,
+            matched_question_revision_count=question.revision_count,
             match_score=score,
             alternative_available=len(all_solutions) > 1 or self.provider is not None,
             warnings=["结果来自当前私有题库的已验证题目，请核对输入是否与原题条件完全一致。"],

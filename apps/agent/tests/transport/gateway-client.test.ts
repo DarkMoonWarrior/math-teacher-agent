@@ -86,6 +86,7 @@ describe("ToolGatewayClient", () => {
         model: "independent-math-verifier",
         mode: "verified_bank",
         matched_question_id: "q_1",
+        matched_question_revision_count: 2,
         match_score: 1,
         alternative_available: false,
         warnings: [],
@@ -101,6 +102,7 @@ describe("ToolGatewayClient", () => {
     expect(result.data.math_verification.status).toBe("passed");
     expect(result.data.math_verification.scope).toBe("question_answer");
     expect(result.data.mode).toBe("verified_bank");
+    expect(result.data.matched_question_revision_count).toBe(2);
     const call = stub.requests.find((request) => request.route === SOLVE_QUESTION_ROUTE);
     expect(call?.authorization).toBe("Bearer gw-secret");
     expect(call?.body).toEqual({ question_text: "若 x+2=5，求 x。", solution_mode: "standard" });

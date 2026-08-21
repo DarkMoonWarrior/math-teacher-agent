@@ -16,10 +16,10 @@ Harness 不直接调用模型解题 provider，也不接触题库或 MathVerifie
 
 `Teacher Web → same-origin route → FastAPI Solve workflow → TeacherAgentRuntime → solve_question Tool → FastAPI SolutionAssistant → QuestionBank / provider / MathVerifier`
 
-M5 第一条 vertical slice 先完成 `solve_question` Tool seam。Tool 接通不等于 M5 完成。
-第二条 vertical slice 将题库中已有的 MathVerifier/教师独立核验证据归一为显式分级；这仍不代表 M5 完成。
+M5 第一条 vertical slice 完成 `solve_question` Tool seam。
+第二条 vertical slice 将题库中已有的 MathVerifier/教师独立核验证据归一为显式分级。
 第三条 vertical slice 已完成产品自有 Solve workflow、公开 FastAPI 生命周期和错误分类；只有唯一成功的 `solve_question` 结构化结果能成为最终解答，原始 Tool payload 与模型自由文本不进入浏览器。
-第四条 vertical slice 已完成新 Teacher Web 接入：文字输入、Search 转入、同一 run 恢复、取消、结构化三页结果和 MathVerifier 证据页均已接通。M5 仍需 synthetic eval 与完整 Gate E，尚未完成。
+第四条 vertical slice 已完成新 Teacher Web 接入：文字输入、Search 转入、同一 run 恢复、取消、结构化三页结果和 MathVerifier 证据页均已接通。第五条完成固定 synthetic evaluation、revision 追踪、320—1920px 验收和完整 Gate E；M5 已完成，等待所有者确认是否进入 M6。
 
 ## 可信等级
 
@@ -46,7 +46,7 @@ M5 第一条 vertical slice 先完成 `solve_question` Tool seam。Tool 接通�
 2. Solve workflow：题库解析优先、Runtime 编排、取消/恢复和失败分类。（已完成）
 3. MathVerifier 分级：supported/pass/fail/inconclusive 证据进入结果，不能被模型覆盖。（已完成现有证据分级与 Tool 透传；任意新题通用验证能力仍不虚构）
 4. 新 Teacher Web 解题导航、文字输入、Search 结果转入、结构化结果和可信提示。（已完成）
-5. synthetic eval 与完整 Gate E。（当前；关键浏览器响应式与真实本地链路已完成首轮验收）
+5. synthetic eval 与完整 Gate E。（已完成；9 个固定场景六类可信违规为 0）
 
 ## 当前公开接口
 
@@ -70,3 +70,5 @@ run 记录仍是当前开发阶段的进程内状态，不代表云端持久化�
 - 新工作台解题流程和 320-1920px 关键响应式通过。
 - FastAPI、Agent、Teacher Web 与 legacy 回归按 Gate E 通过。
 - 完成/部分/未完成/超范围修改形成 M5 Gate 审计。
+
+完整评测见 [`M5-SOLVE-EVALUATION.md`](M5-SOLVE-EVALUATION.md)，逐项 Gate 证据见 [`M5-GATE-REVIEW.md`](M5-GATE-REVIEW.md)。M6 在项目所有者确认前保持未启动。

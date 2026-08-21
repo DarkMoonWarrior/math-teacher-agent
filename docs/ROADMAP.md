@@ -21,7 +21,7 @@
 | M2 Trusted Search Core | 已完成 | 自然语言意图、教材映射、真实检索、权利/验证状态、去重、多样性与空结果。 | 固定 synthetic evaluation 覆盖精确、歧义、无结果、权利拒绝和模型不可用。 |
 | M3 新 Teacher Web 基础 | 已完成 | 建立完全新的 Agent-first 教师工作台，旧 `apps/web` 仅保留为业务地基。 | 新视觉、能力导航、响应式、动态纸张和诚实的未接入状态可用。 |
 | M4 Search 集成稳定化 | 已完成 | 让新工作台中的 Search 成为稳定、可理解、可恢复的完整入口。 | 同源请求、加载、取消、错误、空结果、可信标签、关键响应式和全量测试全部通过；Gate E 于 2026-08-21 通过。 |
-| **M5 Solve Agent** | **当前** | 为题库题和新题提供分层可信解答，不把模型输出冒充 verified。 | 优先复用 verified solution；新解答明确 `teacher_review_required`；MathVerifier 分级和失败路径通过。 |
+| **M5 Solve Agent** | **已完成（待阶段确认）** | 为题库题和新题提供分层可信解答，不把模型输出冒充 verified。 | 优先复用 verified solution；新解答明确 `teacher_review_required`；MathVerifier 分级、固定 synthetic eval、320—1920px 响应式和 Gate E 通过。 |
 | M6 Private Library Agent | 待开始 | 让教师的 PDF/DOCX/图片在 private workspace 内完成导入、OCR、拆题、映射和检索。 | 原文件与 revision 可追踪；private-by-default；owner 隔离与越权测试通过；无自动 public 路径。 |
 | M7 Paper Agent | 待开始 | 将自然语言转换为 PaperBlueprint，并生成可编辑试卷草稿和双向细目表。 | 权利/验证/重复/相似度/覆盖/难度门禁通过；不为凑题伪造 verified 题；导出闭环可用。 |
 | M8 Lesson Agent | 待开始 | 基于教材、真实题目和教师资料生成可逐段编辑的教案草稿。 | 目标、活动、例题、练习、作业与来源状态可追踪；AI 内容明确标记；教师保存前可编辑。 |
@@ -35,6 +35,6 @@
 
 ## 当前启动顺序
 
-`M4 Search 稳定化（已完成） → M5 Solve（当前） → M6 Private Library → M7 Paper → M8 Lesson → M9 Memory → M10 Beta 准备 → M11 Beta 验证 → M12 商业基础 → M13 Teacher Pro → M14 教研组 → M15 学校`
+`M4 Search 稳定化（已完成） → M5 Solve（已完成，等待所有者确认） → M6 Private Library（未启动） → M7 Paper → M8 Lesson → M9 Memory → M10 Beta 准备 → M11 Beta 验证 → M12 商业基础 → M13 Teacher Pro → M14 教研组 → M15 学校`
 
 任何阶段不得因为后端已有旧模块、界面已经出现入口或模型能够生成文本，就提前宣称完成。详细产品和商业门禁见 [`PRODUCT-GATES.md`](PRODUCT-GATES.md)。

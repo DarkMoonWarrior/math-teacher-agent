@@ -41,14 +41,14 @@ apps/web (legacy/reference Next.js UI, :3000)
 - Trust: model deltas and Tool input/output remain inside FastAPI; the browser receives only payload-free progress events and the final grounded `SearchAgentResponse`.
 - Rule: structured business results are the source of truth; model prose cannot add facts.
 
-### Solve Agent module（M5 开发中）
+### Solve Agent module（M5 已完成）
 
 - Seam: `SolveAgentWorkflow.run/stream/cancel/resume`、`SolveAgentCommand` 与 `SolveAgentResponse`。
 - Lifecycle: FastAPI 公开接口拥有同步执行、单次真实 SSE、进程内 run 快照、在途取消与同 session 恢复；路由和业务模块均不 import Harness 类型。
 - Trust: 一次成功 run 必须且只能包含一次成功的 `solve_question` Tool 调用；最终 `SolutionResult` 只从该结构化输出建立。模型自由文本、额外 Tool 调用、失败 Tool 伪装的成功 payload、可信等级与验证证据冲突都会被拒绝。
 - Exposure: 浏览器只接收无原始 input/output 的 Tool 进度和结构化终态；`math_verification` 的 status、capability、scope 和 evidence source 由业务模块拥有。
 - UI: `TeacherWorkspace.solveQuestion` 通过同源无缓冲流接入；教师可输入完整题目或从 Search 结果转入，并在三页纸张中查看结构化解析、课堂提示与独立验证证据。
-- Current boundary: 代码 feature gate 默认关闭，本地 M5 联调显式开启；synthetic eval 与完整 Gate E 尚未完成，因此不能进入 M6。
+- Current boundary: 代码 feature gate 默认关闭，本地显式开启；固定 synthetic eval 与完整 Gate E 已通过。M6 仍需项目所有者确认后才可启动。
 
 ### Teacher Agent Runtime module
 

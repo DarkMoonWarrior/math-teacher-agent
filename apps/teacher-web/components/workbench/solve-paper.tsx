@@ -146,7 +146,14 @@ export function SolveResultBrief({ result }: { result: SolveTaskResult }) {
         <p>{result.duration_ms} ms · {result.tool_call_count} 次受控工具调用</p>
       </div>
       <p>{verificationScopeLabel(solution.math_verification.scope)} · {evidenceSourceLabel(solution.math_verification.evidence_source)}</p>
-      {solution.matched_question_id && <p>匹配题库记录 · {solution.matched_question_id}</p>}
+      {solution.matched_question_id && (
+        <p>
+          匹配题库记录 · {solution.matched_question_id}
+          {solution.matched_question_revision_count !== null
+            ? ` · 修订记录 ${solution.matched_question_revision_count} 次`
+            : ""}
+        </p>
+      )}
       {solution.warnings.map((warning) => <p className="result-warning" key={warning}>{warning}</p>)}
     </section>
   );

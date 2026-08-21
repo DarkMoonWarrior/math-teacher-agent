@@ -74,6 +74,7 @@ class SolutionResult(BaseModel):
     model: str
     mode: Literal["verified_bank", "live_ai"]
     matched_question_id: str | None = None
+    matched_question_revision_count: int | None = Field(default=None, ge=0)
     match_score: float | None = Field(default=None, ge=0, le=1)
     alternative_available: bool = False
     warnings: list[str] = Field(default_factory=list)
