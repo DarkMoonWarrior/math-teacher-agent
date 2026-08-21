@@ -126,9 +126,10 @@ class Settings(BaseSettings):
     tool_gateway_timeout_seconds: float = 30.0
     solve_tool_timeout_seconds: float = 120.0
 
-    # -- Search Agent（Prompt 3） -------------------------------------------
-    # 默认关闭：现有传统搜索页面行为不变。dsh 编排 + Agent Service 就绪后开启。
+    # -- Agent workflow feature gates ---------------------------------------
+    # 默认关闭：现有传统页面行为不变。仅在相应 Runtime/Tool/UI Gate 就绪后开启。
     search_agent_enabled: bool = False
+    solve_agent_enabled: bool = False
     search_agent_max_query_length: int = 2000
 
     @property

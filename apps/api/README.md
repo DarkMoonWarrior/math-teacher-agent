@@ -1,6 +1,6 @@
 # FastAPI Business Backend
 
-`apps/api` 是业务规则和数据访问的唯一所有者。QuestionBank、MathVerifier、Curriculum、PrivateLibrary、PDF、Paper、Lesson、Search Agent 等模块都在这里执行权限、权利、验证与发布门禁。
+`apps/api` 是业务规则和数据访问的唯一所有者。QuestionBank、MathVerifier、Curriculum、PrivateLibrary、PDF、Paper、Lesson、Search Agent、Solve Agent 等模块都在这里执行权限、权利、验证与发布门禁。
 
 ## 运行
 
@@ -33,6 +33,19 @@ MATH_AI_AGENT_PROVIDER=test-mock
 ```
 
 Search Agent 的结构化结果是事实来源。模型说明不得补充结果中不存在的题目、学校、年份、考试或验证状态。
+
+## Solve Agent（M5 开发中）
+
+Solve workflow 已提供同步、真实 SSE、run 快照、取消和同会话恢复接口：
+
+- `POST /api/v1/agent/solve`
+- `POST /api/v1/agent/solve/stream`
+- `GET /api/v1/agent/solve/{run_id}`
+- `GET /api/v1/agent/solve/{run_id}/stream`
+- `POST /api/v1/agent/solve/{run_id}/cancel`
+- `POST /api/v1/agent/solve/{run_id}/resume`
+
+默认保持 `MATH_AI_SOLVE_AGENT_ENABLED=false`。最终数学结果只接受唯一一次成功的 `solve_question` Tool 结构化输出；模型自由文本和原始 Tool payload 不会越过业务 seam。该后端接口完成不代表 M5 已完成，新 Teacher Web 解题流程和完整 Gate 仍待实施。
 
 ## 测试
 

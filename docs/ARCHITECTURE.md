@@ -41,6 +41,14 @@ apps/web (legacy/reference Next.js UI, :3000)
 - Trust: model deltas and Tool input/output remain inside FastAPI; the browser receives only payload-free progress events and the final grounded `SearchAgentResponse`.
 - Rule: structured business results are the source of truth; model prose cannot add facts.
 
+### Solve Agent module（M5 开发中）
+
+- Seam: `SolveAgentWorkflow.run/stream/cancel/resume`、`SolveAgentCommand` 与 `SolveAgentResponse`。
+- Lifecycle: FastAPI 公开接口拥有同步执行、单次真实 SSE、进程内 run 快照、在途取消与同 session 恢复；路由和业务模块均不 import Harness 类型。
+- Trust: 一次成功 run 必须且只能包含一次成功的 `solve_question` Tool 调用；最终 `SolutionResult` 只从该结构化输出建立。模型自由文本、额外 Tool 调用、失败 Tool 伪装的成功 payload、可信等级与验证证据冲突都会被拒绝。
+- Exposure: 浏览器只接收无原始 input/output 的 Tool 进度和结构化终态；`math_verification` 的 status、capability、scope 和 evidence source 由业务模块拥有。
+- Current boundary: 后端工作流已实现但 feature gate 默认关闭；`apps/teacher-web` 尚未接入，因此 M5 尚未完成。
+
 ### Teacher Agent Runtime module
 
 - Seam: product-owned Python and TypeScript runtime contracts.
@@ -97,6 +105,7 @@ The primary UI should normally call `/api/v1` on its own origin. Next.js rewrite
 
 - UI adapter tests and type checks target `TeacherWorkspace` observable progress, completion, failure and cancellation states, plus the exact same-origin streaming proxy.
 - Search tests target `SearchAgentPipeline` and the HTTP route, not private ranking internals alone.
+- Solve tests target 唯一 Tool 证据、可信字段校验、结构化错误、真实 SSE、取消、恢复和 feature gate。
 - Runtime conformance tests exercise both runtime adapters through the product-owned interface.
 - Security tests enforce the exact read-only Tool allowlist and absence of database access in `apps/agent`.
 - Business tests use synthetic/local adapters and assert published behaviour, rights, verification and privacy invariants.

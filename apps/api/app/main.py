@@ -22,6 +22,11 @@ from app.routes.search_agent import (
     router as search_agent_router,
     search_agent_error_handler,
 )
+from app.routes.solve_agent import (
+    _SolveAgentHttpError,
+    router as solve_agent_router,
+    solve_agent_error_handler,
+)
 from app.routes.solutions import router as solutions_router
 
 
@@ -29,6 +34,7 @@ settings = get_settings()
 app = FastAPI(title=settings.app_name, version="0.1.0")
 app.add_exception_handler(_GatewayHttpError, gateway_error_handler)
 app.add_exception_handler(_SearchAgentHttpError, search_agent_error_handler)
+app.add_exception_handler(_SolveAgentHttpError, solve_agent_error_handler)
 
 app.add_middleware(
     CORSMiddleware,
@@ -54,7 +60,7 @@ app.include_router(solutions_router, prefix="/api/v1")
 app.include_router(library_router, prefix="/api/v1")
 app.include_router(model_operations_router, prefix="/api/v1")
 app.include_router(search_agent_router, prefix="/api/v1")
+app.include_router(solve_agent_router, prefix="/api/v1")
 # Internal-only Agent Tool Gateway（不进入公开 API 文档，M2M token 保护）
 app.include_router(internal_agent_tools_router)
-
 
