@@ -314,6 +314,7 @@ svg { flex: 0 0 auto; }
 }
 
 .composer-surface textarea::placeholder { color: var(--color-faint); opacity: 1; }
+.composer-surface textarea[readonly] { color: var(--color-muted); cursor: wait; }
 .composer-actions { align-items: center; display: flex; gap: var(--space-sm); justify-content: space-between; }
 
 .form-help,
@@ -368,6 +369,7 @@ svg { flex: 0 0 auto; }
 }
 
 .quick-prompts button + button { border-left: 0.0625rem solid var(--color-rule); }
+.quick-prompts button:disabled { color: var(--color-faint); cursor: wait; }
 .quick-prompts button > span { font-size: var(--text-sm); font-weight: 700; }
 
 .quick-prompts button small {
@@ -635,6 +637,12 @@ svg { flex: 0 0 auto; }
 
 .message-paper--error { background: var(--color-error-soft); }
 .message-paper--error .error-code { color: var(--color-error); }
+.message-paper--error .request-id {
+  color: var(--color-faint);
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: var(--text-xs);
+  overflow-wrap: anywhere;
+}
 
 .question-paper { display: flex; flex-direction: column; }
 

@@ -27,6 +27,7 @@ build/
 # Runtime and private data
 data/runtime/
 data/private-runtime/
+apps/agent/data/runtime/
 uploads/
 
 # Exports and generated artifacts

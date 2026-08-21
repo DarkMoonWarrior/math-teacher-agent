@@ -352,7 +352,9 @@ export function TeacherWorkbench() {
   const sessionRef = useRef("");
   const abortRef = useRef<AbortController | null>(null);
   const turnTimerRef = useRef<number | null>(null);
+  const requestSequenceRef = useRef(0);
   const resultRegionRef = useRef<HTMLElement | null>(null);
+  const taskInputRef = useRef<HTMLTextAreaElement | null>(null);
   const historyTriggerRef = useRef<HTMLButtonElement | null>(null);
   const historyDrawerRef = useRef<HTMLElement | null>(null);
   const historyCloseRef = useRef<HTMLButtonElement | null>(null);
@@ -393,9 +395,18 @@ export function TeacherWorkbench() {
     });
   }
 
+  function returnToComposer() {
+    window.requestAnimationFrame(() => {
+      taskInputRef.current?.focus({ preventScroll: true });
+      const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      window.scrollTo({ behavior: reducedMotion ? "auto" : "smooth", top: 0 });
+    });
+  }
+
   useEffect(() => {
     return () => {
       if (turnTimerRef.current !== null) window.clearTimeout(turnTimerRef.current);
+      abortRef.current?.abort();
     };
   }, []);
 
@@ -451,6 +462,7 @@ export function TeacherWorkbench() {
     if (!trimmed || running) return;
 
     if (!sessionRef.current) sessionRef.current = createSessionId();
+    const requestSequence = ++requestSequenceRef.current;
     const controller = new AbortController();
     abortRef.current = controller;
     setPhase("running");
@@ -463,6 +475,7 @@ export function TeacherWorkbench() {
         { query: trimmed, sessionId: sessionRef.current },
         controller.signal,
       );
+      if (requestSequence !== requestSequenceRef.current) return;
       setResult(nextResult);
       setHistory((current) => [
         { id: nextResult.run_id || nextResult.request_id, query: trimmed, result: nextResult },
@@ -470,6 +483,7 @@ export function TeacherWorkbench() {
       ]);
       setPhase("success");
     } catch (cause) {
+      if (requestSequence !== requestSequenceRef.current) return;
       if (cause instanceof DOMException && cause.name === "AbortError") {
         setPhase("cancelled");
         return;
@@ -480,7 +494,7 @@ export function TeacherWorkbench() {
       setError(nextError);
       setPhase("error");
     } finally {
-      abortRef.current = null;
+      if (requestSequence === requestSequenceRef.current) abortRef.current = null;
     }
   }
 
@@ -493,7 +507,12 @@ export function TeacherWorkbench() {
 
   function selectCapability(nextCapability: CapabilityId) {
     if (nextCapability === capability || turning) return;
-    if (running) abortRef.current?.abort();
+    if (running) {
+      requestSequenceRef.current += 1;
+      abortRef.current?.abort();
+      abortRef.current = null;
+      setPhase("cancelled");
+    }
 
     const currentIndex = CAPABILITY_ORDER.indexOf(capability);
     const nextIndex = CAPABILITY_ORDER.indexOf(nextCapability);
@@ -509,7 +528,9 @@ export function TeacherWorkbench() {
   }
 
   function resetTask() {
-    if (running) abortRef.current?.abort();
+    requestSequenceRef.current += 1;
+    abortRef.current?.abort();
+    abortRef.current = null;
     setDrafts((current) => ({ ...current, [capability]: "" }));
     setTouched(false);
     setPreviewPage(0);
@@ -519,9 +540,13 @@ export function TeacherWorkbench() {
       setPhase("idle");
       setQuestionPage(0);
     }
+    returnToComposer();
   }
 
   function openTask(task: TaskRecord) {
+    requestSequenceRef.current += 1;
+    abortRef.current?.abort();
+    abortRef.current = null;
     setCapability("search");
     setDrafts((current) => ({ ...current, search: task.query }));
     setResult(task.result);
@@ -529,6 +554,7 @@ export function TeacherWorkbench() {
     setQuestionPage(0);
     setPhase("success");
     setHistoryOpen(false);
+    scrollToResultRegion();
   }
 
   function turnPage(direction: FlipDirection) {
@@ -610,8 +636,10 @@ export function TeacherWorkbench() {
             <label htmlFor="teacher-task">{definition.inputLabel}</label>
             <div className={`composer-surface${validationMessage ? " is-error" : ""}${running ? " is-running" : ""}${definition.ready ? "" : " is-planned"}`}>
               <textarea
+                ref={taskInputRef}
                 id="teacher-task"
                 aria-describedby="teacher-task-help"
+                aria-busy={running}
                 aria-invalid={Boolean(validationMessage)}
                 aria-required={definition.ready}
                 onBlur={() => {
@@ -623,6 +651,7 @@ export function TeacherWorkbench() {
                 }}
                 onKeyDown={handleComposerKeyDown}
                 placeholder={definition.placeholder}
+                readOnly={running}
                 rows={4}
                 value={query}
               />
@@ -647,7 +676,7 @@ export function TeacherWorkbench() {
             <p>从一个具体任务开始</p>
             <div>
               {definition.examples.map((example) => (
-                <button key={example.query} type="button" onClick={() => updateQuery(example.query)}>
+                <button key={example.query} type="button" disabled={running} onClick={() => updateQuery(example.query)}>
                   <span>{example.label}</span>
                   <small>{example.detail}</small>
                   <ArrowRightIcon />
@@ -700,6 +729,7 @@ export function TeacherWorkbench() {
                   <h2>任务没有完成</h2>
                   <p>{error.message}</p>
                   {ERROR_GUIDANCE[error.code] && <span>{ERROR_GUIDANCE[error.code]}</span>}
+                  {error.requestId && <small className="request-id">请求编号 · {error.requestId}</small>}
                   <button type="button" onClick={() => void runTask()}>重新尝试 <ArrowRightIcon /></button>
                 </section>
               )}

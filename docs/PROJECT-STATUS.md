@@ -40,9 +40,9 @@
 - FastAPI：238 项测试通过；另有 1 条来自 Starlette TestClient 的依赖弃用提示。
 - Agent Runtime：类型检查、31 项测试和生产构建通过（含 SSE 客户端断开取消）。
 - 新教师工作台：类型检查、3 项 TeacherWorkspace stream/cancel 测试和生产构建通过。
-- 新教师工作台浏览器验收：320px 无关键横向溢出；记录抽屉的初始焦点、Tab 约束、Escape 关闭、焦点返回和关闭态 `inert` 通过。
+- 新教师工作台浏览器验收：320px 无关键横向溢出；记录抽屉的初始焦点、Tab 约束、Escape 关闭、焦点返回和关闭态 `inert` 通过；检索完成与历史恢复会自动定位结果区，新任务会返回输入区并恢复焦点。
 - 旧界面：类型检查和生产构建通过，确保地基能力未被整理工作破坏。
-- 2026-08-20 本机 `test-mock` 真实链路：Teacher Web → FastAPI → DeepSeek Harness Runtime → 受控 `search_questions` Tool 调用成功；空商业题库返回可信的 0 结果，不生成假题。
+- 2026-08-21 本机 `test-mock` 真实链路复验：Teacher Web → FastAPI → DeepSeek Harness Runtime → 受控 `search_questions` Tool 调用成功；空商业题库返回可信的 0 结果，不生成假题，页面自动定位结果区并可从会话记录恢复。
 
 ## 已知未决项
 
