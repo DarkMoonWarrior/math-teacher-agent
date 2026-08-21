@@ -28,6 +28,7 @@ from app.modules.question_similarity import QuestionSimilarityRegistry
 from app.modules.solution_assistant import (
     SolutionAssistantError,
     SolutionAssistantUnavailableError,
+    SolutionAssistantVerificationError,
     SolutionProviderError,
     SolutionRequest,
     SolutionResult,
@@ -339,6 +340,13 @@ async def solve_question(
             command,
             timeout_seconds=get_settings().solve_tool_timeout_seconds,
         )
+    except SolutionAssistantVerificationError as exc:
+        code = (
+            "VERIFICATION_FAILED"
+            if exc.assessment.status == "failed"
+            else "VERIFICATION_INCONCLUSIVE"
+        )
+        raise _GatewayHttpError(409, code, str(exc), request_id) from None
     except (SolutionAssistantUnavailableError, SolutionProviderError):
         raise _GatewayHttpError(
             503,

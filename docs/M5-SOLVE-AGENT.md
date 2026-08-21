@@ -17,6 +17,7 @@ Harness 不直接调用模型解题 provider，也不接触题库或 MathVerifie
 `Teacher Web → same-origin route → FastAPI Solve workflow → TeacherAgentRuntime → solve_question Tool → FastAPI SolutionAssistant → QuestionBank / provider / MathVerifier`
 
 M5 第一条 vertical slice 先完成 `solve_question` Tool seam。Tool 接通不等于 M5 完成。
+第二条 vertical slice 将题库中已有的 MathVerifier/教师独立核验证据归一为显式分级；这仍不代表 M5 完成。
 
 ## 可信等级
 
@@ -28,11 +29,20 @@ M5 第一条 vertical slice 先完成 `solve_question` Tool seam。Tool 接通�
 
 任何格式校验、第二模型一致或 Agent 自评都不能升级为 `program_verified`。
 
+每次成功结果还必须携带 `math_verification`：
+
+- `status`：`passed | failed | inconclusive`；
+- `capability`：`supported | unsupported`；
+- `scope`：明确证据只覆盖题库题答案、匹配到的题库记录，还是模型生成的完整解答；
+- `evidence_source`、方法、独立答案、来源答案、证据步骤和 verifier 版本。
+
+题库中已有的答案矛盾不能被模型输出覆盖；任意模型新解答在现有 MathVerifier 无对应能力时必须保持 `unsupported/inconclusive`。
+
 ## 实施顺序
 
 1. 受控 `solve_question` Tool：M2M、超时、结构化错误、可信状态原样透传。
 2. Solve workflow：题库解析优先、Runtime 编排、取消/恢复和失败分类。
-3. MathVerifier 分级：supported/pass/fail/inconclusive 证据进入结果，不能被模型覆盖。
+3. MathVerifier 分级：supported/pass/fail/inconclusive 证据进入结果，不能被模型覆盖。（已完成现有证据分级与 Tool 透传；任意新题通用验证能力仍不虚构）
 4. 新 Teacher Web 解题导航、文字输入、Search 结果转入、结构化结果和可信提示。
 5. synthetic eval、关键浏览器矩阵和完整 Gate E。
 

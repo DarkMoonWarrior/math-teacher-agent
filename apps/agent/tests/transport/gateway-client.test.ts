@@ -70,6 +70,17 @@ describe("ToolGatewayClient", () => {
         common_mistakes: [],
         teaching_notes: [],
         confidence_status: "program_verified",
+        math_verification: {
+          status: "passed",
+          capability: "supported",
+          scope: "question_answer",
+          evidence_source: "math_verifier",
+          method: "linear_equation",
+          computed_answer: "x=3",
+          source_answer: "x=3",
+          details: ["独立计算与题库答案一致。"],
+          verifier_version: "math-v0.3.0",
+        },
         verification_evidence: ["题库记录标记为已通过独立数学验证。"],
         provider: "verified_question_bank",
         model: "independent-math-verifier",
@@ -87,6 +98,8 @@ describe("ToolGatewayClient", () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.data.confidence_status).toBe("program_verified");
+    expect(result.data.math_verification.status).toBe("passed");
+    expect(result.data.math_verification.scope).toBe("question_answer");
     expect(result.data.mode).toBe("verified_bank");
     const call = stub.requests.find((request) => request.route === SOLVE_QUESTION_ROUTE);
     expect(call?.authorization).toBe("Bearer gw-secret");

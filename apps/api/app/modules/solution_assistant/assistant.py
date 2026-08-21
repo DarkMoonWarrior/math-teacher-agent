@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import re
 from difflib import SequenceMatcher
+from typing import Literal
 
 from app.modules.question_bank import QuestionBank
 from app.modules.question_bank.schemas import QuestionDetail
 from app.modules.solution_assistant.providers import SolutionProvider
 from app.modules.solution_assistant.schemas import (
+    MathVerificationAssessment,
     SolutionExplanation,
     SolutionRequest,
     SolutionResult,
@@ -19,6 +21,19 @@ class SolutionAssistantError(ValueError):
 
 class SolutionAssistantUnavailableError(SolutionAssistantError):
     """No verified solution or configured model can complete the request."""
+
+
+class SolutionAssistantVerificationError(SolutionAssistantError):
+    """A matching bank record has failed or inconclusive verification evidence."""
+
+    def __init__(self, assessment: MathVerificationAssessment) -> None:
+        self.assessment = assessment
+        message = (
+            "匹配题目的独立数学验证未通过，不能作为可信解析返回。"
+            if assessment.status == "failed"
+            else "匹配题目的独立数学验证证据不足，不能作为可信解析返回。"
+        )
+        super().__init__(message)
 
 
 class SolutionAssistant:
@@ -48,8 +63,9 @@ class SolutionAssistant:
         self.provider = provider
 
     def solve(self, request: SolutionRequest) -> SolutionResult:
-        match, score = self._best_verified_match(request.question_text)
-        exact_verified_match = match is not None and score == 1.0
+        match, score = self._best_bank_match(request.question_text)
+        exact_match = match is not None and score == 1.0
+        exact_verified_match = exact_match and match.verification_status == "passed"
         if exact_verified_match:
             solutions = match.raw.get("solutions") or []
             solution_index = 1 if request.solution_mode == "alternative" else 0
@@ -59,21 +75,31 @@ class SolutionAssistant:
                 )
         if self.provider is not None:
             generated = self.provider.solve(request)
+            assessment = self._generated_assessment(match if exact_match else None)
+            warnings = ["请由教师核对条件、推导过程和最终答案后再用于教学。"]
+            if assessment.scope == "matched_question_record":
+                warnings.insert(
+                    0,
+                    "题库中的同题记录存在验证冲突或证据不足；该状态不因模型重新作答而消失。",
+                )
             return SolutionResult(
                 question_text=request.question_text,
                 solution_mode=request.solution_mode,
                 **generated.model_dump(),
                 confidence_status="teacher_review_required",
-                verification_evidence=[
-                    "答案与解析由大模型生成，尚未经过独立数学程序或第二模型复核。"
-                ],
+                math_verification=assessment,
+                verification_evidence=assessment.details,
                 provider=self.provider.name,
                 model=self.provider.model,
                 mode="live_ai",
                 matched_question_id=match.question_id if match else None,
                 match_score=score if match else None,
                 alternative_available=True,
-                warnings=["请由教师核对条件、推导过程和最终答案后再用于教学。"],
+                warnings=warnings,
+            )
+        if exact_match and not exact_verified_match:
+            raise SolutionAssistantVerificationError(
+                self._stored_assessment(match, scope="matched_question_record")
             )
         if exact_verified_match and request.solution_mode == "alternative":
             raise SolutionAssistantUnavailableError(
@@ -83,13 +109,11 @@ class SolutionAssistant:
             "当前文字题未匹配到已验证题库；配置可用的模型解题 Provider 后才能生成新解答。"
         )
 
-    def _best_verified_match(
+    def _best_bank_match(
         self, question_text: str
     ) -> tuple[QuestionDetail | None, float | None]:
         target = self._normalize(question_text)
-        candidates = self.question_bank.search(
-            verification_status="passed", page=1, page_size=100
-        ).items
+        candidates = self.question_bank.search(page=1, page_size=100).items
         best = None
         best_score = 0.0
         for candidate in candidates:
@@ -124,14 +148,9 @@ class SolutionAssistant:
         final_answer = str(
             solution.get("final_answer") or question.answer_value or "待教师确认"
         ).strip()
-        verification = question.raw.get("verification") or {}
-        evidence = [
-            str(item).strip()
-            for item in verification.get("details", [])
-            if str(item).strip()
-        ]
-        if not evidence:
-            evidence = ["题库记录标记为已通过独立数学验证。"]
+        assessment = self._stored_assessment(question, scope="question_answer")
+        if assessment.status != "passed":
+            raise SolutionAssistantVerificationError(assessment)
         all_solutions = question.raw.get("solutions") or []
         raw_knowledge_points = question.raw.get("curriculum", {}).get(
             "knowledge_point_ids", question.knowledge_point_ids
@@ -155,7 +174,8 @@ class SolutionAssistant:
                 "题库解析可以继续在审核台由教师修订。",
             ],
             confidence_status="program_verified",
-            verification_evidence=evidence,
+            math_verification=assessment,
+            verification_evidence=assessment.details,
             provider="verified_question_bank",
             model="independent-math-verifier",
             mode="verified_bank",
@@ -163,6 +183,81 @@ class SolutionAssistant:
             match_score=score,
             alternative_available=len(all_solutions) > 1 or self.provider is not None,
             warnings=["结果来自当前私有题库的已验证题目，请核对输入是否与原题条件完全一致。"],
+        )
+
+    @staticmethod
+    def _stored_assessment(
+        question: QuestionDetail,
+        *,
+        scope: Literal["question_answer", "matched_question_record"],
+    ) -> MathVerificationAssessment:
+        verification = question.raw.get("verification") or {}
+        raw_status = str(verification.get("status") or question.verification_status)
+        status = (
+            "passed"
+            if raw_status == "passed"
+            else "failed"
+            if raw_status in {"failed", "inconsistent", "source_inconsistency_detected"}
+            else "inconclusive"
+        )
+        details = [
+            str(item).strip()
+            for item in verification.get("details", [])
+            if str(item).strip()
+        ]
+        if not details:
+            details = {
+                "passed": ["题库记录标记为已通过独立数学验证。"],
+                "failed": ["题库记录显示独立计算与来源答案存在矛盾。"],
+                "inconclusive": ["题库记录尚无足够的独立数学验证证据。"],
+            }[status]
+        method = verification.get("method")
+        methods = verification.get("methods") or []
+        if not method and methods:
+            method = methods[0]
+        verifier_version = verification.get("verifier_version")
+        if verifier_version:
+            evidence_source = "math_verifier"
+        elif method == "teacher_independent_derivation":
+            evidence_source = "teacher_evidence"
+        else:
+            evidence_source = "stored_status"
+        return MathVerificationAssessment(
+            status=status,
+            capability="supported",
+            scope=scope,
+            evidence_source=evidence_source,
+            method=str(method) if method else None,
+            computed_answer=(
+                str(verification["computed_answer"])
+                if verification.get("computed_answer") is not None
+                else None
+            ),
+            source_answer=(
+                str(verification["source_answer"])
+                if verification.get("source_answer") is not None
+                else question.answer_value
+            ),
+            details=details,
+            verifier_version=str(verifier_version) if verifier_version else None,
+        )
+
+    @classmethod
+    def _generated_assessment(
+        cls, exact_match: QuestionDetail | None
+    ) -> MathVerificationAssessment:
+        if exact_match is not None and exact_match.verification_status != "passed":
+            return cls._stored_assessment(
+                exact_match, scope="matched_question_record"
+            )
+        return MathVerificationAssessment(
+            status="inconclusive",
+            capability="unsupported",
+            scope="generated_solution",
+            evidence_source="none",
+            details=[
+                "答案与解析由大模型生成；当前 MathVerifier 不支持对此完整推导做独立验证。"
+            ],
         )
 
     @staticmethod

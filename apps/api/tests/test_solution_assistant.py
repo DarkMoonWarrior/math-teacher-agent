@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
@@ -9,6 +10,7 @@ from app.modules.solution_assistant import (
     SolutionAssistant,
     SolutionExplanation,
     SolutionRequest,
+    SolutionResult,
 )
 from app.routes.questions import get_question_bank
 
@@ -46,6 +48,9 @@ def test_solve_exact_verified_bank_question() -> None:
     result = response.json()
     assert result["matched_question_id"] == source.question_id
     assert result["confidence_status"] == "program_verified"
+    assert result["math_verification"]["status"] == "passed"
+    assert result["math_verification"]["capability"] == "supported"
+    assert result["math_verification"]["scope"] == "question_answer"
     assert result["mode"] == "verified_bank"
     assert result["explanation"]["steps"]
     assert result["explanation"]["final_answer"]
@@ -98,8 +103,67 @@ def test_provider_solves_question_outside_bank(tmp_path: Path) -> None:
     assert result.provider == "fake_model"
     assert result.mode == "live_ai"
     assert result.confidence_status == "teacher_review_required"
+    assert result.math_verification.status == "inconclusive"
+    assert result.math_verification.capability == "unsupported"
+    assert result.math_verification.scope == "generated_solution"
     assert result.explanation.final_answer == "$x=2$"
     assert result.alternative_available
+
+    forged = result.model_dump()
+    forged["confidence_status"] = "program_verified"
+    with pytest.raises(ValueError, match="program_verified"):
+        SolutionResult.model_validate(forged)
+
+    divergent = result.model_dump()
+    divergent["verification_evidence"] = ["模型自行声称已验证"]
+    with pytest.raises(ValueError, match="必须与"):
+        SolutionResult.model_validate(divergent)
+
+
+def test_failed_bank_record_is_never_promoted_by_generated_solution() -> None:
+    bank = get_question_bank()
+    source = bank.search(
+        verification_status="source_inconsistency_detected", page_size=1
+    ).items[0]
+    assistant = SolutionAssistant(question_bank=bank, provider=FakeSolutionProvider())
+
+    result = assistant.solve(SolutionRequest(question_text=source.stem_plain))
+
+    assert result.mode == "live_ai"
+    assert result.confidence_status == "teacher_review_required"
+    assert result.math_verification.status == "failed"
+    assert result.math_verification.capability == "supported"
+    assert result.math_verification.scope == "matched_question_record"
+    assert result.math_verification.details
+    assert any("不因模型重新作答而消失" in item for item in result.warnings)
+
+
+def test_inconclusive_bank_record_is_never_promoted_by_generated_solution() -> None:
+    bank = get_question_bank()
+    source = bank.search(verification_status="needs_math_review", page_size=1).items[0]
+    assistant = SolutionAssistant(question_bank=bank, provider=FakeSolutionProvider())
+
+    result = assistant.solve(SolutionRequest(question_text=source.stem_plain))
+
+    assert result.confidence_status == "teacher_review_required"
+    assert result.math_verification.status == "inconclusive"
+    assert result.math_verification.capability == "supported"
+    assert result.math_verification.scope == "matched_question_record"
+
+
+def test_failed_bank_record_without_model_returns_verification_conflict() -> None:
+    bank = get_question_bank()
+    source = bank.search(
+        verification_status="source_inconsistency_detected", page_size=1
+    ).items[0]
+
+    response = client.post(
+        "/api/v1/solutions/solve",
+        json={"question_text": source.stem_plain},
+    )
+
+    assert response.status_code == 409
+    assert "验证未通过" in response.json()["detail"]
 
 
 def test_solution_request_rejects_too_short_question() -> None:

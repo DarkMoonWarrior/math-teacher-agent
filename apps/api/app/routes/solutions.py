@@ -11,6 +11,7 @@ from app.modules.solution_assistant import (
     SolutionAssistant,
     SolutionAssistantError,
     SolutionAssistantUnavailableError,
+    SolutionAssistantVerificationError,
     SolutionProviderError,
     SolutionRequest,
     SolutionResult,
@@ -57,6 +58,8 @@ def get_solution_assistant() -> SolutionAssistant:
 def solve_question(command: SolutionRequest) -> SolutionResult:
     try:
         return get_solution_assistant().solve(command)
+    except SolutionAssistantVerificationError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     except SolutionAssistantUnavailableError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except SolutionAssistantError as exc:
