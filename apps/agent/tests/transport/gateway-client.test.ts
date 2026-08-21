@@ -4,6 +4,7 @@ import { createGatewayStub, gatewayJson, waitFor, type GatewayStub } from "../he
 
 const SEARCH_ROUTE = "/internal/agent-tools/v1/search-questions";
 const GET_QUESTION_ROUTE = "/internal/agent-tools/v1/get-question";
+const SOLVE_QUESTION_ROUTE = "/internal/agent-tools/v1/solve-question";
 
 describe("ToolGatewayClient", () => {
   let stub: GatewayStub;
@@ -57,6 +58,39 @@ describe("ToolGatewayClient", () => {
     if (result.ok) return;
     expect(result.error.code).toBe("TOOL_UNAUTHORIZED");
     expect(result.error.message).toBe("缺少 service token");
+  });
+
+  it("只通过固定 solve-question route 返回可信分层结果", async () => {
+    stub.handlers[SOLVE_QUESTION_ROUTE] = ({ body }) =>
+      gatewayJson(200, {
+        question_text: body.question_text,
+        solution_mode: "standard",
+        explanation: { method: "题库标准解法", steps: ["由等式性质求解。"], final_answer: "x=3" },
+        knowledge_points: ["一元一次方程"],
+        common_mistakes: [],
+        teaching_notes: [],
+        confidence_status: "program_verified",
+        verification_evidence: ["题库记录标记为已通过独立数学验证。"],
+        provider: "verified_question_bank",
+        model: "independent-math-verifier",
+        mode: "verified_bank",
+        matched_question_id: "q_1",
+        match_score: 1,
+        alternative_available: false,
+        warnings: [],
+        request_id: "req_stub_solve",
+      });
+    const result = await client.solveQuestion(
+      { question_text: "若 x+2=5，求 x。", solution_mode: "standard" },
+      { requestId: "req_solve_1" },
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data.confidence_status).toBe("program_verified");
+    expect(result.data.mode).toBe("verified_bank");
+    const call = stub.requests.find((request) => request.route === SOLVE_QUESTION_ROUTE);
+    expect(call?.authorization).toBe("Bearer gw-secret");
+    expect(call?.body).toEqual({ question_text: "若 x+2=5，求 x。", solution_mode: "standard" });
   });
 
   it("把 404 映射为 TOOL_NOT_FOUND", async () => {

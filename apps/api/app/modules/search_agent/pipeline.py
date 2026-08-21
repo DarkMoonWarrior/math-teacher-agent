@@ -27,6 +27,7 @@ from collections.abc import AsyncIterator
 from typing import Any
 
 from app.agent_runtime import (
+    TeacherAgentError,
     TeacherAgentErrorCode,
     TeacherAgentEvent,
     TeacherAgentEventType,
@@ -34,6 +35,7 @@ from app.agent_runtime import (
     TeacherAgentRunResult,
     TeacherAgentRunStatus,
     TeacherAgentRuntime,
+    TeacherAgentToolCall,
     get_teacher_agent_runtime,
 )
 from app.core.config import get_settings
@@ -149,7 +151,6 @@ class SearchAgentPipeline:
                 message=f"Agent Runtime 异常：{type(exc).__name__}",
             )
 
-        self._active_runs[run_result.run_id] = runtime
         if run_result.status == TeacherAgentRunStatus.CANCELLED:
             response = self._error_response(
                 request_id=request_id,
@@ -196,25 +197,15 @@ class SearchAgentPipeline:
     ) -> AsyncIterator[TeacherAgentEvent]:
         """SSE 友好的流式入口。
 
-        先发出 RUN_STARTED（含 intent/plan 摘要），随后等待 runtime run 完成，
-        终态事件携带完整 grounded SearchAgentResponse（前端只读结构化字段）。
+        Runtime 的真实流式事件是唯一执行源。run_id 一出现就注册为在途任务，
+        终态事件再携带完整 grounded SearchAgentResponse（前端只读结构化字段）。
+        关闭生成器会取消同一个 runtime run，不会启动第二次搜索。
         """
+        started = time.monotonic()
         request_id = request_id or f"req_{uuid.uuid4().hex}"
         intent = self.parser.parse(raw_query)
         plan = build_search_plan(intent)
         runtime = self.runtime
-
-        yield TeacherAgentEvent(
-            type=TeacherAgentEventType.RUN_STARTED,
-            run_id="",
-            session_id=session_id or "",
-            request_id=request_id,
-            data={
-                "intent_summary": plan.intent_summary,
-                "applied_filters": plan.applied_filters,
-                "soft_preferences": plan.soft_preferences,
-            },
-        )
 
         if runtime.runtime_name == "legacy":
             yield TeacherAgentEvent(
@@ -232,61 +223,155 @@ class SearchAgentPipeline:
             )
             return
 
-        run_result = await runtime.run(
-            TeacherAgentRunRequest(
-                user_message=self._compose_agent_message(intent),
-                session_id=session_id,
-                request_id=request_id,
-            )
-        )
-        self._active_runs[run_result.run_id] = runtime
+        run_id = ""
+        run_session_id = session_id or ""
+        final_text_parts: list[str] = []
+        tool_calls: list[TeacherAgentToolCall] = []
+        terminal = False
 
-        if run_result.status == TeacherAgentRunStatus.CANCELLED:
+        try:
+            async for event in runtime.stream(
+                TeacherAgentRunRequest(
+                    user_message=self._compose_agent_message(intent),
+                    session_id=session_id,
+                    request_id=request_id,
+                )
+            ):
+                if event.run_id:
+                    run_id = event.run_id
+                    run_session_id = event.session_id
+                    self._active_runs[run_id] = runtime
+
+                if event.type == TeacherAgentEventType.ASSISTANT_DELTA:
+                    delta = event.data.get("delta", event.data.get("text", ""))
+                    if isinstance(delta, str):
+                        final_text_parts.append(delta)
+                    # 模型增量文本尚未经过事实消毒，不跨过业务 seam 暴露给 UI。
+                    continue
+
+                if event.type == TeacherAgentEventType.TOOL_STARTED:
+                    yield TeacherAgentEvent(
+                        type=event.type,
+                        run_id=event.run_id,
+                        session_id=event.session_id,
+                        request_id=event.request_id,
+                        data={"tool_name": str(event.data.get("tool_name", ""))},
+                        sequence=event.sequence,
+                        created_at=event.created_at,
+                    )
+                    continue
+
+                if event.type == TeacherAgentEventType.TOOL_FINISHED:
+                    raw_output = event.data.get("output")
+                    raw_input = event.data.get("input")
+                    raw_error = event.data.get("error")
+                    error: TeacherAgentError | None = None
+                    if isinstance(raw_error, dict):
+                        try:
+                            error = TeacherAgentError.model_validate(raw_error)
+                        except ValueError:
+                            error = TeacherAgentError(
+                                code=TeacherAgentErrorCode.TOOL_EXECUTION_ERROR,
+                                message="工具返回了无法解析的错误",
+                                request_id=request_id,
+                            )
+                    tool_calls.append(
+                        TeacherAgentToolCall(
+                            tool_name=str(event.data.get("tool_name", "")),
+                            status=str(event.data.get("status", "error")),
+                            input=raw_input if isinstance(raw_input, dict) else {},
+                            output=raw_output if isinstance(raw_output, dict) else None,
+                            error=error,
+                            started_at=event.created_at,
+                            finished_at=event.created_at,
+                        )
+                    )
+                    # Tool 原始 input/output 只用于本模块构建 grounded 结果；浏览器
+                    # 只接收无事实载荷的进度，不得绕过 Rights/Visibility 过滤。
+                    yield TeacherAgentEvent(
+                        type=event.type,
+                        run_id=event.run_id,
+                        session_id=event.session_id,
+                        request_id=event.request_id,
+                        data={
+                            "tool_name": str(event.data.get("tool_name", "")),
+                            "status": str(event.data.get("status", "error")),
+                        },
+                        sequence=event.sequence,
+                        created_at=event.created_at,
+                    )
+                    continue
+
+                if event.type == TeacherAgentEventType.RUN_COMPLETED:
+                    raw_final_text = event.data.get("final_text")
+                    final_text = (
+                        raw_final_text
+                        if isinstance(raw_final_text, str)
+                        else "".join(final_text_parts)
+                    )
+                    run_result = TeacherAgentRunResult(
+                        run_id=run_id or event.run_id,
+                        session_id=run_session_id or event.session_id,
+                        request_id=request_id,
+                        runtime=runtime.runtime_name,
+                        status=TeacherAgentRunStatus.COMPLETED,
+                        final_text=final_text,
+                        tool_calls=tool_calls,
+                    )
+                    response = self._build_response(
+                        run_result=run_result,
+                        intent=intent,
+                        plan=plan,
+                        request_id=request_id,
+                    )
+                    response.duration_ms = int((time.monotonic() - started) * 1000)
+                    terminal = True
+                    yield TeacherAgentEvent(
+                        type=TeacherAgentEventType.RUN_COMPLETED,
+                        run_id=run_result.run_id,
+                        session_id=run_result.session_id,
+                        request_id=request_id,
+                        data={"search_response": response.model_dump(mode="json")},
+                        sequence=event.sequence,
+                        created_at=event.created_at,
+                    )
+                    return
+
+                if event.type in {
+                    TeacherAgentEventType.RUN_FAILED,
+                    TeacherAgentEventType.RUN_CANCELLED,
+                }:
+                    terminal = True
+                    yield event
+                    return
+
+                yield event
+
+            terminal = True
             yield TeacherAgentEvent(
-                type=TeacherAgentEventType.RUN_CANCELLED,
-                run_id=run_result.run_id,
-                session_id=run_result.session_id,
+                type=TeacherAgentEventType.RUN_FAILED,
+                run_id=run_id,
+                session_id=run_session_id,
                 request_id=request_id,
                 data={
                     "error": {
-                        "code": TeacherAgentErrorCode.RUN_CANCELLED.value,
-                        "message": "搜索已取消",
+                        "code": TeacherAgentErrorCode.INTERNAL_ERROR.value,
+                        "message": "Agent 流在终态前结束",
                         "request_id": request_id,
                     }
                 },
             )
-            return
-        if run_result.status == TeacherAgentRunStatus.FAILED:
-            error = run_result.error
-            yield TeacherAgentEvent(
-                type=TeacherAgentEventType.RUN_FAILED,
-                run_id=run_result.run_id,
-                session_id=run_result.session_id,
-                request_id=request_id,
-                data={
-                    "error": (
-                        error.model_dump(mode="json")
-                        if error
-                        else {
-                            "code": TeacherAgentErrorCode.INTERNAL_ERROR.value,
-                            "message": "Agent run 失败",
-                            "request_id": request_id,
-                        }
+        finally:
+            if run_id and not terminal:
+                try:
+                    await runtime.cancel(run_id)
+                except Exception:  # pragma: no cover - 连接关闭时的防御清理
+                    logger.exception(
+                        "search_agent_stream_cancel_failed",
+                        extra={"request_id": request_id, "run_id": run_id},
                     )
-                },
-            )
-            return
-
-        response = self._build_response(
-            run_result=run_result, intent=intent, plan=plan, request_id=request_id
-        )
-        yield TeacherAgentEvent(
-            type=TeacherAgentEventType.RUN_COMPLETED,
-            run_id=run_result.run_id,
-            session_id=run_result.session_id,
-            request_id=request_id,
-            data={"search_response": response.model_dump(mode="json")},
-        )
+            if run_id:
+                self._active_runs.pop(run_id, None)
 
     # -- cancel -------------------------------------------------------------
 

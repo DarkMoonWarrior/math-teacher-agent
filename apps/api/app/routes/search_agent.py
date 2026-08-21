@@ -1,8 +1,9 @@
 """教师可信 Search Agent API（Prompt 3）。
 
 - POST /api/v1/agent/search                发起搜索（同步返回 grounded 结果）
+- POST /api/v1/agent/search/stream         单次真实执行的 SSE 主入口
 - GET  /api/v1/agent/search/{run_id}       读取 run 记录
-- GET  /api/v1/agent/search/{run_id}/stream SSE（最终事件携带 SearchAgentResponse）
+- GET  /api/v1/agent/search/{run_id}/stream 读取已保存终态的 SSE 快照（不重新执行）
 - POST /api/v1/agent/search/{run_id}/cancel 取消 run
 
 边界：
@@ -15,6 +16,7 @@
 from __future__ import annotations
 
 import json
+import time
 import uuid
 from functools import lru_cache
 from typing import Any
@@ -24,6 +26,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 from app.core.config import get_settings
+from app.agent_runtime import TeacherAgentEvent, TeacherAgentEventType
 from app.modules.search_agent import SearchAgentPipeline, SearchAgentResponse, SearchAgentRunRecord
 
 router = APIRouter(prefix="/agent/search", tags=["search-agent"])
@@ -114,6 +117,81 @@ async def search(body: SearchAgentSearchRequest) -> SearchAgentResponse:
     return response
 
 
+def _record_stream_event(body: SearchAgentSearchRequest, event: TeacherAgentEvent) -> None:
+    """Persist the observable run lifecycle before the event reaches the client."""
+    if not event.run_id:
+        return
+    record = _RUNS.get(event.run_id)
+    if record is None:
+        record = SearchAgentRunRecord(
+            run_id=event.run_id,
+            request_id=event.request_id,
+            session_id=event.session_id,
+            status="pending",
+            raw_query=body.query,
+        )
+        _RUNS[event.run_id] = record
+
+    if event.type == TeacherAgentEventType.RUN_STARTED:
+        record.status = "running"
+        return
+
+    if event.type == TeacherAgentEventType.RUN_COMPLETED:
+        raw_response = event.data.get("search_response")
+        if isinstance(raw_response, dict):
+            response = SearchAgentResponse.model_validate(raw_response)
+            record.status = response.status
+            record.intent = response.intent
+            record.plan_summary = response.plan_summary
+            record.response = response
+            record.error = response.error
+        else:
+            record.status = "error"
+            record.error = {
+                "code": "INTERNAL_ERROR",
+                "message": "搜索终态缺少结构化结果",
+                "request_id": event.request_id,
+            }
+        record.finished_at = time.time()
+        return
+
+    if event.type in {
+        TeacherAgentEventType.RUN_FAILED,
+        TeacherAgentEventType.RUN_CANCELLED,
+    }:
+        record.status = (
+            "cancelled"
+            if event.type == TeacherAgentEventType.RUN_CANCELLED
+            else "error"
+        )
+        raw_error = event.data.get("error")
+        record.error = raw_error if isinstance(raw_error, dict) else None
+        record.finished_at = time.time()
+
+
+@router.post("/stream")
+async def stream_search(body: SearchAgentSearchRequest) -> StreamingResponse:
+    """Run Search once and stream its real lifecycle; disconnect cancels that run."""
+    _require_feature()
+    request_id = f"req_{uuid.uuid4().hex}"
+    pipeline = get_search_agent_pipeline()
+
+    async def events():
+        async for event in pipeline.stream(
+            body.query,
+            session_id=body.session_id,
+            request_id=request_id,
+        ):
+            _record_stream_event(body, event)
+            yield f"data: {json.dumps(event.model_dump(mode='json'), ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(
+        events(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
 @router.get("/{run_id}")
 async def get_run(run_id: str) -> dict[str, Any]:
     record = _require_run(run_id)
@@ -123,18 +201,56 @@ async def get_run(run_id: str) -> dict[str, Any]:
 @router.get("/{run_id}/stream")
 async def stream_run(run_id: str) -> StreamingResponse:
     record = _require_run(run_id)
-    pipeline = get_search_agent_pipeline()
 
     async def events():
-        async for event in pipeline.stream(
-            record.raw_query, session_id=record.session_id, request_id=record.request_id
-        ):
-            yield f"data: {json.dumps(event.model_dump(mode='json'), ensure_ascii=False)}\n\n"
+        started = TeacherAgentEvent(
+            type=TeacherAgentEventType.RUN_STARTED,
+            run_id=record.run_id,
+            session_id=record.session_id,
+            request_id=record.request_id,
+        )
+        yield f"data: {json.dumps(started.model_dump(mode='json'), ensure_ascii=False)}\n\n"
+        if record.response is not None:
+            terminal = TeacherAgentEvent(
+                type=TeacherAgentEventType.RUN_COMPLETED,
+                run_id=record.run_id,
+                session_id=record.session_id,
+                request_id=record.request_id,
+                data={"search_response": record.response.model_dump(mode="json")},
+                sequence=1,
+            )
+            yield f"data: {json.dumps(terminal.model_dump(mode='json'), ensure_ascii=False)}\n\n"
+        elif record.status in {"error", "cancelled"}:
+            terminal = TeacherAgentEvent(
+                type=(
+                    TeacherAgentEventType.RUN_CANCELLED
+                    if record.status == "cancelled"
+                    else TeacherAgentEventType.RUN_FAILED
+                ),
+                run_id=record.run_id,
+                session_id=record.session_id,
+                request_id=record.request_id,
+                data={"error": record.error},
+                sequence=1,
+            )
+            yield f"data: {json.dumps(terminal.model_dump(mode='json'), ensure_ascii=False)}\n\n"
 
     return StreamingResponse(events(), media_type="text/event-stream")
 
 
 @router.post("/{run_id}/cancel")
 async def cancel_run(run_id: str) -> dict[str, Any]:
-    _require_run(run_id)
-    return await get_search_agent_pipeline().cancel(run_id)
+    record = _require_run(run_id)
+    if record.status in {"ok", "error", "cancelled"}:
+        return {
+            "run_id": run_id,
+            "status": record.status,
+            "error": record.error,
+        }
+    outcome = await get_search_agent_pipeline().cancel(run_id)
+    status = outcome.get("status")
+    if status == "cancelled":
+        record.status = "cancelled"
+        record.error = outcome.get("error")
+        record.finished_at = time.time()
+    return outcome

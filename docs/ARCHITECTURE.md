@@ -1,6 +1,6 @@
 # 当前架构与模块 seam
 
-更新日期：2026-08-20
+更新日期：2026-08-21
 
 ## 1. 总体结构
 
@@ -27,14 +27,18 @@ apps/web (legacy/reference Next.js UI, :3000)
 ### Teacher Workspace module
 
 - Seam: `apps/teacher-web/lib/teacher-workspace/contracts.ts`.
-- Interface: UI submits a teaching task and receives product-owned structured results/errors.
-- Adapter: current HTTP adapter calls same-origin FastAPI routes.
-- Rule: React views do not know backend storage, Harness events, provider payloads, or raw database fields.
+- Interface: UI submits a teaching task and receives product-owned progress stages, structured results and errors.
+- Adapter: current HTTP adapter consumes the same-origin Search SSE route, exposes only `connecting / understanding / searching / checking / recovering` progress, returns one structured result, and maps `AbortSignal` to explicit run cancellation.
+- Recovery: after a transport interruption with a known `run_id`, the adapter performs one read-only `GET /api/v1/agent/search/{run_id}/stream` snapshot lookup. It never repeats the Search `POST` or Tool execution; a snapshot without a saved terminal state becomes `STREAM_RECOVERY_FAILED`.
+- Transport: `apps/teacher-web/app/api/v1/agent/search/stream/route.ts` is an exact no-buffer streaming proxy to FastAPI; other same-origin API paths continue to use the general Next.js rewrite.
+- Rule: React views do not know SSE parsing, backend storage, Harness events, provider payloads, or raw database fields.
 
 ### Search Agent module
 
 - Seam: `SearchAgentPipeline.run/stream/cancel` and `SearchAgentResponse`.
 - Implementation: deterministic intent parsing, grounded curriculum mapping, rights/visibility gate, verification enrichment, deduplication, ranking, diversity and explanation sanitization.
+- Lifecycle: `POST /api/v1/agent/search/stream` executes one real runtime stream; `run_id` is registered before delivery, disconnect/cancel reaches the same in-flight run, and later snapshot reads never execute the query again.
+- Trust: model deltas and Tool input/output remain inside FastAPI; the browser receives only payload-free progress events and the final grounded `SearchAgentResponse`.
 - Rule: structured business results are the source of truth; model prose cannot add facts.
 
 ### Teacher Agent Runtime module
@@ -91,7 +95,7 @@ The primary UI should normally call `/api/v1` on its own origin. Next.js rewrite
 
 ## 6. Testing at the seam
 
-- UI tests and type checks target `TeacherWorkspace` observable states.
+- UI adapter tests and type checks target `TeacherWorkspace` observable progress, completion, failure and cancellation states, plus the exact same-origin streaming proxy.
 - Search tests target `SearchAgentPipeline` and the HTTP route, not private ranking internals alone.
 - Runtime conformance tests exercise both runtime adapters through the product-owned interface.
 - Security tests enforce the exact read-only Tool allowlist and absence of database access in `apps/agent`.

@@ -16,6 +16,7 @@ import pytest
 from app.agent_runtime import (
     TeacherAgentError,
     TeacherAgentErrorCode,
+    TeacherAgentEvent,
     TeacherAgentEventType,
     TeacherAgentRunRequest,
     TeacherAgentRunResult,
@@ -73,8 +74,73 @@ class FakeRuntime(TeacherAgentRuntime):
         return self.result
 
     async def stream(self, request: TeacherAgentRunRequest):
-        if False:
-            yield None  # pragma: no cover
+        self.requests.append(request)
+        result = self.result or TeacherAgentRunResult(
+            run_id="run_fake", session_id="sess_fake", request_id=request.request_id,
+            runtime=self.runtime_name, status=TeacherAgentRunStatus.COMPLETED,
+            final_text="", tool_calls=[],
+        )
+        sequence = 0
+        yield TeacherAgentEvent(
+            type=TeacherAgentEventType.RUN_STARTED,
+            run_id=result.run_id,
+            session_id=result.session_id,
+            request_id=request.request_id,
+            sequence=sequence,
+        )
+        sequence += 1
+        for call in result.tool_calls:
+            yield TeacherAgentEvent(
+                type=TeacherAgentEventType.TOOL_STARTED,
+                run_id=result.run_id,
+                session_id=result.session_id,
+                request_id=request.request_id,
+                data={"tool_name": call.tool_name, "input": call.input},
+                sequence=sequence,
+            )
+            sequence += 1
+            yield TeacherAgentEvent(
+                type=TeacherAgentEventType.TOOL_FINISHED,
+                run_id=result.run_id,
+                session_id=result.session_id,
+                request_id=request.request_id,
+                data={
+                    "tool_name": call.tool_name,
+                    "input": call.input,
+                    "output": call.output,
+                    "status": call.status,
+                    "error": call.error.model_dump(mode="json") if call.error else None,
+                },
+                sequence=sequence,
+            )
+            sequence += 1
+        event_type = {
+            TeacherAgentRunStatus.COMPLETED: TeacherAgentEventType.RUN_COMPLETED,
+            TeacherAgentRunStatus.CANCELLED: TeacherAgentEventType.RUN_CANCELLED,
+        }.get(result.status, TeacherAgentEventType.RUN_FAILED)
+        data = (
+            {"final_text": result.final_text}
+            if event_type == TeacherAgentEventType.RUN_COMPLETED
+            else {
+                "error": (
+                    result.error.model_dump(mode="json")
+                    if result.error
+                    else {
+                        "code": TeacherAgentErrorCode.INTERNAL_ERROR.value,
+                        "message": "fake runtime failed",
+                        "request_id": request.request_id,
+                    }
+                )
+            }
+        )
+        yield TeacherAgentEvent(
+            type=event_type,
+            run_id=result.run_id,
+            session_id=result.session_id,
+            request_id=request.request_id,
+            data=data,
+            sequence=sequence,
+        )
 
     async def cancel(self, run_id: str) -> TeacherAgentRunResult:
         self.cancelled_runs.append(run_id)
@@ -313,15 +379,68 @@ def test_cancelled_run_maps_to_cancelled_response(sa_bank, catalog) -> None:
     assert response.error["code"] == TeacherAgentErrorCode.RUN_CANCELLED.value
 
 
-def test_cancel_known_and_unknown_run(sa_bank, catalog) -> None:
+def test_completed_and_unknown_runs_are_not_cancellable(sa_bank, catalog) -> None:
     runtime = FakeRuntime(_result([_search_call([_search_item("q_sa_focus_01")])]))
     pipeline = _pipeline(sa_bank, catalog, runtime)
     _run(pipeline.run("找椭圆题"))
     outcome = _run(pipeline.cancel("run_fake_1"))
-    assert outcome["status"] == "cancelled"
-    assert runtime.cancelled_runs == ["run_fake_1"]
+    assert outcome["error"]["code"] == "RUN_NOT_FOUND"
+    assert runtime.cancelled_runs == []
     missing = _run(pipeline.cancel("run_unknown"))
     assert missing["error"]["code"] == "RUN_NOT_FOUND"
+
+
+def test_stream_registers_live_run_and_cancel_reaches_runtime(sa_bank, catalog) -> None:
+    class BlockingRuntime(FakeRuntime):
+        def __init__(self) -> None:
+            super().__init__()
+            self.release = asyncio.Event()
+
+        async def stream(self, request: TeacherAgentRunRequest):
+            self.requests.append(request)
+            yield TeacherAgentEvent(
+                type=TeacherAgentEventType.RUN_STARTED,
+                run_id="run_live",
+                session_id="sess_live",
+                request_id=request.request_id,
+            )
+            await self.release.wait()
+            yield TeacherAgentEvent(
+                type=TeacherAgentEventType.RUN_CANCELLED,
+                run_id="run_live",
+                session_id="sess_live",
+                request_id=request.request_id,
+                data={
+                    "error": {
+                        "code": TeacherAgentErrorCode.RUN_CANCELLED.value,
+                        "message": "run 已取消",
+                        "request_id": request.request_id,
+                    }
+                },
+                sequence=1,
+            )
+
+        async def cancel(self, run_id: str) -> TeacherAgentRunResult:
+            result = await super().cancel(run_id)
+            self.release.set()
+            return result
+
+    async def scenario() -> None:
+        runtime = BlockingRuntime()
+        pipeline = _pipeline(sa_bank, catalog, runtime)
+        iterator = pipeline.stream("找题", request_id="req_live").__aiter__()
+        first = await anext(iterator)
+        assert first.type == TeacherAgentEventType.RUN_STARTED
+        outcome = await pipeline.cancel(first.run_id)
+        assert outcome["status"] == "cancelled"
+        terminal = await anext(iterator)
+        assert terminal.type == TeacherAgentEventType.RUN_CANCELLED
+        with pytest.raises(StopAsyncIteration):
+            await anext(iterator)
+        assert runtime.cancelled_runs == ["run_live"]
+        assert (await pipeline.cancel("run_live"))["error"]["code"] == "RUN_NOT_FOUND"
+
+    _run(scenario())
 
 
 def test_pipeline_is_read_only(sa_bank, catalog) -> None:
@@ -360,6 +479,10 @@ def test_stream_emits_start_and_grounded_completion(sa_bank, catalog) -> None:
     events = _run(collect())
     assert events[0].type == TeacherAgentEventType.RUN_STARTED
     assert events[-1].type == TeacherAgentEventType.RUN_COMPLETED
+    for event in events[:-1]:
+        assert "input" not in event.data
+        assert "output" not in event.data
+        assert "delta" not in event.data
     payload = events[-1].data["search_response"]
     assert payload["results"][0]["question_id"] == "q_sa_focus_01"
 

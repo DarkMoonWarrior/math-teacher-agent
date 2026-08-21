@@ -3,7 +3,7 @@
  *
  * 真正穿过 DeepSeek Harness：mock 模型 -> search_questions -> get_question ->
  * 网关 stub -> 结构化结果。绝不调用真实 DeepSeek API。
- * 同时验证 Prompt 3 之后 model-visible tool allowlist 仍为 EXACTLY 5。
+ * 同时验证 M5 开始后 model-visible tool allowlist 仍为精确受控集合。
  */
 import { afterEach, describe, expect, it } from "vitest";
 import { TEACHER_TOOL_ALLOWLIST } from "../../src/tools/teacher-tools.js";
@@ -89,10 +89,11 @@ describe("Search Agent deterministic harness scenario", () => {
       expect(call.authorization).toBe("Bearer test-gateway-token");
     }
 
-    // Prompt 3 之后可见工具必须仍是 EXACTLY 5。
+    // M5 新增 Solve Tool 后可见工具仍必须是精确受控集合。
     expect(TEACHER_TOOL_ALLOWLIST).toEqual([
       "search_questions",
       "get_question",
+      "solve_question",
       "find_similar_questions",
       "verify_question",
       "get_curriculum_node",

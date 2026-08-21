@@ -1,5 +1,5 @@
 /**
- * 第一批 5 个只读 Teacher Tools（Prompt 2 §13 强制 allowlist）。
+ * Teacher Tools 的最小只读 allowlist。
  *
  * 每个 tool：
  *   - 输入 typed（DSH defineTool 自动校验 model 生成的参数）。
@@ -13,6 +13,7 @@ import {
   ToolGatewayClient,
   ToolGatewayError,
   type GatewayRequestOptions,
+  type SolutionMode,
 } from "../transport/gateway-client.js";
 import type { TeacherAgentError } from "../runtime/types.js";
 
@@ -150,6 +151,98 @@ export function defineTeacherTools(options: TeacherToolOptions): ToolDefinition[
         verification_status: "unknown",
         visibility: "unknown",
         source_status: "unknown",
+        request_id: result.error.request_id ?? requestId,
+        error: gatewayErrorEnvelope(requestId, new ToolGatewayError(result.error)),
+      };
+    },
+  });
+
+  const solveQuestion = defineTool({
+    name: "solve_question",
+    description:
+      "调用 FastAPI 的可信解题模块。优先返回题库已验证解析；模型新解答始终标记 teacher_review_required，不会自动发布或冒充已验证。",
+    parameters: {
+      question_text: { type: "string", description: "完整高中数学题目文本", required: true },
+      solution_mode: { type: "string", description: "standard 或 alternative" },
+      teacher_instruction: { type: "string", description: "教师对讲解方式的补充要求（可选）" },
+    },
+    output: {
+      schema: {
+        type: "object",
+        properties: {
+          ok: { type: "boolean", required: true },
+          question_text: { type: "string", required: true },
+          solution_mode: { type: "string", required: true },
+          explanation: { type: "json", required: true },
+          knowledge_points: { type: "array", required: true },
+          common_mistakes: { type: "array", required: true },
+          teaching_notes: { type: "array", required: true },
+          confidence_status: { type: "string", required: true },
+          verification_evidence: { type: "array", required: true },
+          provider: { type: "string", required: true },
+          model: { type: "string", required: true },
+          mode: { type: "string", required: true },
+          matched_question_id: { type: "json" },
+          match_score: { type: "json" },
+          alternative_available: { type: "boolean", required: true },
+          warnings: { type: "array", required: true },
+          request_id: { type: "string", required: true },
+          error: { type: "json" },
+        },
+        additionalProperties: false,
+      },
+      render: (_args, value) => JSON_OUTPUT(JSON.stringify(value)),
+    },
+    timeoutMs: 120_000,
+    async execute(args, exec) {
+      const requestId = callOptions(exec).requestId;
+      const result = await gateway.solveQuestion(
+        {
+          question_text: args.question_text,
+          solution_mode: (args.solution_mode ?? "standard") as SolutionMode,
+          teacher_instruction: args.teacher_instruction ?? "",
+        },
+        { ...callOptions(exec), timeoutMs: 120_000 },
+      );
+      if (result.ok) {
+        return {
+          ok: true,
+          question_text: result.data.question_text,
+          solution_mode: result.data.solution_mode,
+          explanation: result.data.explanation as unknown as JsonValue,
+          knowledge_points: result.data.knowledge_points,
+          common_mistakes: result.data.common_mistakes,
+          teaching_notes: result.data.teaching_notes,
+          confidence_status: result.data.confidence_status,
+          verification_evidence: result.data.verification_evidence,
+          provider: result.data.provider,
+          model: result.data.model,
+          mode: result.data.mode,
+          matched_question_id: result.data.matched_question_id,
+          match_score: result.data.match_score,
+          alternative_available: result.data.alternative_available,
+          warnings: result.data.warnings,
+          request_id: result.data.request_id ?? requestId,
+          error: null,
+        };
+      }
+      return {
+        ok: false,
+        question_text: args.question_text,
+        solution_mode: args.solution_mode ?? "standard",
+        explanation: null,
+        knowledge_points: [],
+        common_mistakes: [],
+        teaching_notes: [],
+        confidence_status: "teacher_review_required",
+        verification_evidence: [],
+        provider: "",
+        model: "",
+        mode: "live_ai",
+        matched_question_id: null,
+        match_score: null,
+        alternative_available: false,
+        warnings: [],
         request_id: result.error.request_id ?? requestId,
         error: gatewayErrorEnvelope(requestId, new ToolGatewayError(result.error)),
       };
@@ -322,17 +415,17 @@ export function defineTeacherTools(options: TeacherToolOptions): ToolDefinition[
     },
   });
 
-  return [searchQuestions, getQuestion, findSimilarQuestions, verifyQuestion, getCurriculumNode];
+  return [searchQuestions, getQuestion, solveQuestion, findSimilarQuestions, verifyQuestion, getCurriculumNode];
 }
 
 /** Prompt 2 强制 allowlist：model-visible 工具名必须恰好等于该集合。 */
 export const TEACHER_TOOL_ALLOWLIST: readonly string[] = [
   "search_questions",
   "get_question",
+  "solve_question",
   "find_similar_questions",
   "verify_question",
   "get_curriculum_node",
 ];
 
 export type { TeacherAgentError };
-

@@ -124,6 +124,7 @@ class Settings(BaseSettings):
     # Agent -> FastAPI internal tool gateway 的机器身份。
     tool_gateway_token: str = ""
     tool_gateway_timeout_seconds: float = 30.0
+    solve_tool_timeout_seconds: float = 120.0
 
     # -- Search Agent（Prompt 3） -------------------------------------------
     # 默认关闭：现有传统搜索页面行为不变。dsh 编排 + Agent Service 就绪后开启。

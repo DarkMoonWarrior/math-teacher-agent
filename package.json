@@ -11,6 +11,7 @@
     "dev:teacher": "pnpm --filter @math-teacher-agent/teacher-web dev",
     "build:teacher": "pnpm --filter @math-teacher-agent/teacher-web build",
     "typecheck:teacher": "pnpm --filter @math-teacher-agent/teacher-web typecheck",
+    "test:teacher": "pnpm --filter @math-teacher-agent/teacher-web test",
     "dev:web": "pnpm dev:teacher",
     "build:web": "pnpm build:teacher",
     "typecheck:web": "pnpm typecheck:teacher",

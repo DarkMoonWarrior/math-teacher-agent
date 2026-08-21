@@ -12,11 +12,13 @@
 from __future__ import annotations
 
 import json
+from datetime import date
 from pathlib import Path
 from typing import Any
 
 from app.modules.curriculum import CsvCurriculumCatalog
 from app.modules.question_bank import QuestionBank
+from app.modules.search_agent import SearchIntentParser
 from app.modules.search_agent.pipeline import SearchAgentPipeline
 
 from tests.test_search_agent_eval import (
@@ -58,6 +60,11 @@ def _load_holdout_cases() -> list[dict[str, Any]]:
     cases = payload["cases"]
     assert len(cases) >= 20
     return cases
+
+
+def _load_holdout_reference_date() -> date:
+    payload = json.loads(_HOLDOUT_CASES.read_text(encoding="utf-8"))
+    return date.fromisoformat(payload["reference_date"])
 
 
 def _load_eval_queries() -> set[str]:
@@ -121,6 +128,9 @@ def _check_intent_metrics(case: dict[str, Any], intent: Any) -> dict[str, tuple[
         )
         metrics["intent_field"].append(("kp_ids_grounded", int(ok), 1))
         metrics["curriculum_mapping"].append(("kp_ids_grounded", int(ok), 1))
+    for fragment in expected.get("parse_warnings_contains", []):
+        ok = any(fragment in warning for warning in intent.parse_warnings)
+        metrics["intent_field"].append((f"parse_warnings_contains[{fragment}]", int(ok), 1))
     for term in expected.get("knowledge_points_contains", []):
         ok = term in (intent.knowledge_points + intent.sub_knowledge_points)
         metrics["intent_field"].append((f"knowledge_points_contains[{term}]", int(ok), 1))
@@ -165,14 +175,14 @@ def test_holdout_intent_field_accuracy_meets_target(tmp_path: Path) -> None:
     bank = QuestionBank(tmp_path / "holdout-eval.sqlite3")
     bank.import_batch(_FIXTURES / "search-agent-synthetic-14q-v1.json")
     catalog = CsvCurriculumCatalog(_CURRICULUM_CSV)
-    pipeline = SearchAgentPipeline(question_bank=bank, catalog=catalog)
+    parser = SearchIntentParser(catalog, reference_date=_load_holdout_reference_date())
 
     # 先冻结实现：_check_intent 与逐字段 metrics 同源，保证与 50 条 eval 判定一致。
     totals: dict[str, list[int]] = {name: [0, 0] for name in _METRIC_FIELDS}
     totals["intent_field"] = [0, 0]
     failures: list[str] = []
     for case in cases:
-        intent = pipeline.parser.parse(case["query"])
+        intent = parser.parse(case["query"])
         # 整体字段判定（与 eval 同一套 checker）。
         case_passed, case_total, case_failures = _check_intent(case, intent)
         totals["intent_field"][0] += case_passed

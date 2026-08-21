@@ -12,6 +12,7 @@ import {
 import { MathText } from "@/components/math-text";
 import {
   type SearchQuestion,
+  type SearchTaskProgressStage,
   type SearchTaskResult,
   TeacherWorkspaceError,
 } from "@/lib/teacher-workspace/contracts";
@@ -54,6 +55,12 @@ type ViewError = {
   requestId: string;
 };
 
+type SearchProgressDefinition = {
+  stageTitle: string;
+  paperTitle: string;
+  activeStep: number;
+};
+
 type PromptExample = {
   label: string;
   detail: string;
@@ -84,6 +91,40 @@ type CapabilityDefinition = {
 };
 
 const CAPABILITY_ORDER: CapabilityId[] = ["search", "lesson", "paper"];
+
+const SEARCH_PROGRESS: Record<SearchTaskProgressStage, SearchProgressDefinition> = {
+  connecting: {
+    stageTitle: "正在建立可信连接",
+    paperTitle: "正在连接受控搜索工作流",
+    activeStep: 0,
+  },
+  understanding: {
+    stageTitle: "正在理解教学条件",
+    paperTitle: "正在把描述整理成可核对条件",
+    activeStep: 0,
+  },
+  searching: {
+    stageTitle: "正在查找真实题目",
+    paperTitle: "正在通过受控工具翻查题库",
+    activeStep: 1,
+  },
+  checking: {
+    stageTitle: "正在核对可信状态",
+    paperTitle: "正在核对来源、权利与验证状态",
+    activeStep: 2,
+  },
+  recovering: {
+    stageTitle: "正在恢复同一次任务",
+    paperTitle: "连接中断，正在取回已保存的运行结果",
+    activeStep: 3,
+  },
+};
+
+const SEARCH_PROGRESS_STEPS = [
+  "解析教学描述",
+  "调用受控搜索工具",
+  "核对来源与验证状态",
+];
 
 const CAPABILITIES: Record<CapabilityId, CapabilityDefinition> = {
   search: {
@@ -342,6 +383,7 @@ export function TeacherWorkbench() {
   const [phase, setPhase] = useState<Phase>("idle");
   const [result, setResult] = useState<SearchTaskResult | null>(null);
   const [error, setError] = useState<ViewError | null>(null);
+  const [searchProgress, setSearchProgress] = useState<SearchTaskProgressStage>("connecting");
   const [history, setHistory] = useState<TaskRecord[]>([]);
   const [touched, setTouched] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -352,7 +394,12 @@ export function TeacherWorkbench() {
   const sessionRef = useRef("");
   const abortRef = useRef<AbortController | null>(null);
   const turnTimerRef = useRef<number | null>(null);
+  const requestSequenceRef = useRef(0);
   const resultRegionRef = useRef<HTMLElement | null>(null);
+  const taskInputRef = useRef<HTMLTextAreaElement | null>(null);
+  const historyTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const historyDrawerRef = useRef<HTMLElement | null>(null);
+  const historyCloseRef = useRef<HTMLButtonElement | null>(null);
 
   const definition = CAPABILITIES[capability];
   const query = drafts[capability];
@@ -369,6 +416,9 @@ export function TeacherWorkbench() {
       ? 1
       : definition.pages.length;
   const pageIndex = showingSearchResult ? questionPage : previewPage;
+  const progressSteps = searchProgress === "recovering"
+    ? [...SEARCH_PROGRESS_STEPS, "恢复同一次运行"]
+    : SEARCH_PROGRESS_STEPS;
 
   function updateQuery(value: string) {
     setDrafts((current) => ({ ...current, [capability]: value }));
@@ -390,19 +440,64 @@ export function TeacherWorkbench() {
     });
   }
 
+  function returnToComposer() {
+    window.requestAnimationFrame(() => {
+      taskInputRef.current?.focus({ preventScroll: true });
+      const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      window.scrollTo({ behavior: reducedMotion ? "auto" : "smooth", top: 0 });
+    });
+  }
+
   useEffect(() => {
     return () => {
       if (turnTimerRef.current !== null) window.clearTimeout(turnTimerRef.current);
+      abortRef.current?.abort();
     };
   }, []);
 
   useEffect(() => {
-    function closeOnEscape(event: globalThis.KeyboardEvent) {
-      if (event.key === "Escape") setHistoryOpen(false);
+    if (!historyOpen) return;
+    const previousFocus = document.activeElement;
+    historyCloseRef.current?.focus();
+
+    function manageDialogFocus(event: globalThis.KeyboardEvent) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setHistoryOpen(false);
+        return;
+      }
+      if (event.key !== "Tab") return;
+
+      const drawer = historyDrawerRef.current;
+      if (!drawer) return;
+      const focusable = Array.from(drawer.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), [href], input:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      )).filter((element) => !element.hasAttribute("hidden"));
+      if (focusable.length === 0) {
+        event.preventDefault();
+        return;
+      }
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
     }
-    window.addEventListener("keydown", closeOnEscape);
-    return () => window.removeEventListener("keydown", closeOnEscape);
-  }, []);
+
+    window.addEventListener("keydown", manageDialogFocus);
+    return () => {
+      window.removeEventListener("keydown", manageDialogFocus);
+      if (previousFocus instanceof HTMLElement && document.contains(previousFocus)) {
+        previousFocus.focus();
+      } else {
+        historyTriggerRef.current?.focus();
+      }
+    };
+  }, [historyOpen]);
 
   async function runTask(event?: FormEvent<HTMLFormElement>) {
     event?.preventDefault();
@@ -412,9 +507,11 @@ export function TeacherWorkbench() {
     if (!trimmed || running) return;
 
     if (!sessionRef.current) sessionRef.current = createSessionId();
+    const requestSequence = ++requestSequenceRef.current;
     const controller = new AbortController();
     abortRef.current = controller;
     setPhase("running");
+    setSearchProgress("connecting");
     setError(null);
     setQuestionPage(0);
     scrollToResultRegion();
@@ -422,8 +519,16 @@ export function TeacherWorkbench() {
     try {
       const nextResult = await teacherWorkspace.searchQuestions(
         { query: trimmed, sessionId: sessionRef.current },
-        controller.signal,
+        {
+          signal: controller.signal,
+          onProgress: (progress) => {
+            if (requestSequence === requestSequenceRef.current) {
+              setSearchProgress(progress.stage);
+            }
+          },
+        },
       );
+      if (requestSequence !== requestSequenceRef.current) return;
       setResult(nextResult);
       setHistory((current) => [
         { id: nextResult.run_id || nextResult.request_id, query: trimmed, result: nextResult },
@@ -431,6 +536,7 @@ export function TeacherWorkbench() {
       ]);
       setPhase("success");
     } catch (cause) {
+      if (requestSequence !== requestSequenceRef.current) return;
       if (cause instanceof DOMException && cause.name === "AbortError") {
         setPhase("cancelled");
         return;
@@ -441,7 +547,7 @@ export function TeacherWorkbench() {
       setError(nextError);
       setPhase("error");
     } finally {
-      abortRef.current = null;
+      if (requestSequence === requestSequenceRef.current) abortRef.current = null;
     }
   }
 
@@ -454,7 +560,12 @@ export function TeacherWorkbench() {
 
   function selectCapability(nextCapability: CapabilityId) {
     if (nextCapability === capability || turning) return;
-    if (running) abortRef.current?.abort();
+    if (running) {
+      requestSequenceRef.current += 1;
+      abortRef.current?.abort();
+      abortRef.current = null;
+      setPhase("cancelled");
+    }
 
     const currentIndex = CAPABILITY_ORDER.indexOf(capability);
     const nextIndex = CAPABILITY_ORDER.indexOf(nextCapability);
@@ -470,7 +581,9 @@ export function TeacherWorkbench() {
   }
 
   function resetTask() {
-    if (running) abortRef.current?.abort();
+    requestSequenceRef.current += 1;
+    abortRef.current?.abort();
+    abortRef.current = null;
     setDrafts((current) => ({ ...current, [capability]: "" }));
     setTouched(false);
     setPreviewPage(0);
@@ -480,9 +593,13 @@ export function TeacherWorkbench() {
       setPhase("idle");
       setQuestionPage(0);
     }
+    returnToComposer();
   }
 
   function openTask(task: TaskRecord) {
+    requestSequenceRef.current += 1;
+    abortRef.current?.abort();
+    abortRef.current = null;
     setCapability("search");
     setDrafts((current) => ({ ...current, search: task.query }));
     setResult(task.result);
@@ -490,6 +607,7 @@ export function TeacherWorkbench() {
     setQuestionPage(0);
     setPhase("success");
     setHistoryOpen(false);
+    scrollToResultRegion();
   }
 
   function turnPage(direction: FlipDirection) {
@@ -511,7 +629,7 @@ export function TeacherWorkbench() {
   const stageTitle = searchVisible && phase === "success" && result
     ? `${result.returned_count} 道题已整理成册`
     : running
-      ? "正在翻查题库"
+      ? SEARCH_PROGRESS[searchProgress].stageTitle
       : searchVisible && phase === "error"
         ? "检索暂时中断"
         : definition.stageTitle;
@@ -547,7 +665,7 @@ export function TeacherWorkbench() {
           </nav>
 
           <div className="nav-actions">
-            <button className="icon-button" type="button" onClick={() => setHistoryOpen(true)} aria-label="查看搜题记录">
+            <button ref={historyTriggerRef} className="icon-button" type="button" onClick={() => setHistoryOpen(true)} aria-label="查看搜题记录">
               <HistoryIcon />
               {history.length > 0 && <span>{history.length}</span>}
             </button>
@@ -571,8 +689,10 @@ export function TeacherWorkbench() {
             <label htmlFor="teacher-task">{definition.inputLabel}</label>
             <div className={`composer-surface${validationMessage ? " is-error" : ""}${running ? " is-running" : ""}${definition.ready ? "" : " is-planned"}`}>
               <textarea
+                ref={taskInputRef}
                 id="teacher-task"
                 aria-describedby="teacher-task-help"
+                aria-busy={running}
                 aria-invalid={Boolean(validationMessage)}
                 aria-required={definition.ready}
                 onBlur={() => {
@@ -584,6 +704,7 @@ export function TeacherWorkbench() {
                 }}
                 onKeyDown={handleComposerKeyDown}
                 placeholder={definition.placeholder}
+                readOnly={running}
                 rows={4}
                 value={query}
               />
@@ -608,7 +729,7 @@ export function TeacherWorkbench() {
             <p>从一个具体任务开始</p>
             <div>
               {definition.examples.map((example) => (
-                <button key={example.query} type="button" onClick={() => updateQuery(example.query)}>
+                <button key={example.query} type="button" disabled={running} onClick={() => updateQuery(example.query)}>
                   <span>{example.label}</span>
                   <small>{example.detail}</small>
                   <ArrowRightIcon />
@@ -640,11 +761,21 @@ export function TeacherWorkbench() {
                 <section className="process-paper">
                   <span className="orbit-loader" aria-hidden="true"><i /><i /><i /></span>
                   <p>SEARCH / CONTROLLED TOOLS</p>
-                  <h2>正在理解条件并核对真实记录</h2>
+                  <h2>{SEARCH_PROGRESS[searchProgress].paperTitle}</h2>
                   <ol>
-                    <li className="is-active"><span>01</span>解析教学描述</li>
-                    <li><span>02</span>调用受控搜索工具</li>
-                    <li><span>03</span>核对来源与验证状态</li>
+                    {progressSteps.map((label, index) => (
+                      <li
+                        aria-current={index === SEARCH_PROGRESS[searchProgress].activeStep ? "step" : undefined}
+                        className={index === SEARCH_PROGRESS[searchProgress].activeStep
+                          ? "is-active"
+                          : index < SEARCH_PROGRESS[searchProgress].activeStep
+                            ? "is-complete"
+                            : undefined}
+                        key={label}
+                      >
+                        <span>{String(index + 1).padStart(2, "0")}</span>{label}
+                      </li>
+                    ))}
                   </ol>
                 </section>
               )}
@@ -661,6 +792,7 @@ export function TeacherWorkbench() {
                   <h2>任务没有完成</h2>
                   <p>{error.message}</p>
                   {ERROR_GUIDANCE[error.code] && <span>{ERROR_GUIDANCE[error.code]}</span>}
+                  {error.requestId && <small className="request-id">请求编号 · {error.requestId}</small>}
                   <button type="button" onClick={() => void runTask()}>重新尝试 <ArrowRightIcon /></button>
                 </section>
               )}
@@ -707,11 +839,19 @@ export function TeacherWorkbench() {
         <span>高中数学 · 私有工作区</span>
       </footer>
 
-      <button className={`drawer-backdrop${historyOpen ? " is-open" : ""}`} type="button" onClick={() => setHistoryOpen(false)} aria-label="关闭任务记录" tabIndex={historyOpen ? 0 : -1} />
-      <aside className={`history-drawer${historyOpen ? " is-open" : ""}`} aria-hidden={!historyOpen} aria-label="本次会话搜题记录">
+      <button className={`drawer-backdrop${historyOpen ? " is-open" : ""}`} type="button" onClick={() => setHistoryOpen(false)} aria-hidden="true" tabIndex={-1} />
+      <aside
+        ref={historyDrawerRef}
+        className={`history-drawer${historyOpen ? " is-open" : ""}`}
+        aria-hidden={!historyOpen}
+        aria-labelledby="history-drawer-title"
+        aria-modal="true"
+        inert={!historyOpen}
+        role="dialog"
+      >
         <header>
-          <div><span>本次会话</span><h2>搜题记录</h2></div>
-          <button className="icon-button" type="button" onClick={() => setHistoryOpen(false)} aria-label="关闭"><CloseIcon /></button>
+          <div><span>本次会话</span><h2 id="history-drawer-title">搜题记录</h2></div>
+          <button ref={historyCloseRef} className="icon-button" type="button" onClick={() => setHistoryOpen(false)} aria-label="关闭"><CloseIcon /></button>
         </header>
         {history.length === 0 ? (
           <div className="history-empty"><ClockIcon /><p>完成的检索会暂存在这里。</p><span>刷新页面后清空。</span></div>

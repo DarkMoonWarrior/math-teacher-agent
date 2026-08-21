@@ -80,10 +80,26 @@ export type SearchTaskRequest = {
   sessionId: string;
 };
 
+export type SearchTaskProgressStage =
+  | "connecting"
+  | "understanding"
+  | "searching"
+  | "checking"
+  | "recovering";
+
+export type SearchTaskProgress = {
+  stage: SearchTaskProgressStage;
+};
+
+export type SearchTaskOptions = {
+  signal?: AbortSignal;
+  onProgress?: (progress: SearchTaskProgress) => void;
+};
+
 export interface TeacherWorkspace {
   searchQuestions(
     request: SearchTaskRequest,
-    signal?: AbortSignal,
+    options?: SearchTaskOptions,
   ): Promise<SearchTaskResult>;
 }
 
