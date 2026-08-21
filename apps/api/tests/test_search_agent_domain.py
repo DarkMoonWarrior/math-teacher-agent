@@ -149,6 +149,33 @@ def test_curriculum_mapping_grounded_in_catalog():
     assert intent.curriculum.chapter is not None
 
 
+def test_inferred_curriculum_metadata_is_not_promoted_to_hard_filters():
+    intent = _parser().parse("找 1 道高中函数题")
+    hard_constraints = [constraint for constraint in intent.constraints if constraint.strength == "hard"]
+
+    assert not any(constraint.field == "volume" for constraint in hard_constraints)
+    assert not any(constraint.field == "chapter" for constraint in hard_constraints)
+    assert any(
+        constraint.field == "knowledge_points" and constraint.value == "函数"
+        for constraint in hard_constraints
+    )
+    assert not any(
+        constraint.field == "knowledge_points" and isinstance(constraint.value, list)
+        for constraint in hard_constraints
+    )
+
+
+def test_explicit_volume_remains_a_hard_filter():
+    intent = _parser().parse("找 1 道必修一的集合题")
+    volume_constraint = next(
+        constraint for constraint in intent.constraints if constraint.field == "volume"
+    )
+
+    assert volume_constraint.value == "必修第一册"
+    assert volume_constraint.strength == "hard"
+    assert volume_constraint.origin == "explicit"
+
+
 def test_unmapped_terms_never_become_fake_node_ids():
     intent = _parser().parse("构造函数的导数题")
     # 构造函数不是 catalog 节点：绝不能出现臆造的 node id。

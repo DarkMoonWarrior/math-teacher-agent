@@ -68,6 +68,21 @@ describe("Teacher Agent least-capability 安全门禁", () => {
     expect(names).toEqual([...TEACHER_TOOL_ALLOWLIST].sort());
   });
 
+  it("配置真实 DeepSeek key 时 composition 能装载官方 provider", async () => {
+    const previous = process.env.MATH_AI_DEEPSEEK_API_KEY;
+    process.env.MATH_AI_DEEPSEEK_API_KEY = "sk-test-composition-only";
+    try {
+      ctx = await bootContext();
+      expect(ctx.tools.schemas()).toHaveLength(TEACHER_TOOL_ALLOWLIST.length);
+    } finally {
+      if (previous === undefined) {
+        delete process.env.MATH_AI_DEEPSEEK_API_KEY;
+      } else {
+        process.env.MATH_AI_DEEPSEEK_API_KEY = previous;
+      }
+    }
+  });
+
   it("不存在 bash/fs/web/subagent/workflow/terminal 等任何额外能力", async () => {
     ctx = await bootContext();
     const names = ctx.tools.schemas().map((schema) => schema.name);
