@@ -13,8 +13,8 @@
 ## 当前路线基线
 
 - M0-M4：已完成，不因路线重排返工；M4 Gate E 于 2026-08-21 严格通过。
-- **当前处于阶段转换等待状态：M5 必须由项目所有者确认后启动。**
-- M5-M9：五个独立 Agent 工作流，均未开始。
+- **M5 Solve Agent：当前唯一开发里程碑。**
+- M6-M9：四个后续 Agent 工作流，均未开始。
 - M10-M11：Closed Beta 准备与数据验证，均未开始。
 - M12-M15：商业基础、Teacher Pro、教研组和学校，均未开始。
 
@@ -25,9 +25,9 @@
 | 新教师工作台 | 可用 | `apps/teacher-web`，端口 3001；新 UI、Agent 导航、任务输入、动态纸张、真实 Search 进度与结果状态。 |
 | Search Agent | 可用 | FastAPI SearchAgentPipeline + `/api/v1/agent/search/stream`；单次真实流式执行、同一 run 终态恢复、在途 run 登记、服务端取消、可信标签、相对年份透明解析、放宽披露与空结果。需启用 Search、选择 DSH runtime 并启动 Agent Service。 |
 | TeacherAgentRuntime | 可用 | Python 产品接口、Legacy adapter、DSH HTTP adapter；默认 legacy，DSH 不可达时默认不静默降级。 |
-| DeepSeek Harness Service | 可用（开发/测试） | `apps/agent`；五个只读工具、mock provider、取消/恢复/安全测试。真实模型需私有环境变量。 |
+| DeepSeek Harness Service | 可用（开发/测试） | `apps/agent`；六个受控只读工具、mock provider、取消/恢复/安全测试。真实模型需私有环境变量。 |
 | QuestionBank / MathVerifier / Curriculum | 后端已有 | 核心业务资产继续复用，不因新 UI 重写。 |
-| Solve 工作流 | 后端已有 | 旧 solution assistant/legacy UI 存在；新的 Solve Agent 与新 UI 尚未实现。 |
+| Solve Agent | 开发中 | 复用旧 `SolutionAssistant` 可信分层；受控只读 `solve_question` Tool seam 已开始接入 FastAPI 与 Harness。新工作台解题界面、完整编排和 M5 Gate 尚未完成。 |
 | Private Library / PDF import | 后端已有 | 私有资料和导入模块存在；新的 Private Library Agent 与新 UI 尚未实现。 |
 | Paper | 界面预览 + 后端已有 | 新 UI 可整理组卷需求，但按钮明确禁用；旧 exam_papers 模块不是 Paper Agent 完成证明。 |
 | Lesson | 界面预览 + 后端已有 | 新 UI 可整理教案需求，但按钮明确禁用；旧 lesson_plans 模块不是 Lesson Agent 完成证明。 |
@@ -37,8 +37,8 @@
 
 ## 2026-08-21 验证快照
 
-- FastAPI：242 项测试通过；另有 1 条来自 Starlette TestClient 的依赖弃用提示。
-- Agent Runtime：类型检查、31 项测试和生产构建通过（含 SSE 客户端断开取消）。
+- FastAPI：247 项测试通过；另有 1 条来自 Starlette TestClient 的依赖弃用提示。
+- Agent Runtime：类型检查、34 项测试和生产构建通过（含 Solve Tool seam、模型不可用失败路径与 SSE 客户端断开取消）。
 - 新教师工作台：类型检查、13 项 TeacherWorkspace / 同源流 Route / 展示契约测试和生产构建通过。
 - 新教师工作台浏览器验收：320px 无关键横向溢出；记录抽屉的初始焦点、Tab 约束、Escape 关闭、焦点返回和关闭态 `inert` 通过；检索完成与历史恢复会自动定位结果区，新任务会返回输入区并恢复焦点；延迟 SSE 下理解、搜索、可信核对、中途取消和同一 run 恢复状态均可见。
 - Search 故障体验验收：模型不可用、Tool 超时、网络失败、权限拒绝均展示明确原因、处置建议与请求编号，输入框恢复可编辑且允许重试；真实 QuestionBank 枚举 `single_choice`、`passed` 和 `commercial_granted` 分别显示为“单选题”“程序验证通过”和“已获商业使用授权”，未验证或冲突状态不会使用可信样式。
@@ -46,6 +46,7 @@
 - 旧界面：类型检查和生产构建通过，确保地基能力未被整理工作破坏。
 - 2026-08-21 本机 `test-mock` 真实链路复验：Teacher Web → 无缓冲同源流 Route → FastAPI → DeepSeek Harness Runtime → 受控 `search_questions` Tool 调用成功；页面可依次展示理解、搜索和可信核对阶段，空商业题库返回可信的 0 结果，不生成假题。
 - 相对年份浏览器验收：按请求发生时的北京时间自然年解释“近 N 年”并包含当前年；2026-08-21 的“近两年”透明披露为 2025—2026；无数字“近年”不设置年份硬条件并提示教师改用明确表达；完成后自动定位结果，320px 下无关键横向溢出。
+- M5 第一条 vertical slice：`solve_question` 经 M2M FastAPI Tool Gateway 接入 Harness；题库已验证解析保持 `program_verified`，模型新解答保持 `teacher_review_required`，无解析/模型与超时均返回结构化错误；尚未接入新 Teacher Web 完整解题工作流。
 
 ## 已知未决项
 

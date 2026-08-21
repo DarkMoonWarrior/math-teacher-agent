@@ -15,7 +15,7 @@ import asyncio
 import hmac
 import logging
 import uuid
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, Header, Request
 from fastapi.responses import JSONResponse
@@ -25,9 +25,17 @@ from app.core.config import get_settings
 from app.modules.math_verifier import MathVerifier
 from app.modules.question_bank import QuestionBankError
 from app.modules.question_similarity import QuestionSimilarityRegistry
+from app.modules.solution_assistant import (
+    SolutionAssistantError,
+    SolutionAssistantUnavailableError,
+    SolutionProviderError,
+    SolutionRequest,
+    SolutionResult,
+)
 from app.routes.curriculum import _catalog_for_path
 from app.routes.questions import get_question_bank, get_question_quality_workflow
 from app.routes.question_similarity import get_question_similarity_registry
+from app.routes.solutions import get_solution_assistant
 
 logger = logging.getLogger("math_ai.internal_agent_tools")
 
@@ -82,9 +90,15 @@ def _request_id_from(request: Request) -> str:
     return value[:160] or f"req_{uuid.uuid4().hex}"
 
 
-async def _run_with_timeout(request: Request, fn: Any, *args: Any, **kwargs: Any) -> Any:
+async def _run_with_timeout(
+    request: Request,
+    fn: Any,
+    *args: Any,
+    timeout_seconds: float | None = None,
+    **kwargs: Any,
+) -> Any:
     """同步业务服务在受控超时内执行；超时返回 TOOL_TIMEOUT，不泄漏 traceback。"""
-    timeout = get_settings().tool_gateway_timeout_seconds
+    timeout = timeout_seconds or get_settings().tool_gateway_timeout_seconds
     try:
         return await asyncio.wait_for(
             asyncio.to_thread(fn, *args, **kwargs), timeout=timeout
@@ -143,6 +157,16 @@ class GetQuestionResponse(BaseModel):
     verification_status: str
     visibility: str
     source_status: str
+    request_id: str
+
+
+class SolveQuestionRequest(BaseModel):
+    question_text: str = Field(min_length=5, max_length=30000)
+    solution_mode: Literal["standard", "alternative"] = "standard"
+    teacher_instruction: str = Field(default="", max_length=2000)
+
+
+class SolveQuestionResponse(SolutionResult):
     request_id: str
 
 
@@ -274,7 +298,13 @@ async def get_question(
         logger.exception("get_question_failed", extra={"request_id": request_id})
         raise _GatewayHttpError(500, "TOOL_EXECUTION_ERROR", "题目读取失败", request_id) from None
     raw = detail.raw or {}
-    solution_steps = [str(step) for step in (raw.get("solutions") or [])][:20]
+    solutions = raw.get("solutions") or []
+    first_solution = solutions[0] if solutions and isinstance(solutions[0], dict) else {}
+    solution_steps = [
+        str(step).strip()
+        for step in first_solution.get("steps_latex", [])
+        if str(step).strip()
+    ][:20]
     return GetQuestionResponse(
         question_id=detail.question_id,
         stem=detail.stem_plain[:2000],
@@ -286,6 +316,54 @@ async def get_question(
         source_status=detail.license_status,
         request_id=request_id,
     )
+
+
+@router.post("/solve-question", response_model=SolveQuestionResponse)
+async def solve_question(
+    body: SolveQuestionRequest,
+    request: Request,
+    _token: None = Depends(_require_tool_gateway_token),
+) -> SolveQuestionResponse:
+    """Read-only Solve Tool: all trust decisions remain in SolutionAssistant."""
+    request_id = _request_id_from(request)
+    command = SolutionRequest(
+        question_text=body.question_text,
+        solution_mode=body.solution_mode,
+        teacher_instruction=body.teacher_instruction,
+        teacher_id="owner_teacher",
+    )
+    try:
+        result = await _run_with_timeout(
+            request,
+            get_solution_assistant().solve,
+            command,
+            timeout_seconds=get_settings().solve_tool_timeout_seconds,
+        )
+    except (SolutionAssistantUnavailableError, SolutionProviderError):
+        raise _GatewayHttpError(
+            503,
+            "MODEL_UNAVAILABLE",
+            "当前没有可用的已验证解析或模型解题能力",
+            request_id,
+        ) from None
+    except SolutionAssistantError as exc:
+        raise _GatewayHttpError(
+            422,
+            "TOOL_VALIDATION_ERROR",
+            str(exc),
+            request_id,
+        ) from exc
+    except _GatewayHttpError:
+        raise
+    except Exception:
+        logger.exception("solve_question_failed", extra={"request_id": request_id})
+        raise _GatewayHttpError(
+            500,
+            "TOOL_EXECUTION_ERROR",
+            "解题工具执行失败",
+            request_id,
+        ) from None
+    return SolveQuestionResponse(**result.model_dump(), request_id=request_id)
 
 
 @router.post("/find-similar-questions", response_model=FindSimilarQuestionsResponse)

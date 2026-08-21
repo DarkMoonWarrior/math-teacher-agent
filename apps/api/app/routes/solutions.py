@@ -10,6 +10,7 @@ from app.modules.solution_assistant import (
     OpenAISolutionProvider,
     SolutionAssistant,
     SolutionAssistantError,
+    SolutionAssistantUnavailableError,
     SolutionProviderError,
     SolutionRequest,
     SolutionResult,
@@ -56,6 +57,8 @@ def get_solution_assistant() -> SolutionAssistant:
 def solve_question(command: SolutionRequest) -> SolutionResult:
     try:
         return get_solution_assistant().solve(command)
+    except SolutionAssistantUnavailableError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     except SolutionAssistantError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except SolutionProviderError as exc:

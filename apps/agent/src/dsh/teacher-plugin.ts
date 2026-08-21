@@ -1,6 +1,6 @@
 /**
  * Teacher Agent 的 Cordis 插件：在最小组合之上注册
- *   1) 5 个只读 teacher tools（model-visible allowlist 的唯一来源）
+ *   1) 6 个受控只读 teacher tools（model-visible allowlist 的唯一来源）
  *   2) deterministic mock provider route "test-mock"（仅测试）
  *   3) 日志与安全 guard
  *

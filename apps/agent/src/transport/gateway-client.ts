@@ -59,6 +59,37 @@ export interface GetQuestionResponse {
   request_id: string;
 }
 
+export type SolutionMode = "standard" | "alternative";
+
+export interface SolveQuestionInput {
+  question_text: string;
+  solution_mode?: SolutionMode;
+  teacher_instruction?: string;
+}
+
+export interface SolveQuestionResponse {
+  question_text: string;
+  solution_mode: SolutionMode;
+  explanation: {
+    method: string;
+    steps: string[];
+    final_answer: string;
+  };
+  knowledge_points: string[];
+  common_mistakes: string[];
+  teaching_notes: string[];
+  confidence_status: "program_verified" | "model_reviewed" | "teacher_review_required";
+  verification_evidence: string[];
+  provider: string;
+  model: string;
+  mode: "verified_bank" | "live_ai";
+  matched_question_id: string | null;
+  match_score: number | null;
+  alternative_available: boolean;
+  warnings: string[];
+  request_id: string;
+}
+
 export interface SimilarQuestionItem {
   question_id: string;
   stem: string;
@@ -102,6 +133,7 @@ const KNOWN_STATUS_ERROR_CODES: Record<number, TeacherAgentErrorCode> = {
   403: "TOOL_UNAUTHORIZED",
   404: "TOOL_NOT_FOUND",
   422: "TOOL_VALIDATION_ERROR",
+  503: "MODEL_UNAVAILABLE",
   504: "TOOL_TIMEOUT",
 };
 
@@ -235,6 +267,10 @@ export class ToolGatewayClient {
     return this.post("/internal/agent-tools/v1/get-question", { question_id: questionId }, options);
   }
 
+  solveQuestion(input: SolveQuestionInput, options: GatewayRequestOptions): Promise<GatewayResult<SolveQuestionResponse>> {
+    return this.post("/internal/agent-tools/v1/solve-question", input, options);
+  }
+
   findSimilarQuestions(input: { question_id: string; limit?: number }, options: GatewayRequestOptions): Promise<GatewayResult<FindSimilarQuestionsResponse>> {
     return this.post("/internal/agent-tools/v1/find-similar-questions", input, options);
   }
@@ -247,4 +283,3 @@ export class ToolGatewayClient {
     return this.post("/internal/agent-tools/v1/get-curriculum-node", { node_id: nodeId }, options);
   }
 }
-

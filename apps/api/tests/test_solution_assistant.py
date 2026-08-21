@@ -59,8 +59,8 @@ def test_unmatched_question_without_provider_explains_configuration() -> None:
         json={"question_text": "求一个当前测试题库中绝对不存在的复合虚构数学问题 987654321。"},
     )
 
-    assert response.status_code == 422
-    assert "OpenAI API Key" in response.json()["detail"]
+    assert response.status_code == 503
+    assert "模型解题 Provider" in response.json()["detail"]
 
 
 def test_short_fragment_cannot_inherit_verified_answer() -> None:
@@ -72,7 +72,19 @@ def test_short_fragment_cannot_inherit_verified_answer() -> None:
         json={"question_text": source.stem_plain[:12]},
     )
 
-    assert response.status_code == 422
+    assert response.status_code == 503
+
+
+def test_modified_question_cannot_inherit_verified_answer() -> None:
+    bank = get_question_bank()
+    source = bank.search(verification_status="passed", page_size=1).items[0]
+
+    response = client.post(
+        "/api/v1/solutions/solve",
+        json={"question_text": f"{source.stem_plain} 另加条件 x>100。"},
+    )
+
+    assert response.status_code == 503
 
 
 def test_provider_solves_question_outside_bank(tmp_path: Path) -> None:

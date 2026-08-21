@@ -17,6 +17,10 @@ class SolutionAssistantError(ValueError):
     pass
 
 
+class SolutionAssistantUnavailableError(SolutionAssistantError):
+    """No verified solution or configured model can complete the request."""
+
+
 class SolutionAssistant:
     """Solves through one interface while keeping trust decisions internal."""
 
@@ -45,7 +49,8 @@ class SolutionAssistant:
 
     def solve(self, request: SolutionRequest) -> SolutionResult:
         match, score = self._best_verified_match(request.question_text)
-        if match is not None:
+        exact_verified_match = match is not None and score == 1.0
+        if exact_verified_match:
             solutions = match.raw.get("solutions") or []
             solution_index = 1 if request.solution_mode == "alternative" else 0
             if len(solutions) > solution_index:
@@ -70,12 +75,12 @@ class SolutionAssistant:
                 alternative_available=True,
                 warnings=["请由教师核对条件、推导过程和最终答案后再用于教学。"],
             )
-        if match is not None and request.solution_mode == "alternative":
-            raise SolutionAssistantError(
-                "当前题库只保存了一种已验证解法；配置 OpenAI API Key 后可生成第二种解法。"
+        if exact_verified_match and request.solution_mode == "alternative":
+            raise SolutionAssistantUnavailableError(
+                "当前题库只保存了一种已验证解法；配置可用的模型解题 Provider 后可生成第二种解法。"
             )
-        raise SolutionAssistantError(
-            "当前文字题未匹配到已验证题库；配置 OpenAI API Key 后可解答任意新题。"
+        raise SolutionAssistantUnavailableError(
+            "当前文字题未匹配到已验证题库；配置可用的模型解题 Provider 后才能生成新解答。"
         )
 
     def _best_verified_match(
@@ -91,10 +96,8 @@ class SolutionAssistant:
             stem = self._normalize(candidate.stem_plain)
             if not stem:
                 continue
-            if stem in target:
+            if stem == target:
                 score = 1.0
-            elif target in stem and len(target) >= len(stem) * self.MATCH_THRESHOLD:
-                score = len(target) / len(stem)
             else:
                 score = SequenceMatcher(None, target, stem).ratio()
             if score > best_score:

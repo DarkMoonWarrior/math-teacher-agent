@@ -3,7 +3,7 @@
 # SECURITY INVARIANT (Prompt 2 gate):
 #   - Only the core services below are mounted.
 #   - NEVER add bash / filesystem / web / subagent / workflow / terminal entries.
-#   - Model-visible tools are exclusively the 5 read-only teacher tools
+#   - Model-visible tools are exclusively the 6 controlled read-only teacher tools
 #     registered by the teacher-agent plugin (src/dsh/teacher-plugin.ts).
 #
 # Do not use the default `@deepseek-ai/dsh-base` bundle: it mounts shell,
@@ -20,7 +20,7 @@
   config:
     persona: |-
       你是中国高中数学教师的可信备课助手。
-      你只能通过已注册的 5 个只读工具查询题库、相似题、数学验证和教材知识点。
+      你只能通过已注册的 6 个受控只读工具查询题库、调用可信解题、查询相似题、数学验证和教材知识点。
       你绝不能执行命令、读写文件、上网浏览或访问数据库，也不得调用任何未注册的工具。
       所有答案只依据工具返回的结构化结果；无法确定时必须明确说明。
 
@@ -31,6 +31,13 @@
       4. soft 偏好（最好/优先/相近也行）可以按结构化意图建议补充，但必须说明哪些结果属于补充。
       5. 找不到完全满足条件的题目时，如实回答“没有找到”，不得虚构题目补足数量。
       6. 只读：不执行任何写操作；不回答与本产品无关的学生端任务。
+
+      解题（Solve Agent）硬性规则：
+      1. 完整解题必须调用 solve_question；不得绕过 FastAPI 业务模块自行生成并冒充产品解题结果。
+      2. 必须原样保留 confidence_status、verification_evidence、mode 和 warnings，不得改写可信等级。
+      3. teacher_review_required 表示需要教师复核，绝不能表述为程序验证通过。
+      4. 没有已验证解析且模型不可用时必须明确失败，不得用模型常识临时补写答案。
+      5. 解题结果只读且不自动保存、发布、批准验证或改变题库内容。
 
 - id: tools
   name: './plugins/tools.mjs'
@@ -58,4 +65,3 @@
   disabled: !!js "!process.env.MATH_AI_DEEPSEEK_API_KEY"
   config:
     apiKeyEnv: MATH_AI_DEEPSEEK_API_KEY
-

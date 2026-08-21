@@ -27,45 +27,49 @@
 
 完整量化门禁见 [`PRODUCT-GATES.md`](PRODUCT-GATES.md)。
 
-## 3. 最近完成里程碑：M4 Search 集成稳定化
+## 3. 当前里程碑：M5 Solve Agent
 
-M0-M4 已完成，M4 Gate E 于 2026-08-21 严格通过。当前处于阶段转换等待状态；在项目所有者确认前，不启动 Solve、Private Library、Paper、Lesson 或 Memory。
+M0-M4 已完成，项目所有者已确认进入 M5。当前只建设可信解题工作流，不启动 Private Library、Paper、Lesson 或 Memory。
 
 本阶段允许：
 
-- 完善 `apps/teacher-web` 的新视觉、导航、响应式、无障碍和任务到结果的交互；
-- 打通同源 Search 请求、加载、取消、错误、空结果、重试和可信状态；
-- 修复 SearchIntent 的明确解析缺陷并扩充 synthetic evaluation；
-- 改善 Runtime/Tool 连接可靠性、错误分类、超时和可观察性；
-- 补齐运行说明、测试、文档和仓库入口；
-- 记录 Solve Agent 的接口需求，但不实现完整 Solve 工作流。
+- 复用现有 `SolutionAssistant`，优先返回题库中已有的已验证解析；
+- 增加受控只读 `solve_question` Tool，并通过 TeacherAgentRuntime / Harness 编排；
+- 支持完整文字题与 Search 结果题进入新工作台解题流程；
+- 展示解法、最终答案、知识点、易错点、教学提示和验证证据；
+- 对模型新解答强制 `teacher_review_required`，对 MathVerifier 不支持或不确定的结果保持待复核；
+- 完善加载、取消、模型不可用、Tool 失败、验证不确定和重试体验；
+- 补齐 synthetic evaluation、运行说明、测试和 Gate 审计。
 
 本阶段禁止：
 
-- 把旧 `apps/web` 的视觉壳直接搬进新工作台；
-- 把旧 REST 页面宣称为新的 Lesson/Paper/Solve Agent 已完成；
+- 把旧 `apps/web/solve` 的视觉壳直接搬进新工作台；
+- 因为旧 `/api/v1/solutions/solve` 已存在就宣称 Solve Agent 已完成；
 - 新增 Agent 写数据库、自动发布、自动批准、批量删除或 private → public 路径；
-- 为凑题生成并伪装成题库 verified 内容；
+- 把模型生成解析、第二模型复核或格式校验冒充 `program_verified`；
+- 自动保存、覆盖或发布题目答案与解析；
+- 顺带开发题目变式、图片/PDF 导入、组卷、教案或教师记忆；
 - 提前开发账号、付费、多租户、教研组、学校后台或学生功能；
-- 同时铺开 M5-M9；
+- 同时铺开 M6-M9；
 - 因为 Harness 不可达而静默切换执行语义。可以提供显式、可观测、由产品决定的 fallback，但默认 fail closed。
 
-## 4. M4 完成 Gate（已通过）
+## 4. M5 完成 Gate
 
-M4 只有同时满足以下条件才完成：
+M5 只有同时满足以下条件才完成：
 
-1. 新工作台是默认 Web 入口，旧 UI 只作为 legacy/reference；
-2. Search 从新工作台经同源入口调用 FastAPI 和受控 Agent Tool；
-3. 运行中、取消、错误、空结果、重试和可信标签都有明确体验；
-4. 无真实结果时返回空结果，不生成假题补数；
-5. 320-1920px 无关键横向溢出，关键操作可键盘访问并尊重 reduced motion；
-6. Primary UI、FastAPI、Agent Runtime 的相关测试、类型检查和生产构建通过；
-7. `PRODUCT-GATES.md` 的 Gate E 通过；
-8. Lesson/Paper 继续诚实显示为预览，不越级宣称完成。
+1. 精确匹配的已验证题库解析优先返回，并携带 question/revision/验证证据；
+2. 新题或新解法的模型结果始终为 `teacher_review_required`，不自动升级可信等级；
+3. MathVerifier 的支持、通过、失败与 inconclusive 状态可区分，失败路径不被模型文字覆盖；
+4. 新工作台完成文字输入、Search 结果转入解题、运行、取消、错误、重试和结果可信展示；
+5. 模型不可用、Tool 超时、权限拒绝、无已验证解析和验证不确定均有明确体验；
+6. Agent 只调用 allowlisted Tool，不访问数据库，不保存、发布或批准解析；
+7. 320-1920px 无关键横向溢出，关键操作可键盘访问并尊重 reduced motion；
+8. Primary UI、FastAPI、Agent Runtime 的相关测试、类型检查和生产构建通过；
+9. `PRODUCT-GATES.md` 的 Gate E 通过；Lesson/Paper 继续诚实显示为预览。
 
 ## 5. 下一阶段启动条件
 
-M4 Gate 已完整通过；变更形成可回滚提交并由项目所有者确认阶段转换后，才进入 M5 Solve Agent。M5 只处理解题可信分层，不顺带实现变式、组卷、私人资料或教案。
+只有 M5 Gate 完整通过、变更形成可回滚提交并由项目所有者确认后，才进入 M6 Private Library Agent。
 
 后续顺序以 [`ROADMAP.md`](ROADMAP.md) 为准：Solve → Private Library → Paper → Lesson → Memory → Beta 准备 → Beta 验证 → 商业基础 → Teacher Pro → 教研组 → 学校。
 

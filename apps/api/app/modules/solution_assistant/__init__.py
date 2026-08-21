@@ -1,6 +1,7 @@
 from app.modules.solution_assistant.assistant import (
     SolutionAssistant,
     SolutionAssistantError,
+    SolutionAssistantUnavailableError,
 )
 from app.modules.solution_assistant.providers import (
     OpenAISolutionProvider,
@@ -21,6 +22,7 @@ __all__ = [
     "DeepSeekSolutionProvider",
     "SolutionAssistant",
     "SolutionAssistantError",
+    "SolutionAssistantUnavailableError",
     "SolutionExplanation",
     "SolutionProvider",
     "SolutionProviderError",
