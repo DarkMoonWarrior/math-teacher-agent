@@ -1,11 +1,19 @@
 import {
   TeacherWorkspace,
   TeacherWorkspaceError,
+  type SearchTaskOptions,
+  type SearchTaskProgressStage,
   type SearchTaskRequest,
   type SearchTaskResult,
 } from "./contracts";
 
 const SEARCH_STREAM_ENDPOINT = "/api/v1/agent/search/stream";
+const PROGRESS_ORDER: SearchTaskProgressStage[] = [
+  "connecting",
+  "understanding",
+  "searching",
+  "checking",
+];
 
 function apiUrl(path: string): string {
   const configured = process.env.NEXT_PUBLIC_MATH_AI_API_URL?.replace(/\/$/, "");
@@ -62,9 +70,18 @@ async function responseError(response: Response): Promise<TeacherWorkspaceError>
 export class HttpTeacherWorkspace implements TeacherWorkspace {
   async searchQuestions(
     request: SearchTaskRequest,
-    signal?: AbortSignal,
+    options: SearchTaskOptions = {},
   ): Promise<SearchTaskResult> {
+    const { signal, onProgress } = options;
     if (signal?.aborted) throw abortError();
+    let progressIndex = -1;
+    const reportProgress = (stage: SearchTaskProgressStage) => {
+      const nextIndex = PROGRESS_ORDER.indexOf(stage);
+      if (nextIndex <= progressIndex) return;
+      progressIndex = nextIndex;
+      onProgress?.({ stage });
+    };
+    reportProgress("connecting");
 
     let response: Response;
     let runId = "";
@@ -88,6 +105,12 @@ export class HttpTeacherWorkspace implements TeacherWorkspace {
       });
 
       if (!response.ok) throw await responseError(response);
+      if (!response.headers.get("content-type")?.toLowerCase().startsWith("text/event-stream")) {
+        throw new TeacherWorkspaceError(
+          "STREAM_UNAVAILABLE",
+          "业务服务没有返回任务事件流。",
+        );
+      }
       if (!response.body) {
         throw new TeacherWorkspaceError(
           "STREAM_UNAVAILABLE",
@@ -125,6 +148,10 @@ export class HttpTeacherWorkspace implements TeacherWorkspace {
 
           if (event.run_id) runId = event.run_id;
           if (signal?.aborted) throw abortError();
+
+          if (event.type === "run_started") reportProgress("understanding");
+          if (event.type === "tool_started") reportProgress("searching");
+          if (event.type === "tool_finished") reportProgress("checking");
 
           if (event.type === "run_completed") {
             const result = event.data.search_response;

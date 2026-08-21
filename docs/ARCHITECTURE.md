@@ -27,8 +27,9 @@ apps/web (legacy/reference Next.js UI, :3000)
 ### Teacher Workspace module
 
 - Seam: `apps/teacher-web/lib/teacher-workspace/contracts.ts`.
-- Interface: UI submits a teaching task and receives product-owned structured results/errors.
-- Adapter: current HTTP adapter consumes the same-origin Search SSE route, returns one structured result, and maps `AbortSignal` to explicit run cancellation.
+- Interface: UI submits a teaching task and receives product-owned progress stages, structured results and errors.
+- Adapter: current HTTP adapter consumes the same-origin Search SSE route, exposes only `connecting / understanding / searching / checking` progress, returns one structured result, and maps `AbortSignal` to explicit run cancellation.
+- Transport: `apps/teacher-web/app/api/v1/agent/search/stream/route.ts` is an exact no-buffer streaming proxy to FastAPI; other same-origin API paths continue to use the general Next.js rewrite.
 - Rule: React views do not know SSE parsing, backend storage, Harness events, provider payloads, or raw database fields.
 
 ### Search Agent module
@@ -93,7 +94,7 @@ The primary UI should normally call `/api/v1` on its own origin. Next.js rewrite
 
 ## 6. Testing at the seam
 
-- UI adapter tests and type checks target `TeacherWorkspace` observable completion, failure and cancellation states.
+- UI adapter tests and type checks target `TeacherWorkspace` observable progress, completion, failure and cancellation states, plus the exact same-origin streaming proxy.
 - Search tests target `SearchAgentPipeline` and the HTTP route, not private ranking internals alone.
 - Runtime conformance tests exercise both runtime adapters through the product-owned interface.
 - Security tests enforce the exact read-only Tool allowlist and absence of database access in `apps/agent`.

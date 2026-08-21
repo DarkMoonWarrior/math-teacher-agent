@@ -575,10 +575,13 @@ svg { flex: 0 0 auto; }
   gap: var(--space-md);
   grid-template-columns: 2rem 1fr;
   padding: var(--space-sm) 0;
+  transition: color 220ms ease;
 }
 
 .process-paper li.is-active { color: var(--color-ink); }
+.process-paper li.is-complete { color: var(--color-ink-soft); }
 .process-paper li span { color: var(--color-vermilion); font-size: var(--text-xs); }
+.process-paper li.is-complete span { color: var(--color-teal); }
 
 .orbit-loader {
   border: 0.0625rem solid var(--color-rule-strong);

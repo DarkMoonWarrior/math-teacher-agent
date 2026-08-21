@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { SearchTaskResult } from "./contracts";
+import type { SearchTaskProgressStage, SearchTaskResult } from "./contracts";
 import { HttpTeacherWorkspace } from "./http-adapter";
 
 const encoder = new TextEncoder();
@@ -8,7 +8,7 @@ function eventBlock(event: unknown): Uint8Array {
   return encoder.encode(`data: ${JSON.stringify(event)}\n\n`);
 }
 
-function streamResponse(events: unknown[]): Response {
+function streamResponse(events: unknown[], contentType = "text/event-stream"): Response {
   return new Response(new ReadableStream({
     start(controller) {
       for (const event of events) controller.enqueue(eventBlock(event));
@@ -16,7 +16,7 @@ function streamResponse(events: unknown[]): Response {
     },
   }), {
     status: 200,
-    headers: { "Content-Type": "text/event-stream" },
+    headers: { "Content-Type": contentType },
   });
 }
 
@@ -77,6 +77,66 @@ describe("HttpTeacherWorkspace", () => {
       .resolves.toEqual(result);
   });
 
+  it("reports only the safe task stages exposed by the stream contract", async () => {
+    const result = resultFixture();
+    vi.stubGlobal("fetch", vi.fn(async () => streamResponse([
+      { type: "run_started", run_id: "run_1", request_id: "req_1", data: {} },
+      {
+        type: "assistant_delta",
+        run_id: "run_1",
+        request_id: "req_1",
+        data: { text: "raw model text must stay private" },
+      },
+      {
+        type: "tool_started",
+        run_id: "run_1",
+        request_id: "req_1",
+        data: { tool_name: "search_questions", input: { query: "private payload" } },
+      },
+      {
+        type: "tool_finished",
+        run_id: "run_1",
+        request_id: "req_1",
+        data: { tool_name: "search_questions", output: { questions: ["private payload"] } },
+      },
+      {
+        type: "tool_started",
+        run_id: "run_1",
+        request_id: "req_1",
+        data: { tool_name: "get_question" },
+      },
+      {
+        type: "run_completed",
+        run_id: "run_1",
+        request_id: "req_1",
+        data: { search_response: result },
+      },
+    ])));
+    const stages: SearchTaskProgressStage[] = [];
+
+    const workspace = new HttpTeacherWorkspace();
+    await workspace.searchQuestions(
+      { query: "找椭圆题", sessionId: "tch_1" },
+      { onProgress: ({ stage }) => stages.push(stage) },
+    );
+
+    expect(stages).toEqual(["connecting", "understanding", "searching", "checking"]);
+  });
+
+  it("rejects a successful non-SSE response before attempting to parse it", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("<html>proxy error</html>", {
+      status: 200,
+      headers: { "Content-Type": "text/html" },
+    })));
+
+    const workspace = new HttpTeacherWorkspace();
+    const failure = workspace.searchQuestions({ query: "找题", sessionId: "tch_proxy" });
+    await expect(failure).rejects.toMatchObject({
+      code: "STREAM_UNAVAILABLE",
+      message: "业务服务没有返回任务事件流。",
+    });
+  });
+
   it("preserves the product error code from a failed run", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => streamResponse([
       { type: "run_started", run_id: "run_2", request_id: "req_2", data: {} },
@@ -122,7 +182,10 @@ describe("HttpTeacherWorkspace", () => {
           }, { once: true });
         },
       });
-      return Promise.resolve(new Response(stream, { status: 200 }));
+      return Promise.resolve(new Response(stream, {
+        status: 200,
+        headers: { "Content-Type": "text/event-stream" },
+      }));
     });
     vi.stubGlobal("fetch", fetchMock);
 
@@ -130,7 +193,7 @@ describe("HttpTeacherWorkspace", () => {
     const workspace = new HttpTeacherWorkspace();
     const pending = workspace.searchQuestions(
       { query: "找题", sessionId: "tch_live" },
-      controller.signal,
+      { signal: controller.signal },
     );
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
     await new Promise((resolve) => setTimeout(resolve, 0));

@@ -22,7 +22,7 @@
 
 | 能力 | 状态 | 当前事实 |
 | --- | --- | --- |
-| 新教师工作台 | 可用 | `apps/teacher-web`，端口 3001；新 UI、Agent 导航、任务输入、动态纸张与 Search 结果状态。 |
+| 新教师工作台 | 可用 | `apps/teacher-web`，端口 3001；新 UI、Agent 导航、任务输入、动态纸张、真实 Search 进度与结果状态。 |
 | Search Agent | 可用 | FastAPI SearchAgentPipeline + `/api/v1/agent/search/stream`；单次真实流式执行、在途 run 登记、服务端取消、可信标签、放宽披露与空结果。需启用 Search、选择 DSH runtime 并启动 Agent Service。 |
 | TeacherAgentRuntime | 可用 | Python 产品接口、Legacy adapter、DSH HTTP adapter；默认 legacy，DSH 不可达时默认不静默降级。 |
 | DeepSeek Harness Service | 可用（开发/测试） | `apps/agent`；五个只读工具、mock provider、取消/恢复/安全测试。真实模型需私有环境变量。 |
@@ -39,10 +39,10 @@
 
 - FastAPI：238 项测试通过；另有 1 条来自 Starlette TestClient 的依赖弃用提示。
 - Agent Runtime：类型检查、31 项测试和生产构建通过（含 SSE 客户端断开取消）。
-- 新教师工作台：类型检查、3 项 TeacherWorkspace stream/cancel 测试和生产构建通过。
-- 新教师工作台浏览器验收：320px 无关键横向溢出；记录抽屉的初始焦点、Tab 约束、Escape 关闭、焦点返回和关闭态 `inert` 通过；检索完成与历史恢复会自动定位结果区，新任务会返回输入区并恢复焦点。
+- 新教师工作台：类型检查、7 项 TeacherWorkspace / 同源流 Route 测试和生产构建通过。
+- 新教师工作台浏览器验收：320px 无关键横向溢出；记录抽屉的初始焦点、Tab 约束、Escape 关闭、焦点返回和关闭态 `inert` 通过；检索完成与历史恢复会自动定位结果区，新任务会返回输入区并恢复焦点；延迟 SSE 下理解、搜索、可信核对和中途取消状态均可见。
 - 旧界面：类型检查和生产构建通过，确保地基能力未被整理工作破坏。
-- 2026-08-21 本机 `test-mock` 真实链路复验：Teacher Web → FastAPI → DeepSeek Harness Runtime → 受控 `search_questions` Tool 调用成功；空商业题库返回可信的 0 结果，不生成假题，页面自动定位结果区并可从会话记录恢复。
+- 2026-08-21 本机 `test-mock` 真实链路复验：Teacher Web → 无缓冲同源流 Route → FastAPI → DeepSeek Harness Runtime → 受控 `search_questions` Tool 调用成功；页面可依次展示理解、搜索和可信核对阶段，空商业题库返回可信的 0 结果，不生成假题。
 
 ## 已知未决项
 

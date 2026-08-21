@@ -12,6 +12,7 @@ import {
 import { MathText } from "@/components/math-text";
 import {
   type SearchQuestion,
+  type SearchTaskProgressStage,
   type SearchTaskResult,
   TeacherWorkspaceError,
 } from "@/lib/teacher-workspace/contracts";
@@ -54,6 +55,12 @@ type ViewError = {
   requestId: string;
 };
 
+type SearchProgressDefinition = {
+  stageTitle: string;
+  paperTitle: string;
+  activeStep: number;
+};
+
 type PromptExample = {
   label: string;
   detail: string;
@@ -84,6 +91,29 @@ type CapabilityDefinition = {
 };
 
 const CAPABILITY_ORDER: CapabilityId[] = ["search", "lesson", "paper"];
+
+const SEARCH_PROGRESS: Record<SearchTaskProgressStage, SearchProgressDefinition> = {
+  connecting: {
+    stageTitle: "正在建立可信连接",
+    paperTitle: "正在连接受控搜索工作流",
+    activeStep: 0,
+  },
+  understanding: {
+    stageTitle: "正在理解教学条件",
+    paperTitle: "正在把描述整理成可核对条件",
+    activeStep: 0,
+  },
+  searching: {
+    stageTitle: "正在查找真实题目",
+    paperTitle: "正在通过受控工具翻查题库",
+    activeStep: 1,
+  },
+  checking: {
+    stageTitle: "正在核对可信状态",
+    paperTitle: "正在核对来源、权利与验证状态",
+    activeStep: 2,
+  },
+};
 
 const CAPABILITIES: Record<CapabilityId, CapabilityDefinition> = {
   search: {
@@ -342,6 +372,7 @@ export function TeacherWorkbench() {
   const [phase, setPhase] = useState<Phase>("idle");
   const [result, setResult] = useState<SearchTaskResult | null>(null);
   const [error, setError] = useState<ViewError | null>(null);
+  const [searchProgress, setSearchProgress] = useState<SearchTaskProgressStage>("connecting");
   const [history, setHistory] = useState<TaskRecord[]>([]);
   const [touched, setTouched] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -466,6 +497,7 @@ export function TeacherWorkbench() {
     const controller = new AbortController();
     abortRef.current = controller;
     setPhase("running");
+    setSearchProgress("connecting");
     setError(null);
     setQuestionPage(0);
     scrollToResultRegion();
@@ -473,7 +505,14 @@ export function TeacherWorkbench() {
     try {
       const nextResult = await teacherWorkspace.searchQuestions(
         { query: trimmed, sessionId: sessionRef.current },
-        controller.signal,
+        {
+          signal: controller.signal,
+          onProgress: (progress) => {
+            if (requestSequence === requestSequenceRef.current) {
+              setSearchProgress(progress.stage);
+            }
+          },
+        },
       );
       if (requestSequence !== requestSequenceRef.current) return;
       setResult(nextResult);
@@ -576,7 +615,7 @@ export function TeacherWorkbench() {
   const stageTitle = searchVisible && phase === "success" && result
     ? `${result.returned_count} 道题已整理成册`
     : running
-      ? "正在翻查题库"
+      ? SEARCH_PROGRESS[searchProgress].stageTitle
       : searchVisible && phase === "error"
         ? "检索暂时中断"
         : definition.stageTitle;
@@ -708,11 +747,21 @@ export function TeacherWorkbench() {
                 <section className="process-paper">
                   <span className="orbit-loader" aria-hidden="true"><i /><i /><i /></span>
                   <p>SEARCH / CONTROLLED TOOLS</p>
-                  <h2>正在理解条件并核对真实记录</h2>
+                  <h2>{SEARCH_PROGRESS[searchProgress].paperTitle}</h2>
                   <ol>
-                    <li className="is-active"><span>01</span>解析教学描述</li>
-                    <li><span>02</span>调用受控搜索工具</li>
-                    <li><span>03</span>核对来源与验证状态</li>
+                    {["解析教学描述", "调用受控搜索工具", "核对来源与验证状态"].map((label, index) => (
+                      <li
+                        aria-current={index === SEARCH_PROGRESS[searchProgress].activeStep ? "step" : undefined}
+                        className={index === SEARCH_PROGRESS[searchProgress].activeStep
+                          ? "is-active"
+                          : index < SEARCH_PROGRESS[searchProgress].activeStep
+                            ? "is-complete"
+                            : undefined}
+                        key={label}
+                      >
+                        <span>{String(index + 1).padStart(2, "0")}</span>{label}
+                      </li>
+                    ))}
                   </ol>
                 </section>
               )}
