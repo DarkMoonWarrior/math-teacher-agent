@@ -40,10 +40,60 @@ export const DEFAULT_MOCK_SCRIPT: MockScript = {
   finalText: "已根据工具返回的结构化结果完成查询。",
 };
 
+function messageText(message: GenerateOptions["messages"][number]): string {
+  const content = (message as { content?: unknown }).content;
+  if (typeof content === "string") return content;
+  if (!Array.isArray(content)) return "";
+  return content
+    .map((block) => {
+      if (typeof block === "string") return block;
+      if (block && typeof block === "object" && "text" in block) {
+        const text = (block as { text?: unknown }).text;
+        return typeof text === "string" ? text : "";
+      }
+      return "";
+    })
+    .join("\n");
+}
+
+function currentUserText(messages: GenerateOptions["messages"]): string {
+  const currentUserMessage = messages.findLast(
+    (message) => message.role === "user" && message.source.kind === "user",
+  );
+  return currentUserMessage ? messageText(currentUserMessage) : "";
+}
+
+function defaultScriptFor(messages: GenerateOptions["messages"]): MockScript {
+  const conversation = currentUserText(messages);
+  if (!conversation.includes("solve_question")) return DEFAULT_MOCK_SCRIPT;
+
+  const question = conversation.match(/题目：([\s\S]+)$/)?.[1]?.trim() || "解方程 2x-4=0。";
+  const solutionMode = conversation.match(/solution_mode：([^\n]+)/)?.[1]?.trim() || "standard";
+  return {
+    steps: [
+      {
+        kind: "tool",
+        toolName: "solve_question",
+        arguments: { question_text: question, solution_mode: solutionMode },
+      },
+    ],
+    finalText: "已返回受控工具生成的结构化解题结果。",
+  };
+}
+
 const MOCK_MODEL_ID = "mock-model";
 
 function assistantMessageCount(messages: GenerateOptions["messages"]): number {
   return messages.filter((message) => message.role === "assistant").length;
+}
+
+function assistantMessageCountInCurrentTurn(messages: GenerateOptions["messages"]): number {
+  const lastUserIndex = messages.findLastIndex(
+    (message) => message.role === "user" && message.source.kind === "user",
+  );
+  return messages
+    .slice(lastUserIndex + 1)
+    .filter((message) => message.role === "assistant").length;
 }
 
 function textChunk(text: string): StreamChunk[] {
@@ -77,7 +127,7 @@ function toolCallChunk(toolName: string, args: Record<string, unknown>, stepInde
  * 始终遵守 options.signal：中止后立即停止产出。
  */
 export class MockLlmAdapter extends LlmAdapter {
-  constructor(readonly script: MockScript = DEFAULT_MOCK_SCRIPT) {
+  constructor(readonly script?: MockScript) {
     super();
   }
 
@@ -94,10 +144,13 @@ export class MockLlmAdapter extends LlmAdapter {
   }
 
   async *stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
-    const stepIndex = assistantMessageCount(options.messages);
-    const step = stepIndex < this.script.steps.length ? this.script.steps[stepIndex] : undefined;
+    const script = this.script ?? defaultScriptFor(options.messages);
+    const stepIndex = this.script
+      ? assistantMessageCount(options.messages)
+      : assistantMessageCountInCurrentTurn(options.messages);
+    const step = stepIndex < script.steps.length ? script.steps[stepIndex] : undefined;
     const chunks = step === undefined
-      ? textChunk(this.script.finalText)
+      ? textChunk(script.finalText)
       : step.kind === "text"
         ? textChunk(step.text)
         : toolCallChunk(step.toolName, step.arguments, stepIndex);
@@ -107,5 +160,3 @@ export class MockLlmAdapter extends LlmAdapter {
     }
   }
 }
-
-

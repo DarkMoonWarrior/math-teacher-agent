@@ -6,13 +6,15 @@
 
 ## 当前能做什么
 
-- 新教师工作台与搜题／教案／组卷能力导航；
+- 新教师工作台与搜题／解题／教案／组卷能力导航；
 - 可信 Search Agent：自然语言意图、教材映射、真实题库检索、去重与多样性；
 - 题目来源、权利状态、验证状态和条件放宽披露；
 - 产品自有 `TeacherAgentRuntime` 与隔离的 DeepSeek Harness adapter；
+- M5 Solve 后端编排：唯一可信 Tool 结果、分级数学验证、运行/流式/取消/恢复；
+- Solve 工作台：完整题目输入、Search 题目转入、结构化三页解析与 MathVerifier 证据；
 - QuestionBank、MathVerifier、Curriculum、PrivateLibrary、PDF、试卷、教案等成熟业务模块。
 
-当前只有 Search Agent 接入新工作台。教案和组卷在新 UI 中是明确标记的工作流预览，不能运行，也不代表 Agent 已完成。最新状态见 [`docs/PROJECT-STATUS.md`](docs/PROJECT-STATUS.md)。
+当前 Search 与 Solve Agent 已接入新工作台；Solve 的固定 synthetic eval 与完整 M5 Gate E 已严格通过。M6 仍需项目所有者确认后才可启动，教案和组卷在新 UI 中继续明确标记为工作流预览。最新状态见 [`docs/PROJECT-STATUS.md`](docs/PROJECT-STATUS.md)。
 
 ## 核心原则
 
@@ -64,6 +66,7 @@ pnpm setup:env
 
 ```dotenv
 MATH_AI_SEARCH_AGENT_ENABLED=true
+MATH_AI_SOLVE_AGENT_ENABLED=true
 MATH_AI_API_INTERNAL_URL=http://127.0.0.1:8000
 MATH_AI_AGENT_RUNTIME=dsh
 MATH_AI_AGENT_PROVIDER=test-mock
@@ -81,7 +84,7 @@ pnpm dev:web
 - FastAPI 文档：<http://127.0.0.1:8000/docs>
 - Agent Service 健康检查：<http://127.0.0.1:4100/health>（需要 M2M 认证）
 
-`test-mock` 是确定性本地模型，不需要 DeepSeek Key；它仍然经过真实 Harness、Tool gateway 和业务门禁。使用真实模型时才把 provider 改为 `deepseek-official` 并在私有 `.env` 中设置 Key。
+`test-mock` 是确定性本地模型，不需要 DeepSeek Key；它会按 Search/Solve 受控指令选择对应 Tool，且仍然经过真实 Harness、Tool gateway 和业务门禁。代码中的 Solve feature gate 默认关闭；本地示例为当前 M5 联调显式开启。使用真实模型时才把 provider 改为 `deepseek-official` 并在私有 `.env` 中设置 Key。
 
 ## 常用命令
 
@@ -98,7 +101,7 @@ pnpm build:agent
 
 ## 当前开发顺序
 
-`Search 稳定化 → Solve → Private Library → Paper → Lesson → Memory → Beta 准备 → Beta 验证 → 商业基础 → Teacher Pro → 教研组 → 学校`
+`Search 稳定化（完成） → Solve（完成，等待阶段确认） → Private Library（未启动） → Paper → Lesson → Memory → Beta 准备 → Beta 验证 → 商业基础 → Teacher Pro → 教研组 → 学校`
 
 不要并行铺开后续阶段。最新版 M0-M15 路线见 [`docs/ROADMAP.md`](docs/ROADMAP.md)，每阶段和商业发布门禁见 [`docs/PRODUCT-GATES.md`](docs/PRODUCT-GATES.md)。
 

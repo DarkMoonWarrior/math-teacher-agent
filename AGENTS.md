@@ -22,11 +22,12 @@ The current product line is the new `apps/teacher-web` experience. `apps/web` is
 ## Current product state
 
 - `Search Agent`: implemented in the FastAPI business backend and exposed in the new teacher workbench.
-- `TeacherAgentRuntime` and the isolated DeepSeek Harness adapter: implemented with six controlled read-only tools; `solve_question` was added for M5 through the FastAPI business module.
+- `Solve Agent`: backend workflow and new Teacher Web flow are connected, including structured solution pages, Search-to-Solve transfer, graded MathVerifier evidence, cancellation, and same-run recovery.
+- `TeacherAgentRuntime` and the isolated DeepSeek Harness adapter: implemented with six controlled read-only tools; M5 now has a product-owned FastAPI Solve workflow with run/stream/cancel/resume lifecycle and graded MathVerifier evidence.
 - `Lesson Agent` and `Paper Agent`: navigation and requirement-drafting previews only in `apps/teacher-web`; their Agent runtimes/tools are not connected.
-- Mature lesson-plan, paper, import, library, solution, curriculum, question-bank, and verification modules exist in the migrated backend/legacy UI. Existing REST workflows do not mean the corresponding new Agent capability is complete.
+- M5 passed its fixed synthetic evaluation and full Gate E audit on 2026-08-21. Mature lesson-plan, paper, import, library, solution, curriculum, question-bank, and verification modules exist in the migrated backend/legacy UI. Existing REST workflows do not mean the corresponding new Agent capability is complete.
 - Teacher identity, cloud isolation, billing, and public commercial operation are not implemented.
-- M0-M4 are complete. M5 Solve Agent is the only active milestone; M6 and later must not start before the M5 Gate and owner confirmation.
+- M0-M5 are complete. The project is waiting for explicit owner confirmation before M6; M6 and later must not start during this transition hold.
 
 ## Repository seams
 

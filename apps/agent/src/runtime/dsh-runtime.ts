@@ -104,10 +104,7 @@ export class DeepSeekHarnessRuntime implements TeacherAgentRuntime {
       sessionRoot: this.config.sessionRoot,
       plugin: {
         gateway: this.gateway,
-        mockScript: this.mockScript ?? {
-          steps: [{ kind: "tool", toolName: "search_questions", arguments: { query: "x+2=5", limit: 5 } }],
-          finalText: "已根据工具返回的结构化结果完成查询。",
-        },
+        mockScript: this.mockScript,
         logger: this.logger,
       },
     }).catch((cause) => {
@@ -671,4 +668,3 @@ export class DeepSeekHarnessRuntime implements TeacherAgentRuntime {
     if (!state.runIds.includes(runId)) state.runIds.push(runId);
   }
 }
-

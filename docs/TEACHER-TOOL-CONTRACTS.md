@@ -21,9 +21,13 @@
 - 认证：`Authorization: Bearer <MATH_AI_TOOL_GATEWAY_TOKEN>`
 - 请求：`question_text`、`solution_mode=standard|alternative`、可选 `teacher_instruction`
 - 业务接口：`SolutionAssistant.solve(SolutionRequest) -> SolutionResult`
-- 成功响应：结构化解法、最终答案、知识点、易错点、教学提示、`confidence_status`、`verification_evidence`、provider/model、mode、匹配题目与 warnings
+- 成功响应：结构化解法、最终答案、知识点、易错点、教学提示、`confidence_status`、`math_verification`、`verification_evidence`、provider/model、mode、匹配题目 ID、题库修订计数与 warnings
+- `math_verification`：包含 `status=passed|failed|inconclusive`、`capability=supported|unsupported`、验证 `scope`、证据来源、方法、独立答案、来源答案、明细与 verifier 版本
 - 已验证题库解析：`mode=verified_bank`、`confidence_status=program_verified`
 - 模型新解答：`mode=live_ai`、`confidence_status=teacher_review_required`
+- 任意模型新解答未被现有 MathVerifier 覆盖时：`math_verification=unsupported/inconclusive`，scope 为 `generated_solution`
+- 精确匹配到来源矛盾题：不得继承可信解析；无模型时 HTTP 409 + `VERIFICATION_FAILED`，有模型时仍保持 `teacher_review_required` 并保留冲突证据及 `matched_question_record` scope
+- 精确匹配到证据不足题：不得继承可信解析；无模型时 HTTP 409 + `VERIFICATION_INCONCLUSIVE`
 - 无已验证解析且模型不可用：HTTP 503 + `MODEL_UNAVAILABLE`
 - 超时：HTTP 504 + `TOOL_TIMEOUT`
 

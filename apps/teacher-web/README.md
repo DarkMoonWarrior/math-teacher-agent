@@ -4,8 +4,10 @@
 
 ## 当前能力
 
-- 搜题、教案、组卷三项 Agent 能力导航；
+- 搜题、解题、教案、组卷四项 Agent 能力导航；
 - Search Agent 单次真实流式请求、服务端取消、错误/空结果/可信状态；
+- Solve Agent 单次真实流式请求、同一 run 恢复、服务端取消与结构化错误；
+- 完整题目输入、Search 结果一键转入解题、三页纸张式解析／课堂提示／MathVerifier 证据；
 - 教案与组卷需求草稿及工作流预览（运行时尚未接入，提交按钮禁用）；
 - 桌面与手机响应式动态纸张画布。
 
@@ -19,10 +21,11 @@ pnpm dev:teacher
 
 访问 <http://127.0.0.1:3001>。Next.js 将同源 `/api/v1/*` 转发到 `MATH_AI_API_INTERNAL_URL`，默认是 `http://127.0.0.1:8000`。
 
-要使用 Search Agent，需要同时启动 FastAPI 与 `apps/agent`，并设置：
+要使用 Search 与 Solve Agent，需要同时启动 FastAPI 与 `apps/agent`，并设置：
 
 ```dotenv
 MATH_AI_SEARCH_AGENT_ENABLED=true
+MATH_AI_SOLVE_AGENT_ENABLED=true
 MATH_AI_AGENT_RUNTIME=dsh
 MATH_AI_AGENT_PROVIDER=test-mock
 ```
@@ -32,7 +35,7 @@ MATH_AI_AGENT_PROVIDER=test-mock
 ## 模块 seam
 
 - `lib/teacher-workspace/contracts.ts`：UI 可见的稳定接口和结果模型。
-- `lib/teacher-workspace/http-adapter.ts`：同源 FastAPI adapter；内部处理 SSE 和服务端取消，不向 React 泄漏传输细节。
+- `lib/teacher-workspace/http-adapter.ts`：Search/Solve 同源 FastAPI adapter；内部处理 SSE、同一 run 恢复和服务端取消，不向 React 泄漏传输细节。
 - `components/workbench/teacher-workbench.tsx`：视图与交互状态。
 
 React 代码不得依赖数据库、Harness 类型、供应商响应或后端内部存储字段。

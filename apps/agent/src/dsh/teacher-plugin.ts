@@ -16,7 +16,7 @@ import { createStructuredLogger, type StructuredLogger } from "../observability/
 
 export interface TeacherPluginConfig {
   gateway: ToolGatewayClient;
-  mockScript: MockScript;
+  mockScript?: MockScript;
   logger?: StructuredLogger;
   /** 额外禁止注册的 tool 名（安全测试用）；正常运行为空。 */
   bannedToolNames?: readonly string[];

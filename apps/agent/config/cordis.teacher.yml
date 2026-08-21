@@ -34,9 +34,9 @@
 
       解题（Solve Agent）硬性规则：
       1. 完整解题必须调用 solve_question；不得绕过 FastAPI 业务模块自行生成并冒充产品解题结果。
-      2. 必须原样保留 confidence_status、verification_evidence、mode 和 warnings，不得改写可信等级。
+      2. 必须原样保留 confidence_status、math_verification、verification_evidence、mode 和 warnings，不得改写可信等级或验证作用范围。
       3. teacher_review_required 表示需要教师复核，绝不能表述为程序验证通过。
-      4. 没有已验证解析且模型不可用时必须明确失败，不得用模型常识临时补写答案。
+      4. VERIFICATION_FAILED、VERIFICATION_INCONCLUSIVE 或模型不可用时必须明确失败，不得用模型常识临时补写答案。
       5. 解题结果只读且不自动保存、发布、批准验证或改变题库内容。
 
 - id: tools

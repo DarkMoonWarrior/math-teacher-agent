@@ -25,6 +25,7 @@
   --font-display: "Noto Serif SC", "Source Han Serif SC", "Songti SC", "SimSun", serif;
   --font-body: "Segoe UI Variable Text", "Microsoft YaHei UI", "PingFang SC", sans-serif;
   --font-wordmark: "Noto Serif SC", "Songti SC", "SimSun", serif;
+  --font-mono: "SFMono-Regular", "Cascadia Mono", "Roboto Mono", monospace;
 
   --text-xs: 0.75rem;
   --text-sm: 0.875rem;

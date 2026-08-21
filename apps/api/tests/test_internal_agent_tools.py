@@ -245,8 +245,11 @@ def test_solve_question_prefers_verified_bank_solution(gateway_client: TestClien
     payload = response.json()
     assert payload["request_id"] == "req_test_001"
     assert payload["matched_question_id"] == source["question_id"]
+    assert payload["matched_question_revision_count"] >= 0
     assert payload["mode"] == "verified_bank"
     assert payload["confidence_status"] == "program_verified"
+    assert payload["math_verification"]["status"] == "passed"
+    assert payload["math_verification"]["scope"] == "question_answer"
     assert payload["verification_evidence"]
     assert payload["explanation"]["steps"]
 
@@ -288,7 +291,43 @@ def test_solve_question_generated_result_is_never_marked_verified(
     payload = response.json()
     assert payload["mode"] == "live_ai"
     assert payload["confidence_status"] == "teacher_review_required"
-    assert "尚未经过独立数学程序" in " ".join(payload["verification_evidence"])
+    assert payload["math_verification"]["status"] == "inconclusive"
+    assert payload["math_verification"]["capability"] == "unsupported"
+    assert "不支持" in " ".join(payload["verification_evidence"])
+
+
+def test_solve_question_rejects_known_failed_bank_record(
+    gateway_client: TestClient,
+) -> None:
+    bank = gateway.get_question_bank()
+    source = bank.search(
+        verification_status="source_inconsistency_detected", page_size=1
+    ).items[0]
+
+    response = gateway_client.post(
+        "/internal/agent-tools/v1/solve-question",
+        json={"question_text": source.stem_plain},
+        headers=_auth(),
+    )
+
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "VERIFICATION_FAILED"
+
+
+def test_solve_question_rejects_inconclusive_bank_record_without_model(
+    gateway_client: TestClient,
+) -> None:
+    bank = gateway.get_question_bank()
+    source = bank.search(verification_status="needs_math_review", page_size=1).items[0]
+
+    response = gateway_client.post(
+        "/internal/agent-tools/v1/solve-question",
+        json={"question_text": source.stem_plain},
+        headers=_auth(),
+    )
+
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "VERIFICATION_INCONCLUSIVE"
 
 
 def test_solve_question_without_verified_match_or_model_is_explicit(

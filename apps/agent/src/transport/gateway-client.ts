@@ -79,11 +79,23 @@ export interface SolveQuestionResponse {
   common_mistakes: string[];
   teaching_notes: string[];
   confidence_status: "program_verified" | "model_reviewed" | "teacher_review_required";
+  math_verification: {
+    status: "passed" | "failed" | "inconclusive";
+    capability: "supported" | "unsupported";
+    scope: "question_answer" | "matched_question_record" | "generated_solution";
+    evidence_source: "math_verifier" | "teacher_evidence" | "stored_status" | "none";
+    method: string | null;
+    computed_answer: string | null;
+    source_answer: string | null;
+    details: string[];
+    verifier_version: string | null;
+  };
   verification_evidence: string[];
   provider: string;
   model: string;
   mode: "verified_bank" | "live_ai";
   matched_question_id: string | null;
+  matched_question_revision_count: number | null;
   match_score: number | null;
   alternative_available: boolean;
   warnings: string[];
@@ -236,15 +248,20 @@ export class ToolGatewayClient {
     if (payload !== null && typeof payload === "object") {
       const code = (payload as { code?: unknown }).code;
       const message = (payload as { message?: unknown }).message;
+      const payloadRequestId = (payload as { request_id?: unknown }).request_id;
       if (typeof code === "string" && typeof message === "string") {
-        return { code: code as TeacherAgentErrorCode, message: String(message).slice(0, 500), request_id: requestId };
+        return {
+          code: code as TeacherAgentErrorCode,
+          message: String(message).slice(0, 500),
+          request_id: typeof payloadRequestId === "string" ? payloadRequestId : requestId,
+        };
       }
-      const error = (payload as { error?: { code?: unknown; message?: unknown } }).error;
+      const error = (payload as { error?: { code?: unknown; message?: unknown; request_id?: unknown } }).error;
       if (error && typeof error === "object" && typeof error.code === "string") {
         return {
           code: error.code as TeacherAgentErrorCode,
           message: String(error.message ?? "网关错误").slice(0, 500),
-          request_id: requestId,
+          request_id: typeof error.request_id === "string" ? error.request_id : requestId,
         };
       }
     }

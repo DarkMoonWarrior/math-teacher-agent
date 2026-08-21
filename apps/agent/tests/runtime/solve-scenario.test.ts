@@ -16,6 +16,65 @@ describe("Solve Agent deterministic harness scenario", () => {
     if (harness) await harness.close();
   });
 
+  it("routes the default development mock to solve_question from the trusted solve instruction", async () => {
+    harness = await createRuntimeHarness({
+      handlers: {
+        [SOLVE_QUESTION_ROUTE]: ({ body }) => ({
+          status: 200,
+          body: {
+            question_text: body.question_text,
+            solution_mode: body.solution_mode,
+            explanation: { method: "代数法", steps: ["移项。"], final_answer: "x=2" },
+            knowledge_points: ["一元一次方程"],
+            common_mistakes: [],
+            teaching_notes: [],
+            confidence_status: "teacher_review_required",
+            math_verification: {
+              status: "inconclusive", capability: "unsupported", scope: "generated_solution",
+              evidence_source: "none", method: null, computed_answer: null, source_answer: null,
+              details: ["需要教师复核。"], verifier_version: null,
+            },
+            verification_evidence: ["需要教师复核。"],
+            provider: "test-mock", model: "mock-model", mode: "live_ai",
+            matched_question_id: null, matched_question_revision_count: null,
+            match_score: null, alternative_available: false,
+            warnings: ["请由教师复核。"], request_id: "req_default_mock_solve",
+          },
+        }),
+      },
+    });
+
+    const result = await harness.runtime.run({
+      user_message: [
+        "请完成下面这道高中数学题的可信解题。必须且只能调用一次 solve_question。",
+        "solution_mode：standard",
+        "题目：解方程 2x-4=0。",
+      ].join("\n"),
+      request_id: "req_default_mock_route",
+    });
+
+    expect(result.status).toBe("completed");
+    expect(result.tool_calls.map((call) => call.tool_name)).toEqual(["solve_question"]);
+    expect(result.tool_calls[0]?.input).toMatchObject({
+      question_text: "解方程 2x-4=0。",
+      solution_mode: "standard",
+    });
+
+    const repeated = await harness.runtime.run({
+      user_message: [
+        "请完成下面这道高中数学题的可信解题。必须且只能调用一次 solve_question。",
+        "solution_mode：standard",
+        "题目：解方程 3x-6=0。",
+      ].join("\n"),
+      session_id: result.session_id,
+      request_id: "req_default_mock_route_2",
+    });
+
+    expect(repeated.status).toBe("completed");
+    expect(repeated.tool_calls.map((call) => call.tool_name)).toEqual(["solve_question"]);
+    expect(repeated.tool_calls[0]?.input.question_text).toBe("解方程 3x-6=0。");
+  });
+
   it("runs through the allowlisted solve tool and preserves teacher-review status", async () => {
     harness = await createRuntimeHarness({
       handlers: {
@@ -33,11 +92,23 @@ describe("Solve Agent deterministic harness scenario", () => {
             common_mistakes: ["移项时忘记变号"],
             teaching_notes: ["教师复核后使用"],
             confidence_status: "teacher_review_required",
-            verification_evidence: ["答案与解析由大模型生成，尚未经过独立数学程序或第二模型复核。"],
+            math_verification: {
+              status: "inconclusive",
+              capability: "unsupported",
+              scope: "generated_solution",
+              evidence_source: "none",
+              method: null,
+              computed_answer: null,
+              source_answer: null,
+              details: ["当前 MathVerifier 不支持对此完整推导做独立验证。"],
+              verifier_version: null,
+            },
+            verification_evidence: ["当前 MathVerifier 不支持对此完整推导做独立验证。"],
             provider: "fake_model",
             model: "fake-solver-v1",
             mode: "live_ai",
             matched_question_id: null,
+            matched_question_revision_count: null,
             match_score: null,
             alternative_available: true,
             warnings: ["请由教师核对后再用于教学。"],
@@ -66,10 +137,16 @@ describe("Solve Agent deterministic harness scenario", () => {
     expect(result.tool_calls.map((call) => call.tool_name)).toEqual(["solve_question"]);
     const output = result.tool_calls[0]?.output as {
       confidence_status: string;
+      math_verification: { status: string; capability: string; scope: string };
       verification_evidence: string[];
     };
     expect(output.confidence_status).toBe("teacher_review_required");
-    expect(output.verification_evidence.join(" ")).toContain("尚未经过独立数学程序");
+    expect(output.math_verification).toMatchObject({
+      status: "inconclusive",
+      capability: "unsupported",
+      scope: "generated_solution",
+    });
+    expect(output.verification_evidence.join(" ")).toContain("不支持");
     expect(result.final_text).not.toContain("程序验证通过");
 
     const call = harness.stub.requests.find((request) => request.route === SOLVE_QUESTION_ROUTE);
@@ -116,5 +193,54 @@ describe("Solve Agent deterministic harness scenario", () => {
     expect(output.confidence_status).toBe("teacher_review_required");
     expect(output.error.code).toBe("MODEL_UNAVAILABLE");
     expect(output.error.message).not.toContain("fake-solver");
+  });
+
+  it("preserves a MathVerifier failure and never lets the model overwrite it", async () => {
+    harness = await createRuntimeHarness({
+      handlers: {
+        [SOLVE_QUESTION_ROUTE]: () => ({
+          status: 409,
+          body: {
+            error: {
+              code: "VERIFICATION_FAILED",
+              message: "匹配题目的独立数学验证未通过，不能作为可信解析返回。",
+              request_id: "req_stub_verification_failed",
+            },
+          },
+        }),
+      },
+      mockScript: {
+        steps: [
+          {
+            kind: "tool",
+            toolName: "solve_question",
+            arguments: { question_text: "一道已知来源答案矛盾的题目。" },
+          },
+        ],
+        finalText: "该题已有独立验证冲突，不能作为可信解析使用。",
+      },
+    });
+
+    const result = await harness.runtime.run({
+      user_message: "请解这道来源答案有冲突的题。",
+      request_id: "req_solve_verification_failed",
+    });
+
+    const output = result.tool_calls[0]?.output as {
+      ok: boolean;
+      confidence_status: string;
+      math_verification: { status: string; capability: string; scope: string };
+      error: { code: string };
+    };
+    expect(output.ok).toBe(false);
+    expect(output.confidence_status).toBe("teacher_review_required");
+    expect(output.math_verification).toMatchObject({
+      status: "failed",
+      capability: "supported",
+      scope: "matched_question_record",
+    });
+    expect(output.error.code).toBe("VERIFICATION_FAILED");
+    expect(result.final_text).not.toContain("程序验证通过");
+    expect(result.tool_calls[0]?.output?.request_id).toBe("req_stub_verification_failed");
   });
 });

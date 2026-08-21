@@ -1,8 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
   ERROR_GUIDANCE,
+  evidenceSourceLabel,
+  mathVerificationLabel,
   questionTypeLabel,
+  solutionConfidenceLabel,
+  solutionConfidenceTone,
   sourceLabel,
+  verificationScopeLabel,
   verificationLabel,
   verificationTone,
 } from "./labels";
@@ -24,6 +29,16 @@ describe("Teacher Workspace labels", () => {
     expect(verificationLabel("source_inconsistency_detected")).toBe("来源答案存在冲突");
     expect(verificationTone("needs_math_review")).toBe("review");
     expect(verificationTone("source_inconsistency_detected")).toBe("review");
+  });
+
+  it("keeps Solve confidence and MathVerifier scope distinct", () => {
+    expect(solutionConfidenceLabel("program_verified")).toContain("程序验证通过");
+    expect(solutionConfidenceTone("program_verified")).toBe("trusted");
+    expect(solutionConfidenceLabel("teacher_review_required")).toContain("教师复核");
+    expect(solutionConfidenceTone("teacher_review_required")).toBe("review");
+    expect(mathVerificationLabel("inconclusive", "unsupported")).toContain("不支持");
+    expect(verificationScopeLabel("generated_solution")).toContain("生成解答");
+    expect(evidenceSourceLabel("none")).toContain("暂无独立验证证据");
   });
 
   it("provides explicit guidance for model, permission, validation and Tool failures", () => {

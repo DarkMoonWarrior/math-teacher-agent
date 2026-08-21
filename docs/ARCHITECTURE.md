@@ -27,10 +27,10 @@ apps/web (legacy/reference Next.js UI, :3000)
 ### Teacher Workspace module
 
 - Seam: `apps/teacher-web/lib/teacher-workspace/contracts.ts`.
-- Interface: UI submits a teaching task and receives product-owned progress stages, structured results and errors.
-- Adapter: current HTTP adapter consumes the same-origin Search SSE route, exposes only `connecting / understanding / searching / checking / recovering` progress, returns one structured result, and maps `AbortSignal` to explicit run cancellation.
-- Recovery: after a transport interruption with a known `run_id`, the adapter performs one read-only `GET /api/v1/agent/search/{run_id}/stream` snapshot lookup. It never repeats the Search `POST` or Tool execution; a snapshot without a saved terminal state becomes `STREAM_RECOVERY_FAILED`.
-- Transport: `apps/teacher-web/app/api/v1/agent/search/stream/route.ts` is an exact no-buffer streaming proxy to FastAPI; other same-origin API paths continue to use the general Next.js rewrite.
+- Interface: UI submits Search or Solve teaching tasks and receives product-owned progress stages, structured results and errors.
+- Adapter: the HTTP adapter consumes same-origin Search/Solve SSE routes, exposes only product progress, returns one structured result, and maps `AbortSignal` to explicit run cancellation.
+- Recovery: after a transport interruption with a known `run_id`, the adapter performs one read-only snapshot lookup for that capability. It never repeats the Search/Solve `POST` or Tool execution; a snapshot without a saved terminal state becomes `STREAM_RECOVERY_FAILED`.
+- Transport: `apps/teacher-web/app/api/v1/agent/{search,solve}/stream/route.ts` are exact no-buffer streaming proxies to FastAPI; other same-origin API paths continue to use the general Next.js rewrite.
 - Rule: React views do not know SSE parsing, backend storage, Harness events, provider payloads, or raw database fields.
 
 ### Search Agent module
@@ -40,6 +40,15 @@ apps/web (legacy/reference Next.js UI, :3000)
 - Lifecycle: `POST /api/v1/agent/search/stream` executes one real runtime stream; `run_id` is registered before delivery, disconnect/cancel reaches the same in-flight run, and later snapshot reads never execute the query again.
 - Trust: model deltas and Tool input/output remain inside FastAPI; the browser receives only payload-free progress events and the final grounded `SearchAgentResponse`.
 - Rule: structured business results are the source of truth; model prose cannot add facts.
+
+### Solve Agent module（M5 已完成）
+
+- Seam: `SolveAgentWorkflow.run/stream/cancel/resume`、`SolveAgentCommand` 与 `SolveAgentResponse`。
+- Lifecycle: FastAPI 公开接口拥有同步执行、单次真实 SSE、进程内 run 快照、在途取消与同 session 恢复；路由和业务模块均不 import Harness 类型。
+- Trust: 一次成功 run 必须且只能包含一次成功的 `solve_question` Tool 调用；最终 `SolutionResult` 只从该结构化输出建立。模型自由文本、额外 Tool 调用、失败 Tool 伪装的成功 payload、可信等级与验证证据冲突都会被拒绝。
+- Exposure: 浏览器只接收无原始 input/output 的 Tool 进度和结构化终态；`math_verification` 的 status、capability、scope 和 evidence source 由业务模块拥有。
+- UI: `TeacherWorkspace.solveQuestion` 通过同源无缓冲流接入；教师可输入完整题目或从 Search 结果转入，并在三页纸张中查看结构化解析、课堂提示与独立验证证据。
+- Current boundary: 代码 feature gate 默认关闭，本地显式开启；固定 synthetic eval 与完整 Gate E 已通过。M6 仍需项目所有者确认后才可启动。
 
 ### Teacher Agent Runtime module
 
@@ -95,8 +104,9 @@ The primary UI should normally call `/api/v1` on its own origin. Next.js rewrite
 
 ## 6. Testing at the seam
 
-- UI adapter tests and type checks target `TeacherWorkspace` observable progress, completion, failure and cancellation states, plus the exact same-origin streaming proxy.
+- UI adapter tests and type checks target Search/Solve observable progress, completion, same-run recovery, failure and cancellation states, plus both exact same-origin streaming proxies.
 - Search tests target `SearchAgentPipeline` and the HTTP route, not private ranking internals alone.
+- Solve tests target 唯一 Tool 证据、可信字段校验、结构化错误、真实 SSE、取消、恢复和 feature gate。
 - Runtime conformance tests exercise both runtime adapters through the product-owned interface.
 - Security tests enforce the exact read-only Tool allowlist and absence of database access in `apps/agent`.
 - Business tests use synthetic/local adapters and assert published behaviour, rights, verification and privacy invariants.
