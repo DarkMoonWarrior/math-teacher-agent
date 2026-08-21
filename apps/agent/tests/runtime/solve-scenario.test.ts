@@ -16,6 +16,64 @@ describe("Solve Agent deterministic harness scenario", () => {
     if (harness) await harness.close();
   });
 
+  it("routes the default development mock to solve_question from the trusted solve instruction", async () => {
+    harness = await createRuntimeHarness({
+      handlers: {
+        [SOLVE_QUESTION_ROUTE]: ({ body }) => ({
+          status: 200,
+          body: {
+            question_text: body.question_text,
+            solution_mode: body.solution_mode,
+            explanation: { method: "代数法", steps: ["移项。"], final_answer: "x=2" },
+            knowledge_points: ["一元一次方程"],
+            common_mistakes: [],
+            teaching_notes: [],
+            confidence_status: "teacher_review_required",
+            math_verification: {
+              status: "inconclusive", capability: "unsupported", scope: "generated_solution",
+              evidence_source: "none", method: null, computed_answer: null, source_answer: null,
+              details: ["需要教师复核。"], verifier_version: null,
+            },
+            verification_evidence: ["需要教师复核。"],
+            provider: "test-mock", model: "mock-model", mode: "live_ai",
+            matched_question_id: null, match_score: null, alternative_available: false,
+            warnings: ["请由教师复核。"], request_id: "req_default_mock_solve",
+          },
+        }),
+      },
+    });
+
+    const result = await harness.runtime.run({
+      user_message: [
+        "请完成下面这道高中数学题的可信解题。必须且只能调用一次 solve_question。",
+        "solution_mode：standard",
+        "题目：解方程 2x-4=0。",
+      ].join("\n"),
+      request_id: "req_default_mock_route",
+    });
+
+    expect(result.status).toBe("completed");
+    expect(result.tool_calls.map((call) => call.tool_name)).toEqual(["solve_question"]);
+    expect(result.tool_calls[0]?.input).toMatchObject({
+      question_text: "解方程 2x-4=0。",
+      solution_mode: "standard",
+    });
+
+    const repeated = await harness.runtime.run({
+      user_message: [
+        "请完成下面这道高中数学题的可信解题。必须且只能调用一次 solve_question。",
+        "solution_mode：standard",
+        "题目：解方程 3x-6=0。",
+      ].join("\n"),
+      session_id: result.session_id,
+      request_id: "req_default_mock_route_2",
+    });
+
+    expect(repeated.status).toBe("completed");
+    expect(repeated.tool_calls.map((call) => call.tool_name)).toEqual(["solve_question"]);
+    expect(repeated.tool_calls[0]?.input.question_text).toBe("解方程 3x-6=0。");
+  });
+
   it("runs through the allowlisted solve tool and preserves teacher-review status", async () => {
     harness = await createRuntimeHarness({
       handlers: {

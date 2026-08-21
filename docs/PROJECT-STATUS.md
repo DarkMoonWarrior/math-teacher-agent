@@ -22,12 +22,12 @@
 
 | 能力 | 状态 | 当前事实 |
 | --- | --- | --- |
-| 新教师工作台 | 可用 | `apps/teacher-web`，端口 3001；新 UI、Agent 导航、任务输入、动态纸张、真实 Search 进度与结果状态。 |
+| 新教师工作台 | 可用 | `apps/teacher-web`，端口 3001；新 UI、四能力导航、任务输入、动态纸张，以及真实 Search/Solve 进度与结果状态。 |
 | Search Agent | 可用 | FastAPI SearchAgentPipeline + `/api/v1/agent/search/stream`；单次真实流式执行、同一 run 终态恢复、在途 run 登记、服务端取消、可信标签、相对年份透明解析、放宽披露与空结果。需启用 Search、选择 DSH runtime 并启动 Agent Service。 |
 | TeacherAgentRuntime | 可用 | Python 产品接口、Legacy adapter、DSH HTTP adapter；默认 legacy，DSH 不可达时默认不静默降级。 |
-| DeepSeek Harness Service | 可用（开发/测试） | `apps/agent`；六个受控只读工具、mock provider、取消/恢复/安全测试。真实模型需私有环境变量。 |
+| DeepSeek Harness Service | 可用（开发/测试） | `apps/agent`；六个受控只读工具、按 Search/Solve 指令分流的 deterministic mock provider、取消/恢复/安全测试。真实模型需私有环境变量。 |
 | QuestionBank / MathVerifier / Curriculum | 后端已有 | 核心业务资产继续复用，不因新 UI 重写。 |
-| Solve Agent | 开发中 | 复用旧 `SolutionAssistant` 可信分层；受控只读 `solve_question` Tool 与产品自有 `SolveAgentWorkflow` 已接入，支持同步/真实 SSE/run 快照/取消/同会话恢复，并原样透传 MathVerifier 分级证据。新工作台解题界面、synthetic eval、浏览器矩阵和 M5 Gate 尚未完成。 |
+| Solve Agent | 开发中 | 复用旧 `SolutionAssistant` 可信分层；受控只读 `solve_question` Tool、产品自有 `SolveAgentWorkflow` 与新工作台已接入，支持完整题目输入、Search 转入、同步/真实 SSE/run 快照/取消/同会话恢复和三页可信结果。synthetic eval 与完整 M5 Gate 尚未完成。 |
 | Private Library / PDF import | 后端已有 | 私有资料和导入模块存在；新的 Private Library Agent 与新 UI 尚未实现。 |
 | Paper | 界面预览 + 后端已有 | 新 UI 可整理组卷需求，但按钮明确禁用；旧 exam_papers 模块不是 Paper Agent 完成证明。 |
 | Lesson | 界面预览 + 后端已有 | 新 UI 可整理教案需求，但按钮明确禁用；旧 lesson_plans 模块不是 Lesson Agent 完成证明。 |
@@ -38,8 +38,8 @@
 ## 2026-08-21 验证快照
 
 - FastAPI：267 项测试通过；另有 1 条来自 Starlette TestClient 的依赖弃用提示。
-- Agent Runtime：类型检查、35 项测试和生产构建通过（含 Solve Tool seam、验证冲突/模型不可用失败路径与 SSE 客户端断开取消）。
-- 新教师工作台：类型检查、13 项 TeacherWorkspace / 同源流 Route / 展示契约测试和生产构建通过。
+- Agent Runtime：类型检查、36 项测试和生产构建通过（含 Solve Tool seam、开发 mock 能力分流、验证冲突/模型不可用失败路径与 SSE 客户端断开取消）。
+- 新教师工作台：类型检查、19 项 TeacherWorkspace / Search 与 Solve 同源流 Route / 展示契约测试和生产构建通过。
 - 新教师工作台浏览器验收：320px 无关键横向溢出；记录抽屉的初始焦点、Tab 约束、Escape 关闭、焦点返回和关闭态 `inert` 通过；检索完成与历史恢复会自动定位结果区，新任务会返回输入区并恢复焦点；延迟 SSE 下理解、搜索、可信核对、中途取消和同一 run 恢复状态均可见。
 - Search 故障体验验收：模型不可用、Tool 超时、网络失败、权限拒绝均展示明确原因、处置建议与请求编号，输入框恢复可编辑且允许重试；真实 QuestionBank 枚举 `single_choice`、`passed` 和 `commercial_granted` 分别显示为“单选题”“程序验证通过”和“已获商业使用授权”，未验证或冲突状态不会使用可信样式。
 - Search 恢复故障演练：主流中断后严格保持一次 Search `POST`，仅追加一次同一 `run_id` 的只读快照 `GET`；有终态时恢复结果，无终态时展示 `STREAM_RECOVERY_FAILED` 和请求编号。
@@ -48,7 +48,8 @@
 - 相对年份浏览器验收：按请求发生时的北京时间自然年解释“近 N 年”并包含当前年；2026-08-21 的“近两年”透明披露为 2025—2026；无数字“近年”不设置年份硬条件并提示教师改用明确表达；完成后自动定位结果，320px 下无关键横向溢出。
 - M5 第一条 vertical slice：`solve_question` 经 M2M FastAPI Tool Gateway 接入 Harness；题库已验证解析保持 `program_verified`，模型新解答保持 `teacher_review_required`，无解析/模型与超时均返回结构化错误；尚未接入新 Teacher Web 完整解题工作流。
 - M5 第二条 vertical slice：解题结果新增 MathVerifier 分级对象；题库通过、来源矛盾、证据不足和模型新解答不支持自动验证四类状态可区分，验证作用范围不能被 Agent 改写；任意新题的通用数学验证能力仍未虚构。
-- M5 第三条 vertical slice：产品自有 `SolveAgentWorkflow` 与公开 FastAPI 生命周期已实现；只接受唯一成功的 `solve_question` 结构化输出，模型自由文本与原始 Tool payload 不越过业务 seam；同步、SSE、终态快照、在途取消、失败/取消后同 session 恢复、feature gate 与错误分类均有自动测试。新 Teacher Web 仍未接入，不能把此项标记为 M5 完成。
+- M5 第三条 vertical slice：产品自有 `SolveAgentWorkflow` 与公开 FastAPI 生命周期已实现；只接受唯一成功的 `solve_question` 结构化输出，模型自由文本与原始 Tool payload 不越过业务 seam；同步、SSE、终态快照、在途取消、失败/取消后同 session 恢复、feature gate 与错误分类均有自动测试。
+- M5 第四条 vertical slice：新 Teacher Web 已接入 Solve；教师可输入完整题目或从 Search 题目转入，页面在运行与成功终态自动定位结果区，并以三页纸张分别展示解析、课堂提示和 MathVerifier 证据。320/375/414/768/1440px 无关键横向溢出，本地 `test-mock` 真实链路可返回题库精确匹配、`program_verified`、独立答案和 verifier 版本；模型不可用时仍诚实失败。M5 synthetic eval 与完整 Gate E 仍未完成。
 
 ## 已知未决项
 

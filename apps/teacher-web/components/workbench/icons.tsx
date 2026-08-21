@@ -26,6 +26,15 @@ export function SearchIcon(props: IconProps) {
   );
 }
 
+export function FormulaIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <path d="M4.5 7h3l2 10 3-12h7" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.6" />
+      <path d="M14 11h5M16.5 8.5v5" stroke="currentColor" strokeLinecap="round" strokeWidth="1.6" />
+    </IconBase>
+  );
+}
+
 export function ShieldIcon(props: IconProps) {
   return (
     <IconBase {...props}>

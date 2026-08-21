@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { SearchTaskProgressStage, SearchTaskResult } from "./contracts";
+import type {
+  SearchTaskProgressStage,
+  SearchTaskResult,
+  SolveTaskProgressStage,
+  SolveTaskResult,
+} from "./contracts";
 import { HttpTeacherWorkspace } from "./http-adapter";
 
 const encoder = new TextEncoder();
@@ -51,6 +56,53 @@ function resultFixture(): SearchTaskResult {
     duration_ms: 12,
     tool_call_count: 1,
     candidate_count: 1,
+    error: null,
+  };
+}
+
+function solveResultFixture(): SolveTaskResult {
+  return {
+    request_id: "req_solve_1",
+    session_id: "tch_solve_1",
+    run_id: "run_solve_1",
+    status: "ok",
+    question_text: "解方程 2x-4=0。",
+    solution_mode: "standard",
+    solution: {
+      question_text: "解方程 2x-4=0。",
+      solution_mode: "standard",
+      explanation: {
+        method: "代数法",
+        steps: ["移项得 2x=4。", "两边同除以 2，得到 x=2。"],
+        final_answer: "x=2",
+      },
+      knowledge_points: ["一元一次方程"],
+      common_mistakes: ["移项忘记变号"],
+      teaching_notes: ["提醒学生核验代入结果"],
+      confidence_status: "teacher_review_required",
+      math_verification: {
+        status: "inconclusive",
+        capability: "unsupported",
+        scope: "generated_solution",
+        evidence_source: "none",
+        method: null,
+        computed_answer: null,
+        source_answer: null,
+        details: ["当前 MathVerifier 不支持完整推导验证。"],
+        verifier_version: null,
+      },
+      verification_evidence: ["当前 MathVerifier 不支持完整推导验证。"],
+      provider: "fake_model",
+      model: "fake-solver-v1",
+      mode: "live_ai",
+      matched_question_id: null,
+      match_score: null,
+      alternative_available: true,
+      warnings: ["请由教师复核"],
+    },
+    tool_request_id: "req_tool_solve",
+    duration_ms: 24,
+    tool_call_count: 1,
     error: null,
   };
 }
@@ -293,5 +345,116 @@ describe("HttpTeacherWorkspace", () => {
       expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith("/run_live/cancel"))).toBe(true);
     });
     expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith("/run_live/stream"))).toBe(false);
+  });
+
+  it("returns a structured Solve result and reports trusted progress stages", async () => {
+    const result = solveResultFixture();
+    vi.stubGlobal("fetch", vi.fn(async () => streamResponse([
+      { type: "run_started", run_id: "run_solve_1", request_id: "req_solve_1", data: {} },
+      { type: "tool_started", run_id: "run_solve_1", request_id: "req_solve_1", data: { tool_name: "solve_question" } },
+      { type: "tool_finished", run_id: "run_solve_1", request_id: "req_solve_1", data: { tool_name: "solve_question", status: "ok" } },
+      {
+        type: "run_completed",
+        run_id: "run_solve_1",
+        request_id: "req_solve_1",
+        data: { solve_response: result },
+      },
+    ])));
+    const stages: SolveTaskProgressStage[] = [];
+
+    const workspace = new HttpTeacherWorkspace();
+    await expect(workspace.solveQuestion(
+      { questionText: "解方程 2x-4=0。", sessionId: "tch_solve_1" },
+      { onProgress: ({ stage }) => stages.push(stage) },
+    )).resolves.toEqual(result);
+
+    expect(stages).toEqual(["connecting", "understanding", "solving", "verifying"]);
+    expect(fetch).toHaveBeenCalledWith(
+      "/api/v1/agent/solve/stream",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          question_text: "解方程 2x-4=0。",
+          session_id: "tch_solve_1",
+          solution_mode: "standard",
+          teacher_instruction: "",
+        }),
+      }),
+    );
+  });
+
+  it("recovers the same Solve run snapshot without repeating execution", async () => {
+    const result = solveResultFixture();
+    const fetchMock = vi.fn((input: RequestInfo | URL, _init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/run_solve_1/stream")) {
+        return Promise.resolve(streamResponse([
+          { type: "run_started", run_id: "run_solve_1", request_id: "req_solve_1", data: {} },
+          {
+            type: "run_completed",
+            run_id: "run_solve_1",
+            request_id: "req_solve_1",
+            data: { solve_response: result },
+          },
+        ]));
+      }
+      return Promise.resolve(streamResponse([
+        { type: "run_started", run_id: "run_solve_1", request_id: "req_solve_1", data: {} },
+      ]));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const workspace = new HttpTeacherWorkspace();
+    await expect(workspace.solveQuestion({
+      questionText: "解方程 2x-4=0。",
+      sessionId: "tch_solve_1",
+    })).resolves.toEqual(result);
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({ method: "POST" });
+    expect(String(fetchMock.mock.calls[1]?.[0])).toBe("/api/v1/agent/solve/run_solve_1/stream");
+  });
+
+  it("maps Solve AbortSignal to the Solve cancel endpoint", async () => {
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/run_solve_live/cancel")) {
+        return Promise.resolve(new Response(JSON.stringify({ status: "cancelled" }), { status: 200 }));
+      }
+      const stream = new ReadableStream({
+        start(controller) {
+          controller.enqueue(eventBlock({
+            type: "run_started",
+            run_id: "run_solve_live",
+            request_id: "req_solve_live",
+            data: {},
+          }));
+          init?.signal?.addEventListener("abort", () => {
+            controller.error(new DOMException("cancelled", "AbortError"));
+          }, { once: true });
+        },
+      });
+      return Promise.resolve(new Response(stream, {
+        status: 200,
+        headers: { "Content-Type": "text/event-stream" },
+      }));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const controller = new AbortController();
+    const workspace = new HttpTeacherWorkspace();
+    const pending = workspace.solveQuestion(
+      { questionText: "解方程 2x-4=0。", sessionId: "tch_solve_live" },
+      { signal: controller.signal },
+    );
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    controller.abort();
+
+    await expect(pending).rejects.toMatchObject({ name: "AbortError" });
+    await vi.waitFor(() => {
+      expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith("/run_solve_live/cancel"))).toBe(true);
+    });
+    expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith("/run_solve_live/stream"))).toBe(false);
   });
 });

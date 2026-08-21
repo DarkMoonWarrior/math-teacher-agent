@@ -14,6 +14,8 @@ import {
   type SearchQuestion,
   type SearchTaskProgressStage,
   type SearchTaskResult,
+  type SolveTaskProgressStage,
+  type SolveTaskResult,
   TeacherWorkspaceError,
 } from "@/lib/teacher-workspace/contracts";
 import { teacherWorkspace } from "@/lib/teacher-workspace/http-adapter";
@@ -21,6 +23,7 @@ import {
   difficultyLabel,
   ERROR_GUIDANCE,
   questionTypeLabel,
+  solutionConfidenceLabel,
   sourceLabel,
   verificationLabel,
   verificationTone,
@@ -33,21 +36,33 @@ import {
   CheckIcon,
   ClockIcon,
   CloseIcon,
+  FormulaIcon,
   HistoryIcon,
   PaperIcon,
   PlusIcon,
   SearchIcon,
 } from "./icons";
+import { SolvePaper, SolveResultBrief } from "./solve-paper";
 
 type Phase = "idle" | "running" | "success" | "error" | "cancelled";
 type FlipDirection = "next" | "previous";
-type CapabilityId = "search" | "lesson" | "paper";
+type CapabilityId = "search" | "solve" | "lesson" | "paper";
 
-type TaskRecord = {
+type SearchTaskRecord = {
   id: string;
+  capability: "search";
   query: string;
   result: SearchTaskResult;
 };
+
+type SolveTaskRecord = {
+  id: string;
+  capability: "solve";
+  query: string;
+  result: SolveTaskResult;
+};
+
+type TaskRecord = SearchTaskRecord | SolveTaskRecord;
 
 type ViewError = {
   code: string;
@@ -56,6 +71,12 @@ type ViewError = {
 };
 
 type SearchProgressDefinition = {
+  stageTitle: string;
+  paperTitle: string;
+  activeStep: number;
+};
+
+type SolveProgressDefinition = {
   stageTitle: string;
   paperTitle: string;
   activeStep: number;
@@ -90,7 +111,7 @@ type CapabilityDefinition = {
   pages: PreviewPage[];
 };
 
-const CAPABILITY_ORDER: CapabilityId[] = ["search", "lesson", "paper"];
+const CAPABILITY_ORDER: CapabilityId[] = ["search", "solve", "lesson", "paper"];
 
 const SEARCH_PROGRESS: Record<SearchTaskProgressStage, SearchProgressDefinition> = {
   connecting: {
@@ -124,6 +145,40 @@ const SEARCH_PROGRESS_STEPS = [
   "解析教学描述",
   "调用受控搜索工具",
   "核对来源与验证状态",
+];
+
+const SOLVE_PROGRESS: Record<SolveTaskProgressStage, SolveProgressDefinition> = {
+  connecting: {
+    stageTitle: "正在建立可信连接",
+    paperTitle: "正在连接受控解题工作流",
+    activeStep: 0,
+  },
+  understanding: {
+    stageTitle: "正在理解题目条件",
+    paperTitle: "正在核对题目与解题要求",
+    activeStep: 0,
+  },
+  solving: {
+    stageTitle: "正在形成结构化解析",
+    paperTitle: "正在通过唯一受控工具解题",
+    activeStep: 1,
+  },
+  verifying: {
+    stageTitle: "正在核对数学证据",
+    paperTitle: "正在确认验证范围与可信等级",
+    activeStep: 2,
+  },
+  recovering: {
+    stageTitle: "正在恢复同一次解题",
+    paperTitle: "连接中断，正在取回已保存的解题结果",
+    activeStep: 3,
+  },
+};
+
+const SOLVE_PROGRESS_STEPS = [
+  "理解题目条件",
+  "调用受控解题工具",
+  "核对验证范围与证据",
 ];
 
 const CAPABILITIES: Record<CapabilityId, CapabilityDefinition> = {
@@ -174,6 +229,56 @@ const CAPABILITIES: Record<CapabilityId, CapabilityDefinition> = {
         eyebrow: "返回可信记录",
         title: "来源与验证状态，和题目一起出现。",
         body: "没有满足条件的真实记录时，系统会明确告诉你，而不是临时编一道。",
+      },
+    ],
+  },
+  solve: {
+    id: "solve",
+    label: "解题",
+    ready: true,
+    status: "Solve Agent 已接入",
+    title: ["把一道题，", "讲到可以上课。"],
+    intro: "输入完整题目，系统优先查找已有可信解析；需要模型生成时会明确标记教师复核，并单独展示 MathVerifier 能力、范围和证据。",
+    inputLabel: "输入完整数学题目",
+    placeholder: "例如：已知函数 f(x)=x³-3x，求其单调区间与极值",
+    actionLabel: "开始解题",
+    stageLabel: "解题工作方式",
+    stageTitle: "从题目，到分层可信解析",
+    examples: [
+      {
+        label: "函数单调性",
+        detail: "导数 · 极值 · 标准解析",
+        query: "已知函数 f(x)=x³-3x，求其单调区间与极值。",
+      },
+      {
+        label: "椭圆离心率",
+        detail: "圆锥曲线 · 参数范围",
+        query: "已知椭圆 x²/a²+y²/b²=1（a>b>0）的焦距为 2c，且 a=2c，求椭圆的离心率。",
+      },
+      {
+        label: "数列求和",
+        detail: "等差数列 · 前 n 项和",
+        query: "等差数列 {aₙ} 中，a₁=3，公差 d=2，求前 n 项和 Sₙ。",
+      },
+    ],
+    pages: [
+      {
+        index: "01",
+        eyebrow: "提交完整题目",
+        title: "先保留题目的全部条件。",
+        body: "公式、定义域和问题目标共同进入受控解题工作流，不从一句残缺描述猜题。",
+      },
+      {
+        index: "02",
+        eyebrow: "形成结构化解析",
+        title: "方法、步骤与答案分开呈现。",
+        body: "解析通过业务模块生成；Agent 不能用自由文本替代受控 Tool 的结构化结果。",
+      },
+      {
+        index: "03",
+        eyebrow: "核对可信范围",
+        title: "验证到哪里，就只说到哪里。",
+        body: "程序验证、题库证据和模型新解使用不同标记；不支持验证时明确要求教师复核。",
       },
     ],
   },
@@ -299,12 +404,23 @@ function intentLabels(result: SearchTaskResult): string[] {
 }
 
 function CapabilityIcon({ id }: { id: CapabilityId }) {
+  if (id === "solve") return <FormulaIcon />;
   if (id === "lesson") return <BookIcon />;
   if (id === "paper") return <PaperIcon />;
   return <SearchIcon />;
 }
 
-function QuestionPaper({ item, index, total }: { item: SearchQuestion; index: number; total: number }) {
+function QuestionPaper({
+  item,
+  index,
+  onSolve,
+  total,
+}: {
+  item: SearchQuestion;
+  index: number;
+  onSolve: (item: SearchQuestion) => void;
+  total: number;
+}) {
   return (
     <article className="question-paper">
       <header className="question-paper__head">
@@ -334,6 +450,9 @@ function QuestionPaper({ item, index, total }: { item: SearchQuestion; index: nu
         <span>{difficultyLabel(item.difficulty)}</span>
         {item.year !== null && <span>{item.year} 年</span>}
         {item.region && <span>{item.region}</span>}
+        <button className="solve-question-button" type="button" onClick={() => onSolve(item)}>
+          解这道题 <ArrowRightIcon />
+        </button>
       </footer>
 
       {item.relaxed_fields.length > 0 && (
@@ -377,18 +496,30 @@ export function TeacherWorkbench() {
   const [capability, setCapability] = useState<CapabilityId>("search");
   const [drafts, setDrafts] = useState<Record<CapabilityId, string>>({
     search: "",
+    solve: "",
     lesson: "",
     paper: "",
   });
-  const [phase, setPhase] = useState<Phase>("idle");
+  const [phases, setPhases] = useState<Record<CapabilityId, Phase>>({
+    search: "idle",
+    solve: "idle",
+    lesson: "idle",
+    paper: "idle",
+  });
   const [result, setResult] = useState<SearchTaskResult | null>(null);
-  const [error, setError] = useState<ViewError | null>(null);
+  const [solveResult, setSolveResult] = useState<SolveTaskResult | null>(null);
+  const [errors, setErrors] = useState<Record<"search" | "solve", ViewError | null>>({
+    search: null,
+    solve: null,
+  });
   const [searchProgress, setSearchProgress] = useState<SearchTaskProgressStage>("connecting");
+  const [solveProgress, setSolveProgress] = useState<SolveTaskProgressStage>("connecting");
   const [history, setHistory] = useState<TaskRecord[]>([]);
   const [touched, setTouched] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [previewPage, setPreviewPage] = useState(0);
   const [questionPage, setQuestionPage] = useState(0);
+  const [solvePage, setSolvePage] = useState(0);
   const [turning, setTurning] = useState(false);
   const [flipDirection, setFlipDirection] = useState<FlipDirection>("next");
   const sessionRef = useRef("");
@@ -403,22 +534,47 @@ export function TeacherWorkbench() {
 
   const definition = CAPABILITIES[capability];
   const query = drafts[capability];
+  const phase = phases[capability];
   const searchVisible = capability === "search";
-  const running = searchVisible && phase === "running";
-  const validationMessage = searchVisible && touched && !query.trim() ? "先写下要找什么题。" : "";
+  const solveVisible = capability === "solve";
+  const runnable = searchVisible || solveVisible;
+  const error = runnable ? errors[capability as "search" | "solve"] : null;
+  const running = runnable && phase === "running";
+  const trimmedQuery = query.trim();
+  const queryValid = searchVisible ? Boolean(trimmedQuery) : solveVisible ? trimmedQuery.length >= 5 : false;
+  const validationMessage = runnable && touched && !queryValid
+    ? searchVisible
+      ? "先写下要找什么题。"
+      : "请输入一道完整题目，至少 5 个字符。"
+    : "";
   const intent = useMemo(() => (result ? intentLabels(result) : []), [result]);
   const activeQuestion = result?.results[questionPage] ?? null;
   const showingSearchResult = searchVisible && phase === "success" && Boolean(result?.results.length);
   const showingEmptySearchResult = searchVisible && phase === "success" && result?.results.length === 0;
-  const pageCount = showingSearchResult && result
+  const showingSolveResult = solveVisible && phase === "success" && Boolean(solveResult?.solution);
+  const pageCount = showingSolveResult
+    ? 3
+    : showingSearchResult && result
     ? result.results.length
     : showingEmptySearchResult
       ? 1
       : definition.pages.length;
-  const pageIndex = showingSearchResult ? questionPage : previewPage;
-  const progressSteps = searchProgress === "recovering"
-    ? [...SEARCH_PROGRESS_STEPS, "恢复同一次运行"]
-    : SEARCH_PROGRESS_STEPS;
+  const pageIndex = showingSolveResult ? solvePage : showingSearchResult ? questionPage : previewPage;
+  const progressSteps = solveVisible
+    ? solveProgress === "recovering"
+      ? [...SOLVE_PROGRESS_STEPS, "恢复同一次运行"]
+      : SOLVE_PROGRESS_STEPS
+    : searchProgress === "recovering"
+      ? [...SEARCH_PROGRESS_STEPS, "恢复同一次运行"]
+      : SEARCH_PROGRESS_STEPS;
+
+  function setPhase(nextPhase: Phase, target: CapabilityId = capability) {
+    setPhases((current) => ({ ...current, [target]: nextPhase }));
+  }
+
+  function setError(nextError: ViewError | null, target: "search" | "solve" = capability as "search" | "solve") {
+    setErrors((current) => ({ ...current, [target]: nextError }));
+  }
 
   function updateQuery(value: string) {
     setDrafts((current) => ({ ...current, [capability]: value }));
@@ -501,40 +657,73 @@ export function TeacherWorkbench() {
 
   async function runTask(event?: FormEvent<HTMLFormElement>) {
     event?.preventDefault();
-    if (!searchVisible) return;
+    if (!runnable) return;
     const trimmed = query.trim();
     setTouched(true);
-    if (!trimmed || running) return;
+    if (!queryValid || running) return;
 
     if (!sessionRef.current) sessionRef.current = createSessionId();
     const requestSequence = ++requestSequenceRef.current;
     const controller = new AbortController();
     abortRef.current = controller;
     setPhase("running");
-    setSearchProgress("connecting");
+    if (searchVisible) setSearchProgress("connecting");
+    else setSolveProgress("connecting");
     setError(null);
     setQuestionPage(0);
+    setSolvePage(0);
     scrollToResultRegion();
 
     try {
-      const nextResult = await teacherWorkspace.searchQuestions(
-        { query: trimmed, sessionId: sessionRef.current },
-        {
-          signal: controller.signal,
-          onProgress: (progress) => {
-            if (requestSequence === requestSequenceRef.current) {
-              setSearchProgress(progress.stage);
-            }
+      if (searchVisible) {
+        const nextResult = await teacherWorkspace.searchQuestions(
+          { query: trimmed, sessionId: sessionRef.current },
+          {
+            signal: controller.signal,
+            onProgress: (progress) => {
+              if (requestSequence === requestSequenceRef.current) {
+                setSearchProgress(progress.stage);
+              }
+            },
           },
-        },
-      );
-      if (requestSequence !== requestSequenceRef.current) return;
-      setResult(nextResult);
-      setHistory((current) => [
-        { id: nextResult.run_id || nextResult.request_id, query: trimmed, result: nextResult },
-        ...current.filter((item) => item.id !== nextResult.run_id).slice(0, 5),
-      ]);
+        );
+        if (requestSequence !== requestSequenceRef.current) return;
+        setResult(nextResult);
+        setHistory((current) => [
+          {
+            id: nextResult.run_id || nextResult.request_id,
+            capability: "search",
+            query: trimmed,
+            result: nextResult,
+          },
+          ...current.filter((item) => item.id !== nextResult.run_id).slice(0, 7),
+        ]);
+      } else {
+        const nextResult = await teacherWorkspace.solveQuestion(
+          { questionText: trimmed, sessionId: sessionRef.current },
+          {
+            signal: controller.signal,
+            onProgress: (progress) => {
+              if (requestSequence === requestSequenceRef.current) {
+                setSolveProgress(progress.stage);
+              }
+            },
+          },
+        );
+        if (requestSequence !== requestSequenceRef.current) return;
+        setSolveResult(nextResult);
+        setHistory((current) => [
+          {
+            id: nextResult.run_id || nextResult.request_id,
+            capability: "solve",
+            query: trimmed,
+            result: nextResult,
+          },
+          ...current.filter((item) => item.id !== nextResult.run_id).slice(0, 7),
+        ]);
+      }
       setPhase("success");
+      scrollToResultRegion();
     } catch (cause) {
       if (requestSequence !== requestSequenceRef.current) return;
       if (cause instanceof DOMException && cause.name === "AbortError") {
@@ -552,7 +741,7 @@ export function TeacherWorkbench() {
   }
 
   function handleComposerKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
-    if (searchVisible && (event.ctrlKey || event.metaKey) && event.key === "Enter") {
+    if (runnable && (event.ctrlKey || event.metaKey) && event.key === "Enter") {
       event.preventDefault();
       void runTask();
     }
@@ -593,6 +782,12 @@ export function TeacherWorkbench() {
       setPhase("idle");
       setQuestionPage(0);
     }
+    if (solveVisible) {
+      setSolveResult(null);
+      setError(null);
+      setPhase("idle");
+      setSolvePage(0);
+    }
     returnToComposer();
   }
 
@@ -600,19 +795,35 @@ export function TeacherWorkbench() {
     requestSequenceRef.current += 1;
     abortRef.current?.abort();
     abortRef.current = null;
-    setCapability("search");
-    setDrafts((current) => ({ ...current, search: task.query }));
-    setResult(task.result);
-    setError(null);
-    setQuestionPage(0);
-    setPhase("success");
+    setCapability(task.capability);
+    setDrafts((current) => ({ ...current, [task.capability]: task.query }));
+    if (task.capability === "search") {
+      setResult(task.result);
+      setQuestionPage(0);
+    } else {
+      setSolveResult(task.result);
+      setSolvePage(0);
+    }
+    setError(null, task.capability);
+    setPhase("success", task.capability);
     setHistoryOpen(false);
     scrollToResultRegion();
   }
 
+  function continueToSolve(item: SearchQuestion) {
+    if (turning || running) return;
+    setDrafts((current) => ({ ...current, solve: item.stem || item.stem_preview }));
+    setSolveResult(null);
+    setError(null, "solve");
+    setPhase("idle", "solve");
+    setSolvePage(0);
+    selectCapability("solve");
+    window.setTimeout(returnToComposer, 480);
+  }
+
   function turnPage(direction: FlipDirection) {
     if (turning || pageCount < 2) return;
-    const current = showingSearchResult ? questionPage : previewPage;
+    const current = showingSolveResult ? solvePage : showingSearchResult ? questionPage : previewPage;
     const next = direction === "next"
       ? (current + 1) % pageCount
       : (current - 1 + pageCount) % pageCount;
@@ -620,7 +831,8 @@ export function TeacherWorkbench() {
     setTurning(true);
     if (turnTimerRef.current !== null) window.clearTimeout(turnTimerRef.current);
     turnTimerRef.current = window.setTimeout(() => {
-      if (showingSearchResult) setQuestionPage(next);
+      if (showingSolveResult) setSolvePage(next);
+      else if (showingSearchResult) setQuestionPage(next);
       else setPreviewPage(next);
       setTurning(false);
     }, 440);
@@ -628,10 +840,14 @@ export function TeacherWorkbench() {
 
   const stageTitle = searchVisible && phase === "success" && result
     ? `${result.returned_count} 道题已整理成册`
+    : solveVisible && phase === "success" && solveResult?.solution
+      ? "解析、课堂提示与可信证据已整理"
     : running
-      ? SEARCH_PROGRESS[searchProgress].stageTitle
-      : searchVisible && phase === "error"
-        ? "检索暂时中断"
+      ? solveVisible
+        ? SOLVE_PROGRESS[solveProgress].stageTitle
+        : SEARCH_PROGRESS[searchProgress].stageTitle
+      : runnable && phase === "error"
+        ? solveVisible ? "解题暂时中断" : "检索暂时中断"
         : definition.stageTitle;
 
   return (
@@ -665,7 +881,7 @@ export function TeacherWorkbench() {
           </nav>
 
           <div className="nav-actions">
-            <button ref={historyTriggerRef} className="icon-button" type="button" onClick={() => setHistoryOpen(true)} aria-label="查看搜题记录">
+            <button ref={historyTriggerRef} className="icon-button" type="button" onClick={() => setHistoryOpen(true)} aria-label="查看任务记录">
               <HistoryIcon />
               {history.length > 0 && <span>{history.length}</span>}
             </button>
@@ -694,7 +910,7 @@ export function TeacherWorkbench() {
                 aria-describedby="teacher-task-help"
                 aria-busy={running}
                 aria-invalid={Boolean(validationMessage)}
-                aria-required={definition.ready}
+                aria-required={runnable}
                 onBlur={() => {
                   if (definition.ready) setTouched(true);
                 }}
@@ -710,14 +926,14 @@ export function TeacherWorkbench() {
               />
               <div className="composer-actions">
                 <span id="teacher-task-help" className={validationMessage ? "form-error" : "form-help"}>
-                  {validationMessage || (definition.ready ? "Ctrl ↵ 运行" : "可以先整理需求；该 Agent 尚未接入运行时。")}
+                  {validationMessage || (runnable ? "Ctrl ↵ 运行" : "可以先整理需求；该 Agent 尚未接入运行时。")}
                 </span>
                 {running ? (
                   <button className="cancel-button" type="button" onClick={() => abortRef.current?.abort()}>
                     <CloseIcon /><span>取消</span>
                   </button>
                 ) : (
-                  <button className="run-button" type="submit" disabled={!definition.ready || !query.trim()}>
+                  <button className="run-button" type="submit" disabled={!runnable || !queryValid}>
                     <span>{definition.actionLabel}</span><ArrowUpIcon />
                   </button>
                 )}
@@ -742,7 +958,7 @@ export function TeacherWorkbench() {
         <section className="visual-pane" aria-live="polite" ref={resultRegionRef}>
           <header className="visual-pane__head">
             <div>
-              <span>{searchVisible && phase === "success" ? "检索结果" : definition.stageLabel}</span>
+              <span>{searchVisible && phase === "success" ? "检索结果" : solveVisible && phase === "success" ? "解题结果" : definition.stageLabel}</span>
               <h2>{stageTitle}</h2>
             </div>
             <div className="page-controls" aria-label="翻页控制">
@@ -756,19 +972,19 @@ export function TeacherWorkbench() {
             <div className="paper-shadow paper-shadow--back" aria-hidden="true" />
             <div className="paper-shadow paper-shadow--middle" aria-hidden="true" />
             <div className={`paper-leaf${turning ? ` is-turning is-turning--${flipDirection}` : ""}`}>
-              {(!searchVisible || phase === "idle") && <PreviewPaper capability={capability} page={previewPage} />}
+              {(!runnable || phase === "idle") && <PreviewPaper capability={capability} page={previewPage} />}
               {running && (
                 <section className="process-paper">
                   <span className="orbit-loader" aria-hidden="true"><i /><i /><i /></span>
-                  <p>SEARCH / CONTROLLED TOOLS</p>
-                  <h2>{SEARCH_PROGRESS[searchProgress].paperTitle}</h2>
+                  <p>{solveVisible ? "SOLVE / CONTROLLED TOOL" : "SEARCH / CONTROLLED TOOLS"}</p>
+                  <h2>{solveVisible ? SOLVE_PROGRESS[solveProgress].paperTitle : SEARCH_PROGRESS[searchProgress].paperTitle}</h2>
                   <ol>
                     {progressSteps.map((label, index) => (
                       <li
-                        aria-current={index === SEARCH_PROGRESS[searchProgress].activeStep ? "step" : undefined}
-                        className={index === SEARCH_PROGRESS[searchProgress].activeStep
+                        aria-current={index === (solveVisible ? SOLVE_PROGRESS[solveProgress].activeStep : SEARCH_PROGRESS[searchProgress].activeStep) ? "step" : undefined}
+                        className={index === (solveVisible ? SOLVE_PROGRESS[solveProgress].activeStep : SEARCH_PROGRESS[searchProgress].activeStep)
                           ? "is-active"
-                          : index < SEARCH_PROGRESS[searchProgress].activeStep
+                          : index < (solveVisible ? SOLVE_PROGRESS[solveProgress].activeStep : SEARCH_PROGRESS[searchProgress].activeStep)
                             ? "is-complete"
                             : undefined}
                         key={label}
@@ -779,14 +995,14 @@ export function TeacherWorkbench() {
                   </ol>
                 </section>
               )}
-              {searchVisible && phase === "cancelled" && (
+              {runnable && phase === "cancelled" && (
                 <section className="message-paper">
                   <ClockIcon /><p>任务已取消</p>
                   <h2>没有保存本次结果。</h2>
                   <span>可以修改描述后重新运行。</span>
                 </section>
               )}
-              {searchVisible && phase === "error" && error && (
+              {runnable && phase === "error" && error && (
                 <section className="message-paper message-paper--error" role="alert">
                   <span className="error-code">{error.code}</span>
                   <h2>任务没有完成</h2>
@@ -797,7 +1013,7 @@ export function TeacherWorkbench() {
                 </section>
               )}
               {searchVisible && phase === "success" && result && activeQuestion && (
-                <QuestionPaper item={activeQuestion} index={questionPage} total={result.results.length} />
+                <QuestionPaper item={activeQuestion} index={questionPage} onSolve={continueToSolve} total={result.results.length} />
               )}
               {searchVisible && phase === "success" && result && result.results.length === 0 && (
                 <section className="message-paper empty-paper">
@@ -808,6 +1024,9 @@ export function TeacherWorkbench() {
                     <button type="button" onClick={() => updateQuery(result.suggestions[0])}>采用放宽建议 <ArrowRightIcon /></button>
                   )}
                 </section>
+              )}
+              {solveVisible && phase === "success" && solveResult?.solution && (
+                <SolvePaper page={solvePage} result={solveResult} />
               )}
             </div>
           </div>
@@ -830,6 +1049,9 @@ export function TeacherWorkbench() {
               )}
             </section>
           )}
+          {solveVisible && phase === "success" && solveResult?.solution && (
+            <SolveResultBrief result={solveResult} />
+          )}
         </section>
       </main>
 
@@ -850,18 +1072,23 @@ export function TeacherWorkbench() {
         role="dialog"
       >
         <header>
-          <div><span>本次会话</span><h2 id="history-drawer-title">搜题记录</h2></div>
+          <div><span>本次会话</span><h2 id="history-drawer-title">任务记录</h2></div>
           <button ref={historyCloseRef} className="icon-button" type="button" onClick={() => setHistoryOpen(false)} aria-label="关闭"><CloseIcon /></button>
         </header>
         {history.length === 0 ? (
-          <div className="history-empty"><ClockIcon /><p>完成的检索会暂存在这里。</p><span>刷新页面后清空。</span></div>
+          <div className="history-empty"><ClockIcon /><p>完成的搜题与解题会暂存在这里。</p><span>刷新页面后清空。</span></div>
         ) : (
           <ol>
             {history.map((task) => (
               <li key={task.id}>
                 <button type="button" onClick={() => openTask(task)}>
                   <span>{querySummary(task.query)}</span>
-                  <small>{task.result.returned_count} 道题 <ArrowRightIcon /></small>
+                  <small>
+                    {task.capability === "search"
+                      ? `${task.result.returned_count} 道题`
+                      : solutionConfidenceLabel(task.result.solution?.confidence_status ?? "")}
+                    <ArrowRightIcon />
+                  </small>
                 </button>
               </li>
             ))}
