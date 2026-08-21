@@ -12,8 +12,8 @@
 
 ## 当前路线基线
 
-- M0-M3：已完成，不因路线重排返工。
-- **M4 Search 集成稳定化：当前唯一开发里程碑。**
+- M0-M4：已完成，不因路线重排返工；M4 Gate E 于 2026-08-21 严格通过。
+- **当前处于阶段转换等待状态：M5 必须由项目所有者确认后启动。**
 - M5-M9：五个独立 Agent 工作流，均未开始。
 - M10-M11：Closed Beta 准备与数据验证，均未开始。
 - M12-M15：商业基础、Teacher Pro、教研组和学校，均未开始。
@@ -23,7 +23,7 @@
 | 能力 | 状态 | 当前事实 |
 | --- | --- | --- |
 | 新教师工作台 | 可用 | `apps/teacher-web`，端口 3001；新 UI、Agent 导航、任务输入、动态纸张、真实 Search 进度与结果状态。 |
-| Search Agent | 可用 | FastAPI SearchAgentPipeline + `/api/v1/agent/search/stream`；单次真实流式执行、同一 run 终态恢复、在途 run 登记、服务端取消、可信标签、放宽披露与空结果。需启用 Search、选择 DSH runtime 并启动 Agent Service。 |
+| Search Agent | 可用 | FastAPI SearchAgentPipeline + `/api/v1/agent/search/stream`；单次真实流式执行、同一 run 终态恢复、在途 run 登记、服务端取消、可信标签、相对年份透明解析、放宽披露与空结果。需启用 Search、选择 DSH runtime 并启动 Agent Service。 |
 | TeacherAgentRuntime | 可用 | Python 产品接口、Legacy adapter、DSH HTTP adapter；默认 legacy，DSH 不可达时默认不静默降级。 |
 | DeepSeek Harness Service | 可用（开发/测试） | `apps/agent`；五个只读工具、mock provider、取消/恢复/安全测试。真实模型需私有环境变量。 |
 | QuestionBank / MathVerifier / Curriculum | 后端已有 | 核心业务资产继续复用，不因新 UI 重写。 |
@@ -37,7 +37,7 @@
 
 ## 2026-08-21 验证快照
 
-- FastAPI：238 项测试通过；另有 1 条来自 Starlette TestClient 的依赖弃用提示。
+- FastAPI：242 项测试通过；另有 1 条来自 Starlette TestClient 的依赖弃用提示。
 - Agent Runtime：类型检查、31 项测试和生产构建通过（含 SSE 客户端断开取消）。
 - 新教师工作台：类型检查、13 项 TeacherWorkspace / 同源流 Route / 展示契约测试和生产构建通过。
 - 新教师工作台浏览器验收：320px 无关键横向溢出；记录抽屉的初始焦点、Tab 约束、Escape 关闭、焦点返回和关闭态 `inert` 通过；检索完成与历史恢复会自动定位结果区，新任务会返回输入区并恢复焦点；延迟 SSE 下理解、搜索、可信核对、中途取消和同一 run 恢复状态均可见。
@@ -45,10 +45,10 @@
 - Search 恢复故障演练：主流中断后严格保持一次 Search `POST`，仅追加一次同一 `run_id` 的只读快照 `GET`；有终态时恢复结果，无终态时展示 `STREAM_RECOVERY_FAILED` 和请求编号。
 - 旧界面：类型检查和生产构建通过，确保地基能力未被整理工作破坏。
 - 2026-08-21 本机 `test-mock` 真实链路复验：Teacher Web → 无缓冲同源流 Route → FastAPI → DeepSeek Harness Runtime → 受控 `search_questions` Tool 调用成功；页面可依次展示理解、搜索和可信核对阶段，空商业题库返回可信的 0 结果，不生成假题。
+- 相对年份浏览器验收：按请求发生时的北京时间自然年解释“近 N 年”并包含当前年；2026-08-21 的“近两年”透明披露为 2025—2026；无数字“近年”不设置年份硬条件并提示教师改用明确表达；完成后自动定位结果，320px 下无关键横向溢出。
 
 ## 已知未决项
 
-- **M4 Gate blocker：** SearchIntent 对相对年份（如“近两年”“近三年”）的基准日期、是否包含当前年，以及无数字“近年”的处理语义尚未由产品所有者确认。确认并完成实现、评测与浏览器复验前，M4 不宣告完成，M5 不启动。
 - 自由格式解释中的学校名/考试名等事实仍以结构化结果为唯一可信来源；通用实体消毒是后续增强。
 - Search run 记录当前为进程内实现；云端持久化在封闭测试阶段处理。
 - Lesson/Paper 导航当前只展示未来工作流和需求草稿，不调用后端生成。
@@ -59,4 +59,4 @@
 
 旧 `apps/web` 及 `docs/high-school-math-ai` 是新产品的业务地基，不是要照搬的产品界面。迁移原则是：复用成熟业务模块和测试，通过新的稳定接口逐项接入 Agent，而不是重新实现全部业务，也不是把旧页面换色后继续使用。
 
-当前 M4 的逐项审计证据见 [`M4-GATE-REVIEW.md`](M4-GATE-REVIEW.md)。
+M4 的逐项通过证据见 [`M4-GATE-REVIEW.md`](M4-GATE-REVIEW.md)。

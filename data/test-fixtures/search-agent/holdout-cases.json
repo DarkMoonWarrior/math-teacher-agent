@@ -1,7 +1,11 @@
 {
-  "holdout_set_id": "search-agent-holdout-v1",
+  "holdout_set_id": "search-agent-holdout-v2",
+  "supersedes": "search-agent-holdout-v1",
   "created_at": "2026-08-16",
-  "policy": "Holdout 集合：全部 query 由 math-teacher-agent 项目自行编写（synthetic=true, source=project_created），不复制原 50 条 eval query，不包含真实教师搜索记录或第三方内容。expected 字段在冻结 SearchIntentParser 实现之后、运行测试之前，依据产品语义与真实 Curriculum Catalog 节点独立编写；第一轮直接记录真实成绩，不针对实现回写。",
+  "updated_at": "2026-08-21",
+  "reference_date": "2026-08-21",
+  "revision_reason": "产品所有者确认相对年份按请求发生时的北京时间自然年解释，近 N 年包含当前年。只修订对应产品语义，不按实现结果回写其他期望。",
+  "policy": "Holdout 集合：全部 query 由 math-teacher-agent 项目自行编写（synthetic=true, source=project_created），不复制 eval query，不包含真实教师搜索记录或第三方内容。expected 字段依据已确认产品语义与真实 Curriculum Catalog 节点独立编写；相对年份统一使用 reference_date，其他字段不针对实现回写。",
   "synthetic": true,
   "source": "project_created",
   "commercial_safe": true,
@@ -39,14 +43,21 @@
           "江苏"
         ],
         "difficulty": 5,
-        "year_from": null,
-        "year_to": null,
+        "year_from": 2025,
+        "year_to": 2026,
         "knowledge_points_contains": [
           "导数"
         ],
         "chapter": "一元函数的导数及其应用",
+        "hard_fields": [
+          "year"
+        ],
         "soft_fields": [
           "difficulty"
+        ],
+        "parse_warnings_contains": [
+          "北京时间自然年",
+          "2025—2026"
         ]
       }
     },

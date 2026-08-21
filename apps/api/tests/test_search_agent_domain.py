@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import date
 from pathlib import Path
 
 from app.core.config import get_settings
@@ -9,10 +10,10 @@ from app.modules.curriculum.catalog import CsvCurriculumCatalog
 from app.modules.search_agent import SearchIntentParser, build_search_plan
 
 
-def _parser() -> SearchIntentParser:
+def _parser(*, reference_date: date | None = None) -> SearchIntentParser:
     csv_path = get_settings().curriculum_csv.resolve()
     catalog = CsvCurriculumCatalog(Path(csv_path))
-    return SearchIntentParser(catalog)
+    return SearchIntentParser(catalog, reference_date=reference_date)
 
 
 def test_default_count_and_usage():
@@ -44,6 +45,38 @@ def test_hard_vs_soft_markers():
     assert intent.year_from == 2025 and intent.year_to == 2025
     assert intent.question_types == ["single_choice"]
     assert intent.count == 4
+
+
+def test_relative_year_window_uses_injected_beijing_calendar_year():
+    intent = _parser(reference_date=date(2026, 1, 1)).parse("只要近两年江苏的导数题")
+    assert intent.year_from == 2025
+    assert intent.year_to == 2026
+    year = next(c for c in intent.constraints if c.field == "year")
+    assert year.value == [2025, 2026]
+    assert year.strength == "hard"
+    assert any("北京时间自然年" in warning and "2025—2026" in warning for warning in intent.parse_warnings)
+
+
+def test_relative_year_window_supports_arabic_and_chinese_numbers():
+    parser = _parser(reference_date=date(2026, 8, 21))
+    arabic = parser.parse("近3年的椭圆题")
+    chinese = parser.parse("近十二年的椭圆题")
+    assert (arabic.year_from, arabic.year_to) == (2024, 2026)
+    assert (chinese.year_from, chinese.year_to) == (2015, 2026)
+
+
+def test_vague_recent_year_never_becomes_an_invented_hard_filter():
+    intent = _parser(reference_date=date(2026, 8, 21)).parse("找近年江苏地区的导数解答题")
+    assert intent.year_from is None
+    assert intent.year_to is None
+    assert not any(c.field == "year" for c in intent.constraints)
+    assert any("未设置年份硬条件" in warning and "近两年" in warning for warning in intent.parse_warnings)
+
+
+def test_explicit_year_range_takes_precedence_over_relative_wording():
+    intent = _parser(reference_date=date(2035, 1, 1)).parse("优先找2023到2025年的题，不要近年的")
+    assert (intent.year_from, intent.year_to) == (2023, 2025)
+    assert not any("未设置年份硬条件" in warning for warning in intent.parse_warnings)
 
 
 def test_soft_preference_recorded_as_soft():

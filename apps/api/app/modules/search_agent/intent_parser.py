@@ -13,6 +13,8 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+from datetime import date, datetime, timedelta, timezone
 import re
 from typing import Any
 
@@ -63,7 +65,20 @@ _CN_NUM = {"一": 1, "二": 2, "两": 2, "三": 3, "四": 4, "五": 5, "六": 6,
 _COUNT_PATTERN = re.compile(r"(\d+|[一二两三四五六七八九十]+)\s*[道题个]")
 _YEAR_RANGE_PATTERN = re.compile(r"(20\d{2})\s*年?\s*(?:-|到|至)\s*(20\d{2})\s*年?")
 _YEAR_SINGLE_PATTERN = re.compile(r"(20\d{2})\s*年?")
+_RELATIVE_YEAR_PATTERN = re.compile(r"近\s*(\d+|[一二两三四五六七八九十]+)\s*年")
+_VAGUE_RECENT_YEAR_PATTERN = re.compile(r"近\s*年")
 _ID_PATTERN = re.compile(r"[Qq][A-Za-z0-9_-]{2,}")
+
+# 中国大陆自 1991 年起不使用夏令时；固定 UTC+8 避免 Windows 缺少 IANA tzdata。
+_BEIJING_TIMEZONE = timezone(timedelta(hours=8), name="Asia/Shanghai")
+
+
+@dataclass(frozen=True)
+class _ParsedYears:
+    year_from: int | None = None
+    year_to: int | None = None
+    constraint_phrase: str = ""
+    disclosure: str = ""
 
 _DIFFICULTY_WORDS: list[tuple[str, int | None, list[int] | None]] = [
     ("压轴", 5, None),
@@ -228,16 +243,67 @@ def _parse_count(text: str) -> tuple[int | None, bool]:
     return min(number, SEARCH_HARD_MAX_COUNT), number > SEARCH_HARD_MAX_COUNT
 
 
-def _parse_years(text: str) -> tuple[int | None, int | None]:
+def _parse_natural_number(raw: str) -> int | None:
+    if raw.isdigit():
+        value = int(raw)
+        return value if value > 0 else None
+    if "十" not in raw:
+        if len(raw) != 1:
+            return None
+        value = _CN_NUM.get(raw, 0)
+        return value if value > 0 else None
+    if raw.count("十") != 1:
+        return None
+    tens_raw, ones_raw = raw.split("十")
+    if len(tens_raw) > 1 or len(ones_raw) > 1:
+        return None
+    tens = _CN_NUM.get(tens_raw, 1) if tens_raw else 1
+    ones = _CN_NUM.get(ones_raw, 0) if ones_raw else 0
+    value = tens * 10 + ones
+    return value if value > 0 else None
+
+
+def _parse_years(text: str, reference_date: date) -> _ParsedYears:
     range_match = _YEAR_RANGE_PATTERN.search(text)
     if range_match:
         first, second = int(range_match.group(1)), int(range_match.group(2))
-        return min(first, second), max(first, second)
+        return _ParsedYears(
+            year_from=min(first, second),
+            year_to=max(first, second),
+            constraint_phrase=range_match.group(0),
+        )
     single = _YEAR_SINGLE_PATTERN.search(text)
     if single:
         year = int(single.group(1))
-        return year, year
-    return None, None
+        return _ParsedYears(
+            year_from=year,
+            year_to=year,
+            constraint_phrase=single.group(0),
+        )
+    relative_match = _RELATIVE_YEAR_PATTERN.search(text)
+    if relative_match:
+        phrase = relative_match.group(0)
+        window = _parse_natural_number(relative_match.group(1))
+        if window is None:
+            return _ParsedYears(
+                disclosure=f"“{phrase}”没有有效的年数，未设置年份硬条件；请改为“近两年”等明确表达。",
+            )
+        year_to = reference_date.year
+        year_from = year_to - window + 1
+        return _ParsedYears(
+            year_from=year_from,
+            year_to=year_to,
+            constraint_phrase=phrase,
+            disclosure=(
+                f"已按请求发生时的北京时间自然年将“{phrase}”解释为 "
+                f"{year_from}—{year_to} 年（包含当前年）。"
+            ),
+        )
+    if _VAGUE_RECENT_YEAR_PATTERN.search(text):
+        return _ParsedYears(
+            disclosure="“近年”没有明确年数，未设置年份硬条件；请改为“近两年”等明确表达。",
+        )
+    return _ParsedYears()
 
 
 def _parse_difficulty(text: str) -> tuple[int | None, list[int], str]:
@@ -302,8 +368,14 @@ def _parse_exclude_ids(text: str) -> list[str]:
 class SearchIntentParser:
     """确定性 SearchIntent 解析器；catalog 传入时做真实教材映射。"""
 
-    def __init__(self, catalog: InMemoryCurriculumCatalog | None = None) -> None:
+    def __init__(
+        self,
+        catalog: InMemoryCurriculumCatalog | None = None,
+        *,
+        reference_date: date | None = None,
+    ) -> None:
         self._catalog = catalog
+        self._reference_date = reference_date
         # term -> 候选 node_id 集合：只索引真实 catalog 名称片段，绝不臆造。
         self._term_index: dict[str, list[str]] = {}
         if catalog is not None:
@@ -341,7 +413,11 @@ class SearchIntentParser:
             warnings.append(f"已识别排除题型“{ignored}”；当前版本不会把它误作正向题型条件。")
         regions = _parse_regions(text)
         usage = _parse_usage(text)
-        year_from, year_to = _parse_years(text)
+        reference_date = self._reference_date or datetime.now(_BEIJING_TIMEZONE).date()
+        parsed_years = _parse_years(text, reference_date)
+        year_from, year_to = parsed_years.year_from, parsed_years.year_to
+        if parsed_years.disclosure:
+            warnings.append(parsed_years.disclosure)
         exclude_ids = _parse_exclude_ids(text)
 
         require_verified = any(
@@ -423,8 +499,13 @@ class SearchIntentParser:
             region_word = next((word for word, _mapped in _REGIONS if word in text), "地区")
             add_constraint("regions", regions, _strength_for_word(clauses, region_word))
         if year_from is not None:
-            year_word = str(year_from)
-            add_constraint("year", [year_from, year_to or year_from], _strength_for_word(clauses, year_word))
+            year_word = parsed_years.constraint_phrase or str(year_from)
+            add_constraint(
+                "year",
+                [year_from, year_to or year_from],
+                _strength_for_word(clauses, year_word),
+                reason=parsed_years.disclosure,
+            )
         if usage:
             # 教学用途是排序偏好，不是硬过滤条件。
             add_constraint("teaching_usage", usage, "soft")

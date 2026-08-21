@@ -15,6 +15,7 @@
 from __future__ import annotations
 
 import json
+from datetime import date
 from pathlib import Path
 from typing import Any
 
@@ -22,6 +23,7 @@ import pytest
 
 from app.modules.curriculum import CsvCurriculumCatalog
 from app.modules.question_bank import QuestionBank
+from app.modules.search_agent import SearchIntentParser
 from app.modules.search_agent.pipeline import SearchAgentPipeline, _satisfies
 from app.modules.search_agent.evidence import CandidateRecord
 from app.modules.search_agent.ranking import VERIFIED_STATUSES
@@ -60,6 +62,11 @@ def _load_cases() -> list[dict[str, Any]]:
     cases = payload["cases"]
     assert len(cases) >= 40
     return cases
+
+
+def _load_reference_date() -> date:
+    payload = json.loads(_EVAL_CASES.read_text(encoding="utf-8"))
+    return date.fromisoformat(payload["reference_date"])
 
 
 def _check_intent(case: dict[str, Any], intent: Any) -> tuple[int, int, list[str]]:
@@ -119,6 +126,12 @@ def _check_intent(case: dict[str, Any], intent: Any) -> tuple[int, int, list[str
         passed += int(ok)
         if not ok:
             failures.append(f"{case['id']}.kp_ids_grounded")
+    for fragment in expected.get("parse_warnings_contains", []):
+        total += 1
+        if any(fragment in warning for warning in intent.parse_warnings):
+            passed += 1
+        else:
+            failures.append(f"{case['id']}.parse_warnings_contains[{fragment}]")
     for term in expected.get("knowledge_points_contains", []):
         total += 1
         pool = intent.knowledge_points + intent.sub_knowledge_points
@@ -187,13 +200,13 @@ def test_intent_field_accuracy_meets_target(tmp_path: Path) -> None:
     bank = QuestionBank(tmp_path / "eval.sqlite3")
     bank.import_batch(_FIXTURES / "search-agent-synthetic-14q-v1.json")
     catalog = CsvCurriculumCatalog(_CURRICULUM_CSV)
-    pipeline = SearchAgentPipeline(question_bank=bank, catalog=catalog)
+    parser = SearchIntentParser(catalog, reference_date=_load_reference_date())
 
     passed = 0
     total = 0
     failures: list[str] = []
     for case in cases:
-        intent = pipeline.parser.parse(case["query"])
+        intent = parser.parse(case["query"])
         case_passed, case_total, case_failures = _check_intent(case, intent)
         passed += case_passed
         total += case_total

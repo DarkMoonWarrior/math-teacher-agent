@@ -27,9 +27,9 @@
 
 完整量化门禁见 [`PRODUCT-GATES.md`](PRODUCT-GATES.md)。
 
-## 3. 当前里程碑：M4 Search 集成稳定化
+## 3. 最近完成里程碑：M4 Search 集成稳定化
 
-M0-M3 已完成。当前只完成新教师工作台中可信 Search Agent 的产品化收尾，不提前启动 Solve、Private Library、Paper、Lesson 或 Memory。
+M0-M4 已完成，M4 Gate E 于 2026-08-21 严格通过。当前处于阶段转换等待状态；在项目所有者确认前，不启动 Solve、Private Library、Paper、Lesson 或 Memory。
 
 本阶段允许：
 
@@ -50,7 +50,7 @@ M0-M3 已完成。当前只完成新教师工作台中可信 Search Agent 的产
 - 同时铺开 M5-M9；
 - 因为 Harness 不可达而静默切换执行语义。可以提供显式、可观测、由产品决定的 fallback，但默认 fail closed。
 
-## 4. M4 完成 Gate
+## 4. M4 完成 Gate（已通过）
 
 M4 只有同时满足以下条件才完成：
 
@@ -65,7 +65,7 @@ M4 只有同时满足以下条件才完成：
 
 ## 5. 下一阶段启动条件
 
-只有 M4 Gate 完整通过、变更已形成可回滚提交并由项目所有者确认后，才进入 M5 Solve Agent。M5 只处理解题可信分层，不顺带实现变式、组卷、私人资料或教案。
+M4 Gate 已完整通过；变更形成可回滚提交并由项目所有者确认阶段转换后，才进入 M5 Solve Agent。M5 只处理解题可信分层，不顺带实现变式、组卷、私人资料或教案。
 
 后续顺序以 [`ROADMAP.md`](ROADMAP.md) 为准：Solve → Private Library → Paper → Lesson → Memory → Beta 准备 → Beta 验证 → 商业基础 → Teacher Pro → 教研组 → 学校。
 

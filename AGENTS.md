@@ -26,7 +26,7 @@ The current product line is the new `apps/teacher-web` experience. `apps/web` is
 - `Lesson Agent` and `Paper Agent`: navigation and requirement-drafting previews only in `apps/teacher-web`; their Agent runtimes/tools are not connected.
 - Mature lesson-plan, paper, import, library, solution, curriculum, question-bank, and verification modules exist in the migrated backend/legacy UI. Existing REST workflows do not mean the corresponding new Agent capability is complete.
 - Teacher identity, cloud isolation, billing, and public commercial operation are not implemented.
-- M0-M3 are complete. M4 Search integration stabilization is the only active milestone; M5 and later require the current Gate and owner confirmation before starting.
+- M0-M4 are complete. M4 Search integration stabilization passed Gate E on 2026-08-21; M5 and later remain unstarted until the owner confirms the milestone transition.
 
 ## Repository seams
 
