@@ -28,7 +28,8 @@ apps/web (legacy/reference Next.js UI, :3000)
 
 - Seam: `apps/teacher-web/lib/teacher-workspace/contracts.ts`.
 - Interface: UI submits a teaching task and receives product-owned progress stages, structured results and errors.
-- Adapter: current HTTP adapter consumes the same-origin Search SSE route, exposes only `connecting / understanding / searching / checking` progress, returns one structured result, and maps `AbortSignal` to explicit run cancellation.
+- Adapter: current HTTP adapter consumes the same-origin Search SSE route, exposes only `connecting / understanding / searching / checking / recovering` progress, returns one structured result, and maps `AbortSignal` to explicit run cancellation.
+- Recovery: after a transport interruption with a known `run_id`, the adapter performs one read-only `GET /api/v1/agent/search/{run_id}/stream` snapshot lookup. It never repeats the Search `POST` or Tool execution; a snapshot without a saved terminal state becomes `STREAM_RECOVERY_FAILED`.
 - Transport: `apps/teacher-web/app/api/v1/agent/search/stream/route.ts` is an exact no-buffer streaming proxy to FastAPI; other same-origin API paths continue to use the general Next.js rewrite.
 - Rule: React views do not know SSE parsing, backend storage, Harness events, provider payloads, or raw database fields.
 
@@ -36,7 +37,7 @@ apps/web (legacy/reference Next.js UI, :3000)
 
 - Seam: `SearchAgentPipeline.run/stream/cancel` and `SearchAgentResponse`.
 - Implementation: deterministic intent parsing, grounded curriculum mapping, rights/visibility gate, verification enrichment, deduplication, ranking, diversity and explanation sanitization.
-- Lifecycle: `POST /api/v1/agent/search/stream` executes one real runtime stream; `run_id` is registered before delivery, disconnect/cancel reaches the same in-flight run, and later reads never execute the query again.
+- Lifecycle: `POST /api/v1/agent/search/stream` executes one real runtime stream; `run_id` is registered before delivery, disconnect/cancel reaches the same in-flight run, and later snapshot reads never execute the query again.
 - Trust: model deltas and Tool input/output remain inside FastAPI; the browser receives only payload-free progress events and the final grounded `SearchAgentResponse`.
 - Rule: structured business results are the source of truth; model prose cannot add facts.
 

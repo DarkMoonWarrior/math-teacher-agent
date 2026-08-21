@@ -54,5 +54,6 @@ export const ERROR_GUIDANCE: Record<string, string> = {
   STREAM_UNAVAILABLE: "请确认反向代理允许 text/event-stream 响应。",
   STREAM_INVALID: "服务返回的事件格式不完整，请保留错误编号并重试。",
   STREAM_INTERRUPTED: "连接可能短暂中断；重新尝试不会使用未完成的结果。",
+  STREAM_RECOVERY_FAILED: "系统没有重新执行搜索；请确认服务恢复后手动重试。",
   TOOL_TIMEOUT: "受控工具或 Agent 运行超过时间限制，请缩小条件后重试。",
 };

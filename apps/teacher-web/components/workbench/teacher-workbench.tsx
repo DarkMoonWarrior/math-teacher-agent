@@ -113,7 +113,18 @@ const SEARCH_PROGRESS: Record<SearchTaskProgressStage, SearchProgressDefinition>
     paperTitle: "正在核对来源、权利与验证状态",
     activeStep: 2,
   },
+  recovering: {
+    stageTitle: "正在恢复同一次任务",
+    paperTitle: "连接中断，正在取回已保存的运行结果",
+    activeStep: 3,
+  },
 };
+
+const SEARCH_PROGRESS_STEPS = [
+  "解析教学描述",
+  "调用受控搜索工具",
+  "核对来源与验证状态",
+];
 
 const CAPABILITIES: Record<CapabilityId, CapabilityDefinition> = {
   search: {
@@ -405,6 +416,9 @@ export function TeacherWorkbench() {
       ? 1
       : definition.pages.length;
   const pageIndex = showingSearchResult ? questionPage : previewPage;
+  const progressSteps = searchProgress === "recovering"
+    ? [...SEARCH_PROGRESS_STEPS, "恢复同一次运行"]
+    : SEARCH_PROGRESS_STEPS;
 
   function updateQuery(value: string) {
     setDrafts((current) => ({ ...current, [capability]: value }));
@@ -749,7 +763,7 @@ export function TeacherWorkbench() {
                   <p>SEARCH / CONTROLLED TOOLS</p>
                   <h2>{SEARCH_PROGRESS[searchProgress].paperTitle}</h2>
                   <ol>
-                    {["解析教学描述", "调用受控搜索工具", "核对来源与验证状态"].map((label, index) => (
+                    {progressSteps.map((label, index) => (
                       <li
                         aria-current={index === SEARCH_PROGRESS[searchProgress].activeStep ? "step" : undefined}
                         className={index === SEARCH_PROGRESS[searchProgress].activeStep

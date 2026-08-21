@@ -138,7 +138,7 @@ describe("HttpTeacherWorkspace", () => {
   });
 
   it("preserves the product error code from a failed run", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => streamResponse([
+    const fetchMock = vi.fn(async () => streamResponse([
       { type: "run_started", run_id: "run_2", request_id: "req_2", data: {} },
       {
         type: "run_failed",
@@ -152,7 +152,8 @@ describe("HttpTeacherWorkspace", () => {
           },
         },
       },
-    ])));
+    ]));
+    vi.stubGlobal("fetch", fetchMock);
 
     const workspace = new HttpTeacherWorkspace();
     const failure = workspace.searchQuestions({ query: "找题", sessionId: "tch_2" });
@@ -161,6 +162,94 @@ describe("HttpTeacherWorkspace", () => {
       message: "工具调用超时",
       requestId: "req_2",
     });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("recovers a saved terminal result by run id without executing Search again", async () => {
+    const result = resultFixture();
+    const fetchMock = vi.fn((input: RequestInfo | URL, _init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/run_1/stream")) {
+        return Promise.resolve(streamResponse([
+          { type: "run_started", run_id: "run_1", request_id: "req_1", data: {} },
+          {
+            type: "run_completed",
+            run_id: "run_1",
+            request_id: "req_1",
+            data: { search_response: result },
+          },
+        ]));
+      }
+      return Promise.resolve(streamResponse([
+        { type: "run_started", run_id: "run_1", request_id: "req_1", data: {} },
+      ]));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const stages: SearchTaskProgressStage[] = [];
+
+    const workspace = new HttpTeacherWorkspace();
+    await expect(workspace.searchQuestions(
+      { query: "找椭圆题", sessionId: "tch_1" },
+      { onProgress: ({ stage }) => stages.push(stage) },
+    )).resolves.toEqual(result);
+
+    expect(stages).toEqual(["connecting", "understanding", "recovering"]);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({ method: "POST" });
+    expect(String(fetchMock.mock.calls[1]?.[0])).toBe("/api/v1/agent/search/run_1/stream");
+  });
+
+  it("reports a stable error when the saved run has no terminal result", async () => {
+    const fetchMock = vi.fn(async () => streamResponse([
+      { type: "run_started", run_id: "run_pending", request_id: "req_pending", data: {} },
+    ]));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const workspace = new HttpTeacherWorkspace();
+    const failure = workspace.searchQuestions({ query: "找题", sessionId: "tch_pending" });
+    await expect(failure).rejects.toMatchObject({
+      code: "STREAM_RECOVERY_FAILED",
+      message: "任务连接中断，且未能取回同一次运行的结果。",
+      requestId: "req_pending",
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("preserves a saved terminal failure instead of hiding it as a recovery error", async () => {
+    let requestCount = 0;
+    const fetchMock = vi.fn(async () => {
+      requestCount += 1;
+      if (requestCount === 1) {
+        return streamResponse([
+          { type: "run_started", run_id: "run_failed", request_id: "req_failed", data: {} },
+        ]);
+      }
+      return streamResponse([
+        { type: "run_started", run_id: "run_failed", request_id: "req_failed", data: {} },
+        {
+          type: "run_failed",
+          run_id: "run_failed",
+          request_id: "req_failed",
+          data: {
+            error: {
+              code: "TOOL_TIMEOUT",
+              message: "工具调用超时",
+              request_id: "req_failed",
+            },
+          },
+        },
+      ]);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const workspace = new HttpTeacherWorkspace();
+    const failure = workspace.searchQuestions({ query: "找题", sessionId: "tch_failed" });
+    await expect(failure).rejects.toMatchObject({
+      code: "TOOL_TIMEOUT",
+      message: "工具调用超时",
+      requestId: "req_failed",
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it("maps AbortSignal to the explicit server-side cancel endpoint", async () => {
@@ -203,5 +292,6 @@ describe("HttpTeacherWorkspace", () => {
     await vi.waitFor(() => {
       expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith("/run_live/cancel"))).toBe(true);
     });
+    expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith("/run_live/stream"))).toBe(false);
   });
 });

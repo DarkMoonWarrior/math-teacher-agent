@@ -84,7 +84,8 @@ export type SearchTaskProgressStage =
   | "connecting"
   | "understanding"
   | "searching"
-  | "checking";
+  | "checking"
+  | "recovering";
 
 export type SearchTaskProgress = {
   stage: SearchTaskProgressStage;
