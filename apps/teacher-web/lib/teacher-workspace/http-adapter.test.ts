@@ -153,6 +153,41 @@ afterEach(() => {
 });
 
 describe("HttpTeacherWorkspace", () => {
+  it("requires an explicit one-action consent when searching private excerpts", async () => {
+    const result = {
+      query: "函数",
+      items: [{
+        library_item_id: "lib_1",
+        title: "函数讲义",
+        excerpt: "函数单调性的课堂例题。",
+        source_version: 2,
+        rights_basis: "original",
+        text_review_status: "confirmed",
+        visibility: "private",
+      }],
+      total: 1,
+      truncated: false,
+      content_scope: "matching_excerpts",
+      visibility: "private",
+    } as const;
+    const fetchMock = vi.fn((_input: RequestInfo | URL, _init?: RequestInit) => Promise.resolve(new Response(JSON.stringify({
+      status: "ok",
+      result,
+    }), { status: 200, headers: { "Content-Type": "application/json" } })));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const workspace = new HttpTeacherWorkspace();
+    await expect(workspace.searchPrivateLibrary("函数", true)).resolves.toEqual(result);
+    const init = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/v1/agent/private-library/search");
+    expect(JSON.parse(String(init.body))).toEqual({
+      query: "函数",
+      private_content_consent: true,
+      limit: 5,
+    });
+    expect(String(init.body)).not.toContain("owner_id");
+  });
+
   it("loads only the server-scoped private library list", async () => {
     const item = libraryItemFixture();
     const fetchMock = vi.fn(async () => new Response(JSON.stringify({ items: [item], total: 1 }), {

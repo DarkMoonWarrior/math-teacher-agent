@@ -491,6 +491,67 @@ export function defineTeacherTools(options: TeacherToolOptions): ToolDefinition[
     },
   });
 
+  const searchPrivateLibrary = defineTool({
+    name: "search_private_library",
+    description:
+      "仅凭 FastAPI 为当前教师本次操作签发的一次性许可，检索已确认的私人资料；只返回有界匹配片段及来源版本/权利状态，不返回原文件、路径或完整正文。",
+    parameters: {
+      query: { type: "string", description: "与许可严格绑定的检索词", required: true },
+      consent_token: { type: "string", description: "FastAPI 签发的一次性检索许可", required: true },
+      limit: { type: "integer", description: "返回资料数，最大 8", required: true },
+    },
+    output: {
+      schema: {
+        type: "object",
+        properties: {
+          ok: { type: "boolean", required: true },
+          query: { type: "string", required: true },
+          items: { type: "array", required: true },
+          total: { type: "integer", required: true },
+          truncated: { type: "boolean", required: true },
+          content_scope: { type: "string", required: true },
+          visibility: { type: "string", required: true },
+          request_id: { type: "string", required: true },
+          error: { type: "json" },
+        },
+        additionalProperties: false,
+      },
+      render: (_args, value) => JSON_OUTPUT(JSON.stringify(value)),
+    },
+    timeoutMs: 30_000,
+    async execute(args, exec) {
+      const requestId = callOptions(exec).requestId;
+      const result = await gateway.searchPrivateLibrary(
+        { query: args.query, consent_token: args.consent_token, limit: args.limit },
+        callOptions(exec),
+      );
+      if (result.ok) {
+        return {
+          ok: true,
+          query: result.data.query,
+          items: result.data.items.map((item) => ({ ...item })),
+          total: result.data.total,
+          truncated: result.data.truncated,
+          content_scope: "matching_excerpts",
+          visibility: "private",
+          request_id: result.data.request_id ?? requestId,
+          error: null,
+        };
+      }
+      return {
+        ok: false,
+        query: args.query,
+        items: [],
+        total: 0,
+        truncated: false,
+        content_scope: "matching_excerpts",
+        visibility: "private",
+        request_id: result.error.request_id ?? requestId,
+        error: gatewayErrorEnvelope(requestId, new ToolGatewayError(result.error)),
+      };
+    },
+  });
+
   return [
     searchQuestions,
     getQuestion,
@@ -499,6 +560,7 @@ export function defineTeacherTools(options: TeacherToolOptions): ToolDefinition[
     verifyQuestion,
     getCurriculumNode,
     inspectPrivateLibrary,
+    searchPrivateLibrary,
   ];
 }
 
@@ -511,6 +573,7 @@ export const TEACHER_TOOL_ALLOWLIST: readonly string[] = [
   "verify_question",
   "get_curriculum_node",
   "inspect_private_library",
+  "search_private_library",
 ];
 
 export type { TeacherAgentError };

@@ -24,6 +24,8 @@ Agent 不得直接访问本目录的数据库实现；它只能经过内部 Tool
 
 ## Private Library（M6 进行中）
 
+除 owner-scoped 上传、OCR/校对、拆题和教材映射外，当前已提供 `/api/v1/agent/private-library/search`：调用方必须逐次提交明确同意，服务端身份签发短时单次检索许可；内部 Tool 只可获得 active + confirmed 资源的有界匹配片段、来源版本与权利依据。浏览器和模型都不能选择 owner，原文件、路径与整份正文不会进入 Agent 输出。
+
 Public 路由通过 `app/core/identity.py` 的 current-teacher seam 在服务端绑定 owner 和 reviewer；浏览器不能提交或选择身份。列表、详情、原文件、OCR、revision、后台任务和拆题候选均按 owner fail closed。当前 adapter 仅用于本地开发并固定返回 `owner_teacher`，不代表生产认证已经完成。
 
 本地数学 OCR 当前只支持 PDF；外部 OCR 每次调用都必须重新提交明确同意。两类 OCR 只生成待教师校对草稿，不会改变 private 状态或自动进入题库。

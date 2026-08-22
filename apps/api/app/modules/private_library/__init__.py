@@ -5,6 +5,11 @@ from app.modules.private_library.providers import (
     OpenAIResourceOCRProvider,
     LocalMathOCRProvider,
 )
+from app.modules.private_library.retrieval_grants import (
+    PrivateRetrievalConsentError,
+    PrivateRetrievalGrantRegistry,
+    get_private_retrieval_grants,
+)
 from app.modules.private_library.schemas import (
     CandidateImportResult,
     LibraryIngestCommand,
@@ -16,6 +21,8 @@ from app.modules.private_library.schemas import (
     LibraryItemList,
     LibraryItemSummary,
     LibraryItemView,
+    PrivateLibrarySearchItem,
+    PrivateLibrarySearchResult,
     LibraryStats,
     LibraryTextReviewCommand,
     LibraryTextRevisionList,
@@ -39,6 +46,8 @@ __all__ = [
     "LibraryItemList",
     "LibraryItemSummary",
     "LibraryItemView",
+    "PrivateLibrarySearchItem",
+    "PrivateLibrarySearchResult",
     "LibraryStats",
     "LibraryTextReviewCommand",
     "LibraryTextRevisionList",
@@ -49,6 +58,9 @@ __all__ = [
     "LocalMathOCRProvider",
     "PrivateLibrary",
     "PrivateLibraryError",
+    "PrivateRetrievalConsentError",
+    "PrivateRetrievalGrantRegistry",
+    "get_private_retrieval_grants",
     "QuestionCandidateList",
     "QuestionCandidateCurriculum",
     "QuestionCandidateCurriculumCommand",

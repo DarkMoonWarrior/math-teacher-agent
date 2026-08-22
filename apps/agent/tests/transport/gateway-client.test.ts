@@ -6,6 +6,7 @@ const SEARCH_ROUTE = "/internal/agent-tools/v1/search-questions";
 const GET_QUESTION_ROUTE = "/internal/agent-tools/v1/get-question";
 const SOLVE_QUESTION_ROUTE = "/internal/agent-tools/v1/solve-question";
 const INSPECT_PRIVATE_LIBRARY_ROUTE = "/internal/agent-tools/v1/inspect-private-library";
+const SEARCH_PRIVATE_LIBRARY_ROUTE = "/internal/agent-tools/v1/search-private-library";
 
 describe("ToolGatewayClient", () => {
   let stub: GatewayStub;
@@ -133,6 +134,34 @@ describe("ToolGatewayClient", () => {
     const call = stub.requests.find((request) => request.route === INSPECT_PRIVATE_LIBRARY_ROUTE);
     expect(call?.body).toEqual({});
     expect(call?.authorization).toBe("Bearer gw-secret");
+  });
+
+  it("私人检索只向固定 route 发送查询与一次性许可", async () => {
+    stub.handlers[SEARCH_PRIVATE_LIBRARY_ROUTE] = ({ body }) => gatewayJson(200, {
+      query: body.query,
+      items: [{
+        library_item_id: "lib_1",
+        title: "函数讲义",
+        excerpt: "函数单调性例题。",
+        source_version: 2,
+        rights_basis: "original",
+        text_review_status: "confirmed",
+        visibility: "private",
+      }],
+      total: 1,
+      truncated: false,
+      content_scope: "matching_excerpts",
+      visibility: "private",
+      request_id: "req_private_search",
+    });
+    const result = await client.searchPrivateLibrary(
+      { query: "函数", consent_token: "opaque-one-use", limit: 5 },
+      { requestId: "req_private_search" },
+    );
+    expect(result.ok).toBe(true);
+    const call = stub.requests.find((request) => request.route === SEARCH_PRIVATE_LIBRARY_ROUTE);
+    expect(call?.body).toEqual({ query: "函数", consent_token: "opaque-one-use", limit: 5 });
+    expect(call?.body).not.toHaveProperty("owner_id");
   });
 
   it("把 404 映射为 TOOL_NOT_FOUND", async () => {

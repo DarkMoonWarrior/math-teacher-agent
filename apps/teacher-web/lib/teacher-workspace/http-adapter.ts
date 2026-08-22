@@ -14,6 +14,7 @@ import {
   type PrivateLibraryQuestionCandidateDraft,
   type PrivateLibraryQuestionCandidateList,
   type PrivateLibraryReview,
+  type PrivateLibrarySearchResult,
   type PrivateLibraryUpload,
   type SearchTaskOptions,
   type SearchTaskProgressStage,
@@ -359,6 +360,39 @@ async function readSolveStream(
 }
 
 export class HttpTeacherWorkspace implements TeacherWorkspace {
+  async searchPrivateLibrary(
+    query: string,
+    privateContentConsent: true,
+    signal?: AbortSignal,
+  ): Promise<PrivateLibrarySearchResult> {
+    try {
+      const response = await fetch(apiUrl("/api/v1/agent/private-library/search"), {
+        method: "POST",
+        headers: { Accept: "application/json", "Content-Type": "application/json" },
+        body: JSON.stringify({ query, private_content_consent: privateContentConsent, limit: 5 }),
+        signal,
+      });
+      if (!response.ok) throw await responseError(response);
+      const payload = await response.json() as {
+        status: "ok" | "error";
+        result: PrivateLibrarySearchResult | null;
+        error?: { code?: string; message?: string; request_id?: string };
+      };
+      if (payload.status !== "ok" || !payload.result) {
+        throw new TeacherWorkspaceError(
+          payload.error?.code ?? "PRIVATE_SEARCH_FAILED",
+          payload.error?.message ?? "私人检索没有返回可用结果。",
+          payload.error?.request_id ?? "",
+        );
+      }
+      return payload.result;
+    } catch (cause) {
+      if (cause instanceof TeacherWorkspaceError) throw cause;
+      if (cause instanceof DOMException && cause.name === "AbortError") throw cause;
+      throw new TeacherWorkspaceError("NETWORK_ERROR", "无法完成私人检索。请确认 Agent Service 与 FastAPI 已启动。");
+    }
+  }
+
   async listPrivateLibrary(signal?: AbortSignal): Promise<PrivateLibraryList> {
     try {
       const response = await fetch(apiUrl("/api/v1/library"), {

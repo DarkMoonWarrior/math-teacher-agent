@@ -152,6 +152,32 @@ export interface InspectPrivateLibraryResponse {
   request_id: string;
 }
 
+export interface SearchPrivateLibraryInput {
+  query: string;
+  consent_token: string;
+  limit?: number;
+}
+
+export interface PrivateLibrarySearchItem {
+  library_item_id: string;
+  title: string;
+  excerpt: string;
+  source_version: number;
+  rights_basis: "original" | "licensed" | "private_teaching_only";
+  text_review_status: "confirmed";
+  visibility: "private";
+}
+
+export interface SearchPrivateLibraryResponse {
+  query: string;
+  items: PrivateLibrarySearchItem[];
+  total: number;
+  truncated: boolean;
+  content_scope: "matching_excerpts";
+  visibility: "private";
+  request_id: string;
+}
+
 const KNOWN_STATUS_ERROR_CODES: Record<number, TeacherAgentErrorCode> = {
   401: "TOOL_UNAUTHORIZED",
   403: "TOOL_UNAUTHORIZED",
@@ -314,5 +340,9 @@ export class ToolGatewayClient {
 
   inspectPrivateLibrary(options: GatewayRequestOptions): Promise<GatewayResult<InspectPrivateLibraryResponse>> {
     return this.post("/internal/agent-tools/v1/inspect-private-library", {}, options);
+  }
+
+  searchPrivateLibrary(input: SearchPrivateLibraryInput, options: GatewayRequestOptions): Promise<GatewayResult<SearchPrivateLibraryResponse>> {
+    return this.post("/internal/agent-tools/v1/search-private-library", input, options);
   }
 }

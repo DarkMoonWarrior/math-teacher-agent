@@ -202,6 +202,25 @@ export type PrivateLibraryList = {
   total: number;
 };
 
+export type PrivateLibrarySearchItem = {
+  library_item_id: string;
+  title: string;
+  excerpt: string;
+  source_version: number;
+  rights_basis: LibraryRightsBasis;
+  text_review_status: "confirmed";
+  visibility: "private";
+};
+
+export type PrivateLibrarySearchResult = {
+  query: string;
+  items: PrivateLibrarySearchItem[];
+  total: number;
+  truncated: boolean;
+  content_scope: "matching_excerpts";
+  visibility: "private";
+};
+
 export type LibraryItemDetail = LibraryItemSummary & {
   source_sha256: string;
   extracted_text: string;
@@ -346,6 +365,12 @@ export interface TeacherWorkspace {
   ): Promise<SolveTaskResult>;
 
   listPrivateLibrary(signal?: AbortSignal): Promise<PrivateLibraryList>;
+
+  searchPrivateLibrary(
+    query: string,
+    privateContentConsent: true,
+    signal?: AbortSignal,
+  ): Promise<PrivateLibrarySearchResult>;
 
   getPrivateLibraryItem(
     itemId: string,

@@ -65,6 +65,15 @@ function currentUserText(messages: GenerateOptions["messages"]): string {
 
 function defaultScriptFor(messages: GenerateOptions["messages"]): MockScript {
   const conversation = currentUserText(messages);
+  if (conversation.includes("search_private_library")) {
+    const query = conversation.match(/检索查询：([^\n]+)/)?.[1]?.trim() || "函数";
+    const limit = Number(conversation.match(/返回上限：(\d+)/)?.[1] || "5");
+    const consentToken = conversation.match(/检索许可：([^\n]+)/)?.[1]?.trim() || "missing";
+    return {
+      steps: [{ kind: "tool", toolName: "search_private_library", arguments: { query, limit, consent_token: consentToken } }],
+      finalText: "已返回本次授权范围内的私人资料匹配片段。",
+    };
+  }
   if (!conversation.includes("solve_question")) return DEFAULT_MOCK_SCRIPT;
 
   const question = conversation.match(/题目：([\s\S]+)$/)?.[1]?.trim() || "解方程 2x-4=0。";

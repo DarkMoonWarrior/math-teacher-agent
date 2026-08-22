@@ -182,6 +182,25 @@ class LibraryItemList(BaseModel):
     total: int
 
 
+class PrivateLibrarySearchItem(BaseModel):
+    library_item_id: str
+    title: str
+    excerpt: str = Field(max_length=480)
+    source_version: int = Field(ge=1)
+    rights_basis: RightsBasis
+    text_review_status: Literal["confirmed"] = "confirmed"
+    visibility: Literal["private"] = "private"
+
+
+class PrivateLibrarySearchResult(BaseModel):
+    query: str
+    items: list[PrivateLibrarySearchItem]
+    total: int = Field(ge=0)
+    truncated: bool
+    content_scope: Literal["matching_excerpts"] = "matching_excerpts"
+    visibility: Literal["private"] = "private"
+
+
 class LibraryStats(BaseModel):
     total: int
     pending_review: int

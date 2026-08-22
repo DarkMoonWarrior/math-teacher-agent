@@ -15,6 +15,7 @@ import type {
   LibraryTextRevision,
   PrivateLibraryQuestionCandidate,
   PrivateLibraryQuestionCandidateDraft,
+  PrivateLibrarySearchItem,
 } from "@/lib/teacher-workspace/contracts";
 import { TeacherWorkspaceError } from "@/lib/teacher-workspace/contracts";
 import { teacherWorkspace } from "@/lib/teacher-workspace/http-adapter";
@@ -444,6 +445,12 @@ export function PrivateLibraryWorkspace() {
   const [uploading, setUploading] = useState(false);
   const [formError, setFormError] = useState("");
   const [announcement, setAnnouncement] = useState("");
+  const [privateQuery, setPrivateQuery] = useState("");
+  const [privateSearchConsent, setPrivateSearchConsent] = useState(false);
+  const [privateSearchBusy, setPrivateSearchBusy] = useState(false);
+  const [privateSearchItems, setPrivateSearchItems] = useState<PrivateLibrarySearchItem[]>([]);
+  const [privateSearchTotal, setPrivateSearchTotal] = useState<number | null>(null);
+  const [privateSearchError, setPrivateSearchError] = useState("");
   const [selectedItemId, setSelectedItemId] = useState("");
   const [detail, setDetail] = useState<LibraryItemDetail | null>(null);
   const [revisions, setRevisions] = useState<LibraryTextRevision[]>([]);
@@ -461,6 +468,7 @@ export function PrivateLibraryWorkspace() {
   const [detailMessage, setDetailMessage] = useState("");
   const inputRef = useRef<HTMLInputElement | null>(null);
   const detailRef = useRef<HTMLElement | null>(null);
+  const privateSearchResultRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -565,6 +573,31 @@ export function PrivateLibraryWorkspace() {
       setFormError(message);
     } finally {
       setUploading(false);
+    }
+  }
+
+  async function searchPrivateContent(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const query = privateQuery.trim();
+    if (!query || privateSearchBusy) return;
+    if (!privateSearchConsent) {
+      setPrivateSearchError("请先确认本次检索授权。每次查询都需要重新确认。");
+      return;
+    }
+    setPrivateSearchBusy(true);
+    setPrivateSearchError("");
+    setPrivateSearchTotal(null);
+    try {
+      const result = await teacherWorkspace.searchPrivateLibrary(query, true);
+      setPrivateSearchItems(result.items);
+      setPrivateSearchTotal(result.total);
+      requestAnimationFrame(() => privateSearchResultRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }));
+    } catch (cause) {
+      setPrivateSearchItems([]);
+      setPrivateSearchError(cause instanceof Error ? cause.message : "本次私人检索没有完成。");
+    } finally {
+      setPrivateSearchConsent(false);
+      setPrivateSearchBusy(false);
     }
   }
 
@@ -815,6 +848,62 @@ export function PrivateLibraryWorkspace() {
         </div>
         <p className="library-announcement" aria-live="polite">{announcement}</p>
       </form>
+
+      <section className="library-private-search">
+        <header>
+          <div>
+            <span>私人检索 Agent</span>
+            <h2>从你确认过的资料里，找一段证据。</h2>
+          </div>
+          <p><LockIcon />只读 · 本次授权 · 有界片段</p>
+        </header>
+        <form onSubmit={searchPrivateContent}>
+          <label>
+            <span>要找什么</span>
+            <div className="library-private-search__input">
+              <SearchIcon />
+              <input
+                maxLength={500}
+                onChange={(event) => { setPrivateQuery(event.target.value); setPrivateSearchError(""); }}
+                placeholder="例如：函数单调性的课堂例题"
+                value={privateQuery}
+              />
+              <button disabled={!privateQuery.trim() || privateSearchBusy} type="submit">
+                {privateSearchBusy ? <span className="button-loader" /> : <ArrowRightIcon />}
+                {privateSearchBusy ? "检索中" : "查找片段"}
+              </button>
+            </div>
+          </label>
+          <label className="library-private-search__consent">
+            <input
+              checked={privateSearchConsent}
+              onChange={(event) => setPrivateSearchConsent(event.target.checked)}
+              type="checkbox"
+            />
+            <span>我同意仅为本次查询，将匹配标题、片段、来源版本与权利状态交给已配置的 Agent；不发送原文件、路径或整份正文。</span>
+          </label>
+        </form>
+        <div className="library-private-search__results" ref={privateSearchResultRef} aria-live="polite">
+          {privateSearchError ? <p className="is-error" role="alert">{privateSearchError}</p> : null}
+          {privateSearchTotal === 0 ? (
+            <div className="library-private-search__empty"><SearchIcon /><span>没有找到已由你确认的匹配资料。待校对内容不会参与检索。</span></div>
+          ) : null}
+          {privateSearchTotal !== null && privateSearchTotal > 0 ? (
+            <>
+              <p className="library-private-search__count">找到 {privateSearchTotal} 份匹配资料；这里只展示最小必要片段。</p>
+              <ol>
+                {privateSearchItems.map((item) => (
+                  <li key={item.library_item_id}>
+                    <header><strong>{item.title}</strong><span><LockIcon />private</span></header>
+                    <p>{item.excerpt}</p>
+                    <footer><span>确认文本 v{item.source_version}</span><span>{rightsLabel(item.rights_basis)}</span></footer>
+                  </li>
+                ))}
+              </ol>
+            </>
+          ) : null}
+        </div>
+      </section>
 
       <section className="library-shelf" aria-busy={loading}>
         <header>

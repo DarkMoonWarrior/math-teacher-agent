@@ -17,7 +17,12 @@ from app.core.config import Settings
 from app.main import _GatewayHttpError, gateway_error_handler
 from app.modules.curriculum import CurriculumNode, InMemoryCurriculumCatalog
 from app.modules.math_verifier import MathVerifier
-from app.modules.private_library import LibraryStats
+from app.modules.private_library import (
+    LibraryStats,
+    PrivateLibrarySearchItem,
+    PrivateLibrarySearchResult,
+    PrivateRetrievalGrantRegistry,
+)
 from app.modules.question_bank import QuestionBank
 from app.modules.question_quality import QuestionQualityWorkflow
 from app.modules.question_similarity import QuestionSimilarityRegistry
@@ -135,7 +140,25 @@ def gateway_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClien
                 by_file_kind={"pdf": 2, "docx": 1},
             )
 
+        def search_confirmed_text(self, query: str, *, limit: int, owner_id: str) -> PrivateLibrarySearchResult:
+            assert owner_id == "owner_teacher"
+            return PrivateLibrarySearchResult(
+                query=query,
+                items=[PrivateLibrarySearchItem(
+                    library_item_id="lib_1",
+                    title="函数讲义",
+                    excerpt="函数单调性的课堂例题。",
+                    source_version=3,
+                    rights_basis="original",
+                )][:limit],
+                total=1,
+                truncated=False,
+            )
+
     monkeypatch.setattr(gateway, "get_private_library", lambda: FakePrivateLibrary())
+    grants = PrivateRetrievalGrantRegistry()
+    monkeypatch.setattr(gateway, "get_private_retrieval_grants", lambda: grants)
+    setattr(grants, "test_token", grants.issue(owner_id="owner_teacher", query="函数", limit=5))
 
     app = FastAPI()
     app.add_exception_handler(_GatewayHttpError, gateway_error_handler)
@@ -161,6 +184,34 @@ def test_wrong_token_rejected(gateway_client: TestClient) -> None:
     )
     assert response.status_code == 401
     assert response.json()["error"]["code"] == "TOOL_UNAUTHORIZED"
+
+
+def test_private_search_requires_matching_one_use_consent(gateway_client: TestClient) -> None:
+    grants = gateway.get_private_retrieval_grants()
+    token = getattr(grants, "test_token")
+    body = {"query": "函数", "consent_token": token, "limit": 5}
+    response = gateway_client.post(
+        "/internal/agent-tools/v1/search-private-library", json=body, headers=_auth()
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["items"][0]["excerpt"] == "函数单调性的课堂例题。"
+    assert payload["content_scope"] == "matching_excerpts"
+    assert "owner_id" not in payload["items"][0]
+    replay = gateway_client.post(
+        "/internal/agent-tools/v1/search-private-library", json=body, headers=_auth()
+    )
+    assert replay.status_code == 403
+    assert replay.json()["error"]["code"] == "PRIVATE_CONSENT_REQUIRED"
+
+
+def test_private_search_rejects_model_owner_selector(gateway_client: TestClient) -> None:
+    response = gateway_client.post(
+        "/internal/agent-tools/v1/search-private-library",
+        json={"query": "函数", "consent_token": "x" * 32, "limit": 5, "owner_id": "other"},
+        headers=_auth(),
+    )
+    assert response.status_code == 422
 
 
 def test_gateway_disabled_when_token_unconfigured(monkeypatch: pytest.MonkeyPatch) -> None:

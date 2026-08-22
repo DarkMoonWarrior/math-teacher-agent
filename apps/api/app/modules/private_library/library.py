@@ -27,6 +27,8 @@ from app.modules.private_library.schemas import (
     LibraryItemList,
     LibraryItemSummary,
     LibraryItemView,
+    PrivateLibrarySearchItem,
+    PrivateLibrarySearchResult,
     LibraryStats,
     LibraryTextReviewCommand,
     LibraryTextRevisionList,
@@ -47,6 +49,8 @@ class PrivateLibrary:
     MAX_DOCX_UNCOMPRESSED_BYTES = 200 * 1024 * 1024
     MAX_IMAGE_PIXELS = 25_000_000
     MAX_CANDIDATES = 100
+    MAX_PRIVATE_SEARCH_LIMIT = 8
+    MAX_PRIVATE_SEARCH_EXCERPT = 480
 
     def __init__(self, database_path: Path, file_root: Path) -> None:
         self.database_path = database_path.resolve()
@@ -149,6 +153,63 @@ class PrivateLibrary:
                 (*values, limit),
             ).fetchall()
         return LibraryItemList(items=[self._summary(row) for row in rows], total=total)
+
+    def search_confirmed_text(
+        self,
+        query: str,
+        *,
+        limit: int = 5,
+        owner_id: str,
+    ) -> PrivateLibrarySearchResult:
+        """Return bounded excerpts from this owner's active, confirmed resources only."""
+        normalized_query = re.sub(r"\s+", " ", query).strip()
+        if not normalized_query:
+            raise PrivateLibraryError("私人检索关键词不能为空")
+        if not 1 <= limit <= self.MAX_PRIVATE_SEARCH_LIMIT:
+            raise PrivateLibraryError("私人检索最多返回 8 份资料")
+        terms = list(
+            dict.fromkeys(
+                term.casefold()
+                for term in re.findall(r"[\w\u4e00-\u9fff]+", normalized_query)
+                if term.strip()
+            )
+        )
+        if not terms:
+            raise PrivateLibraryError("私人检索关键词不能为空")
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT library_item_id, title, corrected_text, version, rights_basis
+                FROM library_items
+                WHERE owner_id = ? AND lifecycle_state = 'active'
+                    AND text_review_status = 'confirmed' AND corrected_text != ''
+                ORDER BY updated_at DESC
+                """,
+                (owner_id,),
+            ).fetchall()
+        matches: list[PrivateLibrarySearchItem] = []
+        for row in rows:
+            searchable_text = re.sub(r"\s+", " ", row["corrected_text"]).strip()
+            folded = searchable_text.casefold()
+            positions = [folded.find(term) for term in terms]
+            positions = [position for position in positions if position >= 0]
+            if not positions:
+                continue
+            matches.append(
+                PrivateLibrarySearchItem(
+                    library_item_id=row["library_item_id"],
+                    title=row["title"],
+                    excerpt=self._bounded_excerpt(searchable_text, min(positions)),
+                    source_version=row["version"],
+                    rights_basis=row["rights_basis"],
+                )
+            )
+        return PrivateLibrarySearchResult(
+            query=normalized_query,
+            items=matches[:limit],
+            total=len(matches),
+            truncated=len(matches) > limit,
+        )
 
     def change_lifecycle(
         self,
@@ -1052,6 +1113,16 @@ class PrivateLibrary:
         return private_use_glyph_count(text) + len(
             re.findall(r"[�□■]|〔公式符号待核〕", text)
         )
+
+    @classmethod
+    def _bounded_excerpt(cls, text: str, match_start: int) -> str:
+        compact = re.sub(r"\s+", " ", text).strip()
+        if len(compact) <= cls.MAX_PRIVATE_SEARCH_EXCERPT:
+            return compact
+        start = max(0, match_start - 120)
+        end = min(len(compact), start + cls.MAX_PRIVATE_SEARCH_EXCERPT - 2)
+        start = max(0, end - (cls.MAX_PRIVATE_SEARCH_EXCERPT - 2))
+        return f"{'…' if start else ''}{compact[start:end]}{'…' if end < len(compact) else ''}"
 
     @staticmethod
     def _split_questions(text: str) -> list[str]:

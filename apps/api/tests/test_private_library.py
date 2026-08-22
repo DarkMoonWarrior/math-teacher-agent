@@ -19,6 +19,8 @@ from app.modules.private_library import (
     OpenAIResourceOCRProvider,
     PrivateLibrary,
     PrivateLibraryError,
+    PrivateRetrievalConsentError,
+    PrivateRetrievalGrantRegistry,
     QuestionCandidateCurriculum,
     QuestionCandidateUpdate,
 )
@@ -90,6 +92,69 @@ def test_docx_is_extracted_but_remains_private(tmp_path: Path) -> None:
     assert not item.model_training_allowed
     assert not item.adaptation_allowed
     assert item.text_review_status == "pending"
+
+
+def test_private_search_returns_only_owner_confirmed_active_bounded_excerpts(tmp_path: Path) -> None:
+    library = make_library(tmp_path)
+    mine = library.ingest(
+        ingest_command(title="我的单调性讲义"),
+        filename="private-source.docx",
+        content=docx_bytes("占位文本"),
+    )
+    library.review(
+        mine.library_item_id,
+        LibraryTextReviewCommand(corrected_text="前言。" + "函数单调性课堂例题。" * 80, confirm=True),
+        owner_id="owner_teacher",
+        reviewer_id="owner_teacher",
+    )
+    pending = library.ingest(
+        ingest_command(title="未确认资料"), filename="pending.docx", content=docx_bytes("另一个文件")
+    )
+    library.review(
+        pending.library_item_id,
+        LibraryTextReviewCommand(corrected_text="函数单调性不应被检索", confirm=False),
+        owner_id="owner_teacher",
+        reviewer_id="owner_teacher",
+    )
+    other = library.ingest(
+        ingest_command(owner_id="other_teacher", title="他人资料"),
+        filename="other.docx",
+        content=docx_bytes("不同所有者"),
+    )
+    library.review(
+        other.library_item_id,
+        LibraryTextReviewCommand(corrected_text="函数单调性他人正文", confirm=True),
+        owner_id="other_teacher",
+        reviewer_id="other_teacher",
+    )
+
+    result = library.search_confirmed_text("函数单调性", owner_id="owner_teacher")
+
+    assert result.total == 1
+    assert result.items[0].library_item_id == mine.library_item_id
+    assert len(result.items[0].excerpt) <= 480
+    payload = result.model_dump()
+    assert "original_filename" not in payload["items"][0]
+    assert "owner_id" not in payload["items"][0]
+    assert "corrected_text" not in payload["items"][0]
+
+
+def test_private_retrieval_grant_is_bound_and_single_use() -> None:
+    now = [10.0]
+    grants = PrivateRetrievalGrantRegistry(ttl_seconds=5, clock=lambda: now[0])
+    token = grants.issue(owner_id="teacher_a", query="  函数  单调性 ", limit=5)
+    assert grants.consume(token, owner_id="teacher_a", query="函数 单调性", limit=5) == "teacher_a"
+    with pytest.raises(PrivateRetrievalConsentError):
+        grants.consume(token, owner_id="teacher_a", query="函数 单调性", limit=5)
+
+    mismatch = grants.issue(owner_id="teacher_a", query="数列", limit=3)
+    with pytest.raises(PrivateRetrievalConsentError):
+        grants.consume(mismatch, owner_id="teacher_b", query="数列", limit=3)
+
+    expired = grants.issue(owner_id="teacher_a", query="圆锥曲线", limit=5)
+    now[0] = 16.0
+    with pytest.raises(PrivateRetrievalConsentError):
+        grants.consume(expired, owner_id="teacher_a", query="圆锥曲线", limit=5)
 
 
 def test_pdf_text_is_extracted_and_download_path_is_confined(tmp_path: Path) -> None:

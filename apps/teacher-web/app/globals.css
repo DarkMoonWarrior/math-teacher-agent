@@ -1417,6 +1417,48 @@ svg { flex: 0 0 auto; }
   padding-top: var(--space-xl);
 }
 
+.library-private-search {
+  display: grid;
+  gap: var(--space-lg);
+  padding: clamp(1.4rem, 3vw, 2.5rem);
+  border: 1px solid color-mix(in srgb, var(--color-vermilion) 30%, var(--color-rule));
+  border-radius: 2rem;
+  background:
+    radial-gradient(circle at 90% 0%, color-mix(in srgb, var(--color-vermilion) 13%, transparent), transparent 38%),
+    var(--color-paper);
+  box-shadow: 0 1.4rem 4rem color-mix(in srgb, var(--color-ink) 7%, transparent);
+}
+
+.library-private-search > header { display: flex; justify-content: space-between; gap: var(--space-lg); align-items: end; }
+.library-private-search > header > div { display: grid; gap: var(--space-2xs); }
+.library-private-search > header span { color: var(--color-vermilion); font-size: .78rem; letter-spacing: .12em; text-transform: uppercase; }
+.library-private-search > header h2 { margin: 0; max-width: 19ch; font-family: var(--font-display); font-size: clamp(1.7rem, 3.5vw, 3rem); font-weight: 500; line-height: 1.04; }
+.library-private-search > header > p { display: inline-flex; align-items: center; gap: .45rem; margin: 0; color: var(--color-ink-muted); font-size: .84rem; }
+.library-private-search > header svg { width: 1rem; }
+.library-private-search form, .library-private-search form > label:first-child { display: grid; gap: .65rem; }
+.library-private-search form > label:first-child > span { font-size: .82rem; font-weight: 650; }
+.library-private-search__input { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: .75rem; padding: .55rem .55rem .55rem 1rem; border: 1px solid var(--color-rule-strong); border-radius: 1.35rem; background: color-mix(in srgb, var(--color-canvas) 70%, transparent); transition: border-color .2s ease, box-shadow .2s ease; }
+.library-private-search__input:focus-within { border-color: var(--color-vermilion); box-shadow: 0 0 0 .25rem color-mix(in srgb, var(--color-vermilion) 10%, transparent); }
+.library-private-search__input > svg { width: 1.1rem; color: var(--color-ink-muted); }
+.library-private-search__input input { min-width: 0; border: 0; outline: 0; background: transparent; color: var(--color-ink); font: inherit; }
+.library-private-search__input button { display: inline-flex; align-items: center; gap: .45rem; min-height: 2.9rem; padding: 0 1.1rem; border: 0; border-radius: 1rem; background: var(--color-ink); color: var(--color-canvas); cursor: pointer; }
+.library-private-search__input button:disabled { opacity: .42; cursor: not-allowed; }
+.library-private-search__input button svg { width: 1rem; }
+.library-private-search__consent { display: flex; gap: .65rem; align-items: flex-start; margin-top: .85rem; color: var(--color-ink-muted); font-size: .82rem; line-height: 1.55; }
+.library-private-search__consent input { margin-top: .25rem; accent-color: var(--color-vermilion); }
+.library-private-search__results > .is-error { color: var(--color-error); }
+.library-private-search__empty { display: flex; gap: .7rem; align-items: center; padding: 1rem; border-top: 1px solid var(--color-rule); color: var(--color-ink-muted); }
+.library-private-search__empty svg { width: 1.1rem; }
+.library-private-search__count { margin: 0 0 .8rem; color: var(--color-ink-muted); font-size: .82rem; }
+.library-private-search__results ol { display: grid; gap: .75rem; margin: 0; padding: 0; list-style: none; }
+.library-private-search__results li { display: grid; gap: .65rem; padding: 1rem 1.1rem; border: 1px solid var(--color-rule); border-radius: 1.15rem; background: color-mix(in srgb, var(--color-canvas) 62%, transparent); animation: library-result-in .35s both; }
+.library-private-search__results li header, .library-private-search__results li footer { display: flex; justify-content: space-between; gap: 1rem; }
+.library-private-search__results li header span { display: inline-flex; align-items: center; gap: .3rem; color: var(--color-vermilion); font-size: .75rem; }
+.library-private-search__results li header svg { width: .9rem; }
+.library-private-search__results li p { margin: 0; color: var(--color-ink-soft); line-height: 1.7; }
+.library-private-search__results li footer { color: var(--color-ink-muted); font-size: .75rem; }
+@keyframes library-result-in { from { opacity: 0; transform: translateY(.45rem); } to { opacity: 1; transform: translateY(0); } }
+
 .library-shelf > header > p {
   align-items: center;
   color: var(--color-teal);
