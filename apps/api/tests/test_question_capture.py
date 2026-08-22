@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from io import BytesIO
 from pathlib import Path
 
@@ -7,9 +8,12 @@ import pytest
 from fastapi.testclient import TestClient
 from PIL import Image, ImageDraw
 
+import app.routes.question_capture as question_capture_route
+from app.core.config import Settings
 from app.core.identity import CurrentTeacher, get_current_teacher
 from app.main import app
 from app.modules.question_capture import (
+    DeepSeekVisionQuestionRecognitionProvider,
     LowConfidenceRegion,
     QuestionCapture,
     QuestionCaptureCommand,
@@ -431,3 +435,119 @@ def test_recognition_and_review_fail_closed_across_owners(tmp_path: Path) -> Non
             QuestionRecognitionReviewCommand(stem_plain="越权"),
             owner_id="teacher_b",
         )
+
+
+def test_deepseek_vision_adapter_uses_image_json_mode_without_leaking_teacher_id(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    image_path = tmp_path / "question.png"
+    image_path.write_bytes(image_bytes())
+    captured: dict[str, object] = {}
+
+    class Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self):
+            content = {
+                "stem_plain": "已知函数 f(x)=x²。",
+                "stem_latex": r"已知函数 $f(x)=x^2$。",
+                "options": [],
+                "low_confidence_regions": [],
+                "warnings": ["请教师核对。"],
+                "requires_visual_reasoning": False,
+            }
+            return json.dumps({
+                "choices": [{"message": {"content": json.dumps(content, ensure_ascii=False)}}],
+                "usage": {"prompt_tokens": 12, "completion_tokens": 8, "total_tokens": 20},
+            }, ensure_ascii=False).encode()
+
+    def fake_urlopen(request, timeout):
+        captured["url"] = request.full_url
+        captured["authorization"] = request.headers["Authorization"]
+        captured["payload"] = json.loads(request.data.decode())
+        captured["timeout"] = timeout
+        return Response()
+
+    monkeypatch.setattr("app.modules.question_capture.recognition.urlopen", fake_urlopen)
+    provider = DeepSeekVisionQuestionRecognitionProvider(
+        api_key="test-secret",
+        model="deepseek-v4-flash-vision-exp",
+        base_url="https://api.deepseek.com/",
+        timeout_seconds=27,
+    )
+    result = provider.recognize(
+        path=image_path,
+        mime_type="image/png",
+        teacher_id="teacher_private",
+    )
+
+    payload = captured["payload"]
+    assert isinstance(payload, dict)
+    assert captured["url"] == "https://api.deepseek.com/chat/completions"
+    assert captured["authorization"] == "Bearer test-secret"
+    assert captured["timeout"] == 27
+    assert payload["model"] == "deepseek-v4-flash-vision-exp"
+    assert payload["response_format"] == {"type": "json_object"}
+    assert payload["thinking"] == {"type": "disabled"}
+    image_block = payload["messages"][1]["content"][1]
+    assert image_block["type"] == "image_url"
+    assert image_block["image_url"]["url"].startswith("data:image/png;base64,")
+    assert image_block["image_url"]["detail"] == "original"
+    assert "teacher_private" not in json.dumps(payload, ensure_ascii=False)
+    assert result.stem_plain == "已知函数 f(x)=x²。"
+    assert result.warnings == ["请教师核对。"]
+
+
+def test_deepseek_vision_adapter_rejects_malformed_result(tmp_path: Path, monkeypatch) -> None:
+    image_path = tmp_path / "question.png"
+    image_path.write_bytes(image_bytes())
+
+    class Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self):
+            return json.dumps({"choices": [{"message": {"content": "not json"}}]}).encode()
+
+    monkeypatch.setattr(
+        "app.modules.question_capture.recognition.urlopen",
+        lambda *_args, **_kwargs: Response(),
+    )
+    provider = DeepSeekVisionQuestionRecognitionProvider(api_key="test-secret")
+    with pytest.raises(QuestionRecognitionError, match="不符合题面结构"):
+        provider.recognize(
+            path=image_path,
+            mime_type="image/png",
+            teacher_id="teacher_a",
+        )
+
+
+def test_route_composition_prefers_configured_deepseek_vision_adapter(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    settings = Settings(
+        question_capture_db=tmp_path / "capture.sqlite3",
+        question_capture_dir=tmp_path / "media",
+        deepseek_api_key="test-deepseek-key",
+        deepseek_vision_model="deepseek-v4-flash-vision-exp",
+        openai_api_key="test-openai-key",
+    )
+    monkeypatch.setattr(question_capture_route, "get_settings", lambda: settings)
+    monkeypatch.setattr(question_capture_route, "get_model_operations_registry", lambda: None)
+    question_capture_route.get_question_capture.cache_clear()
+    try:
+        capture = question_capture_route.get_question_capture()
+        provider = capture.recognition_providers["external"]
+        assert isinstance(provider, DeepSeekVisionQuestionRecognitionProvider)
+        assert provider.model == "deepseek-v4-flash-vision-exp"
+    finally:
+        question_capture_route.get_question_capture.cache_clear()

@@ -26,6 +26,7 @@ FEATURE_LABELS = {
     "question_variant_polish": "教师变式润色",
     "solution_assistant": "解题助手",
     "private_resource_ocr": "私人资料 OCR",
+    "private_question_ocr": "私人单题 OCR",
 }
 
 

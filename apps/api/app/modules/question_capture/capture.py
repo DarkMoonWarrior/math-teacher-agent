@@ -322,7 +322,7 @@ class QuestionCapture:
         provider = self.recognition_providers.get(command.mode)
         if provider is None:
             if command.mode == "external":
-                raise QuestionCaptureError("外部 OCR 尚未配置 OpenAI 图像模型与 API Key")
+                raise QuestionCaptureError("外部 OCR 尚未配置 DeepSeek Vision 或 OpenAI 图像模型与 API Key")
             raise QuestionCaptureError("本地数学 OCR 尚未配置")
 
         with self._connect() as connection:

@@ -15,6 +15,7 @@ from app.modules.question_capture import (
     QuestionMediaSource,
     QuestionMediaTransformCommand,
     LocalQuestionRecognitionProvider,
+    DeepSeekVisionQuestionRecognitionProvider,
     OpenAIQuestionRecognitionProvider,
     QuestionRecognitionCommand,
     QuestionRecognitionReviewCommand,
@@ -29,7 +30,15 @@ router = APIRouter(prefix="/question-capture", tags=["question-capture"])
 def get_question_capture() -> QuestionCapture:
     settings = get_settings()
     providers = {"local": LocalQuestionRecognitionProvider()}
-    if settings.openai_api_key:
+    if settings.deepseek_api_key:
+        providers["external"] = DeepSeekVisionQuestionRecognitionProvider(
+            api_key=settings.deepseek_api_key,
+            model=settings.deepseek_vision_model,
+            base_url=settings.deepseek_base_url,
+            timeout_seconds=settings.deepseek_timeout_seconds,
+            recorder=get_model_operations_registry(),
+        )
+    elif settings.openai_api_key:
         providers["external"] = OpenAIQuestionRecognitionProvider(
             api_key=settings.openai_api_key,
             model=settings.openai_model,

@@ -17,7 +17,7 @@
 - M6 第三条切片：可对照原文件、首次提取文本和教师校对稿，运行本地 PDF OCR 或逐次授权的外部 OCR，并保留 owner-scoped 修订记录；
 - M6 第四条切片：只从教师确认的当前文本版本生成可编辑候选；教材路径由受控 Curriculum 补全，导入固定为 owner 私有、待审核、待数学验证；
 - M6 第五条切片：每次私人检索都需教师明确同意；一次性许可绑定当前教师、查询与数量，Agent 只能看到确认文本的有界匹配片段及来源版本/权利状态；
-- M7 前两条切片：Solve 可上传、粘贴或拍摄单题图片；`QuestionCapture` 保留 owner-scoped private media/OCR revision，并输出可校对的普通题面、LaTeX、选项与低置信度提示；
+- M7 前两条切片：Solve 可上传、粘贴或拍摄单题图片；`QuestionCapture` 保留 owner-scoped private media/OCR revision，并通过本地、DeepSeek Vision 或 OpenAI adapter 输出可校对的普通题面、LaTeX、选项与低置信度提示；
 - QuestionBank、MathVerifier、Curriculum、PrivateLibrary、PDF、试卷、教案等成熟业务模块。
 
 当前 Search、Solve 与 Private Library 入口已接入新工作台；M6 Gate E 已严格通过，项目所有者已确认进入 M7。M7 当前完成私有单题媒体与文字/公式识别校对，尚未实现图形视觉推理或把图片/识别结果交给 Solve；教案和组卷继续明确标记为预览。最新状态见 [`docs/PROJECT-STATUS.md`](docs/PROJECT-STATUS.md)。

@@ -236,6 +236,125 @@ class OpenAIQuestionRecognitionProvider:
         }
 
 
+class DeepSeekVisionQuestionRecognitionProvider:
+    """DeepSeek's experimental vision model behind the shared recognition seam."""
+
+    name = "deepseek"
+    MAX_EXTERNAL_BYTES = 15 * 1024 * 1024
+
+    def __init__(
+        self,
+        *,
+        api_key: str,
+        model: str = "deepseek-v4-flash-vision-exp",
+        base_url: str = "https://api.deepseek.com",
+        timeout_seconds: int = 90,
+        recorder: ModelRunRecorder | None = None,
+    ) -> None:
+        if not api_key:
+            raise ValueError("DeepSeek API Key 不能为空")
+        self.api_key = api_key
+        self.model = model
+        self.base_url = base_url.rstrip("/")
+        self.timeout_seconds = timeout_seconds
+        self.recorder = recorder or NullModelRunRecorder()
+
+    def recognize(
+        self,
+        *,
+        path: Path,
+        mime_type: str,
+        teacher_id: str,
+    ) -> QuestionRecognitionResult:
+        content = path.read_bytes()
+        if len(content) > self.MAX_EXTERNAL_BYTES:
+            raise QuestionRecognitionError("发送到 DeepSeek Vision 的题目图片不能超过 15 MB")
+        encoded = base64.b64encode(content).decode("ascii")
+        schema_example = {
+            "stem_plain": "忠实转录的普通题面",
+            "stem_latex": "含 $LaTeX$ 的完整题面",
+            "options": [{"key": "A", "text": "选项内容"}],
+            "low_confidence_regions": [{
+                "text": "难以辨认的原文",
+                "reason": "说明原因",
+                "confidence": 0.5,
+                "box": [0.0, 0.0, 1.0, 1.0],
+            }],
+            "warnings": ["需要教师核对的内容"],
+            "requires_visual_reasoning": False,
+        }
+        payload = {
+            "model": self.model,
+            "messages": [
+                {
+                    "role": "system",
+                    "content": (
+                        "你是高中数学单题 OCR 助手。只忠实转录，不解题、不补题。"
+                        "普通文字写入 stem_plain，数学表达用 LaTeX 写入 stem_latex，选择题拆出 options。"
+                        "无法辨认处不得猜测，必须列入 low_confidence_regions。"
+                        "若答案依赖坐标系、几何图、函数图像、表格或其他视觉条件，"
+                        "requires_visual_reasoning 必须为 true。只返回 JSON。"
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": (
+                                "识别这张私人题目图片，返回可供教师校对的 JSON。"
+                                f"字段和类型严格参照此示例：{json.dumps(schema_example, ensure_ascii=False)}"
+                            ),
+                        },
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:{mime_type};base64,{encoded}",
+                                "detail": "original",
+                            },
+                        },
+                    ],
+                },
+            ],
+            "response_format": {"type": "json_object"},
+            "thinking": {"type": "disabled"},
+            "max_tokens": 4096,
+            "stream": False,
+        }
+        request = Request(
+            f"{self.base_url}/chat/completions",
+            data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+            headers={"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"},
+            method="POST",
+        )
+        with self.recorder.track(
+            feature="private_question_ocr",
+            provider=self.name,
+            model=self.model,
+            prompt_version="private-question-ocr-v2",
+            actor_id=teacher_id,
+        ) as run:
+            try:
+                with urlopen(request, timeout=self.timeout_seconds) as response:
+                    raw = json.loads(response.read().decode("utf-8"))
+            except HTTPError as exc:
+                details = exc.read().decode("utf-8", errors="replace")[:500]
+                raise QuestionRecognitionError(
+                    f"DeepSeek Vision 返回 HTTP {exc.code}：{details}"
+                ) from exc
+            except (URLError, TimeoutError, OSError, json.JSONDecodeError) as exc:
+                raise QuestionRecognitionError(f"DeepSeek Vision 调用失败：{exc}") from exc
+            run.capture_response(raw)
+        try:
+            message = raw["choices"][0]["message"]["content"]
+            parsed = json.loads(_strip_json_fence(str(message)))
+            return _recognition_result(parsed)
+        except (KeyError, IndexError, TypeError, ValueError, json.JSONDecodeError) as exc:
+            raise QuestionRecognitionError(
+                f"DeepSeek Vision 返回内容不符合题面结构：{exc}"
+            ) from exc
+
+
 def _split_options(lines: list[str]) -> tuple[list[QuestionOption], list[str]]:
     options: list[QuestionOption] = []
     stem: list[str] = []
@@ -246,3 +365,28 @@ def _split_options(lines: list[str]) -> tuple[list[QuestionOption], list[str]]:
         else:
             stem.append(stripped)
     return options, stem
+
+
+def _strip_json_fence(value: str) -> str:
+    content = value.strip()
+    if content.startswith("```"):
+        first_newline = content.find("\n")
+        if first_newline >= 0:
+            content = content[first_newline + 1:]
+        if content.endswith("```"):
+            content = content[:-3]
+    return content.strip()
+
+
+def _recognition_result(parsed: dict) -> QuestionRecognitionResult:
+    return QuestionRecognitionResult(
+        stem_plain=str(parsed["stem_plain"]).strip(),
+        stem_latex=str(parsed.get("stem_latex", "")).strip(),
+        options=[QuestionOption.model_validate(item) for item in parsed.get("options", [])],
+        low_confidence_regions=[
+            LowConfidenceRegion.model_validate(item)
+            for item in parsed.get("low_confidence_regions", [])
+        ],
+        warnings=[str(item) for item in parsed.get("warnings", [])],
+        requires_visual_reasoning=bool(parsed.get("requires_visual_reasoning", False)),
+    )

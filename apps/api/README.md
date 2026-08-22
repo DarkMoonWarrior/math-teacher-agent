@@ -28,7 +28,7 @@ Agent 不得直接访问本目录的数据库实现；它只能经过内部 Tool
 
 Public 路由通过 `app/core/identity.py` 的 current-teacher seam 在服务端绑定 owner 和 reviewer；浏览器不能提交或选择身份。列表、详情、原文件、OCR、revision、后台任务和拆题候选均按 owner fail closed。当前 adapter 仅用于本地开发并固定返回 `owner_teacher`，不代表生产认证已经完成。
 
-本地数学 OCR 当前只支持 PDF；外部 OCR 每次调用都必须重新提交明确同意。两类 OCR 只生成待教师校对草稿，不会改变 private 状态或自动进入题库。
+本地数学 OCR 当前只支持 PDF；外部 OCR 每次调用都必须重新提交明确同意。Private Library 外部 OCR 使用已配置的 OpenAI adapter；M7 单题图片可使用 DeepSeek `deepseek-v4-flash-vision-exp`，未配置 DeepSeek 时回退到 OpenAI 图像 adapter。所有 OCR 只生成待教师校对草稿，不会改变 private 状态或自动进入题库。
 
 拆题候选只允许从教师确认的当前文本版本生成；候选编辑与教材映射同样由服务端身份绑定 owner/editor。浏览器只能提交 Curriculum `node_id`，可信教材路径由业务端补全。未映射候选不能导入；导入结果固定为 `private`、`pending` 和 `needs_math_review`，并保留 owner 与来源版本证据。
 

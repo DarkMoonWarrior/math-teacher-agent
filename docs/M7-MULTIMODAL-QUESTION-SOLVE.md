@@ -63,7 +63,9 @@ Solve 输入区增加：上传图片、粘贴截图、拍照入口、图片预�
 
 第一条切片实现证据：`QuestionCapture.prepare` 对实际 PNG/JPEG/WebP 内容进行探测，限制 15 MB 与 2500 万像素，拒绝损坏、过小和近乎空白图片，并对低分辨率/低对比度返回可见警告。原图、旋转和裁剪使用同一 owner-scoped `asset_id` 与递增 revision；原始 revision 不覆盖。公开路由从服务端 current-teacher seam 绑定 owner，返回值只有受控相对内容端点，不含 owner、存储名或文件路径。新 Solve composer 提供上传、剪贴板与系统相机入口、预览、旋转、裁剪和本次任务移除。
 
-第二条切片实现证据：`QuestionCapture.recognize/review_recognition` 将本地与外部识别隐藏在同一 adapter seam 后，结构化保存普通题面、LaTeX、选项、低置信度区域、provider/model、处理模式、外部同意证据和教师校对备注。识别记录使用独立 append-only revision，并绑定当时的 media revision；图片继续旋转或裁剪后旧识别自动变成 `stale`，不能确认。外部 OCR 只有在当前动作明确同意且配置 OpenAI 图像模型时才调用；本地可选依赖未安装时显式失败。DeepSeek 当前文本接口不被伪装成图像 OCR。教师端可选择识别方式、查看低置信度提示、编辑题面/LaTeX/选项并保存草稿或确认，且明确不会在本切片自动送入 Solve。
+第二条切片实现证据：`QuestionCapture.recognize/review_recognition` 将本地与外部识别隐藏在同一 adapter seam 后，结构化保存普通题面、LaTeX、选项、低置信度区域、provider/model、处理模式、外部同意证据和教师校对备注。识别记录使用独立 append-only revision，并绑定当时的 media revision；图片继续旋转或裁剪后旧识别自动变成 `stale`，不能确认。外部 OCR 只有在当前动作明确同意时才调用；已接入 DeepSeek 官方实验视觉模型 `deepseek-v4-flash-vision-exp`，未配置 DeepSeek 时仍可使用 OpenAI 图像 adapter，本地可选依赖未安装则显式失败。教师端可选择识别方式、查看低置信度提示、编辑题面/LaTeX/选项并保存草稿或确认，且明确不会在本切片自动送入 Solve。
+
+2026-08-22 能力更正：DeepSeek 官方文档新增 `deepseek-v4-flash-vision-exp` 图片输入能力；仓库先前“DeepSeek 仅支持文本”的判断已废止。项目使用 OpenAI-compatible Chat Completions 图片块、JSON 输出和 `detail=original`，真实 synthetic 数学题验证已准确返回题面、LaTeX、四个选项与视觉依赖标记。该模型仍按 true external adapter 治理，实验状态不会降低逐次同意、教师校对或 private 约束。
 
 ## 6. M7 完成 Gate
 

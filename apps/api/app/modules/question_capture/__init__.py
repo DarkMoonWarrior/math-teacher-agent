@@ -1,5 +1,6 @@
 from .capture import QuestionCapture, QuestionCaptureError
 from .recognition import (
+    DeepSeekVisionQuestionRecognitionProvider,
     LocalQuestionRecognitionProvider,
     OpenAIQuestionRecognitionProvider,
     QuestionRecognitionError,
@@ -22,6 +23,7 @@ from .schemas import (
 )
 
 __all__ = [
+    "DeepSeekVisionQuestionRecognitionProvider",
     "LocalQuestionRecognitionProvider",
     "LowConfidenceRegion",
     "OpenAIQuestionRecognitionProvider",

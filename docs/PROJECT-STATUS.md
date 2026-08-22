@@ -66,6 +66,7 @@
 - M6 固定评测与 Gate E：12 个项目自建 synthetic 场景覆盖空库、格式/OCR 失败、模型不可用、Tool 超时、取消、许可重放、跨 owner、未确认/回收站过滤、有界返回、失败后新许可恢复和派生题私有状态，8 类违规均为 0。FastAPI 291 项、Agent 39 项、Teacher Web 28 项测试及全部 typecheck/build 通过；legacy build/typecheck、320—1920px 浏览器、静态边界和仓库卫生通过。
 - M7 第一条切片：新增 `QuestionCapture` 深模块和独立 owner-scoped 本地 adapter；实际 PNG/JPEG/WebP、15 MB、2500 万像素、最小尺寸与近空白检查 fail closed，低分辨率/低对比度产生显式警告。原图、旋转、裁剪 revision 可追踪，跨 owner 的详情、内容和变换均返回 404。真实浏览器使用项目 synthetic 图片完成上传、REV 1→旋转 REV 2→裁剪 REV 3、本次任务移除；320/375/768/1440px 无横向溢出，关键入口有可访问名称，控制台零告警。
 - M7 第二条切片：新增本地/外部单题 OCR adapter seam、结构化题面/LaTeX/选项/低置信度结果、逐次外部同意和 append-only 识别 revision。识别绑定 media revision，后续图片变换会把旧结果标为 `stale` 并阻止确认；公开路由继续由服务端绑定 teacher，浏览器无法选择 owner/reviewer。教师端提供识别方式、逐次同意、校对、保存草稿和确认入口，并明确不会在当前切片把内容交给 Solve。
+- 2026-08-22 DeepSeek Vision 更正与实测：官方新增 `deepseek-v4-flash-vision-exp` 图片输入；已作为第二个真实外部 adapter 接入现有识别 seam，复用 DeepSeek Key、base URL、逐次同意与模型运行记录。仓库 synthetic 数学题真实调用准确返回题面、LaTeX、A–D 选项且无低置信度项；旧的“DeepSeek 仅文本”判断已移除。
 
 ## 已知未决项
 
