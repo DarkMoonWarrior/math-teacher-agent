@@ -4,6 +4,7 @@ import type {
   SearchTaskResult,
   SolveTaskProgressStage,
   SolveTaskResult,
+  LibraryItemSummary,
 } from "./contracts";
 import { HttpTeacherWorkspace } from "./http-adapter";
 
@@ -108,11 +109,80 @@ function solveResultFixture(): SolveTaskResult {
   };
 }
 
+function libraryItemFixture(): LibraryItemSummary {
+  return {
+    library_item_id: "lib_1",
+    title: "函数单调性讲义",
+    original_filename: "函数讲义.docx",
+    file_kind: "docx",
+    mime_type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    size_bytes: 1024,
+    page_count: null,
+    extraction_status: "extracted",
+    text_review_status: "pending",
+    extracted_char_count: 128,
+    corrected_char_count: 128,
+    rights_basis: "private_teaching_only",
+    lifecycle_state: "active",
+    trashed_at: null,
+    visibility: "private",
+    public_search_allowed: false,
+    model_training_allowed: false,
+    version: 1,
+    created_at: "2026-08-22T08:00:00+00:00",
+    updated_at: "2026-08-22T08:00:00+00:00",
+  };
+}
+
 afterEach(() => {
   vi.unstubAllGlobals();
 });
 
 describe("HttpTeacherWorkspace", () => {
+  it("loads only the server-scoped private library list", async () => {
+    const item = libraryItemFixture();
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ items: [item], total: 1 }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const workspace = new HttpTeacherWorkspace();
+    await expect(workspace.listPrivateLibrary()).resolves.toEqual({ items: [item], total: 1 });
+    expect(fetchMock).toHaveBeenCalledWith("/api/v1/library", expect.objectContaining({
+      headers: { Accept: "application/json" },
+    }));
+  });
+
+  it("uploads rights metadata without exposing an owner selector", async () => {
+    const item = libraryItemFixture();
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify(item), {
+      status: 201,
+      headers: { "Content-Type": "application/json" },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    const file = new File(["synthetic lesson"], "lesson.docx", {
+      type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    });
+
+    const workspace = new HttpTeacherWorkspace();
+    await expect(workspace.uploadPrivateLibrary({
+      file,
+      title: "函数单调性讲义",
+      rightsBasis: "private_teaching_only",
+      rightsStatement: "仅在本人的私人教学工作区内使用。",
+      rightsAcknowledged: true,
+    })).resolves.toEqual(item);
+
+    const init = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    const body = init.body as FormData;
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/v1/library");
+    expect(init.method).toBe("POST");
+    expect(body.get("rights_basis")).toBe("private_teaching_only");
+    expect(body.get("rights_acknowledged")).toBe("true");
+    expect(body.has("owner_id")).toBe(false);
+  });
+
   it("returns the structured result from the terminal stream event", async () => {
     const result = resultFixture();
     vi.stubGlobal("fetch", vi.fn(async () => streamResponse([

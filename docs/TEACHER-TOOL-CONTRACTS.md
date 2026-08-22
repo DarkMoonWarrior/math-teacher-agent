@@ -1,6 +1,6 @@
 # Teacher Tool 当前契约
 
-更新日期：2026-08-21
+更新日期：2026-08-22
 
 本文档是当前 model-visible Tool allowlist 的 source of truth。历史第一版五工具契约保留在 `docs/commercial-v1/TEACHER-TOOL-CONTRACTS-v1.md`，不代表 M5 当前状态。
 
@@ -12,8 +12,21 @@
 4. `find_similar_questions`
 5. `verify_question`
 6. `get_curriculum_node`
+7. `inspect_private_library`
 
-自动测试要求可见工具恰好等于该集合。bash、filesystem、web、subagent、workflow、terminal、数据库和任意 URL 能力均禁止。
+自动测试要求可见工具恰好等于该集合。bash、filesystem、web、subagent、workflow、terminal、数据库、私人文件和任意 URL 能力均禁止。
+
+## `inspect_private_library`
+
+- 路由：`POST /internal/agent-tools/v1/inspect-private-library`
+- 认证：`Authorization: Bearer <MATH_AI_TOOL_GATEWAY_TOKEN>`
+- 请求：空对象；`owner_id` 和其他额外字段一律拒绝
+- 业务接口：`PrivateLibrary.stats(owner_id=current_owner)`
+- 成功响应：资料总数、待校对数、已确认数、待 OCR 数、回收站数、文件类型计数、`visibility=private`、`content_included=false`
+- 禁止返回：owner 标识、标题、文件名、正文、路径、哈希、权利声明或原始文件
+- 当前本地 current owner 固定为 `owner_teacher`；M6 完成前必须替换为可验证的 current-owner seam，模型始终不能选择 owner
+
+该 Tool 只读且不代表模型已读取资料内容，不执行上传、OCR、校对、拆题、导入、删除、共享或发布。
 
 ## `solve_question`
 
@@ -33,4 +46,4 @@
 
 Tool 不保存、不发布、不批准答案或解析，不改变题库、权利、验证或 private/public 状态。Agent 必须原样保留可信等级与验证证据。
 
-其他五个工具的请求/响应继续沿用历史 v1 契约；FastAPI Pydantic 模型与 Agent TypeScript 类型是可执行契约，文档不覆盖实现门禁。
+其他五个历史只读工具的请求/响应继续沿用历史 v1 契约；FastAPI Pydantic 模型与 Agent TypeScript 类型是可执行契约，文档不覆盖实现门禁。

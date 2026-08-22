@@ -1,6 +1,6 @@
 # 当前架构与模块 seam
 
-更新日期：2026-08-21
+更新日期：2026-08-22
 
 ## 1. 总体结构
 
@@ -48,7 +48,15 @@ apps/web (legacy/reference Next.js UI, :3000)
 - Trust: 一次成功 run 必须且只能包含一次成功的 `solve_question` Tool 调用；最终 `SolutionResult` 只从该结构化输出建立。模型自由文本、额外 Tool 调用、失败 Tool 伪装的成功 payload、可信等级与验证证据冲突都会被拒绝。
 - Exposure: 浏览器只接收无原始 input/output 的 Tool 进度和结构化终态；`math_verification` 的 status、capability、scope 和 evidence source 由业务模块拥有。
 - UI: `TeacherWorkspace.solveQuestion` 通过同源无缓冲流接入；教师可输入完整题目或从 Search 结果转入，并在三页纸张中查看结构化解析、课堂提示与独立验证证据。
-- Current boundary: 代码 feature gate 默认关闭，本地显式开启；固定 synthetic eval 与完整 Gate E 已通过。M6 仍需项目所有者确认后才可启动。
+- Current boundary: 代码 feature gate 默认关闭，本地显式开启；固定 synthetic eval 与完整 Gate E 已通过。M5 不再扩展。
+
+### Private Library Agent module（M6 进行中）
+
+- Seam: `PrivateLibrary` 业务接口与版本化 internal Tool gateway；Agent 只看到产品拥有的结构化结果。
+- First slice: `inspect_private_library` 没有 model-supplied owner 参数，只返回本地 current owner 的聚合数量、处理状态和文件类型；`content_included=false`。
+- Trust: 标题、文件名、正文、原文件、路径和 owner 标识均不进入第一条 Tool 输出；Agent 不能据此声称已读取资料内容。
+- Current identity: 本地开发身份暂为 `owner_teacher`；它不是生产认证。M6 Gate 前必须把 current-owner 解析放到可替换 seam，并完成跨 owner 越权测试。
+- Next slices: 新 Teacher Web 上传/列表、逐次同意的 OCR/AI 校对、教师确认后拆题/映射、最小必要的私人检索；全部派生内容保持 private。
 
 ### Teacher Agent Runtime module
 
@@ -104,9 +112,10 @@ The primary UI should normally call `/api/v1` on its own origin. Next.js rewrite
 
 ## 6. Testing at the seam
 
-- UI adapter tests and type checks target Search/Solve observable progress, completion, same-run recovery, failure and cancellation states, plus both exact same-origin streaming proxies.
+- UI adapter tests and type checks target Search/Solve observable progress, completion, same-run recovery, failure and cancellation states, plus both exact same-origin streaming proxies；M6 UI 接入后扩展同一产品接口。
 - Search tests target `SearchAgentPipeline` and the HTTP route, not private ranking internals alone.
 - Solve tests target 唯一 Tool 证据、可信字段校验、结构化错误、真实 SSE、取消、恢复和 feature gate。
+- Private Library tests target owner-scoped 结果、private-by-default、revision、逐次外部处理同意、无正文概览 Tool 与越权失败路径。
 - Runtime conformance tests exercise both runtime adapters through the product-owned interface.
 - Security tests enforce the exact read-only Tool allowlist and absence of database access in `apps/agent`.
 - Business tests use synthetic/local adapters and assert published behaviour, rights, verification and privacy invariants.

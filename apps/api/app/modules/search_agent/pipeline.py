@@ -20,6 +20,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import time
 import uuid
@@ -421,11 +422,22 @@ class SearchAgentPipeline:
                 {"field": c.field, "value": c.value} for c in intent.soft_constraints()
             ],
         }
+        primary_query = (
+            intent.knowledge_points[0]
+            if intent.knowledge_points
+            else intent.raw_query
+        )
+        search_input = json.dumps(
+            {"query": primary_query, "limit": 20},
+            ensure_ascii=False,
+        )
         return (
             "请根据高中数学教师的下列搜题需求调用只读工具完成检索。\n"
             f"教师原始需求：{intent.raw_query}\n"
             "系统解析出的结构化意图（供选择工具参数参考，事实以工具返回结果为准）：\n"
             f"{structured}\n"
+            "确定性工具计划：必须且只能调用一次 search_questions，禁止调用其他工具；"
+            f"调用参数必须精确使用：{search_input}。收到结果后立即结束，结果为空也不得重试。\n"
             "硬性规则：只能从工具返回结果获得题目；禁止编造 question_id、题干、来源、年份、"
             "地区或验证状态；结果不足时如实说明，不得虚构题目补足数量；hard 条件不得放宽；"
             "不执行任何写操作；不要调用本需求无关的工具。"

@@ -521,6 +521,17 @@ def test_prompt_injection_cannot_expand_evidence(sa_bank, catalog) -> None:
     for secret in ("bash", "sqlite3", "SELECT ", "D:\\", "Bearer", "sk-"):
         assert secret not in system_text
 
+
+def test_runtime_instruction_uses_one_deterministic_search_call(sa_bank, catalog) -> None:
+    runtime = FakeRuntime(_result([]))
+    _run(_pipeline(sa_bank, catalog, runtime).run("找 1 道高中函数题"))
+
+    instruction = runtime.requests[0].user_message
+    assert "必须且只能调用一次 search_questions" in instruction
+    assert '"query": "函数"' in instruction
+    assert '"limit": 20' in instruction
+    assert "结果为空也不得重试" in instruction
+
 def test_assistant_explanation_grounded_facts_only(sa_bank, catalog) -> None:
     """Prompt 3.5 §5：assistant_explanation 不得携带结构化结果中不存在的事实。
 

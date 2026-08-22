@@ -17,6 +17,7 @@ from app.core.config import Settings
 from app.main import _GatewayHttpError, gateway_error_handler
 from app.modules.curriculum import CurriculumNode, InMemoryCurriculumCatalog
 from app.modules.math_verifier import MathVerifier
+from app.modules.private_library import LibraryStats
 from app.modules.question_bank import QuestionBank
 from app.modules.question_quality import QuestionQualityWorkflow
 from app.modules.question_similarity import QuestionSimilarityRegistry
@@ -121,6 +122,20 @@ def gateway_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClien
     monkeypatch.setattr(gateway, "get_question_quality_workflow", lambda: workflow)
     monkeypatch.setattr(gateway, "get_solution_assistant", lambda: solution_assistant)
     monkeypatch.setattr(gateway, "_catalog_for_path", lambda _path: catalog)
+
+    class FakePrivateLibrary:
+        def stats(self, *, owner_id: str) -> LibraryStats:
+            assert owner_id == "owner_teacher"
+            return LibraryStats(
+                total=3,
+                pending_review=2,
+                confirmed=1,
+                needs_ocr=1,
+                trashed=1,
+                by_file_kind={"pdf": 2, "docx": 1},
+            )
+
+    monkeypatch.setattr(gateway, "get_private_library", lambda: FakePrivateLibrary())
 
     app = FastAPI()
     app.add_exception_handler(_GatewayHttpError, gateway_error_handler)
@@ -426,6 +441,41 @@ def test_get_curriculum_node_contract(gateway_client: TestClient) -> None:
     )
     assert missing.status_code == 404
     assert missing.json()["error"]["code"] == "TOOL_NOT_FOUND"
+
+
+def test_inspect_private_library_returns_owner_scoped_aggregate_only(
+    gateway_client: TestClient,
+) -> None:
+    response = gateway_client.post(
+        "/internal/agent-tools/v1/inspect-private-library",
+        json={},
+        headers=_auth(),
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload == {
+        "total": 3,
+        "pending_review": 2,
+        "confirmed": 1,
+        "needs_ocr": 1,
+        "trashed": 1,
+        "by_file_kind": {"pdf": 2, "docx": 1},
+        "visibility": "private",
+        "content_included": False,
+        "request_id": "req_test_001",
+    }
+    assert not any(
+        key in payload
+        for key in ("owner_id", "title", "filename", "extracted_text", "corrected_text")
+    )
+
+    injected_owner = gateway_client.post(
+        "/internal/agent-tools/v1/inspect-private-library",
+        json={"owner_id": "other_teacher"},
+        headers=_auth(),
+    )
+    assert injected_owner.status_code == 422
 
 
 def test_tool_timeout_is_structured(gateway_client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:

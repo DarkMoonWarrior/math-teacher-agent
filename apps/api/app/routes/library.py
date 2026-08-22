@@ -44,6 +44,7 @@ from app.modules.background_jobs import BackgroundJobRegistry, BackgroundJobView
 router = APIRouter(prefix="/library", tags=["private-library"])
 _local_math_ocr_lock = Lock()
 _background_jobs = BackgroundJobRegistry()
+_CURRENT_OWNER_ID = "owner_teacher"
 
 
 @lru_cache
@@ -124,14 +125,18 @@ def list_library_items(
     lifecycle_state: str = Query(default="active"),
 ) -> LibraryItemList:
     try:
-        return get_private_library().list(limit=limit, lifecycle_state=lifecycle_state)
+        return get_private_library().list(
+            limit=limit,
+            lifecycle_state=lifecycle_state,
+            owner_id=_CURRENT_OWNER_ID,
+        )
     except PrivateLibraryError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.get("/stats", response_model=LibraryStats)
 def library_stats() -> LibraryStats:
-    return get_private_library().stats()
+    return get_private_library().stats(owner_id=_CURRENT_OWNER_ID)
 
 
 @router.post("", response_model=LibraryItemView, status_code=201)
@@ -141,7 +146,6 @@ async def upload_library_item(
     rights_basis: RightsBasis = Form(...),
     rights_statement: str = Form(..., min_length=6, max_length=2000),
     rights_acknowledged: bool = Form(...),
-    owner_id: str = Form("owner_teacher", min_length=1, max_length=120),
 ) -> LibraryItemView:
     try:
         content = await file.read(PrivateLibrary.MAX_FILE_BYTES + 1)
@@ -151,7 +155,7 @@ async def upload_library_item(
                 rights_basis=rights_basis,
                 rights_statement=rights_statement,
                 rights_acknowledged=rights_acknowledged,
-                owner_id=owner_id,
+                owner_id=_CURRENT_OWNER_ID,
             ),
             filename=file.filename or "未命名资料",
             content=content,

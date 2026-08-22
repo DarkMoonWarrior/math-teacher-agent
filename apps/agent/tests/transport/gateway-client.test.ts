@@ -5,6 +5,7 @@ import { createGatewayStub, gatewayJson, waitFor, type GatewayStub } from "../he
 const SEARCH_ROUTE = "/internal/agent-tools/v1/search-questions";
 const GET_QUESTION_ROUTE = "/internal/agent-tools/v1/get-question";
 const SOLVE_QUESTION_ROUTE = "/internal/agent-tools/v1/solve-question";
+const INSPECT_PRIVATE_LIBRARY_ROUTE = "/internal/agent-tools/v1/inspect-private-library";
 
 describe("ToolGatewayClient", () => {
   let stub: GatewayStub;
@@ -106,6 +107,32 @@ describe("ToolGatewayClient", () => {
     const call = stub.requests.find((request) => request.route === SOLVE_QUESTION_ROUTE);
     expect(call?.authorization).toBe("Bearer gw-secret");
     expect(call?.body).toEqual({ question_text: "若 x+2=5，求 x。", solution_mode: "standard" });
+  });
+
+  it("只通过固定 route 读取不含私人正文的资料库概览", async () => {
+    stub.handlers[INSPECT_PRIVATE_LIBRARY_ROUTE] = ({ body }) =>
+      gatewayJson(200, {
+        total: 3,
+        pending_review: 2,
+        confirmed: 1,
+        needs_ocr: 1,
+        trashed: 1,
+        by_file_kind: { pdf: 2, docx: 1 },
+        visibility: "private",
+        content_included: false,
+        request_id: "req_stub_library",
+      });
+
+    const result = await client.inspectPrivateLibrary({ requestId: "req_library_1" });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data.total).toBe(3);
+    expect(result.data.content_included).toBe(false);
+    expect(result.data.visibility).toBe("private");
+    const call = stub.requests.find((request) => request.route === INSPECT_PRIVATE_LIBRARY_ROUTE);
+    expect(call?.body).toEqual({});
+    expect(call?.authorization).toBe("Bearer gw-secret");
   });
 
   it("把 404 映射为 TOOL_NOT_FOUND", async () => {

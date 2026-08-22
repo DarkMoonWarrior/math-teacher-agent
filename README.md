@@ -6,15 +6,17 @@
 
 ## 当前能做什么
 
-- 新教师工作台与搜题／解题／教案／组卷能力导航；
+- 新教师工作台与搜题／解题／资料库／教案／组卷能力导航；
 - 可信 Search Agent：自然语言意图、教材映射、真实题库检索、去重与多样性；
 - 题目来源、权利状态、验证状态和条件放宽披露；
 - 产品自有 `TeacherAgentRuntime` 与隔离的 DeepSeek Harness adapter；
 - M5 Solve 后端编排：唯一可信 Tool 结果、分级数学验证、运行/流式/取消/恢复；
 - Solve 工作台：完整题目输入、Search 题目转入、结构化三页解析与 MathVerifier 证据；
+- M6 第一条切片：Agent 可读取当前教师资料库的聚合处理状态，但看不到私人正文、文件名或路径；
+- M6 第二条切片：新工作台可同源上传 PDF/DOCX/图片，显式记录来源与权利依据，并展示 owner-scoped 私人资料清单；
 - QuestionBank、MathVerifier、Curriculum、PrivateLibrary、PDF、试卷、教案等成熟业务模块。
 
-当前 Search 与 Solve Agent 已接入新工作台；Solve 的固定 synthetic eval 与完整 M5 Gate E 已严格通过。M6 仍需项目所有者确认后才可启动，教案和组卷在新 UI 中继续明确标记为工作流预览。最新状态见 [`docs/PROJECT-STATUS.md`](docs/PROJECT-STATUS.md)。
+当前 Search、Solve 与 Private Library 入口已接入新工作台；Solve 的固定 synthetic eval 与完整 M5 Gate E 已严格通过。项目处于 M6，聚合概览 Tool 与同源上传/列表已完成，OCR/校对、拆题/映射和私人检索仍在建设；教案和组卷继续明确标记为预览。最新状态见 [`docs/PROJECT-STATUS.md`](docs/PROJECT-STATUS.md)。
 
 ## 核心原则
 
@@ -101,7 +103,7 @@ pnpm build:agent
 
 ## 当前开发顺序
 
-`Search 稳定化（完成） → Solve（完成，等待阶段确认） → Private Library（未启动） → Paper → Lesson → Memory → Beta 准备 → Beta 验证 → 商业基础 → Teacher Pro → 教研组 → 学校`
+`Search 稳定化（完成） → Solve（完成） → Private Library（进行中） → Paper → Lesson → Memory → Beta 准备 → Beta 验证 → 商业基础 → Teacher Pro → 教研组 → 学校`
 
 不要并行铺开后续阶段。最新版 M0-M15 路线见 [`docs/ROADMAP.md`](docs/ROADMAP.md)，每阶段和商业发布门禁见 [`docs/PRODUCT-GATES.md`](docs/PRODUCT-GATES.md)。
 

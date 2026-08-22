@@ -478,15 +478,16 @@ class SearchIntentParser:
 
         if grade:
             add_constraint("grade", grade, "explicit")
-        if mapping.volume:
-            add_constraint("volume", mapping.volume, "explicit")
-        if mapping.knowledge_point_ids:
-            term_strengths = [_strength_for_word(clauses, term) for term in knowledge_points]
-            kp_strength = "hard" if any(s in ("hard", "explicit") for s in term_strengths) else "soft"
-            add_constraint("knowledge_points", mapping.knowledge_point_ids, kp_strength)
+        # Catalog mappings explain the request, but they are not teacher-supplied
+        # filters. Promoting an inferred volume/chapter/node id to a hard filter
+        # can hide valid local questions whose catalog metadata is less specific.
+        if volume:
+            add_constraint("volume", volume, "explicit")
+        for term in knowledge_points:
+            add_constraint("knowledge_points", term, _strength_for_word(clauses, term))
         for term in sub_knowledge_points:
             add_constraint("knowledge_points", term, _strength_for_word(clauses, term))
-        if mapping.chapter:
+        if mapping.chapter and mapping.chapter in text:
             add_constraint("chapter", mapping.chapter, "explicit")
         if difficulty is not None:
             add_constraint("difficulty", difficulty, _strength_for_word(clauses, difficulty_word))

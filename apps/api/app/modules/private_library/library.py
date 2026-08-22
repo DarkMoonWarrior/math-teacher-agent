@@ -123,11 +123,20 @@ class PrivateLibrary:
                 raise
         return self.get(item_id)
 
-    def list(self, *, limit: int = 50, lifecycle_state: str = "active") -> LibraryItemList:
+    def list(
+        self,
+        *,
+        limit: int = 50,
+        lifecycle_state: str = "active",
+        owner_id: str = "owner_teacher",
+    ) -> LibraryItemList:
         if lifecycle_state not in {"active", "trashed", "all"}:
             raise PrivateLibraryError("不支持的资料状态")
-        where = "" if lifecycle_state == "all" else "WHERE lifecycle_state = ?"
-        values = () if lifecycle_state == "all" else (lifecycle_state,)
+        where = "WHERE owner_id = ?"
+        values: tuple[str, ...] = (owner_id,)
+        if lifecycle_state != "all":
+            where += " AND lifecycle_state = ?"
+            values += (lifecycle_state,)
         with self._connect() as connection:
             total = connection.execute(
                 f"SELECT COUNT(*) FROM library_items {where}", values
@@ -416,26 +425,33 @@ class PrivateLibrary:
             updated = self._candidate_row(connection, item_id, candidate_id)
         return self._candidate_view(updated)
 
-    def stats(self) -> LibraryStats:
+    def stats(self, *, owner_id: str = "owner_teacher") -> LibraryStats:
         with self._connect() as connection:
-            active_filter = "lifecycle_state = 'active'"
+            active_filter = "owner_id = ? AND lifecycle_state = 'active'"
+            owner_values = (owner_id,)
             total = connection.execute(
-                f"SELECT COUNT(*) FROM library_items WHERE {active_filter}"
+                f"SELECT COUNT(*) FROM library_items WHERE {active_filter}",
+                owner_values,
             ).fetchone()[0]
             pending = connection.execute(
-                f"SELECT COUNT(*) FROM library_items WHERE {active_filter} AND text_review_status = 'pending'"
+                f"SELECT COUNT(*) FROM library_items WHERE {active_filter} AND text_review_status = 'pending'",
+                owner_values,
             ).fetchone()[0]
             confirmed = connection.execute(
-                f"SELECT COUNT(*) FROM library_items WHERE {active_filter} AND text_review_status = 'confirmed'"
+                f"SELECT COUNT(*) FROM library_items WHERE {active_filter} AND text_review_status = 'confirmed'",
+                owner_values,
             ).fetchone()[0]
             needs_ocr = connection.execute(
-                f"SELECT COUNT(*) FROM library_items WHERE {active_filter} AND extraction_status = 'needs_ocr'"
+                f"SELECT COUNT(*) FROM library_items WHERE {active_filter} AND extraction_status = 'needs_ocr'",
+                owner_values,
             ).fetchone()[0]
             trashed = connection.execute(
-                "SELECT COUNT(*) FROM library_items WHERE lifecycle_state = 'trashed'"
+                "SELECT COUNT(*) FROM library_items WHERE owner_id = ? AND lifecycle_state = 'trashed'",
+                owner_values,
             ).fetchone()[0]
             rows = connection.execute(
-                f"SELECT file_kind, COUNT(*) AS count FROM library_items WHERE {active_filter} GROUP BY file_kind"
+                f"SELECT file_kind, COUNT(*) AS count FROM library_items WHERE {active_filter} GROUP BY file_kind",
+                owner_values,
             ).fetchall()
         return LibraryStats(
             total=total,

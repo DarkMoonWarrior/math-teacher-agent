@@ -431,7 +431,75 @@ export function defineTeacherTools(options: TeacherToolOptions): ToolDefinition[
     },
   });
 
-  return [searchQuestions, getQuestion, solveQuestion, findSimilarQuestions, verifyQuestion, getCurriculumNode];
+  const inspectPrivateLibrary = defineTool({
+    name: "inspect_private_library",
+    description:
+      "读取当前教师私人资料库的聚合状态。只返回数量、处理状态和文件类型统计，不返回标题、文件名、正文、路径或 owner 标识。",
+    parameters: {},
+    output: {
+      schema: {
+        type: "object",
+        properties: {
+          ok: { type: "boolean", required: true },
+          total: { type: "integer", required: true },
+          pending_review: { type: "integer", required: true },
+          confirmed: { type: "integer", required: true },
+          needs_ocr: { type: "integer", required: true },
+          trashed: { type: "integer", required: true },
+          by_file_kind: { type: "json", required: true },
+          visibility: { type: "string", required: true },
+          content_included: { type: "boolean", required: true },
+          request_id: { type: "string", required: true },
+          error: { type: "json" },
+        },
+        additionalProperties: false,
+      },
+      render: (_args, value) => JSON_OUTPUT(JSON.stringify(value)),
+    },
+    timeoutMs: 30_000,
+    async execute(_args, exec) {
+      const requestId = callOptions(exec).requestId;
+      const result = await gateway.inspectPrivateLibrary(callOptions(exec));
+      if (result.ok) {
+        return {
+          ok: true,
+          total: result.data.total,
+          pending_review: result.data.pending_review,
+          confirmed: result.data.confirmed,
+          needs_ocr: result.data.needs_ocr,
+          trashed: result.data.trashed,
+          by_file_kind: result.data.by_file_kind as unknown as JsonValue,
+          visibility: "private",
+          content_included: false,
+          request_id: result.data.request_id ?? requestId,
+          error: null,
+        };
+      }
+      return {
+        ok: false,
+        total: 0,
+        pending_review: 0,
+        confirmed: 0,
+        needs_ocr: 0,
+        trashed: 0,
+        by_file_kind: {},
+        visibility: "private",
+        content_included: false,
+        request_id: result.error.request_id ?? requestId,
+        error: gatewayErrorEnvelope(requestId, new ToolGatewayError(result.error)),
+      };
+    },
+  });
+
+  return [
+    searchQuestions,
+    getQuestion,
+    solveQuestion,
+    findSimilarQuestions,
+    verifyQuestion,
+    getCurriculumNode,
+    inspectPrivateLibrary,
+  ];
 }
 
 /** Prompt 2 强制 allowlist：model-visible 工具名必须恰好等于该集合。 */
@@ -442,6 +510,7 @@ export const TEACHER_TOOL_ALLOWLIST: readonly string[] = [
   "find_similar_questions",
   "verify_question",
   "get_curriculum_node",
+  "inspect_private_library",
 ];
 
 export type { TeacherAgentError };

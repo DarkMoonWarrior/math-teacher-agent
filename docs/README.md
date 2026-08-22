@@ -11,6 +11,7 @@
 - [`PRODUCT-GATES.md`](PRODUCT-GATES.md)：永久可信红线、阶段工程 Gate、Beta 指标和商业发布门禁。
 - [`M5-SOLVE-EVALUATION.md`](M5-SOLVE-EVALUATION.md)：Solve 的固定项目自建合成评测、覆盖范围和结果边界。
 - [`M5-GATE-REVIEW.md`](M5-GATE-REVIEW.md)：M5 完成 Gate、工程回归、范围核对和阶段转换结论。
+- [`M6-PRIVATE-LIBRARY-AGENT.md`](M6-PRIVATE-LIBRARY-AGENT.md)：当前 M6 范围、隐私边界、纵向切片和完成 Gate。
 - [`../AGENTS.md`](../AGENTS.md)：供代码开发 Agent 执行的精简规则。
 
 ## 治理与历史记录
