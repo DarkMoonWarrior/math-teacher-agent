@@ -13,6 +13,7 @@
 5. `verify_question`
 6. `get_curriculum_node`
 7. `inspect_private_library`
+8. `search_private_library`
 
 自动测试要求可见工具恰好等于该集合。bash、filesystem、web、subagent、workflow、terminal、数据库、私人文件和任意 URL 能力均禁止。
 
@@ -27,6 +28,18 @@
 - 当前本地 current owner 固定为 `owner_teacher`；M6 完成前必须替换为可验证的 current-owner seam，模型始终不能选择 owner
 
 该 Tool 只读且不代表模型已读取资料内容，不执行上传、OCR、校对、拆题、导入、删除、共享或发布。
+
+## `search_private_library`
+
+- 路由：`POST /internal/agent-tools/v1/search-private-library`
+- 认证：M2M token；另必须携带 FastAPI 为当前教师本次操作签发的 opaque `consent_token`
+- 请求：`query`、`limit<=8`、`consent_token`；`owner_id` 和额外字段一律拒绝
+- 许可：短时、单次消费，并严格绑定 server-owned current owner、规范化 query 与 limit；过期、重放、改写或 owner 不匹配均返回 `PRIVATE_CONSENT_REQUIRED`
+- 业务接口：`PrivateLibrary.search_confirmed_text(query, owner_id=current_owner)`
+- 成功响应：active + confirmed 资料的标题、最多 480 字匹配片段、文本版本、权利依据、`visibility=private` 与 `content_scope=matching_excerpts`
+- 禁止返回：owner、原文件名、存储名/路径、哈希、权利声明、未确认正文或整份正文
+
+该 Tool 只读，不改变资料、候选、题库、验证或发布状态。浏览器每次调用后清空授权确认，许可不能作为会话级或长期授权复用。
 
 ## `solve_question`
 

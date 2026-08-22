@@ -152,7 +152,7 @@ describe("Teacher Agent least-capability 安全门禁", () => {
   });
 
   it("Tool allowlist 常量与注册顺序无关，是唯一可见工具来源", () => {
-    expect(new Set(TEACHER_TOOL_ALLOWLIST).size).toBe(7);
+    expect(new Set(TEACHER_TOOL_ALLOWLIST).size).toBe(8);
     for (const name of TEACHER_TOOL_ALLOWLIST) {
       expect(name).toMatch(/^[a-z_]+$/);
     }

@@ -202,6 +202,25 @@ export type PrivateLibraryList = {
   total: number;
 };
 
+export type PrivateLibrarySearchItem = {
+  library_item_id: string;
+  title: string;
+  excerpt: string;
+  source_version: number;
+  rights_basis: LibraryRightsBasis;
+  text_review_status: "confirmed";
+  visibility: "private";
+};
+
+export type PrivateLibrarySearchResult = {
+  query: string;
+  items: PrivateLibrarySearchItem[];
+  total: number;
+  truncated: boolean;
+  content_scope: "matching_excerpts";
+  visibility: "private";
+};
+
 export type LibraryItemDetail = LibraryItemSummary & {
   source_sha256: string;
   extracted_text: string;
@@ -244,6 +263,83 @@ export type PrivateLibraryOCRResult = {
   warnings: string[];
 };
 
+export type QuestionCandidateOption = {
+  key: string;
+  text: string;
+};
+
+export type QuestionCandidateCurriculum = {
+  node_id: string;
+  name: string;
+  volume: string;
+  chapter: string;
+  section: string;
+};
+
+export type PrivateLibraryQuestionCandidate = {
+  candidate_id: string;
+  library_item_id: string;
+  source_version: number;
+  position: number;
+  question_type: "single_choice" | "multiple_choice" | "fill_blank" | "open_response";
+  stem_plain: string;
+  stem_latex: string | null;
+  options: QuestionCandidateOption[];
+  answer_value: string | null;
+  solution_method: string;
+  solution_steps: string[];
+  final_answer: string | null;
+  difficulty: number;
+  curriculum: QuestionCandidateCurriculum | null;
+  status: "draft" | "discarded" | "imported";
+  warnings: string[];
+  imported_question_id: string | null;
+  updated_at: string;
+};
+
+export type PrivateLibraryQuestionCandidateList = {
+  library_item_id: string;
+  source_version: number;
+  items: PrivateLibraryQuestionCandidate[];
+};
+
+export type PrivateLibraryQuestionCandidateDraft = Pick<
+  PrivateLibraryQuestionCandidate,
+  | "question_type"
+  | "stem_plain"
+  | "stem_latex"
+  | "options"
+  | "answer_value"
+  | "solution_method"
+  | "solution_steps"
+  | "final_answer"
+  | "difficulty"
+>;
+
+export type CurriculumSearchItem = {
+  node_id: string;
+  code: string;
+  name: string;
+  node_type: "knowledge_point";
+  volume: string;
+  chapter: string | null;
+  section: string | null;
+  description: string;
+  match_score: number;
+};
+
+export type CurriculumSearchResult = {
+  query: string;
+  total: number;
+  items: CurriculumSearchItem[];
+};
+
+export type PrivateLibraryCandidateImportResult = {
+  candidate: PrivateLibraryQuestionCandidate;
+  question_id: string;
+  already_imported: boolean;
+};
+
 export type PrivateLibraryProcessingOptions = {
   signal?: AbortSignal;
   onProgress?: (message: string) => void;
@@ -269,6 +365,12 @@ export interface TeacherWorkspace {
   ): Promise<SolveTaskResult>;
 
   listPrivateLibrary(signal?: AbortSignal): Promise<PrivateLibraryList>;
+
+  searchPrivateLibrary(
+    query: string,
+    privateContentConsent: true,
+    signal?: AbortSignal,
+  ): Promise<PrivateLibrarySearchResult>;
 
   getPrivateLibraryItem(
     itemId: string,
@@ -296,6 +398,41 @@ export interface TeacherWorkspace {
     request: PrivateLibraryOCRRequest,
     options?: PrivateLibraryProcessingOptions,
   ): Promise<PrivateLibraryOCRResult>;
+
+  listPrivateLibraryQuestionCandidates(
+    itemId: string,
+    signal?: AbortSignal,
+  ): Promise<PrivateLibraryQuestionCandidateList>;
+
+  preparePrivateLibraryQuestionCandidates(
+    itemId: string,
+    signal?: AbortSignal,
+  ): Promise<PrivateLibraryQuestionCandidateList>;
+
+  updatePrivateLibraryQuestionCandidate(
+    itemId: string,
+    candidateId: string,
+    draft: PrivateLibraryQuestionCandidateDraft,
+    signal?: AbortSignal,
+  ): Promise<PrivateLibraryQuestionCandidate>;
+
+  searchCurriculum(
+    query: string,
+    signal?: AbortSignal,
+  ): Promise<CurriculumSearchResult>;
+
+  mapPrivateLibraryQuestionCandidateCurriculum(
+    itemId: string,
+    candidateId: string,
+    nodeId: string,
+    signal?: AbortSignal,
+  ): Promise<PrivateLibraryQuestionCandidate>;
+
+  importPrivateLibraryQuestionCandidate(
+    itemId: string,
+    candidateId: string,
+    signal?: AbortSignal,
+  ): Promise<PrivateLibraryCandidateImportResult>;
 }
 
 export class TeacherWorkspaceError extends Error {

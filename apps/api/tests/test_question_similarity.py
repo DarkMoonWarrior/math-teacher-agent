@@ -48,6 +48,7 @@ def create_question(
             "rights_statement": "测试资料",
             "adaptation_allowed": True,
         },
+        owner_id="owner_teacher",
     )
 
 

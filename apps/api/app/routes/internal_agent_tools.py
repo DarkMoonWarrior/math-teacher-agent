@@ -23,6 +23,12 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.core.config import get_settings
 from app.modules.math_verifier import MathVerifier
+from app.modules.private_library import (
+    PrivateLibraryError,
+    PrivateLibrarySearchItem,
+    PrivateRetrievalConsentError,
+    get_private_retrieval_grants,
+)
 from app.modules.question_bank import QuestionBankError
 from app.modules.question_similarity import QuestionSimilarityRegistry
 from app.modules.solution_assistant import (
@@ -238,6 +244,26 @@ class InspectPrivateLibraryResponse(BaseModel):
     by_file_kind: dict[str, int]
     visibility: Literal["private"] = "private"
     content_included: Literal[False] = False
+    request_id: str
+
+
+class SearchPrivateLibraryRequest(BaseModel):
+    """Consent receipt selects owner server-side; model cannot submit an owner."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    query: str = Field(min_length=1, max_length=500)
+    consent_token: str = Field(min_length=20, max_length=200)
+    limit: int = Field(default=5, ge=1, le=8)
+
+
+class SearchPrivateLibraryResponse(BaseModel):
+    query: str
+    items: list[PrivateLibrarySearchItem]
+    total: int
+    truncated: bool
+    content_scope: Literal["matching_excerpts"] = "matching_excerpts"
+    visibility: Literal["private"] = "private"
     request_id: str
 
 
@@ -563,6 +589,39 @@ async def inspect_private_library(
         **stats.model_dump(),
         request_id=request_id,
     )
+
+
+@router.post("/search-private-library", response_model=SearchPrivateLibraryResponse)
+async def search_private_library(
+    body: SearchPrivateLibraryRequest,
+    request: Request,
+    _token: None = Depends(_require_tool_gateway_token),
+) -> SearchPrivateLibraryResponse:
+    """Consume one explicit consent receipt and return only bounded confirmed excerpts."""
+    request_id = _request_id_from(request)
+    try:
+        owner_id = get_private_retrieval_grants().consume(
+            body.consent_token,
+            query=body.query,
+            limit=body.limit,
+        )
+        result = await _run_with_timeout(
+            request,
+            get_private_library().search_confirmed_text,
+            body.query,
+            limit=body.limit,
+            owner_id=owner_id,
+        )
+    except PrivateRetrievalConsentError as exc:
+        raise _GatewayHttpError(403, "PRIVATE_CONSENT_REQUIRED", str(exc), request_id) from exc
+    except PrivateLibraryError as exc:
+        raise _GatewayHttpError(422, "TOOL_VALIDATION_ERROR", str(exc), request_id) from exc
+    except _GatewayHttpError:
+        raise
+    except Exception:
+        logger.exception("search_private_library_failed", extra={"request_id": request_id})
+        raise _GatewayHttpError(500, "TOOL_EXECUTION_ERROR", "私人资料检索失败", request_id) from None
+    return SearchPrivateLibraryResponse(**result.model_dump(), request_id=request_id)
 
 async def gateway_error_handler(
     _request: Request, exc: _GatewayHttpError

@@ -20,12 +20,15 @@ from app.modules.private_library.schemas import (
     LibraryIngestCommand,
     LibraryLifecycleCommand,
     QuestionCandidateList,
+    QuestionCandidateCurriculum,
     QuestionCandidateOption,
     QuestionCandidateUpdate,
     QuestionCandidateView,
     LibraryItemList,
     LibraryItemSummary,
     LibraryItemView,
+    PrivateLibrarySearchItem,
+    PrivateLibrarySearchResult,
     LibraryStats,
     LibraryTextReviewCommand,
     LibraryTextRevisionList,
@@ -46,6 +49,8 @@ class PrivateLibrary:
     MAX_DOCX_UNCOMPRESSED_BYTES = 200 * 1024 * 1024
     MAX_IMAGE_PIXELS = 25_000_000
     MAX_CANDIDATES = 100
+    MAX_PRIVATE_SEARCH_LIMIT = 8
+    MAX_PRIVATE_SEARCH_EXCERPT = 480
 
     def __init__(self, database_path: Path, file_root: Path) -> None:
         self.database_path = database_path.resolve()
@@ -148,6 +153,63 @@ class PrivateLibrary:
                 (*values, limit),
             ).fetchall()
         return LibraryItemList(items=[self._summary(row) for row in rows], total=total)
+
+    def search_confirmed_text(
+        self,
+        query: str,
+        *,
+        limit: int = 5,
+        owner_id: str,
+    ) -> PrivateLibrarySearchResult:
+        """Return bounded excerpts from this owner's active, confirmed resources only."""
+        normalized_query = re.sub(r"\s+", " ", query).strip()
+        if not normalized_query:
+            raise PrivateLibraryError("私人检索关键词不能为空")
+        if not 1 <= limit <= self.MAX_PRIVATE_SEARCH_LIMIT:
+            raise PrivateLibraryError("私人检索最多返回 8 份资料")
+        terms = list(
+            dict.fromkeys(
+                term.casefold()
+                for term in re.findall(r"[\w\u4e00-\u9fff]+", normalized_query)
+                if term.strip()
+            )
+        )
+        if not terms:
+            raise PrivateLibraryError("私人检索关键词不能为空")
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT library_item_id, title, corrected_text, version, rights_basis
+                FROM library_items
+                WHERE owner_id = ? AND lifecycle_state = 'active'
+                    AND text_review_status = 'confirmed' AND corrected_text != ''
+                ORDER BY updated_at DESC
+                """,
+                (owner_id,),
+            ).fetchall()
+        matches: list[PrivateLibrarySearchItem] = []
+        for row in rows:
+            searchable_text = re.sub(r"\s+", " ", row["corrected_text"]).strip()
+            folded = searchable_text.casefold()
+            positions = [folded.find(term) for term in terms]
+            positions = [position for position in positions if position >= 0]
+            if not positions:
+                continue
+            matches.append(
+                PrivateLibrarySearchItem(
+                    library_item_id=row["library_item_id"],
+                    title=row["title"],
+                    excerpt=self._bounded_excerpt(searchable_text, min(positions)),
+                    source_version=row["version"],
+                    rights_basis=row["rights_basis"],
+                )
+            )
+        return PrivateLibrarySearchResult(
+            query=normalized_query,
+            items=matches[:limit],
+            total=len(matches),
+            truncated=len(matches) > limit,
+        )
 
     def change_lifecycle(
         self,
@@ -440,15 +502,19 @@ class PrivateLibrary:
                         candidate_id, library_item_id, source_version, position, question_type,
                         stem_plain, stem_latex, options_json, answer_value, solution_method,
                         solution_steps_json, final_answer, difficulty, status, warnings_json,
-                        imported_question_id, updated_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, 3, 'draft', ?, NULL, ?)
+                        imported_question_id, curriculum_node_id, curriculum_name,
+                        curriculum_volume, curriculum_chapter, curriculum_section,
+                        editor_id, updated_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, 3, 'draft', ?, NULL,
+                              NULL, NULL, NULL, NULL, NULL, ?, ?)
                     """,
                     (
                         f"cand_{uuid4().hex[:16]}", item_id, item["version"], position,
                         parsed["question_type"], parsed["stem"],
                         json.dumps(parsed["options"], ensure_ascii=False), parsed["answer"],
                         "资料解析待教师核对", json.dumps(parsed["solution_steps"], ensure_ascii=False),
-                        parsed["answer"], json.dumps(parsed["warnings"], ensure_ascii=False), now,
+                        parsed["answer"], json.dumps(parsed["warnings"], ensure_ascii=False),
+                        owner_id, now,
                     ),
                 )
             rows = connection.execute(
@@ -475,26 +541,61 @@ class PrivateLibrary:
         command: QuestionCandidateUpdate,
         *,
         owner_id: str,
+        editor_id: str,
     ) -> QuestionCandidateView:
-        self.get(item_id, owner_id=owner_id)
+        item = self.get(item_id, owner_id=owner_id)
         now = self._now()
         with self._connect() as connection:
             row = self._candidate_row(connection, item_id, candidate_id)
-            if row["status"] == "imported":
-                raise PrivateLibraryError("已导入题库的候选不可覆盖，请在题库审核台继续修改")
+            self._ensure_candidate_mutable(item, row)
             connection.execute(
                 """
                 UPDATE library_question_candidates SET question_type = ?, stem_plain = ?,
                     stem_latex = ?, options_json = ?, answer_value = ?, solution_method = ?,
                     solution_steps_json = ?, final_answer = ?, difficulty = ?, status = 'draft',
-                    updated_at = ? WHERE candidate_id = ?
+                    editor_id = ?, updated_at = ? WHERE candidate_id = ?
                 """,
                 (
                     command.question_type, command.stem_plain.strip(), command.stem_latex,
                     json.dumps([item.model_dump() for item in command.options], ensure_ascii=False),
                     command.answer_value, command.solution_method,
                     json.dumps(command.solution_steps, ensure_ascii=False), command.final_answer,
-                    command.difficulty, now, candidate_id,
+                    command.difficulty, editor_id, now, candidate_id,
+                ),
+            )
+            updated = self._candidate_row(connection, item_id, candidate_id)
+        return self._candidate_view(updated)
+
+    def map_question_candidate_curriculum(
+        self,
+        item_id: str,
+        candidate_id: str,
+        mapping: QuestionCandidateCurriculum,
+        *,
+        owner_id: str,
+        editor_id: str,
+    ) -> QuestionCandidateView:
+        item = self.get(item_id, owner_id=owner_id)
+        with self._connect() as connection:
+            row = self._candidate_row(connection, item_id, candidate_id)
+            self._ensure_candidate_mutable(item, row)
+            connection.execute(
+                """
+                UPDATE library_question_candidates
+                SET curriculum_node_id = ?, curriculum_name = ?, curriculum_volume = ?,
+                    curriculum_chapter = ?, curriculum_section = ?, editor_id = ?,
+                    updated_at = ?
+                WHERE candidate_id = ?
+                """,
+                (
+                    mapping.node_id,
+                    mapping.name,
+                    mapping.volume,
+                    mapping.chapter,
+                    mapping.section,
+                    editor_id,
+                    self._now(),
+                    candidate_id,
                 ),
             )
             updated = self._candidate_row(connection, item_id, candidate_id)
@@ -507,11 +608,10 @@ class PrivateLibrary:
         *,
         owner_id: str,
     ) -> QuestionCandidateView:
-        self.get(item_id, owner_id=owner_id)
+        item = self.get(item_id, owner_id=owner_id)
         with self._connect() as connection:
             row = self._candidate_row(connection, item_id, candidate_id)
-            if row["status"] == "imported":
-                raise PrivateLibraryError("已导入题库的候选不能丢弃")
+            self._ensure_candidate_mutable(item, row)
             connection.execute(
                 "UPDATE library_question_candidates SET status = 'discarded', updated_at = ? WHERE candidate_id = ?",
                 (self._now(), candidate_id),
@@ -529,6 +629,7 @@ class PrivateLibrary:
         item = self.get(item_id, owner_id=owner_id)
         with self._connect() as connection:
             row = self._candidate_row(connection, item_id, candidate_id)
+            self._ensure_candidate_current(item, row)
         return self._candidate_view(row), item
 
     def mark_candidate_imported(
@@ -539,9 +640,12 @@ class PrivateLibrary:
         *,
         owner_id: str,
     ) -> QuestionCandidateView:
-        self.get(item_id, owner_id=owner_id)
+        item = self.get(item_id, owner_id=owner_id)
         with self._connect() as connection:
             row = self._candidate_row(connection, item_id, candidate_id)
+            self._ensure_candidate_current(item, row)
+            if not row["curriculum_node_id"]:
+                raise PrivateLibraryError("导入私人题库前必须确认教材知识点")
             if row["imported_question_id"] and row["imported_question_id"] != question_id:
                 raise PrivateLibraryError("该候选已关联其他题库题目")
             connection.execute(
@@ -793,6 +897,12 @@ class PrivateLibrary:
                     status TEXT NOT NULL,
                     warnings_json TEXT NOT NULL,
                     imported_question_id TEXT,
+                    curriculum_node_id TEXT,
+                    curriculum_name TEXT,
+                    curriculum_volume TEXT,
+                    curriculum_chapter TEXT,
+                    curriculum_section TEXT,
+                    editor_id TEXT NOT NULL DEFAULT 'owner_teacher',
                     updated_at TEXT NOT NULL,
                     FOREIGN KEY(library_item_id) REFERENCES library_items(library_item_id),
                     UNIQUE(library_item_id, source_version, position)
@@ -822,6 +932,41 @@ class PrivateLibrary:
             if "lifecycle_reason" not in columns:
                 connection.execute(
                     "ALTER TABLE library_items ADD COLUMN lifecycle_reason TEXT NOT NULL DEFAULT ''"
+                )
+            candidate_columns = {
+                row["name"]
+                for row in connection.execute(
+                    "PRAGMA table_info(library_question_candidates)"
+                )
+            }
+            for column in (
+                "curriculum_node_id",
+                "curriculum_name",
+                "curriculum_volume",
+                "curriculum_chapter",
+                "curriculum_section",
+            ):
+                if column not in candidate_columns:
+                    connection.execute(
+                        f"ALTER TABLE library_question_candidates ADD COLUMN {column} TEXT"
+                    )
+            if "editor_id" not in candidate_columns:
+                connection.execute(
+                    "ALTER TABLE library_question_candidates "
+                    "ADD COLUMN editor_id TEXT NOT NULL DEFAULT 'owner_teacher'"
+                )
+                connection.execute(
+                    """
+                    UPDATE library_question_candidates
+                    SET editor_id = (
+                        SELECT owner_id FROM library_items
+                        WHERE library_items.library_item_id = library_question_candidates.library_item_id
+                    )
+                    WHERE EXISTS (
+                        SELECT 1 FROM library_items
+                        WHERE library_items.library_item_id = library_question_candidates.library_item_id
+                    )
+                    """
                 )
             rows = connection.execute(
                 "SELECT library_item_id, extracted_text, corrected_text, warnings_json FROM library_items"
@@ -929,6 +1074,17 @@ class PrivateLibrary:
             solution_steps=json.loads(row["solution_steps_json"]),
             final_answer=row["final_answer"],
             difficulty=row["difficulty"],
+            curriculum=(
+                QuestionCandidateCurriculum(
+                    node_id=row["curriculum_node_id"],
+                    name=row["curriculum_name"],
+                    volume=row["curriculum_volume"],
+                    chapter=row["curriculum_chapter"] or "",
+                    section=row["curriculum_section"] or "",
+                )
+                if row["curriculum_node_id"]
+                else None
+            ),
             status=row["status"],
             warnings=json.loads(row["warnings_json"]),
             imported_question_id=row["imported_question_id"],
@@ -936,10 +1092,37 @@ class PrivateLibrary:
         )
 
     @staticmethod
+    def _ensure_candidate_current(item: LibraryItemView, row: sqlite3.Row) -> None:
+        if item.text_review_status != "confirmed":
+            raise PrivateLibraryError("资料文本已变更，必须重新确认后再处理拆题候选")
+        if row["source_version"] != item.version:
+            raise PrivateLibraryError("拆题候选来自旧文本版本，请基于当前确认版本重新生成")
+
+    @classmethod
+    def _ensure_candidate_mutable(
+        cls, item: LibraryItemView, row: sqlite3.Row
+    ) -> None:
+        cls._ensure_candidate_current(item, row)
+        if row["status"] == "imported":
+            raise PrivateLibraryError("已导入私人题库的候选不可覆盖")
+        if row["status"] == "discarded":
+            raise PrivateLibraryError("已丢弃的候选不可继续编辑或映射")
+
+    @staticmethod
     def _unreadable_glyph_count(text: str) -> int:
         return private_use_glyph_count(text) + len(
             re.findall(r"[�□■]|〔公式符号待核〕", text)
         )
+
+    @classmethod
+    def _bounded_excerpt(cls, text: str, match_start: int) -> str:
+        compact = re.sub(r"\s+", " ", text).strip()
+        if len(compact) <= cls.MAX_PRIVATE_SEARCH_EXCERPT:
+            return compact
+        start = max(0, match_start - 120)
+        end = min(len(compact), start + cls.MAX_PRIVATE_SEARCH_EXCERPT - 2)
+        start = max(0, end - (cls.MAX_PRIVATE_SEARCH_EXCERPT - 2))
+        return f"{'…' if start else ''}{compact[start:end]}{'…' if end < len(compact) else ''}"
 
     @staticmethod
     def _split_questions(text: str) -> list[str]:

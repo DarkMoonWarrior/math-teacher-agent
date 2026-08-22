@@ -19,6 +19,9 @@ from app.modules.private_library import (
     OpenAIResourceOCRProvider,
     PrivateLibrary,
     PrivateLibraryError,
+    PrivateRetrievalConsentError,
+    PrivateRetrievalGrantRegistry,
+    QuestionCandidateCurriculum,
     QuestionCandidateUpdate,
 )
 from app.modules.question_bank import QuestionBank
@@ -89,6 +92,69 @@ def test_docx_is_extracted_but_remains_private(tmp_path: Path) -> None:
     assert not item.model_training_allowed
     assert not item.adaptation_allowed
     assert item.text_review_status == "pending"
+
+
+def test_private_search_returns_only_owner_confirmed_active_bounded_excerpts(tmp_path: Path) -> None:
+    library = make_library(tmp_path)
+    mine = library.ingest(
+        ingest_command(title="我的单调性讲义"),
+        filename="private-source.docx",
+        content=docx_bytes("占位文本"),
+    )
+    library.review(
+        mine.library_item_id,
+        LibraryTextReviewCommand(corrected_text="前言。" + "函数单调性课堂例题。" * 80, confirm=True),
+        owner_id="owner_teacher",
+        reviewer_id="owner_teacher",
+    )
+    pending = library.ingest(
+        ingest_command(title="未确认资料"), filename="pending.docx", content=docx_bytes("另一个文件")
+    )
+    library.review(
+        pending.library_item_id,
+        LibraryTextReviewCommand(corrected_text="函数单调性不应被检索", confirm=False),
+        owner_id="owner_teacher",
+        reviewer_id="owner_teacher",
+    )
+    other = library.ingest(
+        ingest_command(owner_id="other_teacher", title="他人资料"),
+        filename="other.docx",
+        content=docx_bytes("不同所有者"),
+    )
+    library.review(
+        other.library_item_id,
+        LibraryTextReviewCommand(corrected_text="函数单调性他人正文", confirm=True),
+        owner_id="other_teacher",
+        reviewer_id="other_teacher",
+    )
+
+    result = library.search_confirmed_text("函数单调性", owner_id="owner_teacher")
+
+    assert result.total == 1
+    assert result.items[0].library_item_id == mine.library_item_id
+    assert len(result.items[0].excerpt) <= 480
+    payload = result.model_dump()
+    assert "original_filename" not in payload["items"][0]
+    assert "owner_id" not in payload["items"][0]
+    assert "corrected_text" not in payload["items"][0]
+
+
+def test_private_retrieval_grant_is_bound_and_single_use() -> None:
+    now = [10.0]
+    grants = PrivateRetrievalGrantRegistry(ttl_seconds=5, clock=lambda: now[0])
+    token = grants.issue(owner_id="teacher_a", query="  函数  单调性 ", limit=5)
+    assert grants.consume(token, owner_id="teacher_a", query="函数 单调性", limit=5) == "teacher_a"
+    with pytest.raises(PrivateRetrievalConsentError):
+        grants.consume(token, owner_id="teacher_a", query="函数 单调性", limit=5)
+
+    mismatch = grants.issue(owner_id="teacher_a", query="数列", limit=3)
+    with pytest.raises(PrivateRetrievalConsentError):
+        grants.consume(mismatch, owner_id="teacher_b", query="数列", limit=3)
+
+    expired = grants.issue(owner_id="teacher_a", query="圆锥曲线", limit=5)
+    now[0] = 16.0
+    with pytest.raises(PrivateRetrievalConsentError):
+        grants.consume(expired, owner_id="teacher_a", query="圆锥曲线", limit=5)
 
 
 def test_pdf_text_is_extracted_and_download_path_is_confined(tmp_path: Path) -> None:
@@ -622,6 +688,24 @@ A. 1∈A B. 3∈A C. A=∅ D. 2∉A
     )
 
 
+def map_candidate_to_collection_concepts(
+    library: PrivateLibrary, item_id: str, candidate_id: str
+):
+    return library.map_question_candidate_curriculum(
+        item_id,
+        candidate_id,
+        QuestionCandidateCurriculum(
+            node_id="kp_r1_1_1_02",
+            name="元素与集合的关系",
+            volume="必修第一册",
+            chapter="集合与常用逻辑用语",
+            section="集合的概念",
+        ),
+        owner_id="owner_teacher",
+        editor_id="owner_teacher",
+    )
+
+
 def test_confirmed_text_becomes_editable_question_candidates(tmp_path: Path) -> None:
     library = make_library(tmp_path)
     item = confirmed_question_resource(library)
@@ -640,16 +724,142 @@ def test_confirmed_text_becomes_editable_question_candidates(tmp_path: Path) -> 
         item.library_item_id,
         proposed.items[1].candidate_id,
         QuestionCandidateUpdate(**{
-            **proposed.items[1].model_dump(),
+            **proposed.items[1].model_dump(include={
+                "question_type", "stem_plain", "stem_latex", "options", "answer_value",
+                "solution_method", "solution_steps", "final_answer", "difficulty",
+            }),
             "stem_plain": "已知函数 f(x)=x²，求 f(3)。",
             "answer_value": "9",
             "final_answer": "9",
             "solution_steps": ["代入 x=3，得 f(3)=9。"],
         }),
         owner_id="owner_teacher",
+        editor_id="owner_teacher",
     )
     assert updated.stem_plain.endswith("f(3)。")
     assert updated.answer_value == "9"
+
+
+def test_question_candidates_require_confirmed_current_text_and_curriculum(
+    tmp_path: Path,
+) -> None:
+    library = make_library(tmp_path)
+    pending = library.ingest(
+        ingest_command(title="待确认例题", rights_basis="original"),
+        filename="pending.docx",
+        content=docx_bytes("1. 已知集合 A={1,2}，判断 1∈A。\n答案：正确"),
+    )
+    with pytest.raises(PrivateLibraryError, match="教师已确认"):
+        library.propose_questions(pending.library_item_id, owner_id="owner_teacher")
+
+    item = confirmed_question_resource(library)
+    candidate = library.propose_questions(
+        item.library_item_id, owner_id="owner_teacher"
+    ).items[0]
+    with pytest.raises(PrivateLibraryError, match="教材知识点"):
+        library.mark_candidate_imported(
+            item.library_item_id,
+            candidate.candidate_id,
+            "q_not_created",
+            owner_id="owner_teacher",
+        )
+
+    revised = library.review(
+        item.library_item_id,
+        LibraryTextReviewCommand(
+            corrected_text=f"{item.corrected_text}\n3. 新增一道题。\n答案：略",
+            confirm=True,
+        ),
+        owner_id="owner_teacher",
+        reviewer_id="owner_teacher",
+    )
+    assert revised.version > candidate.source_version
+    with pytest.raises(PrivateLibraryError, match="旧文本版本"):
+        library.map_question_candidate_curriculum(
+            item.library_item_id,
+            candidate.candidate_id,
+            QuestionCandidateCurriculum(
+                node_id="kp_r1_1_1_02",
+                name="元素与集合的关系",
+                volume="必修第一册",
+                chapter="集合与常用逻辑用语",
+                section="集合的概念",
+            ),
+            owner_id="owner_teacher",
+            editor_id="owner_teacher",
+        )
+
+
+def test_question_candidate_owner_and_server_owned_fields_fail_closed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    library = make_library(tmp_path)
+    item = confirmed_question_resource(library)
+    candidate = library.propose_questions(
+        item.library_item_id, owner_id="owner_teacher"
+    ).items[0]
+    with pytest.raises(KeyError):
+        library.map_question_candidate_curriculum(
+            item.library_item_id,
+            candidate.candidate_id,
+            QuestionCandidateCurriculum(
+                node_id="kp_r1_1_1_02",
+                name="伪造名称",
+                volume="伪造册次",
+            ),
+            owner_id="other_teacher",
+            editor_id="other_teacher",
+        )
+
+    monkeypatch.setattr("app.routes.library.get_private_library", lambda: library)
+    client = TestClient(app)
+    curriculum_response = client.post(
+        f"/api/v1/library/{item.library_item_id}/question-candidates/{candidate.candidate_id}/curriculum",
+        json={"node_id": "kp_r1_1_1_02", "name": "伪造名称", "volume": "伪造册次"},
+    )
+    update_response = client.patch(
+        f"/api/v1/library/{item.library_item_id}/question-candidates/{candidate.candidate_id}",
+        json={
+            "question_type": candidate.question_type,
+            "stem_plain": candidate.stem_plain,
+            "options": [option.model_dump() for option in candidate.options],
+            "answer_value": candidate.answer_value,
+            "solution_method": candidate.solution_method,
+            "solution_steps": candidate.solution_steps,
+            "final_answer": candidate.final_answer,
+            "difficulty": candidate.difficulty,
+            "editor_id": "other_teacher",
+        },
+    )
+
+    assert curriculum_response.status_code == 422
+    assert update_response.status_code == 422
+    assert library.list_question_candidates(
+        item.library_item_id, owner_id="owner_teacher"
+    ).items[0].curriculum is None
+
+
+def test_http_rejects_unmapped_candidate_before_question_bank_write(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    library = make_library(tmp_path)
+    bank = QuestionBank(tmp_path / "questions.sqlite3", tmp_path / "media")
+    item = confirmed_question_resource(library)
+    candidate = library.propose_questions(
+        item.library_item_id, owner_id="owner_teacher"
+    ).items[0]
+    monkeypatch.setattr("app.routes.library.get_private_library", lambda: library)
+    monkeypatch.setattr("app.routes.library.get_library_question_bank", lambda: bank)
+    client = TestClient(app)
+
+    response = client.post(
+        f"/api/v1/library/{item.library_item_id}/question-candidates/{candidate.candidate_id}/import"
+    )
+
+    assert response.status_code == 409
+    assert "教材知识点" in response.json()["detail"]
+    with pytest.raises(KeyError):
+        bank.get_question(f"q_resource_{candidate.candidate_id.removeprefix('cand_')}")
 
 
 def test_candidate_import_is_private_auditable_and_idempotent(tmp_path: Path) -> None:
@@ -659,9 +869,12 @@ def test_candidate_import_is_private_auditable_and_idempotent(tmp_path: Path) ->
     candidate = library.propose_questions(
         item.library_item_id, owner_id="owner_teacher"
     ).items[0]
+    candidate = map_candidate_to_collection_concepts(
+        library, item.library_item_id, candidate.candidate_id
+    )
 
     question = bank.create_private_resource_question(
-        candidate.model_dump(), resource=item.model_dump()
+        candidate.model_dump(), resource=item.model_dump(), owner_id="owner_teacher"
     )
     marked = library.mark_candidate_imported(
         item.library_item_id,
@@ -669,13 +882,17 @@ def test_candidate_import_is_private_auditable_and_idempotent(tmp_path: Path) ->
         question.question_id,
         owner_id="owner_teacher",
     )
-    same = bank.create_private_resource_question(candidate.model_dump(), resource=item.model_dump())
+    same = bank.create_private_resource_question(
+        candidate.model_dump(), resource=item.model_dump(), owner_id="owner_teacher"
+    )
 
     assert question.visibility == "private"
     assert question.review_status == "pending"
     assert question.verification_status == "needs_math_review"
     assert "teacher_review_required" in question.publication_blockers
     assert question.raw["provenance"]["resource_candidate_id"] == candidate.candidate_id
+    assert question.raw["provenance"]["owner_id"] == "owner_teacher"
+    assert question.raw["curriculum"]["knowledge_point_ids"] == ["kp_r1_1_1_02"]
     assert marked.status == "imported"
     assert same.question_id == question.question_id
 
@@ -739,6 +956,13 @@ def test_question_candidate_http_flow(tmp_path: Path, monkeypatch: pytest.Monkey
     assert proposed.status_code == 200
     candidate = proposed.json()["items"][0]
 
+    mapped = client.post(
+        f"/api/v1/library/{item.library_item_id}/question-candidates/{candidate['candidate_id']}/curriculum",
+        json={"node_id": "kp_r1_1_1_02"},
+    )
+    assert mapped.status_code == 200
+    assert mapped.json()["curriculum"]["name"] == "元素与集合的关系"
+
     imported = client.post(
         f"/api/v1/library/{item.library_item_id}/question-candidates/{candidate['candidate_id']}/import"
     )
@@ -772,6 +996,19 @@ def test_image_resource_is_kept_as_a_bounded_question_image(
     candidate = library.propose_questions(
         item.library_item_id, owner_id="owner_teacher"
     ).items[0]
+    library.map_question_candidate_curriculum(
+        item.library_item_id,
+        candidate.candidate_id,
+        QuestionCandidateCurriculum(
+            node_id="kp_r2_8_4_03",
+            name="异面直线",
+            volume="必修第二册",
+            chapter="立体几何初步",
+            section="空间点直线平面之间的位置关系",
+        ),
+        owner_id="owner_teacher",
+        editor_id="owner_teacher",
+    )
     monkeypatch.setattr("app.routes.library.get_private_library", lambda: library)
     monkeypatch.setattr("app.routes.library.get_library_question_bank", lambda: bank)
     client = TestClient(app)
