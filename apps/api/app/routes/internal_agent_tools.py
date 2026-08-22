@@ -30,6 +30,11 @@ from app.modules.private_library import (
     get_private_retrieval_grants,
 )
 from app.modules.question_bank import QuestionBankError
+from app.modules.question_capture import (
+    QuestionCaptureError,
+    QuestionSolveGrantError,
+    get_question_solve_grants,
+)
 from app.modules.question_similarity import QuestionSimilarityRegistry
 from app.modules.solution_assistant import (
     SolutionAssistantError,
@@ -38,12 +43,14 @@ from app.modules.solution_assistant import (
     SolutionProviderError,
     SolutionRequest,
     SolutionResult,
+    SolutionVisualInput,
 )
 from app.routes.curriculum import _catalog_for_path
 from app.routes.questions import get_question_bank, get_question_quality_workflow
 from app.routes.question_similarity import get_question_similarity_registry
 from app.routes.library import get_private_library
 from app.routes.solutions import get_solution_assistant
+from app.routes.question_capture import get_question_capture
 
 logger = logging.getLogger("math_ai.internal_agent_tools")
 
@@ -172,6 +179,7 @@ class SolveQuestionRequest(BaseModel):
     question_text: str = Field(min_length=5, max_length=30000)
     solution_mode: Literal["standard", "alternative"] = "standard"
     teacher_instruction: str = Field(default="", max_length=2000)
+    capture_grant: str | None = Field(default=None, min_length=20, max_length=200)
 
 
 class SolveQuestionResponse(SolutionResult):
@@ -372,10 +380,56 @@ async def solve_question(
 ) -> SolveQuestionResponse:
     """Read-only Solve Tool: all trust decisions remain in SolutionAssistant."""
     request_id = _request_id_from(request)
+    question_text = body.question_text.strip()
+    solution_mode = body.solution_mode
+    teacher_instruction = body.teacher_instruction
+    visual_input = None
+    if body.capture_grant is not None:
+        try:
+            binding = get_question_solve_grants().consume(body.capture_grant)
+            question_text = binding.question_text
+            solution_mode = binding.solution_mode
+            teacher_instruction = binding.teacher_instruction
+            reference = binding.reference
+            prepared = await _run_with_timeout(
+                request,
+                get_question_capture().prepare_for_solve,
+                reference,
+                owner_id=binding.owner_id,
+                request_id=request_id,
+            )
+        except QuestionSolveGrantError as exc:
+            raise _GatewayHttpError(
+                403, "PRIVATE_CONSENT_REQUIRED", str(exc), request_id
+            ) from exc
+        except KeyError:
+            raise _GatewayHttpError(
+                404, "TOOL_NOT_FOUND", "私人题目图片不存在", request_id
+            ) from None
+        except QuestionCaptureError as exc:
+            raise _GatewayHttpError(
+                422, "TOOL_VALIDATION_ERROR", str(exc), request_id
+            ) from exc
+        if prepared.question_text != question_text:
+            raise _GatewayHttpError(
+                422,
+                "TOOL_VALIDATION_ERROR",
+                "解题文本与教师确认的题面 revision 不一致",
+                request_id,
+            )
+        visual_input = SolutionVisualInput(
+            asset_id=prepared.asset_id,
+            media_revision=prepared.media_revision,
+            recognition_revision=prepared.recognition_revision,
+            requires_visual_reasoning=prepared.requires_visual_reasoning,
+            visual_processing_consent=prepared.visual_processing_consent,
+            image_bytes=prepared.image_bytes,
+            image_mime_type=prepared.image_mime_type,
+        )
     command = SolutionRequest(
-        question_text=body.question_text,
-        solution_mode=body.solution_mode,
-        teacher_instruction=body.teacher_instruction,
+        question_text=question_text,
+        solution_mode=solution_mode,
+        teacher_instruction=teacher_instruction,
         teacher_id="owner_teacher",
     )
     try:
@@ -383,6 +437,7 @@ async def solve_question(
             request,
             get_solution_assistant().solve,
             command,
+            visual_input,
             timeout_seconds=get_settings().solve_tool_timeout_seconds,
         )
     except SolutionAssistantVerificationError as exc:

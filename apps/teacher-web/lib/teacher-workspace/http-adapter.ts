@@ -886,6 +886,12 @@ export class HttpTeacherWorkspace implements TeacherWorkspace {
           session_id: request.sessionId,
           solution_mode: request.solutionMode ?? "standard",
           teacher_instruction: request.teacherInstruction ?? "",
+          question_capture: request.questionCapture ? {
+            asset_id: request.questionCapture.assetId,
+            media_revision: request.questionCapture.mediaRevision,
+            recognition_revision: request.questionCapture.recognitionRevision,
+            visual_processing_consent: request.questionCapture.visualProcessingConsent,
+          } : null,
         }),
         signal,
       });

@@ -78,12 +78,17 @@ function defaultScriptFor(messages: GenerateOptions["messages"]): MockScript {
 
   const question = conversation.match(/题目：([\s\S]+)$/)?.[1]?.trim() || "解方程 2x-4=0。";
   const solutionMode = conversation.match(/solution_mode：([^\n]+)/)?.[1]?.trim() || "standard";
+  const captureGrant = conversation.match(/capture_grant：([^\n]+)/)?.[1]?.trim();
+  const arguments_: Record<string, unknown> = { question_text: question, solution_mode: solutionMode };
+  if (captureGrant) {
+    arguments_.capture_grant = captureGrant;
+  }
   return {
     steps: [
       {
         kind: "tool",
         toolName: "solve_question",
-        arguments: { question_text: question, solution_mode: solutionMode },
+        arguments: arguments_,
       },
     ],
     finalText: "已返回受控工具生成的结构化解题结果。",

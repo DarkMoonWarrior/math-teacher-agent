@@ -15,10 +15,20 @@ const INITIAL_CROP: CropMargins = { top: 4, right: 4, bottom: 4, left: 4 };
 type QuestionMediaComposerProps = {
   bundle: QuestionInputBundle | null;
   disabled?: boolean;
+  visualProcessingConsent: boolean;
   onChange: (bundle: QuestionInputBundle | null) => void;
+  onConfirmed: (bundle: QuestionInputBundle) => void;
+  onVisualProcessingConsentChange: (consent: boolean) => void;
 };
 
-export function QuestionMediaComposer({ bundle, disabled = false, onChange }: QuestionMediaComposerProps) {
+export function QuestionMediaComposer({
+  bundle,
+  disabled = false,
+  visualProcessingConsent,
+  onChange,
+  onConfirmed,
+  onVisualProcessingConsentChange,
+}: QuestionMediaComposerProps) {
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
   const cameraInputRef = useRef<HTMLInputElement | null>(null);
   const operationRef = useRef<AbortController | null>(null);
@@ -167,13 +177,15 @@ export function QuestionMediaComposer({ bundle, disabled = false, onChange }: Qu
     operationRef.current = controller;
     setBusy(true);
     try {
+      const consentForAction = recognitionMode === "external" && externalConsent;
+      if (recognitionMode === "external") setExternalConsent(false);
       const next = await teacherWorkspace.recognizeQuestionMedia(
         bundle.asset.asset_id,
-        { mode: recognitionMode, externalProcessingConsent: recognitionMode === "external" && externalConsent },
+        { mode: recognitionMode, externalProcessingConsent: consentForAction },
         controller.signal,
       );
       onChange(next);
-      setHint("识别草稿已生成。请对照原图校对后再确认；当前不会自动交给 Solve。");
+      setHint("识别草稿已生成。请对照原图校对；只有教师确认的精确 revision 才能进入 Solve。");
     } catch (cause) {
       if (cause instanceof DOMException && cause.name === "AbortError") return;
       setError(cause instanceof TeacherWorkspaceError ? cause.message : "题面识别没有完成，请重试。");
@@ -200,7 +212,8 @@ export function QuestionMediaComposer({ bundle, disabled = false, onChange }: Qu
         controller.signal,
       );
       onChange(next);
-      setHint(confirm ? "题面已由你确认，但尚未交给 Solve。" : "校对草稿已保存为新的识别 revision。");
+      if (confirm) onConfirmed(next);
+      setHint(confirm ? "题面已确认并锁定到当前图片 revision，可以交给 Solve。" : "校对草稿已保存为新的识别 revision。");
     } catch (cause) {
       if (cause instanceof DOMException && cause.name === "AbortError") return;
       setError(cause instanceof TeacherWorkspaceError ? cause.message : "题面校对没有保存成功，请重试。");
@@ -331,7 +344,35 @@ export function QuestionMediaComposer({ bundle, disabled = false, onChange }: Qu
               </div>
             )}
           </section>
-          <p className="question-media__notice">图片与 OCR revision 均只属于你的私人工作区。M7 第二切片不把图片或识别题面自动交给 Solve。</p>
+          {bundle.recognition_status === "confirmed" && (
+            <section className="question-visual-consent" aria-label="本次视觉解题权限">
+              <div>
+                <span>图形保真输入</span>
+                <strong>
+                  {bundle.requires_visual_reasoning === false
+                    ? "确认题面足够，本次不发送原图"
+                    : "本题依赖或可能依赖图形"}
+                </strong>
+                <small>
+                  {bundle.requires_visual_reasoning === false
+                    ? "Solve 只消费教师确认的文字与公式 revision。"
+                    : "如开始解题，原图仅发送给已配置的视觉解题模型；这不构成 MathVerifier 证据。"}
+                </small>
+              </div>
+              {bundle.requires_visual_reasoning !== false && (
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={visualProcessingConsent}
+                    disabled={busy || disabled}
+                    onChange={(event) => onVisualProcessingConsentChange(event.target.checked)}
+                  />
+                  <span>我同意本次解题使用 REV {bundle.asset.current_revision} 原图；仅本次有效。</span>
+                </label>
+              )}
+            </section>
+          )}
+          <p className="question-media__notice">图片与识别 revision 始终属于你的私人工作区；Agent 只能获得不可逆的资源 ID 与版本号，不能读取路径。</p>
         </div>
       )}
 

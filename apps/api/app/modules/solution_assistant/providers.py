@@ -2,13 +2,18 @@ from __future__ import annotations
 
 import hashlib
 import json
+import base64
 from typing import Protocol
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 from app.modules.model_operations import ModelRunRecorder, NullModelRunRecorder
 from app.modules.deepseek import DeepSeekClientError, DeepSeekJsonClient
-from app.modules.solution_assistant.schemas import GeneratedSolution, SolutionRequest
+from app.modules.solution_assistant.schemas import (
+    GeneratedSolution,
+    SolutionRequest,
+    SolutionVisualInput,
+)
 
 
 class SolutionProviderError(RuntimeError):
@@ -19,11 +24,16 @@ class SolutionProvider(Protocol):
     name: str
     model: str
 
-    def solve(self, request: SolutionRequest) -> GeneratedSolution: ...
+    def solve(
+        self,
+        request: SolutionRequest,
+        visual_input: SolutionVisualInput | None = None,
+    ) -> GeneratedSolution: ...
 
 
 class OpenAISolutionProvider:
     name = "openai"
+    vision_model: str | None = None
 
     def __init__(
         self,
@@ -33,16 +43,22 @@ class OpenAISolutionProvider:
         reasoning_effort: str = "low",
         timeout_seconds: int = 90,
         recorder: ModelRunRecorder | None = None,
+        vision_model: str | None = None,
     ) -> None:
         if not api_key:
             raise ValueError("OpenAI API Key 不能为空")
         self.api_key = api_key
         self.model = model
+        self.vision_model = vision_model or model
         self.reasoning_effort = reasoning_effort
         self.timeout_seconds = timeout_seconds
         self.recorder = recorder or NullModelRunRecorder()
 
-    def solve(self, request_data: SolutionRequest) -> GeneratedSolution:
+    def solve(
+        self,
+        request_data: SolutionRequest,
+        visual_input: SolutionVisualInput | None = None,
+    ) -> GeneratedSolution:
         task = (
             "给出一种与常规解法不同但完整严谨的第二种解法。"
             if request_data.solution_mode == "alternative"
@@ -53,8 +69,30 @@ class OpenAISolutionProvider:
             "question": request_data.question_text,
             "teacher_instruction": request_data.teacher_instruction,
         }
+        used_model = self.vision_model if visual_input is not None else self.model
+        if visual_input is not None:
+            if visual_input.image_bytes is None or not visual_input.image_mime_type:
+                raise SolutionProviderError("视觉解题输入缺少受控图片内容")
+            if not visual_input.visual_processing_consent:
+                raise SolutionProviderError("视觉解题缺少本次图片处理同意")
+        prompt_text = json.dumps(prompt, ensure_ascii=False)
+        provider_input: str | list[dict[str, object]] = prompt_text
+        if visual_input is not None:
+            provider_input = [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "input_text", "text": prompt_text},
+                        {
+                            "type": "input_image",
+                            "image_url": self._data_url(visual_input),
+                            "detail": "original",
+                        },
+                    ],
+                }
+            ]
         payload = {
-            "model": self.model,
+            "model": used_model,
             "instructions": (
                 "你是中国高中数学教研员，使用人教A版术语和新高考答题规范解题。"
                 "必须检查题目条件是否充分，逐步给出依据，不能虚构题源、数值或验证结论。"
@@ -64,7 +102,7 @@ class OpenAISolutionProvider:
                 "不要使用 Markdown 代码块，也不要把 LaTeX 命令作为未分隔的普通文字输出。"
                 "输出将交由教师复核，不要声称已经程序验证。"
             ),
-            "input": json.dumps(prompt, ensure_ascii=False),
+            "input": provider_input,
             "reasoning": {"effort": self.reasoning_effort},
             "text": {"format": self._output_format(), "verbosity": "medium"},
             "safety_identifier": hashlib.sha256(
@@ -84,11 +122,19 @@ class OpenAISolutionProvider:
         with self.recorder.track(
             feature="solution_assistant",
             provider=self.name,
-            model=self.model,
-            prompt_version="solution-assistant-v2-math-display",
+            model=used_model,
+            prompt_version=(
+                "solution-assistant-v3-visual-grounding"
+                if visual_input is not None
+                else "solution-assistant-v2-math-display"
+            ),
             actor_id=request_data.teacher_id,
         ) as run:
-            raw = self._request(payload, request)
+            raw = (
+                self._request(payload, request, visual_input)
+                if visual_input is not None
+                else self._request(payload, request)
+            )
             run.capture_response(raw)
             if raw.get("status") == "incomplete":
                 raise SolutionProviderError("OpenAI 返回未完成结果，请缩短题目或要求后重试")
@@ -99,7 +145,12 @@ class OpenAISolutionProvider:
             except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
                 raise SolutionProviderError(f"OpenAI 返回内容不符合解题结构：{exc}") from exc
 
-    def _request(self, payload: dict, request: Request) -> dict:
+    def _request(
+        self,
+        payload: dict,
+        request: Request,
+        visual_input: SolutionVisualInput | None = None,
+    ) -> dict:
         try:
             with urlopen(request, timeout=self.timeout_seconds) as response:
                 return json.loads(response.read().decode("utf-8"))
@@ -108,6 +159,13 @@ class OpenAISolutionProvider:
             raise SolutionProviderError(f"OpenAI 返回 HTTP {exc.code}：{details}") from exc
         except (URLError, TimeoutError, json.JSONDecodeError) as exc:
             raise SolutionProviderError(f"OpenAI 解题失败：{exc}") from exc
+
+    @staticmethod
+    def _data_url(visual_input: SolutionVisualInput) -> str:
+        if visual_input.image_bytes is None or not visual_input.image_mime_type:
+            raise SolutionProviderError("视觉解题输入缺少受控图片内容")
+        encoded = base64.b64encode(visual_input.image_bytes).decode("ascii")
+        return f"data:{visual_input.image_mime_type};base64,{encoded}"
 
     @staticmethod
     def _extract_output_text(payload: dict) -> str:
@@ -166,10 +224,12 @@ class DeepSeekSolutionProvider(OpenAISolutionProvider):
 
     def __init__(
         self, *, api_key: str, model: str, base_url: str,
+        vision_model: str | None = None,
         timeout_seconds: int = 90, recorder=None, **_kwargs,
     ) -> None:
         self.api_key = api_key
         self.model = model
+        self.vision_model = vision_model
         self.reasoning_effort = "low"
         self.timeout_seconds = timeout_seconds
         self.recorder = recorder or NullModelRunRecorder()
@@ -177,14 +237,44 @@ class DeepSeekSolutionProvider(OpenAISolutionProvider):
             api_key=api_key, model=model, base_url=base_url,
             timeout_seconds=timeout_seconds,
         )
+        self.vision_client = (
+            DeepSeekJsonClient(
+                api_key=api_key,
+                model=vision_model,
+                base_url=base_url,
+                timeout_seconds=timeout_seconds,
+            )
+            if vision_model
+            else None
+        )
 
-    def _request(self, payload: dict, request: Request) -> dict:
+    def _request(
+        self,
+        payload: dict,
+        request: Request,
+        visual_input: SolutionVisualInput | None = None,
+    ) -> dict:
         try:
-            return self.client.request(
+            client = self.vision_client if visual_input is not None else self.client
+            if client is None:
+                raise SolutionProviderError("DeepSeek 视觉解题模型尚未配置")
+            input_value = payload["input"]
+            input_text = (
+                str(input_value)
+                if isinstance(input_value, str)
+                else str(input_value[0]["content"][0]["text"])
+            )
+            return client.request(
                 instructions=payload["instructions"],
-                input_text=str(payload["input"]), action="解题",
+                input_text=input_text,
+                action="视觉解题" if visual_input is not None else "解题",
                 output_schema=payload.get("text", {}).get("format"),
                 max_tokens=3000,
+                image_data_url=(
+                    self._data_url(visual_input)
+                    if visual_input is not None
+                    else None
+                ),
             )
         except DeepSeekClientError as exc:
             raise SolutionProviderError(str(exc)) from exc

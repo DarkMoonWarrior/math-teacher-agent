@@ -57,6 +57,8 @@ Solve workflow 已提供同步、真实 SSE、run 快照、取消和同会话恢
 
 默认保持 `MATH_AI_SOLVE_AGENT_ENABLED=false`。最终数学结果只接受唯一一次成功的 `solve_question` Tool 结构化输出；模型自由文本和原始 Tool payload 不会越过业务 seam。新 Teacher Web 解题流程、固定 synthetic evaluation 与完整 M5 Gate E 已通过。
 
+M7 图片解题只接受当前 owner 已确认且与当前媒体 revision 一致的题面。公开 Solve workflow 把 canonical 题面、解题模式/要求、owner、asset/media/OCR revision 和本次视觉同意封装为短时一次性 capability；内部 Tool 在读取图片前消费许可并从服务端恢复完整意图。Agent 只转发 capability，不能提交 owner/resource selector、读取路径或获得图片字节，模型改写普通 Tool 参数也不能改变授权内容。视觉解答仍为 `teacher_review_required`，其 provider/model/revision 证据不属于 MathVerifier。
+
 ## 测试
 
 ```powershell

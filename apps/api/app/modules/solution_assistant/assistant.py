@@ -12,6 +12,8 @@ from app.modules.solution_assistant.schemas import (
     SolutionExplanation,
     SolutionRequest,
     SolutionResult,
+    SolutionVisualContext,
+    SolutionVisualInput,
 )
 
 
@@ -62,21 +64,49 @@ class SolutionAssistant:
         self.question_bank = question_bank
         self.provider = provider
 
-    def solve(self, request: SolutionRequest) -> SolutionResult:
+    def solve(
+        self,
+        request: SolutionRequest,
+        visual_input: SolutionVisualInput | None = None,
+    ) -> SolutionResult:
         match, score = self._best_bank_match(request.question_text)
         exact_match = match is not None and score == 1.0
         exact_verified_match = exact_match and match.verification_status == "passed"
-        if exact_verified_match:
+        image_used = visual_input is not None and visual_input.image_bytes is not None
+        if exact_verified_match and not image_used:
             solutions = match.raw.get("solutions") or []
             solution_index = 1 if request.solution_mode == "alternative" else 0
             if len(solutions) > solution_index:
-                return self._from_verified_question(
+                result = self._from_verified_question(
                     request, match, solutions[solution_index], score
                 )
+                if visual_input is not None:
+                    result.visual_context = self._visual_context(
+                        visual_input,
+                        provider=result.provider,
+                        model=result.model,
+                    )
+                return result
         if self.provider is not None:
-            generated = self.provider.solve(request)
+            if image_used and not getattr(self.provider, "vision_model", None):
+                raise SolutionAssistantUnavailableError("当前解题 Provider 未配置视觉模型")
+            generated = (
+                self.provider.solve(request, visual_input)
+                if image_used
+                else self.provider.solve(request)
+            )
             assessment = self._generated_assessment(match if exact_match else None)
             warnings = ["请由教师核对条件、推导过程和最终答案后再用于教学。"]
+            used_model = (
+                str(getattr(self.provider, "vision_model"))
+                if image_used
+                else self.provider.model
+            )
+            if image_used:
+                warnings.insert(
+                    0,
+                    "原图已参与本次视觉推理；图形理解仍属于模型生成内容，不是 MathVerifier 证据。",
+                )
             if assessment.scope == "matched_question_record":
                 warnings.insert(
                     0,
@@ -90,7 +120,7 @@ class SolutionAssistant:
                 math_verification=assessment,
                 verification_evidence=assessment.details,
                 provider=self.provider.name,
-                model=self.provider.model,
+                model=used_model,
                 mode="live_ai",
                 matched_question_id=match.question_id if match else None,
                 matched_question_revision_count=(
@@ -99,6 +129,15 @@ class SolutionAssistant:
                 match_score=score if match else None,
                 alternative_available=True,
                 warnings=warnings,
+                visual_context=(
+                    self._visual_context(
+                        visual_input,
+                        provider=self.provider.name,
+                        model=used_model,
+                    )
+                    if visual_input is not None
+                    else None
+                ),
             )
         if exact_match and not exact_verified_match:
             raise SolutionAssistantVerificationError(
@@ -110,6 +149,24 @@ class SolutionAssistant:
             )
         raise SolutionAssistantUnavailableError(
             "当前文字题未匹配到已验证题库；配置可用的模型解题 Provider 后才能生成新解答。"
+        )
+
+    @staticmethod
+    def _visual_context(
+        visual_input: SolutionVisualInput,
+        *,
+        provider: str,
+        model: str,
+    ) -> SolutionVisualContext:
+        return SolutionVisualContext(
+            asset_id=visual_input.asset_id,
+            media_revision=visual_input.media_revision,
+            recognition_revision=visual_input.recognition_revision,
+            requires_visual_reasoning=visual_input.requires_visual_reasoning,
+            visual_processing_consent=visual_input.visual_processing_consent,
+            image_used=visual_input.image_bytes is not None,
+            provider=provider,
+            model=model,
         )
 
     def _best_bank_match(

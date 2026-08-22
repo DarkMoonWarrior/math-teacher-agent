@@ -1,4 +1,10 @@
 from .capture import QuestionCapture, QuestionCaptureError
+from .solve_grants import (
+    QuestionSolveGrantBinding,
+    QuestionSolveGrantError,
+    QuestionSolveGrantRegistry,
+    get_question_solve_grants,
+)
 from .recognition import (
     DeepSeekVisionQuestionRecognitionProvider,
     LocalQuestionRecognitionProvider,
@@ -20,6 +26,8 @@ from .schemas import (
     QuestionRecognitionCommand,
     QuestionRecognitionMode,
     QuestionRecognitionReviewCommand,
+    QuestionSolveReference,
+    PreparedQuestionInput,
 )
 
 __all__ = [
@@ -43,4 +51,10 @@ __all__ = [
     "QuestionRecognitionProvider",
     "QuestionRecognitionResult",
     "QuestionRecognitionReviewCommand",
+    "QuestionSolveReference",
+    "PreparedQuestionInput",
+    "QuestionSolveGrantBinding",
+    "QuestionSolveGrantError",
+    "QuestionSolveGrantRegistry",
+    "get_question_solve_grants",
 ]

@@ -538,6 +538,7 @@ export function TeacherWorkbench() {
   const [result, setResult] = useState<SearchTaskResult | null>(null);
   const [solveResult, setSolveResult] = useState<SolveTaskResult | null>(null);
   const [questionBundle, setQuestionBundle] = useState<QuestionInputBundle | null>(null);
+  const [visualProcessingConsent, setVisualProcessingConsent] = useState(false);
   const [errors, setErrors] = useState<Record<"search" | "solve", ViewError | null>>({
     search: null,
     solve: null,
@@ -572,11 +573,28 @@ export function TeacherWorkbench() {
   const error = runnable ? errors[capability as "search" | "solve"] : null;
   const running = runnable && phase === "running";
   const trimmedQuery = query.trim();
-  const queryValid = searchVisible ? Boolean(trimmedQuery) : solveVisible ? trimmedQuery.length >= 5 : false;
+  const captureConfirmed = questionBundle?.recognition_status === "confirmed"
+    && questionBundle.recognition_revision !== null
+    && questionBundle.recognition_source_revision === questionBundle.asset.current_revision;
+  const captureRequiresVisual = Boolean(
+    captureConfirmed && questionBundle?.requires_visual_reasoning !== false,
+  );
+  const captureReady = !questionBundle || (
+    captureConfirmed && (!captureRequiresVisual || visualProcessingConsent)
+  );
+  const queryValid = searchVisible
+    ? Boolean(trimmedQuery)
+    : solveVisible
+      ? trimmedQuery.length >= 5 && captureReady
+      : false;
   const validationMessage = runnable && touched && !queryValid
     ? searchVisible
       ? "先写下要找什么题。"
-      : "请输入一道完整题目，至少 5 个字符。"
+      : questionBundle && !captureConfirmed
+        ? "请先完成识别、校对并确认当前题面 revision。"
+        : captureRequiresVisual && !visualProcessingConsent
+          ? "请确认是否同意本次视觉解题使用当前原图。"
+          : "请输入一道完整题目，至少 5 个字符。"
     : "";
   const intent = useMemo(() => (result ? intentLabels(result) : []), [result]);
   const activeQuestion = result?.results[questionPage] ?? null;
@@ -730,8 +748,15 @@ export function TeacherWorkbench() {
           ...current.filter((item) => item.id !== nextResult.run_id).slice(0, 7),
         ]);
       } else {
+        const questionCapture = questionBundle && captureConfirmed ? {
+          assetId: questionBundle.asset.asset_id,
+          mediaRevision: questionBundle.asset.current_revision,
+          recognitionRevision: questionBundle.recognition_revision as number,
+          visualProcessingConsent: captureRequiresVisual ? visualProcessingConsent : false,
+        } : undefined;
+        if (questionCapture?.visualProcessingConsent) setVisualProcessingConsent(false);
         const nextResult = await teacherWorkspace.solveQuestion(
-          { questionText: trimmed, sessionId: sessionRef.current },
+          { questionText: trimmed, sessionId: sessionRef.current, questionCapture },
           {
             signal: controller.signal,
             onProgress: (progress) => {
@@ -820,6 +845,7 @@ export function TeacherWorkbench() {
     if (solveVisible) {
       setSolveResult(null);
       setQuestionBundle(null);
+      setVisualProcessingConsent(false);
       setError(null);
       setPhase("idle");
       setSolvePage(0);
@@ -840,6 +866,7 @@ export function TeacherWorkbench() {
       setSolveResult(task.result);
       setSolvePage(0);
       setQuestionBundle(null);
+      setVisualProcessingConsent(false);
     }
     setError(null, task.capability);
     setPhase("success", task.capability);
@@ -852,6 +879,7 @@ export function TeacherWorkbench() {
     setDrafts((current) => ({ ...current, solve: item.stem || item.stem_preview }));
     setSolveResult(null);
     setQuestionBundle(null);
+    setVisualProcessingConsent(false);
     setError(null, "solve");
     setPhase("idle", "solve");
     setSolvePage(0);
@@ -948,7 +976,22 @@ export function TeacherWorkbench() {
               <QuestionMediaComposer
                 bundle={questionBundle}
                 disabled={running}
-                onChange={setQuestionBundle}
+                visualProcessingConsent={visualProcessingConsent}
+                onChange={(nextBundle) => {
+                  setQuestionBundle(nextBundle);
+                  setVisualProcessingConsent(false);
+                }}
+                onConfirmed={(confirmedBundle) => {
+                  const optionText = confirmedBundle.options
+                    .map((item) => `${item.key}. ${item.text}`)
+                    .join("\n");
+                  const confirmedText = optionText
+                    ? `${confirmedBundle.stem_plain}\n${optionText}`
+                    : confirmedBundle.stem_plain;
+                  setDrafts((current) => ({ ...current, solve: confirmedText }));
+                  setTouched(false);
+                }}
+                onVisualProcessingConsentChange={setVisualProcessingConsent}
               />
             )}
             <div className={`composer-surface${validationMessage ? " is-error" : ""}${running ? " is-running" : ""}${definition.ready ? "" : " is-planned"}`}>
@@ -968,7 +1011,7 @@ export function TeacherWorkbench() {
                 }}
                 onKeyDown={handleComposerKeyDown}
                 placeholder={definition.placeholder}
-                readOnly={running}
+                readOnly={running || Boolean(questionBundle && captureConfirmed)}
                 rows={4}
                 value={query}
               />

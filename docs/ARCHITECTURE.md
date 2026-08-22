@@ -69,7 +69,8 @@ apps/web (legacy/reference Next.js UI, :3000)
 - Adapters: 本地 OCR/图像处理 adapter、外部视觉 adapter 和 deterministic test adapter；Solve Agent 不直接调用供应商或读取文件。
 - Trust: 带图题的原图/裁剪是 `QuestionInputBundle` 的一部分，不能在 OCR 后丢弃；视觉理解与 MathVerifier 证据范围分开。
 - First slice: `QuestionCapture.prepare/transform/get/content` 隐藏真实格式探测、体积/像素/清晰度、EXIF 方向、owner-scoped SQLite/文件 adapter 和 revision。公开路由只接收图片、来源、私有存储确认与受控 asset ID；浏览器不能提交 owner，也看不到存储路径。新 Solve composer 已接入上传、粘贴、拍照、预览、旋转和裁剪。
-- Second slice: `QuestionCapture.recognize/review_recognition` 隐藏本地/外部 OCR adapter、逐次外部同意、结构化题面与 append-only 识别 revision。生产 adapter 包括本地 pix2text、DeepSeek `deepseek-v4-flash-vision-exp` 与 OpenAI 图像模型，DeepSeek 优先级只属于路由装配，不进入业务 interface。识别与具体 media revision 绑定；媒体变化后结果显式 `stale`。教师端能校对普通题面、LaTeX、选项和低置信度区域，但在图形保真与 Solve 消费切片完成前不会把图片或 OCR 草稿交给 Solve。
+- Second slice: `QuestionCapture.recognize/review_recognition` 隐藏本地/外部 OCR adapter、逐次外部同意、结构化题面与 append-only 识别 revision。生产 adapter 包括本地 pix2text、DeepSeek `deepseek-v4-flash-vision-exp` 与 OpenAI 图像模型，DeepSeek 优先级只属于路由装配，不进入业务 interface。识别与具体 media revision 绑定；媒体变化后结果显式 `stale`。教师端能校对普通题面、LaTeX、选项和低置信度区域；只有教师确认的 current revision 才能进入第三切片。
+- Third slice: `QuestionCapture.prepare_for_solve` 是 owner-scoped、revision-pinned 的深模块 seam；只把教师确认的 canonical 题面和必要视觉字节交给 `SolutionAssistant`。FastAPI 在 Agent 运行前签发一次性 `QuestionSolveGrant`，绑定 owner、canonical 题面、解题模式/要求、asset/media/OCR revision 与本次视觉同意；模型只转发 capability，Tool 在读取图片前消费并从中恢复完整 server-owned 意图，因此模型改写参数不能替换私人资源或改变授权。Agent/Web 不接触文件路径或字节。视觉结果携带实际 provider/model/revision，始终与 MathVerifier 证据分层。
 
 ### Private Question Authoring modules（M8 待开始）
 

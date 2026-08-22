@@ -165,6 +165,7 @@ export function defineTeacherTools(options: TeacherToolOptions): ToolDefinition[
       question_text: { type: "string", description: "完整高中数学题目文本", required: true },
       solution_mode: { type: "string", description: "standard 或 alternative" },
       teacher_instruction: { type: "string", description: "教师对讲解方式的补充要求（可选）" },
+      capture_grant: { type: "string", description: "FastAPI 为本次确认题面和图片签发的一次性许可；必须原样传递，其他可信字段由服务端解析" },
     },
     output: {
       schema: {
@@ -188,6 +189,7 @@ export function defineTeacherTools(options: TeacherToolOptions): ToolDefinition[
           match_score: { type: "json" },
           alternative_available: { type: "boolean", required: true },
           warnings: { type: "array", required: true },
+          visual_context: { type: "json" },
           request_id: { type: "string", required: true },
           error: { type: "json" },
         },
@@ -203,6 +205,7 @@ export function defineTeacherTools(options: TeacherToolOptions): ToolDefinition[
           question_text: args.question_text,
           solution_mode: (args.solution_mode ?? "standard") as SolutionMode,
           teacher_instruction: args.teacher_instruction ?? "",
+          capture_grant: args.capture_grant,
         },
         { ...callOptions(exec), timeoutMs: 120_000 },
       );
@@ -226,6 +229,7 @@ export function defineTeacherTools(options: TeacherToolOptions): ToolDefinition[
           match_score: result.data.match_score,
           alternative_available: result.data.alternative_available,
           warnings: result.data.warnings,
+          visual_context: (result.data.visual_context ?? null) as unknown as JsonValue,
           request_id: result.data.request_id ?? requestId,
           error: null,
         };
@@ -259,6 +263,7 @@ export function defineTeacherTools(options: TeacherToolOptions): ToolDefinition[
         match_score: null,
         alternative_available: false,
         warnings: [],
+        visual_context: null,
         request_id: result.error.request_id ?? requestId,
         error: gatewayErrorEnvelope(requestId, new ToolGatewayError(result.error)),
       };

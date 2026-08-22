@@ -16,6 +16,8 @@ from app.modules.solution_assistant.schemas import (
     SolutionExplanation,
     SolutionRequest,
     SolutionResult,
+    SolutionVisualContext,
+    SolutionVisualInput,
 )
 
 __all__ = [
@@ -32,4 +34,6 @@ __all__ = [
     "SolutionProviderError",
     "SolutionRequest",
     "SolutionResult",
+    "SolutionVisualContext",
+    "SolutionVisualInput",
 ]

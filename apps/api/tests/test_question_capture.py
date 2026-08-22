@@ -25,6 +25,9 @@ from app.modules.question_capture import (
     QuestionRecognitionError,
     QuestionRecognitionResult,
     QuestionRecognitionReviewCommand,
+    QuestionSolveReference,
+    QuestionSolveGrantError,
+    QuestionSolveGrantRegistry,
 )
 from app.routes.question_capture import get_question_capture
 
@@ -55,8 +58,9 @@ class FakeRecognitionProvider:
     name = "synthetic_ocr"
     model = "synthetic-v1"
 
-    def __init__(self, *, fail: bool = False) -> None:
+    def __init__(self, *, fail: bool = False, requires_visual_reasoning: bool = False) -> None:
         self.fail = fail
+        self.requires_visual_reasoning = requires_visual_reasoning
         self.calls: list[dict[str, object]] = []
 
     def recognize(self, *, path: Path, mime_type: str, teacher_id: str) -> QuestionRecognitionResult:
@@ -71,7 +75,7 @@ class FakeRecognitionProvider:
                 LowConfidenceRegion(text="x²", reason="上标较小", confidence=0.72, box=(0.1, 0.2, 0.3, 0.4))
             ],
             warnings=["请核对上标。"],
-            requires_visual_reasoning=False,
+            requires_visual_reasoning=self.requires_visual_reasoning,
         )
 
 
@@ -435,6 +439,152 @@ def test_recognition_and_review_fail_closed_across_owners(tmp_path: Path) -> Non
             QuestionRecognitionReviewCommand(stem_plain="越权"),
             owner_id="teacher_b",
         )
+
+
+def test_prepare_for_solve_uses_only_confirmed_revision_and_canonical_text(tmp_path: Path) -> None:
+    capture = make_recognition_capture(tmp_path, local=FakeRecognitionProvider())
+    created = capture.prepare(command(), filename="question.png", content=image_bytes())
+    draft = capture.recognize(
+        created.asset.asset_id,
+        QuestionRecognitionCommand(mode="local"),
+        owner_id="teacher_a",
+    )
+    draft_reference = QuestionSolveReference(
+        asset_id=created.asset.asset_id,
+        media_revision=1,
+        recognition_revision=draft.recognition_revision,
+    )
+    with pytest.raises(QuestionCaptureError, match="尚未由教师确认"):
+        capture.prepare_for_solve(
+            draft_reference, owner_id="teacher_a", request_id="req_draft"
+        )
+
+    confirmed = capture.review_recognition(
+        created.asset.asset_id,
+        QuestionRecognitionReviewCommand(
+            stem_plain="教师确认题面",
+            options=[QuestionOption(key="A", text="1"), QuestionOption(key="B", text="2")],
+            confirm=True,
+        ),
+        owner_id="teacher_a",
+    )
+    prepared = capture.prepare_for_solve(
+        QuestionSolveReference(
+            asset_id=created.asset.asset_id,
+            media_revision=1,
+            recognition_revision=confirmed.recognition_revision,
+        ),
+        owner_id="teacher_a",
+        request_id="req_confirmed",
+    )
+
+    assert prepared.question_text == "教师确认题面\nA. 1\nB. 2"
+    assert prepared.requires_visual_reasoning is False
+    assert prepared.image_bytes is None
+    assert prepared.image_mime_type is None
+    assert not hasattr(prepared, "path")
+    with pytest.raises(QuestionCaptureError, match="已使用"):
+        capture.prepare_for_solve(
+            QuestionSolveReference(
+                asset_id=created.asset.asset_id,
+                media_revision=1,
+                recognition_revision=confirmed.recognition_revision,
+            ),
+            owner_id="teacher_a",
+            request_id="req_confirmed",
+        )
+    with pytest.raises(KeyError):
+        capture.prepare_for_solve(
+            QuestionSolveReference(
+                asset_id=created.asset.asset_id,
+                media_revision=1,
+                recognition_revision=confirmed.recognition_revision,
+            ),
+            owner_id="teacher_b",
+            request_id="req_wrong_owner",
+        )
+
+
+def test_prepare_for_solve_visual_input_requires_fresh_per_action_consent(tmp_path: Path) -> None:
+    original = image_bytes()
+    capture = make_recognition_capture(
+        tmp_path,
+        local=FakeRecognitionProvider(requires_visual_reasoning=True),
+    )
+    created = capture.prepare(command(), filename="diagram.png", content=original)
+    capture.recognize(
+        created.asset.asset_id,
+        QuestionRecognitionCommand(mode="local"),
+        owner_id="teacher_a",
+    )
+    confirmed = capture.review_recognition(
+        created.asset.asset_id,
+        QuestionRecognitionReviewCommand(stem_plain="如图，求角 A。", confirm=True),
+        owner_id="teacher_a",
+    )
+    reference = QuestionSolveReference(
+        asset_id=created.asset.asset_id,
+        media_revision=1,
+        recognition_revision=confirmed.recognition_revision,
+    )
+    with pytest.raises(QuestionCaptureError, match="逐次确认"):
+        capture.prepare_for_solve(reference, owner_id="teacher_a", request_id="req_no_consent")
+
+    prepared = capture.prepare_for_solve(
+        reference.model_copy(update={"visual_processing_consent": True}),
+        owner_id="teacher_a",
+        request_id="req_visual",
+    )
+    assert prepared.requires_visual_reasoning is True
+    assert prepared.visual_processing_consent is True
+    assert prepared.image_bytes == original
+    assert prepared.image_mime_type == "image/png"
+
+    capture.transform(
+        created.asset.asset_id,
+        QuestionMediaTransformCommand(operation="rotate", degrees=90),
+        owner_id="teacher_a",
+    )
+    with pytest.raises(QuestionCaptureError, match="版本已变化"):
+        capture.prepare_for_solve(
+            reference.model_copy(update={"visual_processing_consent": True}),
+            owner_id="teacher_a",
+            request_id="req_stale",
+        )
+
+
+def test_question_solve_grant_is_one_use_and_restores_complete_server_intent() -> None:
+    registry = QuestionSolveGrantRegistry()
+    reference = QuestionSolveReference(
+        asset_id="qcap_bound",
+        media_revision=2,
+        recognition_revision=4,
+        visual_processing_consent=True,
+    )
+    token = registry.issue(
+        owner_id="teacher_a",
+        question_text="教师确认题面",
+        solution_mode="alternative",
+        teacher_instruction="突出易错点",
+        reference=reference,
+    )
+    binding = registry.consume(token)
+    assert binding.owner_id == "teacher_a"
+    assert binding.question_text == "教师确认题面"
+    assert binding.solution_mode == "alternative"
+    assert binding.teacher_instruction == "突出易错点"
+    assert binding.reference == reference
+    with pytest.raises(QuestionSolveGrantError, match="无效或已使用"):
+        registry.consume(token)
+
+    second_token = registry.issue(
+        owner_id="teacher_a",
+        question_text="教师确认题面",
+        solution_mode="standard",
+        teacher_instruction="",
+        reference=reference,
+    )
+    assert second_token != token
 
 
 def test_deepseek_vision_adapter_uses_image_json_mode_without_leaking_teacher_id(

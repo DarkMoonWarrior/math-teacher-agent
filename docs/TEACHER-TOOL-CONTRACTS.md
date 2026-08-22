@@ -45,12 +45,14 @@
 
 - 路由：`POST /internal/agent-tools/v1/solve-question`
 - 认证：`Authorization: Bearer <MATH_AI_TOOL_GATEWAY_TOKEN>`
-- 请求：`question_text`、`solution_mode=standard|alternative`、可选 `teacher_instruction`
-- 业务接口：`SolutionAssistant.solve(SolutionRequest) -> SolutionResult`
-- 成功响应：结构化解法、最终答案、知识点、易错点、教学提示、`confidence_status`、`math_verification`、`verification_evidence`、provider/model、mode、匹配题目 ID、题库修订计数与 warnings
+- 请求：`question_text`、`solution_mode=standard|alternative`、可选 `teacher_instruction`；图片题在模型可见 Tool 层只额外携带 FastAPI 签发的 opaque `capture_grant`
+- 图片许可：短时、单次消费，严格绑定 server-owned current owner、canonical 题面、solution mode、teacher instruction、asset/media/OCR revision 与本次视觉同意；内部 Tool 在读取图片前从许可恢复完整意图，忽略模型对普通题面/模式/要求的改写。过期、重放或许可替换返回 `PRIVATE_CONSENT_REQUIRED`
+- 业务接口：文字题使用 `SolutionAssistant.solve(SolutionRequest)`；图片题先经 `QuestionCapture.prepare_for_solve` owner/revision 校验，再由同一 `SolutionAssistant` 消费内部视觉输入
+- 成功响应：结构化解法、最终答案、知识点、易错点、教学提示、`confidence_status`、`math_verification`、`verification_evidence`、provider/model、mode、匹配题目 ID、题库修订计数、warnings 与可选 `visual_context`
 - `math_verification`：包含 `status=passed|failed|inconclusive`、`capability=supported|unsupported`、验证 `scope`、证据来源、方法、独立答案、来源答案、明细与 verifier 版本
 - 已验证题库解析：`mode=verified_bank`、`confidence_status=program_verified`
 - 模型新解答：`mode=live_ai`、`confidence_status=teacher_review_required`
+- 视觉模型新解答：必须额外返回是否实际使用原图及 provider/model/media/OCR revision；始终 `teacher_review_required`，视觉理解不属于 MathVerifier 证据
 - 任意模型新解答未被现有 MathVerifier 覆盖时：`math_verification=unsupported/inconclusive`，scope 为 `generated_solution`
 - 精确匹配到来源矛盾题：不得继承可信解析；无模型时 HTTP 409 + `VERIFICATION_FAILED`，有模型时仍保持 `teacher_review_required` 并保留冲突证据及 `matched_question_record` scope
 - 精确匹配到证据不足题：不得继承可信解析；无模型时 HTTP 409 + `VERIFICATION_INCONCLUSIVE`

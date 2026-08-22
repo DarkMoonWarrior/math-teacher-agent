@@ -5,7 +5,11 @@ import json
 from app.modules.deepseek import DeepSeekJsonClient
 from app.modules.lesson_plans import DeepSeekLessonPlanProvider
 from app.modules.question_variants import DeepSeekQuestionVariantProvider
-from app.modules.solution_assistant import DeepSeekSolutionProvider
+from app.modules.solution_assistant import (
+    DeepSeekSolutionProvider,
+    SolutionRequest,
+    SolutionVisualInput,
+)
 
 
 def test_deepseek_uses_chat_completions_json_mode(monkeypatch) -> None:
@@ -73,6 +77,65 @@ def test_deepseek_normalizes_control_characters_fences_and_trailing_text(monkeyp
     )
     parsed = json.loads(result["output"][0]["content"][0]["text"])
     assert parsed == {"answer": "line\none", "formula": "\\frac{1}{2}"}
+
+
+def test_deepseek_solution_provider_uses_configured_vision_model_and_image_block(monkeypatch) -> None:
+    captured = {}
+
+    class Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self):
+            content = {
+                "explanation": {
+                    "method": "图形分析",
+                    "steps": ["结合原图条件。"],
+                    "final_answer": "待教师核对",
+                },
+                "knowledge_points": [],
+                "common_mistakes": [],
+                "teaching_notes": [],
+            }
+            return json.dumps({
+                "choices": [{"message": {"content": json.dumps(content, ensure_ascii=False)}}]
+            }, ensure_ascii=False).encode()
+
+    def fake_urlopen(request, timeout):
+        captured["payload"] = json.loads(request.data.decode())
+        captured["timeout"] = timeout
+        return Response()
+
+    monkeypatch.setattr("app.modules.deepseek.urlopen", fake_urlopen)
+    provider = DeepSeekSolutionProvider(
+        api_key="test-secret",
+        model="deepseek-v4-flash",
+        vision_model="deepseek-v4-flash-vision-exp",
+        base_url="https://api.deepseek.com",
+    )
+    provider.solve(
+        SolutionRequest(question_text="如图，求角 A 的大小。"),
+        SolutionVisualInput(
+            asset_id="qcap_1",
+            media_revision=1,
+            recognition_revision=2,
+            requires_visual_reasoning=True,
+            visual_processing_consent=True,
+            image_bytes=b"private-image",
+            image_mime_type="image/png",
+        ),
+    )
+
+    payload = captured["payload"]
+    assert payload["model"] == "deepseek-v4-flash-vision-exp"
+    assert payload["messages"][1]["content"][0]["type"] == "text"
+    image_block = payload["messages"][1]["content"][1]
+    assert image_block["type"] == "image_url"
+    assert image_block["image_url"]["url"].startswith("data:image/png;base64,")
+    assert image_block["image_url"]["detail"] == "original"
 
 
 def test_deepseek_providers_initialize_openai_compatible_fields() -> None:

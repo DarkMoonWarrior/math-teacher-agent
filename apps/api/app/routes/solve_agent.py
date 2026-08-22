@@ -12,12 +12,13 @@ import uuid
 from functools import lru_cache
 from typing import Any
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
 from app.agent_runtime import TeacherAgentEvent, TeacherAgentEventType
 from app.core.config import get_settings
+from app.core.identity import CurrentTeacher, get_current_teacher
 from app.modules.solve_agent import (
     SolveAgentCommand,
     SolveAgentResponse,
@@ -97,10 +98,15 @@ def _store_response(command: SolveAgentCommand, response: SolveAgentResponse) ->
 
 
 @router.post("", response_model=SolveAgentResponse)
-async def solve(command: SolveAgentCommand) -> SolveAgentResponse:
+async def solve(
+    command: SolveAgentCommand,
+    current_teacher: CurrentTeacher = Depends(get_current_teacher),
+) -> SolveAgentResponse:
     _require_feature()
     response = await get_solve_agent_workflow().run(
-        command, request_id=f"req_{uuid.uuid4().hex}"
+        command,
+        owner_id=current_teacher.teacher_id,
+        request_id=f"req_{uuid.uuid4().hex}",
     )
     _store_response(command, response)
     return response
@@ -148,13 +154,20 @@ def _record_stream_event(command: SolveAgentCommand, event: TeacherAgentEvent) -
 
 
 @router.post("/stream")
-async def stream_solve(command: SolveAgentCommand) -> StreamingResponse:
+async def stream_solve(
+    command: SolveAgentCommand,
+    current_teacher: CurrentTeacher = Depends(get_current_teacher),
+) -> StreamingResponse:
     _require_feature()
     request_id = f"req_{uuid.uuid4().hex}"
     workflow = get_solve_agent_workflow()
 
     async def events():
-        async for event in workflow.stream(command, request_id=request_id):
+        async for event in workflow.stream(
+            command,
+            owner_id=current_teacher.teacher_id,
+            request_id=request_id,
+        ):
             _record_stream_event(command, event)
             yield f"data: {json.dumps(event.model_dump(mode='json'), ensure_ascii=False)}\n\n"
 
@@ -224,7 +237,10 @@ async def cancel_run(run_id: str) -> dict[str, Any]:
 
 
 @router.post("/{run_id}/resume", response_model=SolveAgentResponse)
-async def resume_run(run_id: str) -> SolveAgentResponse:
+async def resume_run(
+    run_id: str,
+    current_teacher: CurrentTeacher = Depends(get_current_teacher),
+) -> SolveAgentResponse:
     record = _require_run(run_id)
     if record.status not in {"error", "cancelled"}:
         raise _SolveAgentHttpError(
@@ -243,6 +259,7 @@ async def resume_run(run_id: str) -> SolveAgentResponse:
     response = await get_solve_agent_workflow().resume(
         record.command,
         session_id=record.session_id,
+        owner_id=current_teacher.teacher_id,
         request_id=f"req_{uuid.uuid4().hex}",
     )
     _store_response(record.command, response)

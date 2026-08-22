@@ -18,6 +18,8 @@ from .schemas import (
     QuestionMediaTransformCommand,
     QuestionRecognitionCommand,
     QuestionRecognitionReviewCommand,
+    QuestionSolveReference,
+    PreparedQuestionInput,
 )
 from .recognition import (
     LocalQuestionRecognitionProvider,
@@ -473,6 +475,108 @@ class QuestionCapture:
             raise QuestionCaptureError("题目图片文件不存在")
         return path, row["mime_type"]
 
+    def prepare_for_solve(
+        self,
+        reference: QuestionSolveReference,
+        *,
+        owner_id: str,
+        request_id: str,
+    ) -> PreparedQuestionInput:
+        """Resolve one confirmed private bundle without exposing storage authority."""
+        with self._connect() as connection:
+            asset = connection.execute(
+                "SELECT * FROM question_capture_assets WHERE asset_id = ? AND owner_id = ?",
+                (reference.asset_id, owner_id),
+            ).fetchone()
+            if asset is None:
+                raise KeyError(reference.asset_id)
+            media = connection.execute(
+                """
+                SELECT * FROM question_capture_revisions
+                WHERE asset_id = ? AND revision = ?
+                """,
+                (reference.asset_id, reference.media_revision),
+            ).fetchone()
+            recognition = connection.execute(
+                """
+                SELECT * FROM question_capture_recognitions
+                WHERE asset_id = ? AND recognition_revision = ?
+                """,
+                (reference.asset_id, reference.recognition_revision),
+            ).fetchone()
+        if int(asset["current_revision"]) != reference.media_revision:
+            raise QuestionCaptureError("题目图片版本已变化，请重新识别并确认后再解题")
+        if media is None:
+            raise QuestionCaptureError("指定的题目图片版本不存在")
+        if recognition is None:
+            raise QuestionCaptureError("指定的题面识别版本不存在")
+        if recognition["status"] != "confirmed":
+            raise QuestionCaptureError("题面尚未由教师确认，不能交给 Solve")
+        if int(recognition["source_media_revision"]) != reference.media_revision:
+            raise QuestionCaptureError("题面识别与图片版本不一致，请重新识别并确认")
+
+        options = json.loads(recognition["options_json"])
+        option_lines = [
+            f"{str(item.get('key', '')).strip()}. {str(item.get('text', '')).strip()}"
+            for item in options
+            if str(item.get("key", "")).strip() and str(item.get("text", "")).strip()
+        ]
+        question_text = recognition["stem_plain"].strip()
+        if option_lines:
+            question_text = f"{question_text}\n" + "\n".join(option_lines)
+        if not question_text:
+            raise QuestionCaptureError("教师确认题面为空，不能交给 Solve")
+
+        # Unknown is treated as visual-dependent: losing a diagram is worse than
+        # requiring a fresh, explicit consent.
+        requires_visual = recognition["requires_visual_reasoning"] != 0
+        if requires_visual and not reference.visual_processing_consent:
+            raise QuestionCaptureError("本题依赖原图；发送给视觉解题模型前必须逐次确认本次处理")
+
+        image_content: bytes | None = None
+        image_mime_type: str | None = None
+        if requires_visual:
+            path = self._confined_path(media["stored_name"])
+            if not path.is_file():
+                raise QuestionCaptureError("题目图片文件不存在")
+            image_content = path.read_bytes()
+            image_mime_type = media["mime_type"]
+
+        try:
+            with self._connect() as connection:
+                connection.execute(
+                    """
+                    INSERT INTO question_capture_solve_uses (
+                        request_id, owner_id, asset_id, media_revision,
+                        recognition_revision, requires_visual_reasoning,
+                        visual_processing_consent, image_prepared, created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        request_id,
+                        owner_id,
+                        reference.asset_id,
+                        reference.media_revision,
+                        reference.recognition_revision,
+                        int(requires_visual),
+                        int(reference.visual_processing_consent),
+                        int(image_content is not None),
+                        self._now(),
+                    ),
+                )
+        except sqlite3.IntegrityError as exc:
+            raise QuestionCaptureError("本次题面/视觉处理许可已使用，请重新发起解题") from exc
+        return PreparedQuestionInput(
+            question_text=question_text,
+            asset_id=reference.asset_id,
+            media_revision=reference.media_revision,
+            recognition_revision=reference.recognition_revision,
+            requires_visual_reasoning=requires_visual,
+            visual_processing_consent=reference.visual_processing_consent,
+            image_bytes=image_content,
+            image_mime_type=image_mime_type,
+        )
+
     def _open_image(self, content: bytes) -> tuple[Image.Image, str]:
         try:
             with Image.open(BytesIO(content)) as opened:
@@ -576,6 +680,20 @@ class QuestionCapture:
                 );
                 CREATE INDEX IF NOT EXISTS idx_question_capture_recognitions_asset
                     ON question_capture_recognitions(asset_id, recognition_revision DESC);
+                CREATE TABLE IF NOT EXISTS question_capture_solve_uses (
+                    request_id TEXT PRIMARY KEY,
+                    owner_id TEXT NOT NULL,
+                    asset_id TEXT NOT NULL,
+                    media_revision INTEGER NOT NULL,
+                    recognition_revision INTEGER NOT NULL,
+                    requires_visual_reasoning INTEGER NOT NULL,
+                    visual_processing_consent INTEGER NOT NULL,
+                    image_prepared INTEGER NOT NULL,
+                    created_at TEXT NOT NULL,
+                    FOREIGN KEY (asset_id) REFERENCES question_capture_assets(asset_id)
+                );
+                CREATE INDEX IF NOT EXISTS idx_question_capture_solve_uses_owner
+                    ON question_capture_solve_uses(owner_id, created_at DESC);
                 """
             )
 

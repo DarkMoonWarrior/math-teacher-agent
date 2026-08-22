@@ -37,6 +37,7 @@ def get_solution_assistant() -> SolutionAssistant:
     provider = DeepSeekSolutionProvider(
         api_key=settings.deepseek_api_key,
         model=settings.deepseek_model,
+        vision_model=settings.deepseek_vision_model,
         base_url=settings.deepseek_base_url,
         timeout_seconds=settings.deepseek_timeout_seconds,
         recorder=get_model_operations_registry(),
@@ -44,6 +45,7 @@ def get_solution_assistant() -> SolutionAssistant:
         OpenAISolutionProvider(
             api_key=settings.openai_api_key,
             model=settings.openai_model,
+            vision_model=settings.openai_model,
             reasoning_effort=settings.openai_reasoning_effort,
             timeout_seconds=settings.openai_timeout_seconds,
             recorder=get_model_operations_registry(),

@@ -130,6 +130,16 @@ export type SolveTaskSolution = {
   match_score: number | null;
   alternative_available: boolean;
   warnings: string[];
+  visual_context: {
+    asset_id: string;
+    media_revision: number;
+    recognition_revision: number;
+    requires_visual_reasoning: boolean;
+    visual_processing_consent: boolean;
+    image_used: boolean;
+    provider: string;
+    model: string;
+  } | null;
 };
 
 export type SolveTaskResult = {
@@ -151,6 +161,12 @@ export type SolveTaskRequest = {
   sessionId: string;
   solutionMode?: "standard" | "alternative";
   teacherInstruction?: string;
+  questionCapture?: {
+    assetId: string;
+    mediaRevision: number;
+    recognitionRevision: number;
+    visualProcessingConsent: boolean;
+  };
 };
 
 export type SolveTaskProgressStage =

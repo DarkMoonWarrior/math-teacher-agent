@@ -65,6 +65,7 @@ export interface SolveQuestionInput {
   question_text: string;
   solution_mode?: SolutionMode;
   teacher_instruction?: string;
+  capture_grant?: string;
 }
 
 export interface SolveQuestionResponse {
@@ -99,6 +100,16 @@ export interface SolveQuestionResponse {
   match_score: number | null;
   alternative_available: boolean;
   warnings: string[];
+  visual_context: {
+    asset_id: string;
+    media_revision: number;
+    recognition_revision: number;
+    requires_visual_reasoning: boolean;
+    visual_processing_consent: boolean;
+    image_used: boolean;
+    provider: string;
+    model: string;
+  } | null;
   request_id: string;
 }
 

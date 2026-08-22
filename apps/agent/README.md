@@ -35,7 +35,7 @@ pnpm build:agent     # 编译到 dist/
 
 - 产品自有 Runtime interface 与 DeepSeek Harness adapter 已实现。
 - Search Agent 与 Solve Agent Tool seam、取消、恢复、tool-loop 上限和最小权限均有自动测试。
-- 目前模型可见能力仍严格限制为 8 个受控只读 Tool；`inspect_private_library` 只返回聚合状态，`search_private_library` 必须携带 FastAPI 为本次操作签发的一次性许可且只返回确认文本的有界片段；`solve_question` 原样返回 MathVerifier 的 status/capability/scope 分级，不保存或发布；Lesson/Paper 写工具尚未接入。
+- 目前模型可见能力仍严格限制为 8 个受控只读 Tool；`inspect_private_library` 只返回聚合状态，`search_private_library` 必须携带 FastAPI 为本次操作签发的一次性许可且只返回确认文本的有界片段；图片 `solve_question` 只原样转发一个绑定完整 Solve 意图的一次性 capability，owner、题面、模式、要求与精确 media/OCR revision 均由 FastAPI 恢复，Agent 看不到资源 selector、路径或图片字节；解题结果原样返回 MathVerifier 的 status/capability/scope 分级，不保存或发布；Lesson/Paper 写工具尚未接入。
 - 默认 `test-mock` 不调用真实模型；生产密钥只存在于本服务环境。
 
 ## HTTP 接口（machine-to-machine）

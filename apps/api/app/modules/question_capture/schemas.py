@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -66,6 +67,31 @@ class QuestionRecognitionReviewCommand(BaseModel):
     options: list[QuestionOption] = Field(default_factory=list, max_length=20)
     note: str = Field(default="", max_length=2000)
     confirm: bool = False
+
+
+class QuestionSolveReference(BaseModel):
+    """Opaque, revision-pinned reference carried by browser and Agent."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    asset_id: str = Field(min_length=1, max_length=160)
+    media_revision: int = Field(ge=1)
+    recognition_revision: int = Field(ge=1)
+    visual_processing_consent: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class PreparedQuestionInput:
+    """Owner-resolved Solve input; storage paths never cross this seam."""
+
+    question_text: str
+    asset_id: str
+    media_revision: int
+    recognition_revision: int
+    requires_visual_reasoning: bool
+    visual_processing_consent: bool
+    image_bytes: bytes | None
+    image_mime_type: str | None
 
 
 class QuestionMediaRevision(BaseModel):

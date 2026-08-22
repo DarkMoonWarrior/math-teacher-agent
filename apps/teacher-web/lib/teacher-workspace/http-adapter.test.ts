@@ -103,6 +103,7 @@ function solveResultFixture(): SolveTaskResult {
       match_score: null,
       alternative_available: true,
       warnings: ["请由教师复核"],
+      visual_context: null,
     },
     tool_request_id: "req_tool_solve",
     duration_ms: 24,
@@ -869,9 +870,43 @@ describe("HttpTeacherWorkspace", () => {
           session_id: "tch_solve_1",
           solution_mode: "standard",
           teacher_instruction: "",
+          question_capture: null,
         }),
       }),
     );
+  });
+
+  it("sends only opaque confirmed revisions and one-run visual consent to Solve", async () => {
+    const result = solveResultFixture();
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => streamResponse([{
+      type: "run_completed",
+      run_id: "run_visual",
+      request_id: "req_visual",
+      data: { solve_response: result },
+    }]));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await new HttpTeacherWorkspace().solveQuestion({
+      questionText: "如图，在三角形 ABC 中求角 A。",
+      sessionId: "tch_visual",
+      questionCapture: {
+        assetId: "qcap_private_1",
+        mediaRevision: 2,
+        recognitionRevision: 5,
+        visualProcessingConsent: true,
+      },
+    });
+
+    const init = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    const body = JSON.parse(String(init.body));
+    expect(body.question_capture).toEqual({
+      asset_id: "qcap_private_1",
+      media_revision: 2,
+      recognition_revision: 5,
+      visual_processing_consent: true,
+    });
+    expect(JSON.stringify(body)).not.toContain("content_endpoint");
+    expect(JSON.stringify(body)).not.toContain("image_bytes");
   });
 
   it("recovers the same Solve run snapshot without repeating execution", async () => {

@@ -21,7 +21,7 @@
 
 ## 3. 深模块与 seam
 
-`QuestionCapture.prepare(QuestionCaptureCommand) -> QuestionInputBundle` 是本阶段的业务深模块接口。图片验证、方向与清晰度检查、裁剪、OCR、公式识别、图形存在性判断、revision、owner 隔离、逐次外部处理同意和错误语义留在实现内部。
+`QuestionCapture.prepare(QuestionCaptureCommand) -> QuestionInputBundle` 与 `QuestionCapture.prepare_for_solve(QuestionSolveReference) -> PreparedQuestionInput` 是本阶段的业务深模块接口。前者拥有图片采集、OCR 与校对，后者只接受当前 owner 已确认且 revision 精确匹配的 bundle，并在 FastAPI 内部解析受控图片字节；图片验证、方向与清晰度检查、裁剪、OCR、公式识别、图形存在性判断、revision、owner 隔离、逐次外部处理同意和错误语义留在实现内部。
 
 `QuestionInputBundle` 至少包含：
 
@@ -58,13 +58,15 @@ Solve 输入区增加：上传图片、粘贴截图、拍照入口、图片预�
 1. **私有单题媒体入口**：上传、粘贴、格式/体积/清晰度检查、旋转裁剪、owner-scoped asset；已完成。
 2. **文字与公式识别**：复用 M6 OCR 能力，输出可编辑题面、LaTeX、选项、revision 和低置信度提示；已完成。
 2A. **数学结果可读展示前置修复**：统一行内/独立公式约定和 KaTeX 渲染，兼容旧式未分隔 LaTeX，失败保留可见原文；已完成。该修复只处理显示，不增加课程层级判断或改变数学结论。
-3. **图形保真输入**：保留原图/裁剪，检测需要视觉推理的题型，让 Solve 同时消费文字与受控视觉信息；未开始。
-4. **可信解题接入**：复用 M5 `SolutionAssistant`、MathVerifier 和可信状态，不复制第二套解题实现；未开始。
+3. **图形保真输入**：保留原图/裁剪，检测需要视觉推理的题型，让 Solve 同时消费文字与受控视觉信息；已完成。
+4. **可信解题接入**：复用 M5 `SolutionAssistant`、MathVerifier 和可信状态，不复制第二套解题实现；进行中，基础 seam 已接入，尚待完整失败/取消/真实场景收口。
 5. **固定评测与 Gate E**：覆盖代数公式、函数图像、解析几何、立体几何、统计图表、模糊/截断/多题图片、OCR/视觉服务失败、取消和跨 owner 越权；未开始。
 
 第一条切片实现证据：`QuestionCapture.prepare` 对实际 PNG/JPEG/WebP 内容进行探测，限制 15 MB 与 2500 万像素，拒绝损坏、过小和近乎空白图片，并对低分辨率/低对比度返回可见警告。原图、旋转和裁剪使用同一 owner-scoped `asset_id` 与递增 revision；原始 revision 不覆盖。公开路由从服务端 current-teacher seam 绑定 owner，返回值只有受控相对内容端点，不含 owner、存储名或文件路径。新 Solve composer 提供上传、剪贴板与系统相机入口、预览、旋转、裁剪和本次任务移除。
 
 第二条切片实现证据：`QuestionCapture.recognize/review_recognition` 将本地与外部识别隐藏在同一 adapter seam 后，结构化保存普通题面、LaTeX、选项、低置信度区域、provider/model、处理模式、外部同意证据和教师校对备注。识别记录使用独立 append-only revision，并绑定当时的 media revision；图片继续旋转或裁剪后旧识别自动变成 `stale`，不能确认。外部 OCR 只有在当前动作明确同意时才调用；已接入 DeepSeek 官方实验视觉模型 `deepseek-v4-flash-vision-exp`，未配置 DeepSeek 时仍可使用 OpenAI 图像 adapter，本地可选依赖未安装则显式失败。教师端可选择识别方式、查看低置信度提示、编辑题面/LaTeX/选项并保存草稿或确认，且明确不会在本切片自动送入 Solve。
+
+第三条切片实现证据：教师确认题面后，Web 使用 canonical 题面并锁定 media/OCR revision；依赖或可能依赖图形时必须另行勾选“仅本次视觉解题”，该同意在发起动作后自动清空，不能复用 OCR 同意。`SolveAgentWorkflow` 为当前教师、canonical 题面、解题模式/要求、精确 asset/media/OCR revision 与视觉同意签发短时一次性 capability；Agent 只原样转发该 capability，不获得 owner/resource selector、路径、内容端点或图片字节。内部 Tool 在读取图片前消费 capability 并恢复完整 server-owned Solve 意图，模型即使改写普通 Tool 参数也不能替换题面、资源或授权。`QuestionCapture.prepare_for_solve` 再次校验 owner、confirmed、current/stale 状态；只有视觉依赖题才读取受控原图。DeepSeek/OpenAI solution adapter 接收多模态输入，结果返回实际使用的 provider/model/revision 证据，并固定保持 `teacher_review_required`；视觉理解明确不是 MathVerifier 证据。真实浏览器链路已用 DeepSeek `deepseek-v4-flash-vision-exp` 验收原图参与、REV/OCR REV 证据、逐次授权清空、无横向溢出和零控制台告警。
 
 2026-08-22 能力更正：DeepSeek 官方文档新增 `deepseek-v4-flash-vision-exp` 图片输入能力；仓库先前“DeepSeek 仅支持文本”的判断已废止。项目使用 OpenAI-compatible Chat Completions 图片块、JSON 输出和 `detail=original`，真实 synthetic 数学题验证已准确返回题面、LaTeX、四个选项与视觉依赖标记。该模型仍按 true external adapter 治理，实验状态不会降低逐次同意、教师校对或 private 约束。
 

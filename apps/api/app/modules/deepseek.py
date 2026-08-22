@@ -38,6 +38,7 @@ class DeepSeekJsonClient:
         action: str,
         output_schema: dict | None = None,
         max_tokens: int = 4096,
+        image_data_url: str | None = None,
     ) -> dict:
         schema_instruction = ""
         if output_schema:
@@ -49,11 +50,20 @@ class DeepSeekJsonClient:
         system = (
             f"{instructions}{schema_instruction}\n必须只输出合法 JSON，不要使用 Markdown 代码块。"
         )
+        user_content: str | list[dict[str, object]] = input_text
+        if image_data_url:
+            user_content = [
+                {"type": "text", "text": input_text},
+                {
+                    "type": "image_url",
+                    "image_url": {"url": image_data_url, "detail": "original"},
+                },
+            ]
         payload = {
             "model": self.model,
             "messages": [
                 {"role": "system", "content": system},
-                {"role": "user", "content": input_text},
+                {"role": "user", "content": user_content},
             ],
             "response_format": {"type": "json_object"},
             "thinking": {"type": "disabled"},

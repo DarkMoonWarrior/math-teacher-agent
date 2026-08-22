@@ -7,11 +7,13 @@ search limit 硬上限、错误响应不泄漏 traceback/路径/secret。
 from __future__ import annotations
 
 import time
+from io import BytesIO
 from pathlib import Path
 
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from PIL import Image, ImageDraw
 
 from app.core.config import Settings
 from app.main import _GatewayHttpError, gateway_error_handler
@@ -24,6 +26,16 @@ from app.modules.private_library import (
     PrivateRetrievalGrantRegistry,
 )
 from app.modules.question_bank import QuestionBank
+from app.modules.question_capture import (
+    QuestionCapture,
+    QuestionCaptureCommand,
+    QuestionOption,
+    QuestionRecognitionCommand,
+    QuestionRecognitionResult,
+    QuestionRecognitionReviewCommand,
+    QuestionSolveGrantRegistry,
+    QuestionSolveReference,
+)
 from app.modules.question_quality import QuestionQualityWorkflow
 from app.modules.question_similarity import QuestionSimilarityRegistry
 from app.modules.solution_assistant import (
@@ -31,6 +43,7 @@ from app.modules.solution_assistant import (
     SolutionAssistant,
     SolutionExplanation,
     SolutionRequest,
+    SolutionVisualInput,
 )
 from app.routes import internal_agent_tools as gateway
 from app.routes.internal_agent_tools import router as gateway_router
@@ -360,6 +373,158 @@ def test_solve_question_generated_result_is_never_marked_verified(
     assert payload["math_verification"]["status"] == "inconclusive"
     assert payload["math_verification"]["capability"] == "unsupported"
     assert "不支持" in " ".join(payload["verification_evidence"])
+
+
+def test_solve_question_visual_bundle_is_owner_scoped_revision_pinned_and_consented(
+    gateway_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    class VisualRecognitionProvider:
+        name = "synthetic_vision_ocr"
+        model = "synthetic-ocr-v1"
+
+        def recognize(self, **_kwargs) -> QuestionRecognitionResult:
+            return QuestionRecognitionResult(
+                stem_plain="如图，在三角形 ABC 中求角 A。",
+                stem_latex="",
+                options=[QuestionOption(key="A", text="30°")],
+                requires_visual_reasoning=True,
+            )
+
+    image = Image.new("RGB", (1000, 700), "white")
+    draw = ImageDraw.Draw(image)
+    draw.polygon(((150, 600), (500, 100), (850, 600)), outline="black", width=5)
+    encoded = BytesIO()
+    image.save(encoded, format="PNG")
+    capture = QuestionCapture(
+        tmp_path / "visual-capture.sqlite3",
+        tmp_path / "visual-media",
+        recognition_providers={"local": VisualRecognitionProvider()},
+    )
+    created = capture.prepare(
+        QuestionCaptureCommand(
+            owner_id="owner_teacher",
+            source="upload",
+            private_storage_acknowledged=True,
+        ),
+        filename="triangle.png",
+        content=encoded.getvalue(),
+    )
+    capture.recognize(
+        created.asset.asset_id,
+        QuestionRecognitionCommand(mode="local"),
+        owner_id="owner_teacher",
+    )
+    confirmed = capture.review_recognition(
+        created.asset.asset_id,
+        QuestionRecognitionReviewCommand(
+            stem_plain="如图，在三角形 ABC 中求角 A。",
+            options=[QuestionOption(key="A", text="30°")],
+            confirm=True,
+        ),
+        owner_id="owner_teacher",
+    )
+
+    class VisualSolutionProvider:
+        name = "fake_model"
+        model = "fake-text-v1"
+        vision_model = "fake-vision-v1"
+
+        def __init__(self) -> None:
+            self.visual_input: SolutionVisualInput | None = None
+
+        def solve(
+            self,
+            _request: SolutionRequest,
+            visual_input: SolutionVisualInput | None = None,
+        ) -> GeneratedSolution:
+            self.visual_input = visual_input
+            return GeneratedSolution(
+                explanation=SolutionExplanation(
+                    method="图形分析",
+                    steps=["结合原图条件分析。"],
+                    final_answer="待教师核对",
+                )
+            )
+
+    provider = VisualSolutionProvider()
+    monkeypatch.setattr(gateway, "get_question_capture", lambda: capture)
+    monkeypatch.setattr(
+        gateway,
+        "get_solution_assistant",
+        lambda: SolutionAssistant(
+            question_bank=QuestionBank(tmp_path / "visual-empty-bank.sqlite3"),
+            provider=provider,
+        ),
+    )
+    body = {
+        "question_text": "如图，在三角形 ABC 中求角 A。\nA. 30°",
+    }
+    reference = QuestionSolveReference(
+        asset_id=created.asset.asset_id,
+        media_revision=1,
+        recognition_revision=confirmed.recognition_revision,
+        visual_processing_consent=True,
+    )
+    grants = QuestionSolveGrantRegistry()
+    monkeypatch.setattr(gateway, "get_question_solve_grants", lambda: grants)
+    no_consent_reference = reference.model_copy(
+        update={"visual_processing_consent": False}
+    )
+    no_consent_grant = grants.issue(
+        owner_id="owner_teacher",
+        question_text=body["question_text"],
+        solution_mode="standard",
+        teacher_instruction="",
+        reference=no_consent_reference,
+    )
+    no_consent = gateway_client.post(
+        "/internal/agent-tools/v1/solve-question",
+        json={**body, "capture_grant": no_consent_grant},
+        headers=_auth(),
+    )
+    assert no_consent.status_code == 422
+    assert "逐次确认" in no_consent.json()["error"]["message"]
+
+    grant = grants.issue(
+        owner_id="owner_teacher",
+        question_text=body["question_text"],
+        solution_mode="standard",
+        teacher_instruction="按课堂板书格式",
+        reference=reference,
+    )
+    response = gateway_client.post(
+        "/internal/agent-tools/v1/solve-question",
+        json={
+            **body,
+            "question_text": "模型改写了题面，但该值不是授权来源",
+            "solution_mode": "alternative",
+            "teacher_instruction": "模型改写了要求",
+            "capture_grant": grant,
+        },
+        headers=_auth(),
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["visual_context"]["image_used"] is True
+    assert payload["visual_context"]["media_revision"] == 1
+    assert payload["model"] == "fake-vision-v1"
+    assert payload["question_text"] == body["question_text"]
+    assert payload["solution_mode"] == "standard"
+    assert provider.visual_input is not None
+    assert provider.visual_input.image_bytes == encoded.getvalue()
+
+    replayed = gateway_client.post(
+        "/internal/agent-tools/v1/solve-question",
+        json={
+            **body,
+            "capture_grant": grant,
+        },
+        headers={**_auth(), "X-Request-Id": "req_replay"},
+    )
+    assert replayed.status_code == 403
+    assert "已使用" in replayed.json()["error"]["message"]
 
 
 def test_solve_question_rejects_known_failed_bank_record(
