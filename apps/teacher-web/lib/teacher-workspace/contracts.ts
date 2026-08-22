@@ -202,6 +202,53 @@ export type PrivateLibraryList = {
   total: number;
 };
 
+export type LibraryItemDetail = LibraryItemSummary & {
+  source_sha256: string;
+  extracted_text: string;
+  corrected_text: string;
+  rights_statement: string;
+  adaptation_allowed: boolean;
+  warnings: string[];
+  review_note: string;
+};
+
+export type LibraryTextRevision = {
+  version: number;
+  previous_text: string;
+  revised_text: string;
+  review_status: "pending" | "confirmed";
+  note: string;
+  created_at: string;
+};
+
+export type LibraryTextRevisionList = {
+  library_item_id: string;
+  current_version: number;
+  items: LibraryTextRevision[];
+};
+
+export type PrivateLibraryReview = {
+  correctedText: string;
+  note: string;
+  confirm: boolean;
+};
+
+export type PrivateLibraryOCRRequest = {
+  mode: "local" | "external";
+  externalProcessingConsent: boolean;
+};
+
+export type PrivateLibraryOCRResult = {
+  item: LibraryItemDetail;
+  provider: string;
+  warnings: string[];
+};
+
+export type PrivateLibraryProcessingOptions = {
+  signal?: AbortSignal;
+  onProgress?: (message: string) => void;
+};
+
 export type PrivateLibraryUpload = {
   file: File;
   title: string;
@@ -223,10 +270,32 @@ export interface TeacherWorkspace {
 
   listPrivateLibrary(signal?: AbortSignal): Promise<PrivateLibraryList>;
 
+  getPrivateLibraryItem(
+    itemId: string,
+    signal?: AbortSignal,
+  ): Promise<LibraryItemDetail>;
+
+  listPrivateLibraryRevisions(
+    itemId: string,
+    signal?: AbortSignal,
+  ): Promise<LibraryTextRevisionList>;
+
   uploadPrivateLibrary(
     request: PrivateLibraryUpload,
     signal?: AbortSignal,
   ): Promise<LibraryItemSummary>;
+
+  reviewPrivateLibraryText(
+    itemId: string,
+    request: PrivateLibraryReview,
+    signal?: AbortSignal,
+  ): Promise<LibraryItemDetail>;
+
+  processPrivateLibraryOCR(
+    itemId: string,
+    request: PrivateLibraryOCRRequest,
+    options?: PrivateLibraryProcessingOptions,
+  ): Promise<PrivateLibraryOCRResult>;
 }
 
 export class TeacherWorkspaceError extends Error {

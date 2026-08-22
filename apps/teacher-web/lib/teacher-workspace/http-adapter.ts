@@ -1,8 +1,14 @@
 import {
   TeacherWorkspace,
   TeacherWorkspaceError,
+  type LibraryItemDetail,
   type LibraryItemSummary,
+  type LibraryTextRevisionList,
   type PrivateLibraryList,
+  type PrivateLibraryOCRRequest,
+  type PrivateLibraryOCRResult,
+  type PrivateLibraryProcessingOptions,
+  type PrivateLibraryReview,
   type PrivateLibraryUpload,
   type SearchTaskOptions,
   type SearchTaskProgressStage,
@@ -42,6 +48,14 @@ function apiUrl(path: string): string {
 type ErrorEnvelope = {
   error?: { code?: string; message?: string; request_id?: string };
   detail?: unknown;
+};
+
+type LibraryBackgroundJob = {
+  job_id: string;
+  status: "queued" | "running" | "succeeded" | "failed";
+  message: string;
+  error: string;
+  result: Record<string, unknown>;
 };
 
 function detailMessage(detail: unknown): string | undefined {
@@ -98,6 +112,17 @@ async function responseError(response: Response): Promise<TeacherWorkspaceError>
     payload.error?.message ?? detailMessage(payload.detail) ?? `任务未完成（HTTP ${response.status}）。`,
     payload.error?.request_id ?? "",
   );
+}
+
+function libraryJobDelay(signal?: AbortSignal): Promise<void> {
+  if (signal?.aborted) return Promise.reject(abortError());
+  return new Promise((resolve, reject) => {
+    const timeout = globalThis.setTimeout(resolve, 450);
+    signal?.addEventListener("abort", () => {
+      globalThis.clearTimeout(timeout);
+      reject(abortError());
+    }, { once: true });
+  });
 }
 
 type SearchStreamContext = {
@@ -325,6 +350,48 @@ export class HttpTeacherWorkspace implements TeacherWorkspace {
     }
   }
 
+  async getPrivateLibraryItem(
+    itemId: string,
+    signal?: AbortSignal,
+  ): Promise<LibraryItemDetail> {
+    try {
+      const response = await fetch(
+        apiUrl(`/api/v1/library/${encodeURIComponent(itemId)}`),
+        { headers: { Accept: "application/json" }, signal },
+      );
+      if (!response.ok) throw await responseError(response);
+      return await response.json() as LibraryItemDetail;
+    } catch (cause) {
+      if (cause instanceof TeacherWorkspaceError) throw cause;
+      if (cause instanceof DOMException && cause.name === "AbortError") throw cause;
+      throw new TeacherWorkspaceError(
+        "NETWORK_ERROR",
+        "无法读取这份私人资料。请确认 FastAPI 已启动。",
+      );
+    }
+  }
+
+  async listPrivateLibraryRevisions(
+    itemId: string,
+    signal?: AbortSignal,
+  ): Promise<LibraryTextRevisionList> {
+    try {
+      const response = await fetch(
+        apiUrl(`/api/v1/library/${encodeURIComponent(itemId)}/revisions`),
+        { headers: { Accept: "application/json" }, signal },
+      );
+      if (!response.ok) throw await responseError(response);
+      return await response.json() as LibraryTextRevisionList;
+    } catch (cause) {
+      if (cause instanceof TeacherWorkspaceError) throw cause;
+      if (cause instanceof DOMException && cause.name === "AbortError") throw cause;
+      throw new TeacherWorkspaceError(
+        "NETWORK_ERROR",
+        "无法读取资料修订记录。",
+      );
+    }
+  }
+
   async uploadPrivateLibrary(
     request: PrivateLibraryUpload,
     signal?: AbortSignal,
@@ -351,6 +418,100 @@ export class HttpTeacherWorkspace implements TeacherWorkspace {
       throw new TeacherWorkspaceError(
         "NETWORK_ERROR",
         "无法上传私人资料。请确认 FastAPI 已启动。",
+      );
+    }
+  }
+
+  async reviewPrivateLibraryText(
+    itemId: string,
+    request: PrivateLibraryReview,
+    signal?: AbortSignal,
+  ): Promise<LibraryItemDetail> {
+    try {
+      const response = await fetch(
+        apiUrl(`/api/v1/library/${encodeURIComponent(itemId)}/review`),
+        {
+          method: "PATCH",
+          headers: {
+            Accept: "application/json",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            corrected_text: request.correctedText,
+            note: request.note,
+            confirm: request.confirm,
+          }),
+          signal,
+        },
+      );
+      if (!response.ok) throw await responseError(response);
+      return await response.json() as LibraryItemDetail;
+    } catch (cause) {
+      if (cause instanceof TeacherWorkspaceError) throw cause;
+      if (cause instanceof DOMException && cause.name === "AbortError") throw cause;
+      throw new TeacherWorkspaceError(
+        "NETWORK_ERROR",
+        "无法保存这次资料校对。",
+      );
+    }
+  }
+
+  async processPrivateLibraryOCR(
+    itemId: string,
+    request: PrivateLibraryOCRRequest,
+    options: PrivateLibraryProcessingOptions = {},
+  ): Promise<PrivateLibraryOCRResult> {
+    const { signal, onProgress } = options;
+    const encodedId = encodeURIComponent(itemId);
+    const isExternal = request.mode === "external";
+    const endpoint = isExternal
+      ? `/api/v1/library/${encodedId}/ocr/jobs`
+      : `/api/v1/library/${encodedId}/local-math-ocr/jobs`;
+    if (signal?.aborted) throw abortError();
+    try {
+      onProgress?.(isExternal ? "正在准备外部 OCR" : "正在准备本地数学 OCR");
+      const startResponse = await fetch(apiUrl(endpoint), {
+        method: "POST",
+        headers: isExternal
+          ? { Accept: "application/json", "Content-Type": "application/json" }
+          : { Accept: "application/json" },
+        body: isExternal
+          ? JSON.stringify({
+            external_processing_consent: request.externalProcessingConsent,
+          })
+          : undefined,
+        signal,
+      });
+      if (!startResponse.ok) throw await responseError(startResponse);
+      let job = await startResponse.json() as LibraryBackgroundJob;
+      onProgress?.(job.message || "OCR 任务已开始");
+
+      while (job.status === "queued" || job.status === "running") {
+        const jobResponse = await fetch(
+          apiUrl(`/api/v1/library/jobs/${encodeURIComponent(job.job_id)}`),
+          { headers: { Accept: "application/json" }, signal },
+        );
+        if (!jobResponse.ok) throw await responseError(jobResponse);
+        job = await jobResponse.json() as LibraryBackgroundJob;
+        onProgress?.(job.message || "正在识别资料");
+        if (job.status === "queued" || job.status === "running") {
+          await libraryJobDelay(signal);
+        }
+      }
+
+      if (job.status === "failed") {
+        throw new TeacherWorkspaceError(
+          "OCR_FAILED",
+          job.error || "OCR 没有生成可用草稿。",
+        );
+      }
+      return job.result as unknown as PrivateLibraryOCRResult;
+    } catch (cause) {
+      if (cause instanceof TeacherWorkspaceError) throw cause;
+      if (cause instanceof DOMException && cause.name === "AbortError") throw cause;
+      throw new TeacherWorkspaceError(
+        "NETWORK_ERROR",
+        "OCR 处理连接中断。请重新打开资料检查是否已经生成草稿。",
       );
     }
   }

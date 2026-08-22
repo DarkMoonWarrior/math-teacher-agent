@@ -14,9 +14,10 @@
 - Solve 工作台：完整题目输入、Search 题目转入、结构化三页解析与 MathVerifier 证据；
 - M6 第一条切片：Agent 可读取当前教师资料库的聚合处理状态，但看不到私人正文、文件名或路径；
 - M6 第二条切片：新工作台可同源上传 PDF/DOCX/图片，显式记录来源与权利依据，并展示 owner-scoped 私人资料清单；
+- M6 第三条切片：可对照原文件、首次提取文本和教师校对稿，运行本地 PDF OCR 或逐次授权的外部 OCR，并保留 owner-scoped 修订记录；
 - QuestionBank、MathVerifier、Curriculum、PrivateLibrary、PDF、试卷、教案等成熟业务模块。
 
-当前 Search、Solve 与 Private Library 入口已接入新工作台；Solve 的固定 synthetic eval 与完整 M5 Gate E 已严格通过。项目处于 M6，聚合概览 Tool 与同源上传/列表已完成，OCR/校对、拆题/映射和私人检索仍在建设；教案和组卷继续明确标记为预览。最新状态见 [`docs/PROJECT-STATUS.md`](docs/PROJECT-STATUS.md)。
+当前 Search、Solve 与 Private Library 入口已接入新工作台；Solve 的固定 synthetic eval 与完整 M5 Gate E 已严格通过。项目处于 M6，聚合概览、同源上传/列表和 OCR/校对已完成，拆题/映射与私人检索仍在建设；教案和组卷继续明确标记为预览。最新状态见 [`docs/PROJECT-STATUS.md`](docs/PROJECT-STATUS.md)。
 
 ## 核心原则
 

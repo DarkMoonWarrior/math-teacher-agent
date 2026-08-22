@@ -4,6 +4,7 @@ import type {
   SearchTaskResult,
   SolveTaskProgressStage,
   SolveTaskResult,
+  LibraryItemDetail,
   LibraryItemSummary,
 } from "./contracts";
 import { HttpTeacherWorkspace } from "./http-adapter";
@@ -134,6 +135,19 @@ function libraryItemFixture(): LibraryItemSummary {
   };
 }
 
+function libraryItemDetailFixture(): LibraryItemDetail {
+  return {
+    ...libraryItemFixture(),
+    source_sha256: "synthetic-sha256",
+    extracted_text: "已提取的函数讲义正文。",
+    corrected_text: "已提取的函数讲义正文。",
+    rights_statement: "仅在本人的私人教学工作区内使用。",
+    adaptation_allowed: false,
+    warnings: [],
+    review_note: "",
+  };
+}
+
 afterEach(() => {
   vi.unstubAllGlobals();
 });
@@ -181,6 +195,125 @@ describe("HttpTeacherWorkspace", () => {
     expect(body.get("rights_basis")).toBe("private_teaching_only");
     expect(body.get("rights_acknowledged")).toBe("true");
     expect(body.has("owner_id")).toBe(false);
+  });
+
+  it("loads an owner-scoped item and its text revisions", async () => {
+    const detail = libraryItemDetailFixture();
+    const revisions = {
+      library_item_id: detail.library_item_id,
+      current_version: 1,
+      items: [],
+    };
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      return new Response(JSON.stringify(url.endsWith("/revisions") ? revisions : detail), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const workspace = new HttpTeacherWorkspace();
+    await expect(workspace.getPrivateLibraryItem("lib_1")).resolves.toEqual(detail);
+    await expect(workspace.listPrivateLibraryRevisions("lib_1")).resolves.toEqual(revisions);
+
+    expect(fetchMock.mock.calls.map(([url]) => String(url))).toEqual([
+      "/api/v1/library/lib_1",
+      "/api/v1/library/lib_1/revisions",
+    ]);
+  });
+
+  it("saves a private text review without accepting browser-supplied actor ids", async () => {
+    const detail = { ...libraryItemDetailFixture(), version: 2, review_note: "核对公式" };
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify(detail), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const workspace = new HttpTeacherWorkspace();
+    await expect(workspace.reviewPrivateLibraryText("lib_1", {
+      correctedText: "校对后的函数讲义正文。",
+      note: "核对公式",
+      confirm: false,
+    })).resolves.toEqual(detail);
+
+    const init = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/v1/library/lib_1/review");
+    expect(init.method).toBe("PATCH");
+    expect(JSON.parse(String(init.body))).toEqual({
+      corrected_text: "校对后的函数讲义正文。",
+      note: "核对公式",
+      confirm: false,
+    });
+    expect(String(init.body)).not.toContain("owner_id");
+    expect(String(init.body)).not.toContain("reviewer_id");
+  });
+
+  it("hides local OCR job mechanics behind the workspace contract", async () => {
+    const detail = { ...libraryItemDetailFixture(), version: 2, corrected_text: "OCR 草稿" };
+    const result = { item: detail, provider: "local_math_ocr", warnings: [] };
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/local-math-ocr/jobs")) {
+        expect(init?.body).toBeUndefined();
+        return new Response(JSON.stringify({
+          job_id: "job_local",
+          status: "running",
+          message: "正在识别",
+          result: null,
+          error: null,
+        }), { status: 202, headers: { "Content-Type": "application/json" } });
+      }
+      return new Response(JSON.stringify({
+        job_id: "job_local",
+        status: "completed",
+        message: "识别完成",
+        result,
+        error: null,
+      }), { status: 200, headers: { "Content-Type": "application/json" } });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const progress: string[] = [];
+
+    const workspace = new HttpTeacherWorkspace();
+    await expect(workspace.processPrivateLibraryOCR(
+      "lib_1",
+      { mode: "local", externalProcessingConsent: false },
+      { onProgress: (message) => progress.push(message) },
+    )).resolves.toEqual(result);
+
+    expect(fetchMock.mock.calls.map(([url]) => String(url))).toEqual([
+      "/api/v1/library/lib_1/local-math-ocr/jobs",
+      "/api/v1/library/jobs/job_local",
+    ]);
+    expect(progress).toEqual(["正在准备本地数学 OCR", "正在识别", "识别完成"]);
+  });
+
+  it("sends per-action consent and no private actor metadata to external OCR", async () => {
+    const result = {
+      item: libraryItemDetailFixture(),
+      provider: "external_ocr",
+      warnings: ["请教师复核"],
+    };
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({
+      job_id: "job_external",
+      status: "completed",
+      message: "识别完成",
+      result,
+      error: null,
+    }), { status: 202, headers: { "Content-Type": "application/json" } }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const workspace = new HttpTeacherWorkspace();
+    await expect(workspace.processPrivateLibraryOCR("lib_1", {
+      mode: "external",
+      externalProcessingConsent: true,
+    })).resolves.toEqual(result);
+
+    const init = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/v1/library/lib_1/ocr/jobs");
+    expect(JSON.parse(String(init.body))).toEqual({ external_processing_consent: true });
   });
 
   it("returns the structured result from the terminal stream event", async () => {

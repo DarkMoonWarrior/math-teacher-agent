@@ -28,6 +28,8 @@ from app.modules.private_library.schemas import (
     LibraryItemView,
     LibraryStats,
     LibraryTextReviewCommand,
+    LibraryTextRevisionList,
+    LibraryTextRevisionView,
 )
 
 
@@ -121,14 +123,14 @@ class PrivateLibrary:
             except Exception:
                 stored_path.unlink(missing_ok=True)
                 raise
-        return self.get(item_id)
+        return self.get(item_id, owner_id=command.owner_id)
 
     def list(
         self,
         *,
         limit: int = 50,
         lifecycle_state: str = "active",
-        owner_id: str = "owner_teacher",
+        owner_id: str,
     ) -> LibraryItemList:
         if lifecycle_state not in {"active", "trashed", "all"}:
             raise PrivateLibraryError("不支持的资料状态")
@@ -148,24 +150,28 @@ class PrivateLibrary:
         return LibraryItemList(items=[self._summary(row) for row in rows], total=total)
 
     def change_lifecycle(
-        self, item_id: str, command: LibraryLifecycleCommand
+        self,
+        item_id: str,
+        command: LibraryLifecycleCommand,
+        *,
+        owner_id: str,
     ) -> LibraryItemView:
         target = "trashed" if command.action == "trash" else "active"
         now = self._now()
         with self._connect() as connection:
             row = connection.execute(
-                "SELECT lifecycle_state FROM library_items WHERE library_item_id = ?",
-                (item_id,),
+                "SELECT lifecycle_state FROM library_items WHERE library_item_id = ? AND owner_id = ?",
+                (item_id, owner_id),
             ).fetchone()
             if row is None:
                 raise KeyError(item_id)
             if row["lifecycle_state"] == target:
-                return self.get(item_id)
+                return self.get(item_id, owner_id=owner_id)
             connection.execute(
                 """
                 UPDATE library_items
                 SET lifecycle_state = ?, trashed_at = ?, lifecycle_reason = ?, updated_at = ?
-                WHERE library_item_id = ?
+                WHERE library_item_id = ? AND owner_id = ?
                 """,
                 (
                     target,
@@ -173,6 +179,7 @@ class PrivateLibrary:
                     command.reason.strip(),
                     now,
                     item_id,
+                    owner_id,
                 ),
             )
             connection.execute(
@@ -183,18 +190,26 @@ class PrivateLibrary:
                 """,
                 (item_id, command.action, command.actor_id, command.reason.strip(), now),
             )
-        return self.get(item_id)
+        return self.get(item_id, owner_id=owner_id)
 
-    def get(self, item_id: str) -> LibraryItemView:
+    def get(self, item_id: str, *, owner_id: str) -> LibraryItemView:
         with self._connect() as connection:
             row = connection.execute(
-                "SELECT * FROM library_items WHERE library_item_id = ?", (item_id,)
+                "SELECT * FROM library_items WHERE library_item_id = ? AND owner_id = ?",
+                (item_id, owner_id),
             ).fetchone()
         if row is None:
             raise KeyError(item_id)
         return self._view(row)
 
-    def review(self, item_id: str, command: LibraryTextReviewCommand) -> LibraryItemView:
+    def review(
+        self,
+        item_id: str,
+        command: LibraryTextReviewCommand,
+        *,
+        owner_id: str,
+        reviewer_id: str,
+    ) -> LibraryItemView:
         corrected = command.corrected_text.strip()
         if command.confirm and not corrected:
             raise PrivateLibraryError("确认校对前必须提供可用文本")
@@ -207,7 +222,8 @@ class PrivateLibrary:
         now = self._now()
         with self._connect() as connection:
             row = connection.execute(
-                "SELECT * FROM library_items WHERE library_item_id = ?", (item_id,)
+                "SELECT * FROM library_items WHERE library_item_id = ? AND owner_id = ?",
+                (item_id, owner_id),
             ).fetchone()
             if row is None:
                 raise KeyError(item_id)
@@ -226,7 +242,7 @@ class PrivateLibrary:
                     row["corrected_text"],
                     corrected,
                     status,
-                    command.reviewer_id,
+                    reviewer_id,
                     command.note.strip(),
                     now,
                 ),
@@ -235,29 +251,96 @@ class PrivateLibrary:
                 """
                 UPDATE library_items SET corrected_text = ?, text_review_status = ?,
                     review_note = ?, version = ?, updated_at = ?
-                WHERE library_item_id = ?
+                WHERE library_item_id = ? AND owner_id = ?
                 """,
-                (corrected, status, command.note.strip(), new_version, now, item_id),
+                (
+                    corrected,
+                    status,
+                    command.note.strip(),
+                    new_version,
+                    now,
+                    item_id,
+                    owner_id,
+                ),
             )
-        return self.get(item_id)
+        return self.get(item_id, owner_id=owner_id)
 
-    def apply_ocr(self, item_id: str, *, provider, consent: bool, teacher_id: str) -> tuple[LibraryItemView, str, list[str]]:
+    def list_text_revisions(
+        self, item_id: str, *, owner_id: str
+    ) -> LibraryTextRevisionList:
+        item = self.get(item_id, owner_id=owner_id)
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT version, previous_text, revised_text, review_status, note, created_at
+                FROM library_text_revisions
+                WHERE library_item_id = ?
+                ORDER BY version DESC
+                """,
+                (item_id,),
+            ).fetchall()
+        return LibraryTextRevisionList(
+            library_item_id=item_id,
+            current_version=item.version,
+            items=[
+                LibraryTextRevisionView(
+                    version=row["version"],
+                    previous_text=row["previous_text"],
+                    revised_text=row["revised_text"],
+                    review_status=row["review_status"],
+                    note=row["note"],
+                    created_at=row["created_at"],
+                )
+                for row in rows
+            ],
+        )
+
+    def apply_ocr(
+        self,
+        item_id: str,
+        *,
+        provider,
+        consent: bool,
+        owner_id: str,
+        teacher_id: str,
+    ) -> tuple[LibraryItemView, str, list[str]]:
         """Run an explicitly authorized OCR provider and return a reviewable draft."""
         if not consent:
             raise PrivateLibraryError("必须明确同意本次将私人文件发送给已配置的 OCR 服务")
         return self._apply_ocr_provider(
-            item_id, provider=provider, teacher_id=teacher_id, external_consent=True
+            item_id,
+            provider=provider,
+            owner_id=owner_id,
+            teacher_id=teacher_id,
+            external_consent=True,
         )
 
-    def apply_local_ocr(self, item_id: str, *, provider, teacher_id: str) -> tuple[LibraryItemView, str, list[str]]:
+    def apply_local_ocr(
+        self,
+        item_id: str,
+        *,
+        provider,
+        owner_id: str,
+        teacher_id: str,
+    ) -> tuple[LibraryItemView, str, list[str]]:
         return self._apply_ocr_provider(
-            item_id, provider=provider, teacher_id=teacher_id, external_consent=False
+            item_id,
+            provider=provider,
+            owner_id=owner_id,
+            teacher_id=teacher_id,
+            external_consent=False,
         )
 
     def _apply_ocr_provider(
-        self, item_id: str, *, provider, teacher_id: str, external_consent: bool
+        self,
+        item_id: str,
+        *,
+        provider,
+        owner_id: str,
+        teacher_id: str,
+        external_consent: bool,
     ) -> tuple[LibraryItemView, str, list[str]]:
-        path, item = self.file_for_download(item_id)
+        path, item = self.file_for_download(item_id, owner_id=owner_id)
         result = provider.extract(
             path=path,
             mime_type=item.mime_type,
@@ -271,7 +354,8 @@ class PrivateLibrary:
         warning = "OCR 文字尚未经过教师核对，不会自动进入题库。"
         with self._connect() as connection:
             row = connection.execute(
-                "SELECT * FROM library_items WHERE library_item_id = ?", (item_id,)
+                "SELECT * FROM library_items WHERE library_item_id = ? AND owner_id = ?",
+                (item_id, owner_id),
             ).fetchone()
             if row is None:
                 raise KeyError(item_id)
@@ -298,9 +382,19 @@ class PrivateLibrary:
                 """
                 UPDATE library_items SET extraction_status = 'extracted', extracted_text = ?,
                     corrected_text = ?, text_review_status = 'pending', warnings_json = ?,
-                    review_note = ?, version = ?, updated_at = ? WHERE library_item_id = ?
+                    review_note = ?, version = ?, updated_at = ?
+                WHERE library_item_id = ? AND owner_id = ?
                 """,
-                (text, text, json.dumps(warnings, ensure_ascii=False), warning, next_version, now, item_id),
+                (
+                    text,
+                    text,
+                    json.dumps(warnings, ensure_ascii=False),
+                    warning,
+                    next_version,
+                    now,
+                    item_id,
+                    owner_id,
+                ),
             )
             connection.execute(
                 """
@@ -310,13 +404,16 @@ class PrivateLibrary:
                 """,
                 (item_id, provider.name, teacher_id, int(external_consent), json.dumps(result.warnings, ensure_ascii=False), now),
             )
-        return self.get(item_id), provider.name, result.warnings
+        return self.get(item_id, owner_id=owner_id), provider.name, result.warnings
 
-    def propose_questions(self, item_id: str) -> QuestionCandidateList:
+    def propose_questions(
+        self, item_id: str, *, owner_id: str
+    ) -> QuestionCandidateList:
         """Create deterministic, editable candidates from teacher-confirmed text."""
         with self._connect() as connection:
             item = connection.execute(
-                "SELECT * FROM library_items WHERE library_item_id = ?", (item_id,)
+                "SELECT * FROM library_items WHERE library_item_id = ? AND owner_id = ?",
+                (item_id, owner_id),
             ).fetchone()
             if item is None:
                 raise KeyError(item_id)
@@ -360,8 +457,10 @@ class PrivateLibrary:
             ).fetchall()
         return self._candidate_list(item_id, item["version"], rows)
 
-    def list_question_candidates(self, item_id: str) -> QuestionCandidateList:
-        item = self.get(item_id)
+    def list_question_candidates(
+        self, item_id: str, *, owner_id: str
+    ) -> QuestionCandidateList:
+        item = self.get(item_id, owner_id=owner_id)
         with self._connect() as connection:
             rows = connection.execute(
                 "SELECT * FROM library_question_candidates WHERE library_item_id = ? AND source_version = ? ORDER BY position",
@@ -370,8 +469,14 @@ class PrivateLibrary:
         return self._candidate_list(item_id, item.version, rows)
 
     def update_question_candidate(
-        self, item_id: str, candidate_id: str, command: QuestionCandidateUpdate
+        self,
+        item_id: str,
+        candidate_id: str,
+        command: QuestionCandidateUpdate,
+        *,
+        owner_id: str,
     ) -> QuestionCandidateView:
+        self.get(item_id, owner_id=owner_id)
         now = self._now()
         with self._connect() as connection:
             row = self._candidate_row(connection, item_id, candidate_id)
@@ -395,7 +500,14 @@ class PrivateLibrary:
             updated = self._candidate_row(connection, item_id, candidate_id)
         return self._candidate_view(updated)
 
-    def discard_question_candidate(self, item_id: str, candidate_id: str) -> QuestionCandidateView:
+    def discard_question_candidate(
+        self,
+        item_id: str,
+        candidate_id: str,
+        *,
+        owner_id: str,
+    ) -> QuestionCandidateView:
+        self.get(item_id, owner_id=owner_id)
         with self._connect() as connection:
             row = self._candidate_row(connection, item_id, candidate_id)
             if row["status"] == "imported":
@@ -407,13 +519,27 @@ class PrivateLibrary:
             updated = self._candidate_row(connection, item_id, candidate_id)
         return self._candidate_view(updated)
 
-    def get_question_candidate(self, item_id: str, candidate_id: str) -> tuple[QuestionCandidateView, LibraryItemView]:
-        item = self.get(item_id)
+    def get_question_candidate(
+        self,
+        item_id: str,
+        candidate_id: str,
+        *,
+        owner_id: str,
+    ) -> tuple[QuestionCandidateView, LibraryItemView]:
+        item = self.get(item_id, owner_id=owner_id)
         with self._connect() as connection:
             row = self._candidate_row(connection, item_id, candidate_id)
         return self._candidate_view(row), item
 
-    def mark_candidate_imported(self, item_id: str, candidate_id: str, question_id: str) -> QuestionCandidateView:
+    def mark_candidate_imported(
+        self,
+        item_id: str,
+        candidate_id: str,
+        question_id: str,
+        *,
+        owner_id: str,
+    ) -> QuestionCandidateView:
+        self.get(item_id, owner_id=owner_id)
         with self._connect() as connection:
             row = self._candidate_row(connection, item_id, candidate_id)
             if row["imported_question_id"] and row["imported_question_id"] != question_id:
@@ -425,7 +551,7 @@ class PrivateLibrary:
             updated = self._candidate_row(connection, item_id, candidate_id)
         return self._candidate_view(updated)
 
-    def stats(self, *, owner_id: str = "owner_teacher") -> LibraryStats:
+    def stats(self, *, owner_id: str) -> LibraryStats:
         with self._connect() as connection:
             active_filter = "owner_id = ? AND lifecycle_state = 'active'"
             owner_values = (owner_id,)
@@ -462,11 +588,14 @@ class PrivateLibrary:
             by_file_kind={row["file_kind"]: row["count"] for row in rows},
         )
 
-    def file_for_download(self, item_id: str) -> tuple[Path, LibraryItemView]:
-        item = self.get(item_id)
+    def file_for_download(
+        self, item_id: str, *, owner_id: str
+    ) -> tuple[Path, LibraryItemView]:
+        item = self.get(item_id, owner_id=owner_id)
         with self._connect() as connection:
             row = connection.execute(
-                "SELECT stored_name FROM library_items WHERE library_item_id = ?", (item_id,)
+                "SELECT stored_name FROM library_items WHERE library_item_id = ? AND owner_id = ?",
+                (item_id, owner_id),
             ).fetchone()
         path = (self.file_root / row["stored_name"]).resolve()
         if path.parent != self.file_root or not path.is_file():

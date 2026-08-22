@@ -55,8 +55,9 @@ apps/web (legacy/reference Next.js UI, :3000)
 - Seam: `PrivateLibrary` 业务接口与版本化 internal Tool gateway；Agent 只看到产品拥有的结构化结果。
 - First slice: `inspect_private_library` 没有 model-supplied owner 参数，只返回本地 current owner 的聚合数量、处理状态和文件类型；`content_included=false`。
 - Trust: 标题、文件名、正文、原文件、路径和 owner 标识均不进入第一条 Tool 输出；Agent 不能据此声称已读取资料内容。
-- Current identity: 本地开发身份暂为 `owner_teacher`；它不是生产认证。M6 Gate 前必须把 current-owner 解析放到可替换 seam，并完成跨 owner 越权测试。
-- Next slices: 新 Teacher Web 上传/列表、逐次同意的 OCR/AI 校对、教师确认后拆题/映射、最小必要的私人检索；全部派生内容保持 private。
+- Current identity: `app/core/identity.py` 是服务端 current-teacher seam；Public 路由不接受浏览器提供的 owner/reviewer，详情、文件、OCR、revision、后台任务和候选访问均通过跨 owner 自动测试。当前 local adapter 固定返回 `owner_teacher`，不是生产认证；真实会话身份在 M12 实现。
+- Third slice: `TeacherWorkspace` 隐藏 OCR 后台任务细节；新 Teacher Web 对照原文件、首次提取文本、可编辑校对稿和 revision。本地 PDF OCR 优先，外部 OCR 每次单独同意，任何 OCR 结果仍为待教师校对草稿。
+- Next slices: 只从教师确认文本进行拆题/映射，再建设最小必要的私人检索；全部派生内容保持 private。
 
 ### Question Capture module（M7 待开始）
 

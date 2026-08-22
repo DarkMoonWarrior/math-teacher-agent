@@ -22,6 +22,12 @@
 
 Agent 不得直接访问本目录的数据库实现；它只能经过内部 Tool gateway 调用业务模块。
 
+## Private Library（M6 进行中）
+
+Public 路由通过 `app/core/identity.py` 的 current-teacher seam 在服务端绑定 owner 和 reviewer；浏览器不能提交或选择身份。列表、详情、原文件、OCR、revision、后台任务和拆题候选均按 owner fail closed。当前 adapter 仅用于本地开发并固定返回 `owner_teacher`，不代表生产认证已经完成。
+
+本地数学 OCR 当前只支持 PDF；外部 OCR 每次调用都必须重新提交明确同意。两类 OCR 只生成待教师校对草稿，不会改变 private 状态或自动进入题库。
+
 ## Search Agent
 
 默认 feature gate 关闭。新工作台本地使用时，需启动 `apps/agent` 并在 `.env` 设置：
