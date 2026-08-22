@@ -43,6 +43,7 @@ from app.modules.solution_assistant import (
     SolutionAssistant,
     SolutionExplanation,
     SolutionRequest,
+    SolutionProviderResponseError,
     SolutionVisualInput,
 )
 from app.routes import internal_agent_tools as gateway
@@ -571,6 +572,30 @@ def test_solve_question_without_verified_match_or_model_is_explicit(
     )
     assert response.status_code == 503
     assert response.json()["error"]["code"] == "MODEL_UNAVAILABLE"
+
+
+def test_solve_question_reports_invalid_model_json_as_execution_error(
+    gateway_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class InvalidResponseAssistant:
+        def solve(self, *_args, **_kwargs):
+            raise SolutionProviderResponseError("DeepSeek 返回的 JSON 无法解析")
+
+    monkeypatch.setattr(
+        gateway,
+        "get_solution_assistant",
+        lambda: InvalidResponseAssistant(),
+    )
+    response = gateway_client.post(
+        "/internal/agent-tools/v1/solve-question",
+        json={"question_text": "如图，在三棱柱中证明两条直线垂直。"},
+        headers=_auth(),
+    )
+
+    assert response.status_code == 502
+    assert response.json()["error"]["code"] == "TOOL_EXECUTION_ERROR"
+    assert "已返回内容" in response.json()["error"]["message"]
 
 
 def test_find_similar_questions_contract(gateway_client: TestClient) -> None:

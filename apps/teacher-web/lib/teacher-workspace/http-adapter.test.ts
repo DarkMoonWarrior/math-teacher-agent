@@ -152,6 +152,7 @@ function questionInputBundleFixture(): QuestionInputBundle {
     stem_latex: "",
     options: [],
     requires_visual_reasoning: null,
+    visual_observations: [],
     low_confidence_regions: [],
     recognition_warnings: [],
     external_processing_consent: false,

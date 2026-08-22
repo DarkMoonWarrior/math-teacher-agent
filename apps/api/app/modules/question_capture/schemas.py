@@ -137,6 +137,7 @@ class QuestionInputBundle(BaseModel):
     stem_latex: str = ""
     options: list[QuestionOption] = Field(default_factory=list)
     requires_visual_reasoning: bool | None = None
+    visual_observations: list[str] = Field(default_factory=list)
     low_confidence_regions: list[LowConfidenceRegion] = Field(default_factory=list)
     recognition_warnings: list[str] = Field(default_factory=list)
     external_processing_consent: bool = False

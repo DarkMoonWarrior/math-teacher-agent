@@ -8,7 +8,11 @@ from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 from app.modules.model_operations import ModelRunRecorder, NullModelRunRecorder
-from app.modules.deepseek import DeepSeekClientError, DeepSeekJsonClient
+from app.modules.deepseek import (
+    DeepSeekClientError,
+    DeepSeekJsonClient,
+    DeepSeekJsonResponseError,
+)
 from app.modules.solution_assistant.schemas import (
     GeneratedSolution,
     SolutionRequest,
@@ -18,6 +22,10 @@ from app.modules.solution_assistant.schemas import (
 
 class SolutionProviderError(RuntimeError):
     pass
+
+
+class SolutionProviderResponseError(SolutionProviderError):
+    """The model responded, but the response could not satisfy the contract."""
 
 
 class SolutionProvider(Protocol):
@@ -75,6 +83,11 @@ class OpenAISolutionProvider:
                 raise SolutionProviderError("视觉解题输入缺少受控图片内容")
             if not visual_input.visual_processing_consent:
                 raise SolutionProviderError("视觉解题缺少本次图片处理同意")
+            prompt["visual_grounding_requirements"] = [
+                "原图是本题事实输入的一部分，必须核对图中的点、线、面标签与虚实线",
+                "不得仅凭 OCR 题面猜测图形关系，也不得把图中未明确给出的关系当作已知",
+                "若图形标签或连线无法可靠辨认，必须在步骤和最终答案中明确要求教师复核",
+            ]
         prompt_text = json.dumps(prompt, ensure_ascii=False)
         provider_input: str | list[dict[str, object]] = prompt_text
         if visual_input is not None:
@@ -276,5 +289,7 @@ class DeepSeekSolutionProvider(OpenAISolutionProvider):
                     else None
                 ),
             )
+        except DeepSeekJsonResponseError as exc:
+            raise SolutionProviderResponseError(str(exc)) from exc
         except DeepSeekClientError as exc:
             raise SolutionProviderError(str(exc)) from exc

@@ -435,6 +435,12 @@ svg { flex: 0 0 auto; }
 .question-media__warning { color: var(--color-muted); font-size: var(--text-xs); }
 .question-media__error { color: var(--color-error); }
 .question-media__warning { color: var(--color-vermilion); }
+.question-recognition__visual { background: color-mix(in srgb, var(--color-teal) 6%, transparent); border: 0.0625rem solid color-mix(in srgb, var(--color-teal) 28%, var(--color-rule)); border-radius: var(--radius-sm); display: grid; gap: var(--space-xs); padding: var(--space-sm); }
+.question-recognition__visual header { align-items: baseline; display: flex; flex-wrap: wrap; gap: var(--space-xs) var(--space-sm); justify-content: space-between; }
+.question-recognition__visual header strong { color: var(--color-teal); font-size: var(--text-xs); letter-spacing: 0.04em; }
+.question-recognition__visual header span, .question-recognition__visual p { color: var(--color-muted); font-size: 0.75rem; line-height: 1.55; }
+.question-recognition__visual ul { display: grid; gap: 0.4rem; margin: 0; padding-left: 1.15rem; }
+.question-recognition__visual li { line-height: 1.6; }
 
 .question-recognition {
   border-bottom: 0.0625rem solid var(--color-rule);

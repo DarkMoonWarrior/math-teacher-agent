@@ -79,6 +79,21 @@ def test_deepseek_normalizes_control_characters_fences_and_trailing_text(monkeyp
     assert parsed == {"answer": "line\none", "formula": "\\frac{1}{2}"}
 
 
+def test_deepseek_normalizes_unescaped_geometry_latex_commands() -> None:
+    content = r'''{"steps":["证明 $AC \perp A_1D$，且 $\angle A=\theta$。","令 $u=\underbrace{a+b}_{2}$，再取 $\vec n$。","由 $\frac{a}{b}=\sqrt{2}$ 得 $x\to 0$，写成 $\left(x\right)$。"],"already_escaped":"$\\underbrace{x}_{1}$"}'''
+
+    normalized = DeepSeekJsonClient._normalize_json(content)
+
+    assert json.loads(normalized) == {
+        "steps": [
+            r"证明 $AC \perp A_1D$，且 $\angle A=\theta$。",
+            r"令 $u=\underbrace{a+b}_{2}$，再取 $\vec n$。",
+            r"由 $\frac{a}{b}=\sqrt{2}$ 得 $x\to 0$，写成 $\left(x\right)$。",
+        ],
+        "already_escaped": r"$\underbrace{x}_{1}$",
+    }
+
+
 def test_deepseek_solution_provider_uses_configured_vision_model_and_image_block(monkeypatch) -> None:
     captured = {}
 
@@ -132,6 +147,11 @@ def test_deepseek_solution_provider_uses_configured_vision_model_and_image_block
     payload = captured["payload"]
     assert payload["model"] == "deepseek-v4-flash-vision-exp"
     assert payload["messages"][1]["content"][0]["type"] == "text"
+    prompt = json.loads(payload["messages"][1]["content"][0]["text"])
+    assert "visual_grounding_requirements" in prompt
+    assert "不得仅凭 OCR 题面猜测图形关系" in "".join(
+        prompt["visual_grounding_requirements"]
+    )
     image_block = payload["messages"][1]["content"][1]
     assert image_block["type"] == "image_url"
     assert image_block["image_url"]["url"].startswith("data:image/png;base64,")

@@ -43,7 +43,7 @@
 
 ## 2026-08-22 验证快照
 
-- FastAPI：313 项测试通过；另有 1 条来自 Starlette TestClient 的依赖弃用提示。
+- FastAPI：315 项测试通过；另有 1 条来自 Starlette TestClient 的依赖弃用提示。
 - Agent Runtime：类型检查、40 项测试和生产构建通过（含 Search/Solve seam、M6 私人聚合与一次性许可检索 Tool、M7 图片 Solve 单一 capability 透传、开发 mock 能力分流、验证冲突/模型不可用失败路径与 SSE 客户端断开取消）。
 - 新教师工作台：类型检查、36 项 TeacherWorkspace / Search/Solve / Private Library / Question Capture / 数学展示契约测试和生产构建通过；图片上传不提交 owner，Solve 只提交 canonical 题面、opaque asset/media/OCR revision 与本次视觉同意，不提交内容端点、路径或图片字节。
 - 新教师工作台浏览器验收：320px 无关键横向溢出；记录抽屉的初始焦点、Tab 约束、Escape 关闭、焦点返回和关闭态 `inert` 通过；检索完成与历史恢复会自动定位结果区，新任务会返回输入区并恢复焦点；延迟 SSE 下理解、搜索、可信核对、中途取消和同一 run 恢复状态均可见。
@@ -68,6 +68,7 @@
 - M7 第二条切片：新增本地/外部单题 OCR adapter seam、结构化题面/LaTeX/选项/低置信度结果、逐次外部同意和 append-only 识别 revision。识别绑定 media revision，后续图片变换会把旧结果标为 `stale` 并阻止确认；公开路由继续由服务端绑定 teacher，浏览器无法选择 owner/reviewer。教师端提供识别方式、逐次同意、校对、保存草稿和确认入口，并明确不会在当前切片把内容交给 Solve。
 - M7 数学展示前置修复：Solution provider 统一要求 `$...$`/`$$...$$` KaTeX 约定并记录 `solution-assistant-v2-math-display`；Teacher Web 识别行内、独立及旧式未分隔公式，失败保留可见原文，步骤正文不再继承编号强调色。该修复不判断课程层级，也不改变数学结论或验证状态。
 - M7 第三条切片：`QuestionCapture.prepare_for_solve` 只接受当前 owner、confirmed、current 且精确匹配的 media/OCR revision，canonical 题面与结构化选项由服务端重建。`SolveAgentWorkflow` 签发短时一次性 capability，绑定 owner、canonical 题面、解题模式/要求、asset/media/OCR revision 和本次视觉同意；模型只传递 capability，内部 Tool 在读取图片前消费并恢复完整 server-owned 意图，模型改写普通参数不会改变实际资源或授权。许可重放、跨 owner、未确认或 stale 均 fail closed。只有视觉依赖题读取原图；DeepSeek/OpenAI solution adapter 支持受控图片块，结果显示实际 provider/model/revision 并固定教师复核，视觉理解不升级 MathVerifier。真实 DeepSeek Vision 浏览器验收已确认 `deepseek-v4-flash-vision-exp` 使用原图、证据页显示图片/OCR revision、逐次同意提交后清空且控制台无告警。
+- M7 空间几何故障收口：外部识别契约新增 `visual_observations`，把点/线/面标签、连线、虚实线、坐标轴、曲线和表格等直接可见结构作为独立教师核对草稿；旧 revision 保持不可变并提示重新授权识别。真实失败记录定位到 DeepSeek 已响应但 LaTeX 反斜杠未按 JSON 转义，现已增加几何常见命令的确定性回归测试与容错解析；不可恢复的响应格式错误改报 `TOOL_EXECUTION_ERROR`，不再误报 `MODEL_UNAVAILABLE`。视觉解题 prompt 明确禁止只凭 OCR 猜测图形关系。
 - 2026-08-22 DeepSeek Vision 更正与实测：官方新增 `deepseek-v4-flash-vision-exp` 图片输入；已作为第二个真实外部 adapter 接入现有识别 seam，复用 DeepSeek Key、base URL、逐次同意与模型运行记录。仓库 synthetic 数学题真实调用准确返回题面、LaTeX、A–D 选项且无低置信度项；旧的“DeepSeek 仅文本”判断已移除。
 
 ## 已知未决项

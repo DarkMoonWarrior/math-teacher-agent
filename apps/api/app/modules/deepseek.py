@@ -10,6 +10,10 @@ class DeepSeekClientError(RuntimeError):
     pass
 
 
+class DeepSeekJsonResponseError(DeepSeekClientError):
+    """The provider responded, but its model-generated JSON was unreadable."""
+
+
 class DeepSeekJsonClient:
     """Minimal OpenAI-compatible Chat Completions adapter for JSON workflows."""
 
@@ -98,7 +102,9 @@ class DeepSeekJsonClient:
         try:
             normalized = self._normalize_json(content)
         except (json.JSONDecodeError, ValueError) as exc:
-            raise DeepSeekClientError(f"DeepSeek 返回的 JSON 无法解析：{exc}") from exc
+            raise DeepSeekJsonResponseError(
+                f"DeepSeek 返回的 JSON 无法解析：{exc}"
+            ) from exc
         return {
             **raw,
             "output": [
@@ -113,22 +119,73 @@ class DeepSeekJsonClient:
         fence = re.match(r"^```(?:json)?\s*(.*?)\s*```", value, flags=re.DOTALL | re.IGNORECASE)
         if fence:
             value = fence.group(1).strip()
-        # JSON considers \b, \f, \n and \t valid escapes, while the same
-        # prefixes start common LaTeX commands. Preserve those commands before
-        # decoding so \frac/\begin/\neq/\text/\times are not turned into
-        # invisible control characters.
-        value = re.sub(
-            r'\\(?=(?:begin|beta|frac|neq|not|text|times|theta|tan|to|nabla)\b)',
-            r'\\\\',
-            value,
-        )
+        # JSON considers \b, \f, \n, \r, \t and \u valid escape prefixes,
+        # while the same prefixes start many LaTeX commands. Preserve any
+        # multi-letter command with those prefixes before decoding so commands
+        # such as \frac, \nabla, \right and \underbrace are not converted into
+        # controls or rejected as malformed unicode escapes.
+        value = DeepSeekJsonClient._protect_latex_control_prefixes(value)
         decoder = json.JSONDecoder(strict=False)
         try:
             parsed, _end = decoder.raw_decode(value)
         except json.JSONDecodeError:
             # LaTeX backslashes are occasionally not JSON-escaped by the model.
-            repaired = re.sub(r'\\(?!["\\/bfnrtu])', r'\\\\', value)
+            repaired = DeepSeekJsonClient._escape_invalid_json_backslashes(value)
             parsed, _end = decoder.raw_decode(repaired)
         if not isinstance(parsed, dict):
             raise ValueError("顶层结果必须是 JSON 对象")
         return json.dumps(parsed, ensure_ascii=False)
+
+    @staticmethod
+    def _escape_invalid_json_backslashes(value: str) -> str:
+        """Escape invalid JSON backslashes without touching existing pairs."""
+        repaired: list[str] = []
+        index = 0
+        length = len(value)
+        while index < length:
+            character = value[index]
+            if character != "\\":
+                repaired.append(character)
+                index += 1
+                continue
+            if index + 1 >= length:
+                repaired.append("\\\\")
+                index += 1
+                continue
+            escaped = value[index + 1]
+            if escaped in '"\\/bfnrt':
+                repaired.extend(("\\", escaped))
+                index += 2
+                continue
+            if (
+                escaped == "u"
+                and index + 5 < length
+                and all(item in "0123456789abcdefABCDEF" for item in value[index + 2:index + 6])
+            ):
+                repaired.append(value[index:index + 6])
+                index += 6
+                continue
+            repaired.append("\\\\")
+            index += 1
+        return "".join(repaired)
+
+    @staticmethod
+    def _protect_latex_control_prefixes(value: str) -> str:
+        """Escape single LaTeX slashes that JSON would treat as controls."""
+        protected: list[str] = []
+        index = 0
+        length = len(value)
+        while index < length:
+            character = value[index]
+            if character != "\\" or index + 1 >= length:
+                protected.append(character)
+                index += 1
+                continue
+            if value[index + 1] == "\\":
+                protected.append("\\\\")
+                index += 2
+                continue
+            command = re.match(r"[bfnrtu][A-Za-z]+\b", value[index + 1:])
+            protected.append("\\\\" if command else "\\")
+            index += 1
+        return "".join(protected)

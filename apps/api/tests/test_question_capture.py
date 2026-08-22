@@ -76,6 +76,11 @@ class FakeRecognitionProvider:
             ],
             warnings=["请核对上标。"],
             requires_visual_reasoning=self.requires_visual_reasoning,
+            visual_observations=(
+                ["图中标注 A、B、C 与 A₁、B₁、C₁，并以实线和虚线表示三棱柱棱。"]
+                if self.requires_visual_reasoning
+                else []
+            ),
         )
 
 
@@ -314,7 +319,7 @@ def test_public_routes_bind_owner_on_server_and_never_accept_owner_selector(tmp_
 
 
 def test_recognition_creates_private_structured_revision_bound_to_media(tmp_path: Path) -> None:
-    provider = FakeRecognitionProvider()
+    provider = FakeRecognitionProvider(requires_visual_reasoning=True)
     capture = make_recognition_capture(tmp_path, local=provider)
     created = capture.prepare(command(), filename="question.png", content=image_bytes())
 
@@ -332,6 +337,9 @@ def test_recognition_creates_private_structured_revision_bound_to_media(tmp_path
     assert recognized.external_processing_consent is False
     assert recognized.options[1].text == "4"
     assert recognized.low_confidence_regions[0].reason == "上标较小"
+    assert recognized.visual_observations == [
+        "图中标注 A、B、C 与 A₁、B₁、C₁，并以实线和虚线表示三棱柱棱。"
+    ]
     assert provider.calls[0]["teacher_id"] == "teacher_a"
     serialized = str(recognized.model_dump(mode="json"))
     assert "teacher_a" not in serialized
@@ -381,7 +389,10 @@ def test_local_recognition_rejects_external_consent_and_provider_failure_is_not_
 
 
 def test_teacher_review_is_append_only_and_media_change_makes_recognition_stale(tmp_path: Path) -> None:
-    capture = make_recognition_capture(tmp_path, local=FakeRecognitionProvider())
+    capture = make_recognition_capture(
+        tmp_path,
+        local=FakeRecognitionProvider(requires_visual_reasoning=True),
+    )
     created = capture.prepare(command(), filename="question.png", content=image_bytes())
     capture.recognize(
         created.asset.asset_id,
@@ -403,6 +414,9 @@ def test_teacher_review_is_append_only_and_media_change_makes_recognition_stale(
     assert confirmed.recognition_revision == 2
     assert confirmed.stem_plain == "教师校对后的题面"
     assert confirmed.teacher_review_note == "已对照原图"
+    assert confirmed.visual_observations == [
+        "图中标注 A、B、C 与 A₁、B₁、C₁，并以实线和虚线表示三棱柱棱。"
+    ]
 
     stale = capture.transform(
         created.asset.asset_id,
@@ -607,6 +621,7 @@ def test_deepseek_vision_adapter_uses_image_json_mode_without_leaking_teacher_id
                 "stem_plain": "已知函数 f(x)=x²。",
                 "stem_latex": r"已知函数 $f(x)=x^2$。",
                 "options": [],
+                "visual_observations": ["坐标系内绘有一条开口向上的抛物线。"],
                 "low_confidence_regions": [],
                 "warnings": ["请教师核对。"],
                 "requires_visual_reasoning": False,
@@ -651,6 +666,8 @@ def test_deepseek_vision_adapter_uses_image_json_mode_without_leaking_teacher_id
     assert "teacher_private" not in json.dumps(payload, ensure_ascii=False)
     assert result.stem_plain == "已知函数 f(x)=x²。"
     assert result.warnings == ["请教师核对。"]
+    assert result.visual_observations == ["坐标系内绘有一条开口向上的抛物线。"]
+    assert "visual_observations" in payload["messages"][0]["content"]
 
 
 def test_deepseek_vision_adapter_rejects_malformed_result(tmp_path: Path, monkeypatch) -> None:

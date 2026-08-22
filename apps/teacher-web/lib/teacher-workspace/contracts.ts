@@ -230,6 +230,7 @@ export type QuestionInputBundle = {
   stem_latex: string;
   options: Array<{ key: string; text: string }>;
   requires_visual_reasoning: boolean | null;
+  visual_observations: string[];
   low_confidence_regions: Array<{
     text: string;
     reason: string;

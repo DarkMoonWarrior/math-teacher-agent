@@ -9,6 +9,7 @@ from app.modules.solution_assistant.providers import (
     DeepSeekSolutionProvider,
     SolutionProvider,
     SolutionProviderError,
+    SolutionProviderResponseError,
 )
 from app.modules.solution_assistant.schemas import (
     GeneratedSolution,
@@ -32,6 +33,7 @@ __all__ = [
     "SolutionExplanation",
     "SolutionProvider",
     "SolutionProviderError",
+    "SolutionProviderResponseError",
     "SolutionRequest",
     "SolutionResult",
     "SolutionVisualContext",

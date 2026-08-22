@@ -285,6 +285,9 @@ class QuestionCapture:
                     None if recognition["requires_visual_reasoning"] is None
                     else bool(recognition["requires_visual_reasoning"])
                 ),
+                "visual_observations": json.loads(
+                    recognition["visual_observations_json"]
+                ),
                 "low_confidence_regions": json.loads(recognition["low_confidence_json"]),
                 "recognition_warnings": recognition_warnings,
                 "external_processing_consent": bool(recognition["external_consent"]),
@@ -363,9 +366,9 @@ class QuestionCapture:
                 INSERT INTO question_capture_recognitions (
                     asset_id, recognition_revision, source_media_revision, status,
                     mode, provider, model, external_consent, stem_plain, stem_latex,
-                    options_json, requires_visual_reasoning, low_confidence_json,
+                    options_json, requires_visual_reasoning, visual_observations_json, low_confidence_json,
                     warnings_json, teacher_review_note, created_at
-                ) VALUES (?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '', ?)
+                ) VALUES (?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '', ?)
                 """,
                 (
                     asset_id,
@@ -379,6 +382,7 @@ class QuestionCapture:
                     result.stem_latex.strip(),
                     json.dumps([item.model_dump(mode="json") for item in result.options], ensure_ascii=False),
                     None if result.requires_visual_reasoning is None else int(result.requires_visual_reasoning),
+                    json.dumps(result.visual_observations, ensure_ascii=False),
                     json.dumps(
                         [item.model_dump(mode="json") for item in result.low_confidence_regions],
                         ensure_ascii=False,
@@ -424,9 +428,9 @@ class QuestionCapture:
                 INSERT INTO question_capture_recognitions (
                     asset_id, recognition_revision, source_media_revision, status,
                     mode, provider, model, external_consent, stem_plain, stem_latex,
-                    options_json, requires_visual_reasoning, low_confidence_json,
+                    options_json, requires_visual_reasoning, visual_observations_json, low_confidence_json,
                     warnings_json, teacher_review_note, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     asset_id,
@@ -441,6 +445,7 @@ class QuestionCapture:
                     command.stem_latex.strip(),
                     json.dumps([item.model_dump(mode="json") for item in command.options], ensure_ascii=False),
                     previous["requires_visual_reasoning"],
+                    previous["visual_observations_json"],
                     previous["low_confidence_json"],
                     json.dumps(warnings, ensure_ascii=False),
                     command.note.strip(),
@@ -671,6 +676,7 @@ class QuestionCapture:
                     stem_latex TEXT NOT NULL,
                     options_json TEXT NOT NULL,
                     requires_visual_reasoning INTEGER,
+                    visual_observations_json TEXT NOT NULL DEFAULT '[]',
                     low_confidence_json TEXT NOT NULL,
                     warnings_json TEXT NOT NULL,
                     teacher_review_note TEXT NOT NULL,
@@ -696,6 +702,17 @@ class QuestionCapture:
                     ON question_capture_solve_uses(owner_id, created_at DESC);
                 """
             )
+            columns = {
+                row["name"]
+                for row in connection.execute(
+                    "PRAGMA table_info(question_capture_recognitions)"
+                ).fetchall()
+            }
+            if "visual_observations_json" not in columns:
+                connection.execute(
+                    "ALTER TABLE question_capture_recognitions "
+                    "ADD COLUMN visual_observations_json TEXT NOT NULL DEFAULT '[]'"
+                )
 
     @staticmethod
     def _now() -> str:

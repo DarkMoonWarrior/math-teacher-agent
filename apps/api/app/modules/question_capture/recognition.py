@@ -26,6 +26,7 @@ class QuestionRecognitionResult:
     low_confidence_regions: list[LowConfidenceRegion] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
     requires_visual_reasoning: bool | None = None
+    visual_observations: list[str] = field(default_factory=list)
 
 
 class QuestionRecognitionProvider(Protocol):
@@ -129,6 +130,8 @@ class OpenAIQuestionRecognitionProvider:
                 "你是高中数学单题 OCR 助手，只忠实转录图片，不解题、不补题。"
                 "区分普通题面与 LaTeX 题面，拆出选择题选项。无法辨认处保留原样并列入低置信度区域。"
                 "若题目依赖坐标系、几何图、函数图像、表格或其他视觉条件，将 requires_visual_reasoning 设为 true。"
+                "若存在图形，必须在 visual_observations 中逐条忠实记录可见的点/线/面标签、"
+                "实线与虚线、坐标轴、图像或表格关系；只描述看得见的内容，不推导、不补条件。"
             ),
             "input": [{
                 "role": "user",
@@ -176,6 +179,11 @@ class OpenAIQuestionRecognitionProvider:
                 ],
                 warnings=[str(item) for item in parsed["warnings"]],
                 requires_visual_reasoning=bool(parsed["requires_visual_reasoning"]),
+                visual_observations=[
+                    str(item).strip()
+                    for item in parsed["visual_observations"]
+                    if str(item).strip()
+                ],
             )
         except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
             raise QuestionRecognitionError(f"外部 OCR 返回内容不符合题面结构：{exc}") from exc
@@ -227,10 +235,15 @@ class OpenAIQuestionRecognitionProvider:
                     "low_confidence_regions": {"type": "array", "items": region},
                     "warnings": {"type": "array", "items": {"type": "string"}},
                     "requires_visual_reasoning": {"type": "boolean"},
+                    "visual_observations": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "只记录图片中直接可见的图形元素和关系，不推导条件",
+                    },
                 },
                 "required": [
                     "stem_plain", "stem_latex", "options", "low_confidence_regions",
-                    "warnings", "requires_visual_reasoning",
+                    "warnings", "requires_visual_reasoning", "visual_observations",
                 ],
             },
         }
@@ -282,6 +295,7 @@ class DeepSeekVisionQuestionRecognitionProvider:
             }],
             "warnings": ["需要教师核对的内容"],
             "requires_visual_reasoning": False,
+            "visual_observations": ["图中直接可见的点、线、面、虚实线或坐标关系"],
         }
         payload = {
             "model": self.model,
@@ -293,7 +307,9 @@ class DeepSeekVisionQuestionRecognitionProvider:
                         "普通文字写入 stem_plain，数学表达用 LaTeX 写入 stem_latex，选择题拆出 options。"
                         "无法辨认处不得猜测，必须列入 low_confidence_regions。"
                         "若答案依赖坐标系、几何图、函数图像、表格或其他视觉条件，"
-                        "requires_visual_reasoning 必须为 true。只返回 JSON。"
+                        "requires_visual_reasoning 必须为 true，并在 visual_observations 中逐条忠实记录"
+                        "图中直接可见的点/线/面标签、连线、实线与虚线、坐标轴、曲线或表格关系。"
+                        "visual_observations 不是证明或数学推断，不得补充图中看不见的条件。只返回 JSON。"
                     ),
                 },
                 {
@@ -389,4 +405,9 @@ def _recognition_result(parsed: dict) -> QuestionRecognitionResult:
         ],
         warnings=[str(item) for item in parsed.get("warnings", [])],
         requires_visual_reasoning=bool(parsed.get("requires_visual_reasoning", False)),
+        visual_observations=[
+            str(item).strip()
+            for item in parsed.get("visual_observations", [])
+            if str(item).strip()
+        ],
     )

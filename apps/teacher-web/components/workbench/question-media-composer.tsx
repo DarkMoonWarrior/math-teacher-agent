@@ -329,6 +329,21 @@ export function QuestionMediaComposer({
                     ))}
                   </fieldset>
                 )}
+                {bundle.visual_observations.length > 0 ? (
+                  <section className="question-recognition__visual" aria-label="图形识别草稿">
+                    <header><strong>图形识别草稿</strong><span>仅记录原图可见结构</span></header>
+                    <ul>
+                      {bundle.visual_observations.map((observation, index) => (
+                        <li key={`${index}-${observation}`}>{observation}</li>
+                      ))}
+                    </ul>
+                    <p>请对照原图核对标签、连线与虚实线；这些观察不会代替原图，也不是 MathVerifier 证据。</p>
+                  </section>
+                ) : bundle.requires_visual_reasoning ? (
+                  <p className="question-media__warning">
+                    当前识别版本只判断出“需要图形”，尚未生成可核对的图形观察。请逐次授权后重新识别当前图片。
+                  </p>
+                ) : null}
                 {bundle.low_confidence_regions.length > 0 && (
                   <div className="question-recognition__uncertain">
                     <strong>优先核对 {bundle.low_confidence_regions.length} 处</strong>
@@ -372,7 +387,7 @@ export function QuestionMediaComposer({
               )}
             </section>
           )}
-          <p className="question-media__notice">图片与识别 revision 始终属于你的私人工作区；Agent 只能获得不可逆的资源 ID 与版本号，不能读取路径。</p>
+          <p className="question-media__notice">图片与识别 revision 始终属于你的私人工作区；Agent 只转发本次任务的一次性许可，不能选择资源、读取路径或获得图片字节。</p>
         </div>
       )}
 

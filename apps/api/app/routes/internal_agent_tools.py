@@ -41,6 +41,7 @@ from app.modules.solution_assistant import (
     SolutionAssistantUnavailableError,
     SolutionAssistantVerificationError,
     SolutionProviderError,
+    SolutionProviderResponseError,
     SolutionRequest,
     SolutionResult,
     SolutionVisualInput,
@@ -447,6 +448,13 @@ async def solve_question(
             else "VERIFICATION_INCONCLUSIVE"
         )
         raise _GatewayHttpError(409, code, str(exc), request_id) from None
+    except SolutionProviderResponseError:
+        raise _GatewayHttpError(
+            502,
+            "TOOL_EXECUTION_ERROR",
+            "视觉模型已返回内容，但结果格式无法读取，请重试",
+            request_id,
+        ) from None
     except (SolutionAssistantUnavailableError, SolutionProviderError):
         raise _GatewayHttpError(
             503,
