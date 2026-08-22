@@ -73,14 +73,25 @@ class PrivateLibraryAgentWorkflow:
             return self._error(command, request_id, TeacherAgentErrorCode.INTERNAL_ERROR, "Agent Runtime 执行异常")
         if run.status != TeacherAgentRunStatus.COMPLETED:
             error = run.error
-            return self._error(
+            response = self._error(
                 command,
                 request_id,
-                error.code if error else TeacherAgentErrorCode.INTERNAL_ERROR,
-                error.message if error else "私人检索执行失败",
+                error.code if error else (
+                    TeacherAgentErrorCode.RUN_CANCELLED
+                    if run.status == TeacherAgentRunStatus.CANCELLED
+                    else TeacherAgentErrorCode.INTERNAL_ERROR
+                ),
+                error.message if error else (
+                    "私人检索已取消"
+                    if run.status == TeacherAgentRunStatus.CANCELLED
+                    else "私人检索执行失败"
+                ),
                 run_id=run.run_id,
                 session_id=run.session_id,
             )
+            if run.status == TeacherAgentRunStatus.CANCELLED:
+                response.status = "cancelled"
+            return response
         calls = [call for call in run.tool_calls if call.tool_name == "search_private_library"]
         if len(run.tool_calls) != 1 or len(calls) != 1:
             return self._error(command, request_id, TeacherAgentErrorCode.TOOL_EXECUTION_ERROR, "私人检索必须且只能调用一次受控 Tool", run_id=run.run_id, session_id=run.session_id, tool_call_count=len(run.tool_calls))

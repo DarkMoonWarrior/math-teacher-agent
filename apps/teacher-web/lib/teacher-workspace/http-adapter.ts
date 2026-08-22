@@ -16,6 +16,9 @@ import {
   type PrivateLibraryReview,
   type PrivateLibrarySearchResult,
   type PrivateLibraryUpload,
+  type QuestionInputBundle,
+  type QuestionMediaTransform,
+  type QuestionMediaUpload,
   type SearchTaskOptions,
   type SearchTaskProgressStage,
   type SearchTaskRequest,
@@ -360,6 +363,60 @@ async function readSolveStream(
 }
 
 export class HttpTeacherWorkspace implements TeacherWorkspace {
+  async uploadQuestionMedia(
+    request: QuestionMediaUpload,
+    signal?: AbortSignal,
+  ): Promise<QuestionInputBundle> {
+    const body = new FormData();
+    body.set("file", request.file);
+    body.set("source", request.source);
+    body.set("private_storage_acknowledged", String(request.privateStorageAcknowledged));
+    try {
+      const response = await fetch(apiUrl("/api/v1/question-capture/assets"), {
+        method: "POST",
+        headers: { Accept: "application/json" },
+        body,
+        signal,
+      });
+      if (!response.ok) throw await responseError(response);
+      return await response.json() as QuestionInputBundle;
+    } catch (cause) {
+      if (cause instanceof TeacherWorkspaceError) throw cause;
+      if (cause instanceof DOMException && cause.name === "AbortError") throw cause;
+      throw new TeacherWorkspaceError(
+        "NETWORK_ERROR",
+        "无法保存题目图片。请确认 FastAPI 已启动。",
+      );
+    }
+  }
+
+  async transformQuestionMedia(
+    assetId: string,
+    transform: QuestionMediaTransform,
+    signal?: AbortSignal,
+  ): Promise<QuestionInputBundle> {
+    try {
+      const response = await fetch(
+        apiUrl(`/api/v1/question-capture/assets/${encodeURIComponent(assetId)}/transform`),
+        {
+          method: "POST",
+          headers: { Accept: "application/json", "Content-Type": "application/json" },
+          body: JSON.stringify(transform),
+          signal,
+        },
+      );
+      if (!response.ok) throw await responseError(response);
+      return await response.json() as QuestionInputBundle;
+    } catch (cause) {
+      if (cause instanceof TeacherWorkspaceError) throw cause;
+      if (cause instanceof DOMException && cause.name === "AbortError") throw cause;
+      throw new TeacherWorkspaceError(
+        "NETWORK_ERROR",
+        "无法调整题目图片。请确认 FastAPI 已启动。",
+      );
+    }
+  }
+
   async searchPrivateLibrary(
     query: string,
     privateContentConsent: true,
@@ -374,7 +431,7 @@ export class HttpTeacherWorkspace implements TeacherWorkspace {
       });
       if (!response.ok) throw await responseError(response);
       const payload = await response.json() as {
-        status: "ok" | "error";
+        status: "ok" | "error" | "cancelled";
         result: PrivateLibrarySearchResult | null;
         error?: { code?: string; message?: string; request_id?: string };
       };

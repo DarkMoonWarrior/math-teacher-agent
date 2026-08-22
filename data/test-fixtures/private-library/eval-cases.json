@@ -1,0 +1,18 @@
+{
+  "evaluation_id": "private-library-agent-synthetic-v1",
+  "source": "project-authored-synthetic",
+  "cases": [
+    {"id": "empty_library", "expected": "truthful_empty"},
+    {"id": "unsupported_format", "expected": "validation_failure"},
+    {"id": "ocr_failure", "expected": "pending_private"},
+    {"id": "model_unavailable", "expected": "explicit_failure"},
+    {"id": "tool_timeout", "expected": "explicit_failure"},
+    {"id": "run_cancelled", "expected": "cancelled"},
+    {"id": "consent_replay", "expected": "permission_denied"},
+    {"id": "cross_owner_isolation", "expected": "no_leak"},
+    {"id": "review_and_trash_filter", "expected": "no_leak"},
+    {"id": "bounded_grounded_success", "expected": "private_excerpt"},
+    {"id": "recovery_new_consent", "expected": "fresh_success"},
+    {"id": "derived_question_private", "expected": "private_pending_review"}
+  ]
+}

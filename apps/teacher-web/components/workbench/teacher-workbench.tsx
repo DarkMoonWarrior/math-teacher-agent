@@ -12,6 +12,7 @@ import {
 import { MathText } from "@/components/math-text";
 import {
   type SearchQuestion,
+  type QuestionInputBundle,
   type SearchTaskProgressStage,
   type SearchTaskResult,
   type SolveTaskProgressStage,
@@ -45,6 +46,7 @@ import {
 } from "./icons";
 import { SolvePaper, SolveResultBrief } from "./solve-paper";
 import { PrivateLibraryWorkspace } from "./private-library-workspace";
+import { QuestionMediaComposer } from "./question-media-composer";
 
 type Phase = "idle" | "running" | "success" | "error" | "cancelled";
 type FlipDirection = "next" | "previous";
@@ -535,6 +537,7 @@ export function TeacherWorkbench() {
   });
   const [result, setResult] = useState<SearchTaskResult | null>(null);
   const [solveResult, setSolveResult] = useState<SolveTaskResult | null>(null);
+  const [questionBundle, setQuestionBundle] = useState<QuestionInputBundle | null>(null);
   const [errors, setErrors] = useState<Record<"search" | "solve", ViewError | null>>({
     search: null,
     solve: null,
@@ -816,6 +819,7 @@ export function TeacherWorkbench() {
     }
     if (solveVisible) {
       setSolveResult(null);
+      setQuestionBundle(null);
       setError(null);
       setPhase("idle");
       setSolvePage(0);
@@ -835,6 +839,7 @@ export function TeacherWorkbench() {
     } else {
       setSolveResult(task.result);
       setSolvePage(0);
+      setQuestionBundle(null);
     }
     setError(null, task.capability);
     setPhase("success", task.capability);
@@ -846,6 +851,7 @@ export function TeacherWorkbench() {
     if (turning || running) return;
     setDrafts((current) => ({ ...current, solve: item.stem || item.stem_preview }));
     setSolveResult(null);
+    setQuestionBundle(null);
     setError(null, "solve");
     setPhase("idle", "solve");
     setSolvePage(0);
@@ -917,7 +923,7 @@ export function TeacherWorkbench() {
               <HistoryIcon />
               {history.length > 0 && <span>{history.length}</span>}
             </button>
-            <button className="new-task-button" type="button" onClick={resetTask}>
+            <button className="new-task-button" type="button" onClick={resetTask} aria-label="新任务">
               <PlusIcon />
               <span>新任务</span>
             </button>
@@ -938,6 +944,13 @@ export function TeacherWorkbench() {
 
           <form className="task-composer" onSubmit={runTask}>
             <label htmlFor="teacher-task">{definition.inputLabel}</label>
+            {solveVisible && (
+              <QuestionMediaComposer
+                bundle={questionBundle}
+                disabled={running}
+                onChange={setQuestionBundle}
+              />
+            )}
             <div className={`composer-surface${validationMessage ? " is-error" : ""}${running ? " is-running" : ""}${definition.ready ? "" : " is-planned"}`}>
               <textarea
                 ref={taskInputRef}

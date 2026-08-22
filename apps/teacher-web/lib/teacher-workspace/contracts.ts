@@ -169,6 +169,62 @@ export type SolveTaskOptions = {
   onProgress?: (progress: SolveTaskProgress) => void;
 };
 
+export type QuestionMediaSource = "upload" | "clipboard" | "camera";
+
+export type QuestionMediaRevision = {
+  revision: number;
+  source_revision: number | null;
+  operation: "original" | "rotate" | "crop";
+  width: number;
+  height: number;
+  mime_type: "image/png" | "image/jpeg" | "image/webp";
+  content_endpoint: string;
+  created_at: string;
+};
+
+export type QuestionMediaAsset = {
+  asset_id: string;
+  original_filename: string;
+  source: QuestionMediaSource;
+  source_sha256: string;
+  current_revision: number;
+  width: number;
+  height: number;
+  size_bytes: number;
+  mime_type: "image/png" | "image/jpeg" | "image/webp";
+  clarity_status: "clear" | "review_needed";
+  warnings: string[];
+  revisions: QuestionMediaRevision[];
+  visibility: "private";
+  public_search_allowed: false;
+  model_training_allowed: false;
+  created_at: string;
+  updated_at: string;
+};
+
+export type QuestionInputBundle = {
+  asset: QuestionMediaAsset;
+  recognition_status: "not_started";
+  stem_plain: string;
+  stem_latex: string;
+  options: Array<Record<string, string>>;
+  requires_visual_reasoning: boolean | null;
+  low_confidence_regions: Array<Record<string, unknown>>;
+  recognition_warnings: string[];
+  external_processing_consent: false;
+  visibility: "private";
+};
+
+export type QuestionMediaUpload = {
+  file: File;
+  source: QuestionMediaSource;
+  privateStorageAcknowledged: true;
+};
+
+export type QuestionMediaTransform =
+  | { operation: "rotate"; degrees: 90 | 180 | 270 }
+  | { operation: "crop"; crop: { x: number; y: number; width: number; height: number } };
+
 export type LibraryRightsBasis =
   | "original"
   | "licensed"
@@ -363,6 +419,17 @@ export interface TeacherWorkspace {
     request: SolveTaskRequest,
     options?: SolveTaskOptions,
   ): Promise<SolveTaskResult>;
+
+  uploadQuestionMedia(
+    request: QuestionMediaUpload,
+    signal?: AbortSignal,
+  ): Promise<QuestionInputBundle>;
+
+  transformQuestionMedia(
+    assetId: string,
+    transform: QuestionMediaTransform,
+    signal?: AbortSignal,
+  ): Promise<QuestionInputBundle>;
 
   listPrivateLibrary(signal?: AbortSignal): Promise<PrivateLibraryList>;
 

@@ -1,7 +1,7 @@
 # M6 Private Library Agent
 
 更新日期：2026-08-22
-状态：进行中
+状态：已完成；Gate E 于 2026-08-22 严格通过，等待项目所有者确认是否进入 M7
 
 ## 1. 本阶段唯一目标
 
@@ -35,7 +35,7 @@ Agent Runtime → inspect_private_library Tool → internal M2M gateway → Priv
 3. **提取与 OCR 校对**：本地处理优先；外部处理逐次同意；原页、草稿和 revision 可核对；已完成。
 4. **拆题与教材映射**：只从教师确认文本生成可编辑候选，导入后仍为 private + pending review；已完成。
 5. **私人检索 Agent**：显式同意后按最小必要内容检索，结果保留来源/revision/权利状态；已完成。许可由 FastAPI 按当前教师、查询和数量签发，短时且单次消费；只检索 active + confirmed 文本并返回不超过 480 字的匹配片段，不暴露原文件、路径、整份正文或 owner selector。
-6. **固定评测与 Gate E**：空库、格式失败、OCR 失败、模型不可用、权限拒绝、取消、跨 owner、private 泄漏和恢复路径；未开始。
+6. **固定评测与 Gate E**：空库、格式失败、OCR 失败、模型不可用、权限拒绝、取消、跨 owner、private 泄漏和恢复路径；已完成。12 个 synthetic 场景的 8 类违规均为 0，完整工程与浏览器门禁通过。
 
 第四条切片的实现证据：候选与资料文本版本绑定，文本未确认或版本过期时 fail closed；题干、题型、选项、答案、解法和难度可由教师编辑。浏览器只提交教材 `node_id`，教材名称、册次、章节和小节由 FastAPI 的受控 Curriculum 目录解析；导入前强制完成映射。导入结果固定为 `private + pending + needs_math_review`，并在来源证据中保存 owner、资料、文本版本与候选标识。浏览器不能提交 owner/editor 或伪造教材路径，跨 owner 候选访问返回 404。
 
@@ -53,4 +53,4 @@ Agent Runtime → inspect_private_library Tool → internal M2M gateway → Priv
 
 M6 的 OCR/修订能力是后续单题图片采集可复用的地基，但本阶段不接入 Solve，也不提前实现多模态解题。
 
-M6 Gate E 通过并由项目所有者确认前，不进入 M7 多模态题目采集与图片解题。
+固定评测见 [`M6-PRIVATE-LIBRARY-EVALUATION.md`](M6-PRIVATE-LIBRARY-EVALUATION.md)，逐项审计见 [`M6-GATE-REVIEW.md`](M6-GATE-REVIEW.md)。M6 已完成，但项目所有者确认阶段转换前仍不进入 M7 多模态题目采集与图片解题。

@@ -80,6 +80,41 @@ export function UploadIcon(props: IconProps) {
   );
 }
 
+export function CameraIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <path d="M4 8.5h3l1.4-2h7.2l1.4 2h3v10H4v-10Z" stroke="currentColor" strokeLinejoin="round" strokeWidth="1.6" />
+      <circle cx="12" cy="13.5" r="3.2" stroke="currentColor" strokeWidth="1.6" />
+    </IconBase>
+  );
+}
+
+export function CropIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <path d="M7 3v14h14M3 7h14v14" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.6" />
+    </IconBase>
+  );
+}
+
+export function RotateIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <path d="M5 8V4m0 0h4M5 4l3 3a7 7 0 1 1-2 7" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.6" />
+    </IconBase>
+  );
+}
+
+export function ImageIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <rect height="15" rx="1.5" stroke="currentColor" strokeWidth="1.6" width="18" x="3" y="4.5" />
+      <circle cx="8.5" cy="9" r="1.5" stroke="currentColor" strokeWidth="1.4" />
+      <path d="m5 17 4.2-4 2.8 2.5 2.6-3 4.4 4.5" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.6" />
+    </IconBase>
+  );
+}
+
 export function LockIcon(props: IconProps) {
   return (
     <IconBase {...props}>
