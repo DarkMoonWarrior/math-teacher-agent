@@ -147,7 +147,7 @@ describe("DeepSeekHarnessRuntime deterministic E2E", () => {
     await runtime.dispose();
   });
 
-  it("health / capabilities 报告 6 个可见工具，且不包含任何凭据字段", async () => {
+  it("health / capabilities 报告 7 个可见工具，且不包含任何凭据字段", async () => {
     harness = await createRuntimeHarness({ handlers: { [SEARCH_ROUTE]: () => searchResponse() } });
 
     const health = await harness.runtime.health();
@@ -155,7 +155,7 @@ describe("DeepSeekHarnessRuntime deterministic E2E", () => {
     expect(health.runtime).toBe("dsh");
     expect(health.initialized).toBe(true);
     expect(health.tool_registry_ready).toBe(true);
-    expect(health.visible_tool_count).toBe(6);
+    expect(health.visible_tool_count).toBe(7);
     expect(health.dsh_version).toBe("0.1.0-rc.6");
 
     const capabilities = await harness.runtime.capabilities();
@@ -168,6 +168,7 @@ describe("DeepSeekHarnessRuntime deterministic E2E", () => {
       "find_similar_questions",
       "get_curriculum_node",
       "get_question",
+      "inspect_private_library",
       "search_questions",
       "solve_question",
       "verify_question",

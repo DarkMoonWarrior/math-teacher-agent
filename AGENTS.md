@@ -23,11 +23,12 @@ The current product line is the new `apps/teacher-web` experience. `apps/web` is
 
 - `Search Agent`: implemented in the FastAPI business backend and exposed in the new teacher workbench.
 - `Solve Agent`: backend workflow and new Teacher Web flow are connected, including structured solution pages, Search-to-Solve transfer, graded MathVerifier evidence, cancellation, and same-run recovery.
-- `TeacherAgentRuntime` and the isolated DeepSeek Harness adapter: implemented with six controlled read-only tools; M5 now has a product-owned FastAPI Solve workflow with run/stream/cancel/resume lifecycle and graded MathVerifier evidence.
+- `TeacherAgentRuntime` and the isolated DeepSeek Harness adapter: implemented with seven controlled read-only tools; the M6 `inspect_private_library` Tool exposes only current-owner aggregate state and no private content.
+- `Private Library Agent`: M6 is active; only the first aggregate overview Tool slice is complete. Upload UI, OCR/review, extraction, mapping and private retrieval are not yet connected in the new workbench.
 - `Lesson Agent` and `Paper Agent`: navigation and requirement-drafting previews only in `apps/teacher-web`; their Agent runtimes/tools are not connected.
 - M5 passed its fixed synthetic evaluation and full Gate E audit on 2026-08-21. Mature lesson-plan, paper, import, library, solution, curriculum, question-bank, and verification modules exist in the migrated backend/legacy UI. Existing REST workflows do not mean the corresponding new Agent capability is complete.
 - Teacher identity, cloud isolation, billing, and public commercial operation are not implemented.
-- M0-M5 are complete. The project is waiting for explicit owner confirmation before M6; M6 and later must not start during this transition hold.
+- M0-M5 are complete. The owner confirmed M6 on 2026-08-22; M7 and later must not start until M6 Gate E passes and the owner confirms the next transition.
 
 ## Repository seams
 

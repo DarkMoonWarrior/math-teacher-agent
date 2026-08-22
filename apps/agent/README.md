@@ -5,8 +5,9 @@
 安全边界：
 
 - 本服务**不直接访问任何数据库**；题目/课程数据只能通过 FastAPI Internal Tool Gateway 获取。
-- 模型可见工具**恰好只有 6 个受控只读工具**：`search_questions`、`get_question`、
-  `solve_question`、`find_similar_questions`、`verify_question`、`get_curriculum_node`。
+- 模型可见工具**恰好只有 7 个受控只读工具**：`search_questions`、`get_question`、
+  `solve_question`、`find_similar_questions`、`verify_question`、`get_curriculum_node`、
+  `inspect_private_library`。
 - 组合不挂载 bash / filesystem / web / subagent / workflow 等任何额外能力。
 - Harness 依赖精确锁定 `0.1.0-rc.6`，所有 DeepSeek Harness import 只允许出现在本 app 内。
 
@@ -34,7 +35,7 @@ pnpm build:agent     # 编译到 dist/
 
 - 产品自有 Runtime interface 与 DeepSeek Harness adapter 已实现。
 - Search Agent 与 Solve Agent Tool seam、取消、恢复、tool-loop 上限和最小权限均有自动测试。
-- 目前模型可见能力仍严格限制为 6 个受控只读 Tool；`solve_question` 原样返回 MathVerifier 的 status/capability/scope 分级，不保存或发布；Lesson/Paper 写工具尚未接入。
+- 目前模型可见能力仍严格限制为 7 个受控只读 Tool；`inspect_private_library` 只返回当前教师的聚合数量与处理状态，不返回私人正文；`solve_question` 原样返回 MathVerifier 的 status/capability/scope 分级，不保存或发布；Lesson/Paper 写工具尚未接入。
 - 默认 `test-mock` 不调用真实模型；生产密钥只存在于本服务环境。
 
 ## HTTP 接口（machine-to-machine）

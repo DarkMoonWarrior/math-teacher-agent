@@ -140,6 +140,18 @@ export interface GetCurriculumNodeResponse {
   request_id: string;
 }
 
+export interface InspectPrivateLibraryResponse {
+  total: number;
+  pending_review: number;
+  confirmed: number;
+  needs_ocr: number;
+  trashed: number;
+  by_file_kind: Record<string, number>;
+  visibility: "private";
+  content_included: false;
+  request_id: string;
+}
+
 const KNOWN_STATUS_ERROR_CODES: Record<number, TeacherAgentErrorCode> = {
   401: "TOOL_UNAUTHORIZED",
   403: "TOOL_UNAUTHORIZED",
@@ -298,5 +310,9 @@ export class ToolGatewayClient {
 
   getCurriculumNode(nodeId: string, options: GatewayRequestOptions): Promise<GatewayResult<GetCurriculumNodeResponse>> {
     return this.post("/internal/agent-tools/v1/get-curriculum-node", { node_id: nodeId }, options);
+  }
+
+  inspectPrivateLibrary(options: GatewayRequestOptions): Promise<GatewayResult<InspectPrivateLibraryResponse>> {
+    return this.post("/internal/agent-tools/v1/inspect-private-library", {}, options);
   }
 }

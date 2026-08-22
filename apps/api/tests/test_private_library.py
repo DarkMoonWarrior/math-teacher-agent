@@ -200,6 +200,27 @@ def test_library_items_move_to_recycle_bin_and_restore(tmp_path: Path) -> None:
     assert library.list().total == 1
 
 
+def test_library_stats_are_scoped_to_the_current_owner(tmp_path: Path) -> None:
+    library = make_library(tmp_path)
+    library.ingest(
+        ingest_command(owner_id="owner_teacher"),
+        filename="mine.docx",
+        content=docx_bytes("函数单调性"),
+    )
+    library.ingest(
+        ingest_command(owner_id="other_teacher"),
+        filename="other.docx",
+        content=docx_bytes("数列求和"),
+    )
+
+    mine = library.stats(owner_id="owner_teacher")
+    other = library.stats(owner_id="other_teacher")
+
+    assert mine.total == 1
+    assert other.total == 1
+    assert mine.by_file_kind == {"docx": 1}
+
+
 def test_image_waits_for_ocr_then_can_be_manually_confirmed(tmp_path: Path) -> None:
     library = make_library(tmp_path)
     item = library.ingest(

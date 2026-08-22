@@ -97,6 +97,7 @@ describe("Search Agent deterministic harness scenario", () => {
       "find_similar_questions",
       "verify_question",
       "get_curriculum_node",
+      "inspect_private_library",
     ]);
   });
 });

@@ -24,7 +24,7 @@ function fakeRuntime(): DeepSeekHarnessRuntime {
     initialized: true,
     model_configured: false,
     tool_registry_ready: true,
-    visible_tool_count: 6,
+    visible_tool_count: 7,
     runtime_version: "0.1.0",
     dsh_version: "0.1.0-rc.6",
   };
@@ -115,7 +115,7 @@ describe("Agent Service HTTP 认证门禁（MATH_AI_AGENT_SERVICE_TOKEN）", () 
     expect(status).toBe(200);
     const payload = JSON.parse(text) as { status: string; visible_tool_count: number };
     expect(payload.status).toBe("ok");
-    expect(payload.visible_tool_count).toBe(6);
+    expect(payload.visible_tool_count).toBe(7);
   });
 
   it("未配置 token 时一律 fail closed", async () => {

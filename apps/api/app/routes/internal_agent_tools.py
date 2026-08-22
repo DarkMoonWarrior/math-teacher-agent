@@ -19,7 +19,7 @@ from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, Header, Request
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.core.config import get_settings
 from app.modules.math_verifier import MathVerifier
@@ -36,6 +36,7 @@ from app.modules.solution_assistant import (
 from app.routes.curriculum import _catalog_for_path
 from app.routes.questions import get_question_bank, get_question_quality_workflow
 from app.routes.question_similarity import get_question_similarity_registry
+from app.routes.library import get_private_library
 from app.routes.solutions import get_solution_assistant
 
 logger = logging.getLogger("math_ai.internal_agent_tools")
@@ -219,6 +220,24 @@ class GetCurriculumNodeResponse(BaseModel):
     name: str
     description: str
     knowledge_points: list[str] = Field(default_factory=list)
+    request_id: str
+
+
+class InspectPrivateLibraryRequest(BaseModel):
+    """No model-supplied owner selector is allowed at this seam."""
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class InspectPrivateLibraryResponse(BaseModel):
+    total: int
+    pending_review: int
+    confirmed: int
+    needs_ocr: int
+    trashed: int
+    by_file_kind: dict[str, int]
+    visibility: Literal["private"] = "private"
+    content_included: Literal[False] = False
     request_id: str
 
 
@@ -506,6 +525,42 @@ async def get_curriculum_node(
         name=node.name,
         description=node.description,
         knowledge_points=node.prerequisite_node_ids,
+        request_id=request_id,
+    )
+
+
+@router.post(
+    "/inspect-private-library",
+    response_model=InspectPrivateLibraryResponse,
+)
+async def inspect_private_library(
+    _body: InspectPrivateLibraryRequest,
+    request: Request,
+    _token: None = Depends(_require_tool_gateway_token),
+) -> InspectPrivateLibraryResponse:
+    """Return aggregate private-library state without exposing private content."""
+    request_id = _request_id_from(request)
+    try:
+        stats = await _run_with_timeout(
+            request,
+            get_private_library().stats,
+            owner_id="owner_teacher",
+        )
+    except _GatewayHttpError:
+        raise
+    except Exception:
+        logger.exception(
+            "inspect_private_library_failed",
+            extra={"request_id": request_id},
+        )
+        raise _GatewayHttpError(
+            500,
+            "TOOL_EXECUTION_ERROR",
+            "私人资料库概览读取失败",
+            request_id,
+        ) from None
+    return InspectPrivateLibraryResponse(
+        **stats.model_dump(),
         request_id=request_id,
     )
 
