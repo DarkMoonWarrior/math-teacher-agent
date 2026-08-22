@@ -6,10 +6,11 @@ from functools import lru_cache
 from threading import Lock
 from typing import Literal
 
-from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
 
 from app.core.config import get_settings
+from app.core.identity import CurrentTeacher, get_current_teacher
 from app.modules.private_library import (
     CandidateImportResult,
     LibraryIngestCommand,
@@ -22,6 +23,7 @@ from app.modules.private_library import (
     LibraryItemView,
     LibraryStats,
     LibraryTextReviewCommand,
+    LibraryTextRevisionList,
     OCRProviderError,
     OpenAIResourceOCRProvider,
     LocalMathOCRProvider,
@@ -44,7 +46,6 @@ from app.modules.background_jobs import BackgroundJobRegistry, BackgroundJobView
 router = APIRouter(prefix="/library", tags=["private-library"])
 _local_math_ocr_lock = Lock()
 _background_jobs = BackgroundJobRegistry()
-_CURRENT_OWNER_ID = "owner_teacher"
 
 
 @lru_cache
@@ -123,20 +124,23 @@ def _split_latex_repair_draft(text: str, *, max_chars: int = 7000) -> list[str]:
 def list_library_items(
     limit: int = Query(default=50, ge=1, le=100),
     lifecycle_state: str = Query(default="active"),
+    current_teacher: CurrentTeacher = Depends(get_current_teacher),
 ) -> LibraryItemList:
     try:
         return get_private_library().list(
             limit=limit,
             lifecycle_state=lifecycle_state,
-            owner_id=_CURRENT_OWNER_ID,
+            owner_id=current_teacher.teacher_id,
         )
     except PrivateLibraryError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.get("/stats", response_model=LibraryStats)
-def library_stats() -> LibraryStats:
-    return get_private_library().stats(owner_id=_CURRENT_OWNER_ID)
+def library_stats(
+    current_teacher: CurrentTeacher = Depends(get_current_teacher),
+) -> LibraryStats:
+    return get_private_library().stats(owner_id=current_teacher.teacher_id)
 
 
 @router.post("", response_model=LibraryItemView, status_code=201)
@@ -146,6 +150,7 @@ async def upload_library_item(
     rights_basis: RightsBasis = Form(...),
     rights_statement: str = Form(..., min_length=6, max_length=2000),
     rights_acknowledged: bool = Form(...),
+    current_teacher: CurrentTeacher = Depends(get_current_teacher),
 ) -> LibraryItemView:
     try:
         content = await file.read(PrivateLibrary.MAX_FILE_BYTES + 1)
@@ -155,7 +160,7 @@ async def upload_library_item(
                 rights_basis=rights_basis,
                 rights_statement=rights_statement,
                 rights_acknowledged=rights_acknowledged,
-                owner_id=_CURRENT_OWNER_ID,
+                owner_id=current_teacher.teacher_id,
             ),
             filename=file.filename or "未命名资料",
             content=content,
@@ -165,44 +170,83 @@ async def upload_library_item(
 
 
 @router.get("/{item_id}", response_model=LibraryItemView)
-def get_library_item(item_id: str) -> LibraryItemView:
+def get_library_item(
+    item_id: str,
+    current_teacher: CurrentTeacher = Depends(get_current_teacher),
+) -> LibraryItemView:
     try:
-        return get_private_library().get(item_id)
+        return get_private_library().get(
+            item_id, owner_id=current_teacher.teacher_id
+        )
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="私人资料不存在") from exc
 
 
 @router.patch("/{item_id}/review", response_model=LibraryItemView)
 def review_library_text(
-    item_id: str, command: LibraryTextReviewCommand
+    item_id: str,
+    command: LibraryTextReviewCommand,
+    current_teacher: CurrentTeacher = Depends(get_current_teacher),
 ) -> LibraryItemView:
     try:
-        return get_private_library().review(item_id, command)
+        return get_private_library().review(
+            item_id,
+            command,
+            owner_id=current_teacher.teacher_id,
+            reviewer_id=current_teacher.teacher_id,
+        )
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="私人资料不存在") from exc
     except PrivateLibraryError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
+@router.get("/{item_id}/revisions", response_model=LibraryTextRevisionList)
+def list_library_text_revisions(
+    item_id: str,
+    current_teacher: CurrentTeacher = Depends(get_current_teacher),
+) -> LibraryTextRevisionList:
+    try:
+        return get_private_library().list_text_revisions(
+            item_id, owner_id=current_teacher.teacher_id
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="私人资料不存在") from exc
+
+
 @router.post("/{item_id}/lifecycle", response_model=LibraryItemView)
 def change_library_item_lifecycle(
-    item_id: str, command: LibraryLifecycleCommand
+    item_id: str,
+    command: LibraryLifecycleCommand,
+    current_teacher: CurrentTeacher = Depends(get_current_teacher),
 ) -> LibraryItemView:
     try:
-        return get_private_library().change_lifecycle(item_id, command)
+        secured_command = command.model_copy(
+            update={"actor_id": current_teacher.teacher_id}
+        )
+        return get_private_library().change_lifecycle(
+            item_id,
+            secured_command,
+            owner_id=current_teacher.teacher_id,
+        )
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="私人资料不存在") from exc
 
 
 @router.post("/{item_id}/ocr", response_model=LibraryOCRResult)
-def run_library_ocr(item_id: str, command: LibraryOCRCommand) -> LibraryOCRResult:
+def run_library_ocr(
+    item_id: str,
+    command: LibraryOCRCommand,
+    current_teacher: CurrentTeacher = Depends(get_current_teacher),
+) -> LibraryOCRResult:
     try:
         provider = get_library_ocr_provider()
         item, provider_name, warnings = get_private_library().apply_ocr(
             item_id,
             provider=provider,
             consent=command.external_processing_consent,
-            teacher_id=command.teacher_id,
+            owner_id=current_teacher.teacher_id,
+            teacher_id=current_teacher.teacher_id,
         )
         return LibraryOCRResult(item=item, provider=provider_name, warnings=warnings)
     except KeyError as exc:
@@ -216,14 +260,18 @@ def run_library_ocr(item_id: str, command: LibraryOCRCommand) -> LibraryOCRResul
 
 
 @router.post("/{item_id}/local-math-ocr", response_model=LibraryOCRResult)
-def run_local_math_ocr(item_id: str) -> LibraryOCRResult:
+def run_local_math_ocr(
+    item_id: str,
+    current_teacher: CurrentTeacher = Depends(get_current_teacher),
+) -> LibraryOCRResult:
     if not _local_math_ocr_lock.acquire(blocking=False):
         raise HTTPException(status_code=409, detail="本地数学 OCR 正在处理另一份资料，请等待当前任务完成后再试")
     try:
         item, provider_name, warnings = get_private_library().apply_local_ocr(
             item_id,
             provider=get_local_math_ocr_provider(),
-            teacher_id="owner_teacher",
+            owner_id=current_teacher.teacher_id,
+            teacher_id=current_teacher.teacher_id,
         )
         return LibraryOCRResult(item=item, provider=provider_name, warnings=warnings)
     except KeyError as exc:
@@ -237,9 +285,12 @@ def run_local_math_ocr(item_id: str) -> LibraryOCRResult:
 
 
 @router.post("/{item_id}/local-math-ocr/jobs", response_model=BackgroundJobView, status_code=202)
-def start_local_math_ocr_job(item_id: str) -> BackgroundJobView:
+def start_local_math_ocr_job(
+    item_id: str,
+    current_teacher: CurrentTeacher = Depends(get_current_teacher),
+) -> BackgroundJobView:
     try:
-        get_private_library().get(item_id)
+        get_private_library().get(item_id, owner_id=current_teacher.teacher_id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="私人资料不存在") from exc
     if not _local_math_ocr_lock.acquire(blocking=False):
@@ -250,51 +301,118 @@ def start_local_math_ocr_job(item_id: str) -> BackgroundJobView:
             item, provider_name, warnings = get_private_library().apply_local_ocr(
                 item_id,
                 provider=get_local_math_ocr_provider(progress),
-                teacher_id="owner_teacher",
+                owner_id=current_teacher.teacher_id,
+                teacher_id=current_teacher.teacher_id,
             )
             return LibraryOCRResult(item=item, provider=provider_name, warnings=warnings).model_dump(mode="json")
         finally:
             _local_math_ocr_lock.release()
 
-    return _background_jobs.start(kind="local_math_ocr", subject_id=item_id, runner=runner)
+    return _background_jobs.start(
+        kind="local_math_ocr",
+        subject_id=item_id,
+        owner_id=current_teacher.teacher_id,
+        runner=runner,
+    )
+
+
+@router.post("/{item_id}/ocr/jobs", response_model=BackgroundJobView, status_code=202)
+def start_library_ocr_job(
+    item_id: str,
+    command: LibraryOCRCommand,
+    current_teacher: CurrentTeacher = Depends(get_current_teacher),
+) -> BackgroundJobView:
+    if not command.external_processing_consent:
+        raise HTTPException(
+            status_code=422,
+            detail="使用外部 OCR 前必须明确同意发送当前私人文件",
+        )
+    try:
+        get_private_library().get(item_id, owner_id=current_teacher.teacher_id)
+        provider = get_library_ocr_provider()
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="私人资料不存在") from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    def runner(progress):
+        progress(0, 1, "正在调用已配置的外部 OCR")
+        item, provider_name, warnings = get_private_library().apply_ocr(
+            item_id,
+            provider=provider,
+            consent=True,
+            owner_id=current_teacher.teacher_id,
+            teacher_id=current_teacher.teacher_id,
+        )
+        progress(1, 1, "OCR 草稿已生成，等待教师校对")
+        return LibraryOCRResult(
+            item=item,
+            provider=provider_name,
+            warnings=warnings,
+        ).model_dump(mode="json")
+
+    return _background_jobs.start(
+        kind="external_ocr",
+        subject_id=item_id,
+        owner_id=current_teacher.teacher_id,
+        runner=runner,
+    )
 
 
 @router.post("/{item_id}/ai-repair/jobs", response_model=BackgroundJobView, status_code=202)
-def start_library_ai_repair_job(item_id: str, command: LibraryAIRepairCommand) -> BackgroundJobView:
+def start_library_ai_repair_job(
+    item_id: str,
+    command: LibraryAIRepairCommand,
+    current_teacher: CurrentTeacher = Depends(get_current_teacher),
+) -> BackgroundJobView:
     # Validate consent and item synchronously so invalid jobs never enter the queue.
     if not command.external_processing_consent:
         raise HTTPException(status_code=422, detail="使用 DeepSeek 修复前必须明确同意发送当前校对草稿")
     try:
-        get_private_library().get(item_id)
+        get_private_library().get(item_id, owner_id=current_teacher.teacher_id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="私人资料不存在") from exc
 
     def runner(progress):
         progress(0, 1, "正在调用 DeepSeek 修复 LaTeX 草稿")
-        result = repair_library_latex(item_id, command)
+        result = repair_library_latex(item_id, command, current_teacher)
         progress(1, 1, "DeepSeek 草稿修复完成")
         return result.model_dump(mode="json")
 
-    return _background_jobs.start(kind="library_ai_repair", subject_id=item_id, runner=runner)
+    return _background_jobs.start(
+        kind="library_ai_repair",
+        subject_id=item_id,
+        owner_id=current_teacher.teacher_id,
+        runner=runner,
+    )
 
 
 @router.get("/jobs/{job_id}", response_model=BackgroundJobView)
-def get_library_background_job(job_id: str) -> BackgroundJobView:
+def get_library_background_job(
+    job_id: str,
+    current_teacher: CurrentTeacher = Depends(get_current_teacher),
+) -> BackgroundJobView:
     try:
-        return _background_jobs.get(job_id)
+        return _background_jobs.get(job_id, owner_id=current_teacher.teacher_id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="后台任务不存在或 API 已重启") from exc
 
 
 @router.post("/{item_id}/ai-repair", response_model=LibraryAIRepairResult)
-def repair_library_latex(item_id: str, command: LibraryAIRepairCommand) -> LibraryAIRepairResult:
+def repair_library_latex(
+    item_id: str,
+    command: LibraryAIRepairCommand,
+    current_teacher: CurrentTeacher = Depends(get_current_teacher),
+) -> LibraryAIRepairResult:
     if not command.external_processing_consent:
         raise HTTPException(
             status_code=422,
             detail="使用 DeepSeek 修复前必须明确同意发送当前校对草稿；原 PDF 不会发送",
         )
     try:
-        item = get_private_library().get(item_id)
+        item = get_private_library().get(
+            item_id, owner_id=current_teacher.teacher_id
+        )
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="私人资料不存在") from exc
     if item.lifecycle_state == "trashed":
@@ -362,9 +480,14 @@ def repair_library_latex(item_id: str, command: LibraryAIRepairCommand) -> Libra
 
 
 @router.post("/{item_id}/send-to-structured-import", response_model=ImportBatchResult)
-def send_library_item_to_structured_import(item_id: str) -> ImportBatchResult:
+def send_library_item_to_structured_import(
+    item_id: str,
+    current_teacher: CurrentTeacher = Depends(get_current_teacher),
+) -> ImportBatchResult:
     try:
-        path, item = get_private_library().file_for_download(item_id)
+        path, item = get_private_library().file_for_download(
+            item_id, owner_id=current_teacher.teacher_id
+        )
         if item.file_kind != "pdf":
             raise PrivateLibraryError("只有 PDF 可以转入逐页可视化结构化加工")
         rights_basis = {
@@ -378,7 +501,7 @@ def send_library_item_to_structured_import(item_id: str) -> ImportBatchResult:
                 rights_basis=rights_basis,
                 rights_statement=item.rights_statement,
                 rights_acknowledged=True,
-                owner_id="owner_teacher",
+                owner_id=current_teacher.teacher_id,
             ),
             [(item.original_filename, path.read_bytes())],
         )
@@ -389,17 +512,27 @@ def send_library_item_to_structured_import(item_id: str) -> ImportBatchResult:
 
 
 @router.get("/{item_id}/question-candidates", response_model=QuestionCandidateList)
-def list_question_candidates(item_id: str) -> QuestionCandidateList:
+def list_question_candidates(
+    item_id: str,
+    current_teacher: CurrentTeacher = Depends(get_current_teacher),
+) -> QuestionCandidateList:
     try:
-        return get_private_library().list_question_candidates(item_id)
+        return get_private_library().list_question_candidates(
+            item_id, owner_id=current_teacher.teacher_id
+        )
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="私人资料不存在") from exc
 
 
 @router.post("/{item_id}/question-candidates", response_model=QuestionCandidateList)
-def propose_question_candidates(item_id: str) -> QuestionCandidateList:
+def propose_question_candidates(
+    item_id: str,
+    current_teacher: CurrentTeacher = Depends(get_current_teacher),
+) -> QuestionCandidateList:
     try:
-        return get_private_library().propose_questions(item_id)
+        return get_private_library().propose_questions(
+            item_id, owner_id=current_teacher.teacher_id
+        )
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="私人资料不存在") from exc
     except PrivateLibraryError as exc:
@@ -410,10 +543,21 @@ def propose_question_candidates(item_id: str) -> QuestionCandidateList:
     "/{item_id}/question-candidates/{candidate_id}", response_model=QuestionCandidateView
 )
 def update_question_candidate(
-    item_id: str, candidate_id: str, command: QuestionCandidateUpdate
+    item_id: str,
+    candidate_id: str,
+    command: QuestionCandidateUpdate,
+    current_teacher: CurrentTeacher = Depends(get_current_teacher),
 ) -> QuestionCandidateView:
     try:
-        return get_private_library().update_question_candidate(item_id, candidate_id, command)
+        secured_command = command.model_copy(
+            update={"editor_id": current_teacher.teacher_id}
+        )
+        return get_private_library().update_question_candidate(
+            item_id,
+            candidate_id,
+            secured_command,
+            owner_id=current_teacher.teacher_id,
+        )
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="拆题候选不存在") from exc
     except PrivateLibraryError as exc:
@@ -423,9 +567,15 @@ def update_question_candidate(
 @router.delete(
     "/{item_id}/question-candidates/{candidate_id}", response_model=QuestionCandidateView
 )
-def discard_question_candidate(item_id: str, candidate_id: str) -> QuestionCandidateView:
+def discard_question_candidate(
+    item_id: str,
+    candidate_id: str,
+    current_teacher: CurrentTeacher = Depends(get_current_teacher),
+) -> QuestionCandidateView:
     try:
-        return get_private_library().discard_question_candidate(item_id, candidate_id)
+        return get_private_library().discard_question_candidate(
+            item_id, candidate_id, owner_id=current_teacher.teacher_id
+        )
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="拆题候选不存在") from exc
     except PrivateLibraryError as exc:
@@ -436,10 +586,16 @@ def discard_question_candidate(item_id: str, candidate_id: str) -> QuestionCandi
     "/{item_id}/question-candidates/{candidate_id}/import",
     response_model=CandidateImportResult,
 )
-def import_question_candidate(item_id: str, candidate_id: str) -> CandidateImportResult:
+def import_question_candidate(
+    item_id: str,
+    candidate_id: str,
+    current_teacher: CurrentTeacher = Depends(get_current_teacher),
+) -> CandidateImportResult:
     try:
         library = get_private_library()
-        candidate, resource = library.get_question_candidate(item_id, candidate_id)
+        candidate, resource = library.get_question_candidate(
+            item_id, candidate_id, owner_id=current_teacher.teacher_id
+        )
         if candidate.imported_question_id:
             return CandidateImportResult(
                 candidate=candidate,
@@ -451,7 +607,9 @@ def import_question_candidate(item_id: str, candidate_id: str) -> CandidateImpor
             candidate.model_dump(), resource=resource.model_dump()
         )
         if resource.file_kind == "image" and not question.images:
-            source_path, _ = library.file_for_download(item_id)
+            source_path, _ = library.file_for_download(
+                item_id, owner_id=current_teacher.teacher_id
+            )
             question_bank.add_image(
                 question.question_id,
                 source_path.read_bytes(),
@@ -461,7 +619,12 @@ def import_question_candidate(item_id: str, candidate_id: str) -> CandidateImpor
                 "拆题时保留的原始题图；请教师确认裁剪范围与题目对应关系。",
                 "private_resource_question_pipeline",
             )
-        marked = library.mark_candidate_imported(item_id, candidate_id, question.question_id)
+        marked = library.mark_candidate_imported(
+            item_id,
+            candidate_id,
+            question.question_id,
+            owner_id=current_teacher.teacher_id,
+        )
         return CandidateImportResult(candidate=marked, question_id=question.question_id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="资料或拆题候选不存在") from exc
@@ -470,9 +633,14 @@ def import_question_candidate(item_id: str, candidate_id: str) -> CandidateImpor
 
 
 @router.get("/{item_id}/file")
-def download_library_file(item_id: str) -> FileResponse:
+def download_library_file(
+    item_id: str,
+    current_teacher: CurrentTeacher = Depends(get_current_teacher),
+) -> FileResponse:
     try:
-        path, item = get_private_library().file_for_download(item_id)
+        path, item = get_private_library().file_for_download(
+            item_id, owner_id=current_teacher.teacher_id
+        )
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="私人资料不存在") from exc
     except PrivateLibraryError as exc:
@@ -487,10 +655,14 @@ def download_library_file(item_id: str) -> FileResponse:
 
 @router.get("/{item_id}/export")
 def export_library_text(
-    item_id: str, format: Literal["docx", "pdf"] = Query(default="docx")
+    item_id: str,
+    format: Literal["docx", "pdf"] = Query(default="docx"),
+    current_teacher: CurrentTeacher = Depends(get_current_teacher),
 ) -> FileResponse:
     try:
-        item = get_private_library().get(item_id)
+        item = get_private_library().get(
+            item_id, owner_id=current_teacher.teacher_id
+        )
         rendered = get_library_text_renderer().render(item, format)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="私人资料不存在") from exc

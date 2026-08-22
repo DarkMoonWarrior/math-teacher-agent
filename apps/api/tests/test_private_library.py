@@ -7,7 +7,9 @@ from fastapi.testclient import TestClient
 from PIL import Image
 from reportlab.pdfgen.canvas import Canvas
 
+from app.core.identity import CurrentTeacher, get_current_teacher
 from app.main import app
+from app.modules.background_jobs import BackgroundJobRegistry
 from app.modules.private_library import (
     LibraryIngestCommand,
     LibraryLifecycleCommand,
@@ -101,7 +103,9 @@ def test_pdf_text_is_extracted_and_download_path_is_confined(tmp_path: Path) -> 
     assert "Function monotonicity" in item.extracted_text
     assert item.page_count == 1
     assert item.adaptation_allowed
-    path, downloaded = library.file_for_download(item.library_item_id)
+    path, downloaded = library.file_for_download(
+        item.library_item_id, owner_id="owner_teacher"
+    )
     assert path.parent == (tmp_path / "files").resolve()
     assert path.read_bytes().startswith(b"%PDF-")
     assert downloaded.original_filename == "lesson.pdf"
@@ -110,7 +114,14 @@ def test_pdf_text_is_extracted_and_download_path_is_confined(tmp_path: Path) -> 
 def test_corrected_math_text_exports_to_readable_docx_and_pdf(tmp_path: Path) -> None:
     library = make_library(tmp_path)
     item = library.ingest(ingest_command(), filename="lesson.pdf", content=pdf_bytes("x^2"))
-    reviewed = library.review(item.library_item_id, LibraryTextReviewCommand(corrected_text=r"函数 $f(x)=\frac{x^2}{2}$", confirm=True))
+    reviewed = library.review(
+        item.library_item_id,
+        LibraryTextReviewCommand(
+            corrected_text=r"函数 $f(x)=\frac{x^2}{2}$", confirm=True
+        ),
+        owner_id="owner_teacher",
+        reviewer_id="owner_teacher",
+    )
     renderer = LibraryTextRenderer(tmp_path / "output")
     docx = renderer.render(reviewed, "docx")
     pdf = renderer.render(reviewed, "pdf")
@@ -141,7 +152,12 @@ def test_local_ocr_audit_does_not_claim_external_consent(tmp_path: Path) -> None
         def extract(self, **_kwargs):
             return OCRTextResult(text=r"函数 $f(x)=x^2$", warnings=[])
 
-    library.apply_local_ocr(item.library_item_id, provider=FakeLocalProvider(), teacher_id="teacher")
+    library.apply_local_ocr(
+        item.library_item_id,
+        provider=FakeLocalProvider(),
+        owner_id="owner_teacher",
+        teacher_id="teacher",
+    )
     import sqlite3
     with sqlite3.connect(tmp_path / "library.sqlite3") as connection:
         consent = connection.execute("SELECT external_consent FROM library_ocr_runs").fetchone()[0]
@@ -175,6 +191,8 @@ def test_unreadable_pdf_font_text_cannot_be_falsely_confirmed(tmp_path: Path) ->
             LibraryTextReviewCommand(
                 corrected_text="已知函数 f(\uf021)=\uf022，求 \uf023。", confirm=True
             ),
+            owner_id="owner_teacher",
+            reviewer_id="owner_teacher",
         )
 
 
@@ -187,17 +205,22 @@ def test_library_items_move_to_recycle_bin_and_restore(tmp_path: Path) -> None:
     trashed = library.change_lifecycle(
         item.library_item_id,
         LibraryLifecycleCommand(action="trash", reason="不再需要"),
+        owner_id="owner_teacher",
     )
     assert trashed.lifecycle_state == "trashed"
-    assert library.list().total == 0
-    assert library.list(lifecycle_state="trashed").total == 1
-    assert library.stats().trashed == 1
+    assert library.list(owner_id="owner_teacher").total == 0
+    assert library.list(
+        owner_id="owner_teacher", lifecycle_state="trashed"
+    ).total == 1
+    assert library.stats(owner_id="owner_teacher").trashed == 1
 
     restored = library.change_lifecycle(
-        item.library_item_id, LibraryLifecycleCommand(action="restore")
+        item.library_item_id,
+        LibraryLifecycleCommand(action="restore"),
+        owner_id="owner_teacher",
     )
     assert restored.lifecycle_state == "active"
-    assert library.list().total == 1
+    assert library.list(owner_id="owner_teacher").total == 1
 
 
 def test_library_stats_are_scoped_to_the_current_owner(tmp_path: Path) -> None:
@@ -274,6 +297,120 @@ def test_library_http_uses_the_server_owner_for_list_upload_and_stats(
     assert library.list(owner_id="other_teacher").total == 1
 
 
+def test_library_detail_review_file_and_revisions_fail_closed_across_owners(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    library = make_library(tmp_path)
+    mine = library.ingest(
+        ingest_command(title="我的函数资料"),
+        filename="mine.docx",
+        content=docx_bytes("函数的单调性"),
+    )
+    other = library.ingest(
+        ingest_command(owner_id="other_teacher", title="其他教师资料"),
+        filename="other.docx",
+        content=docx_bytes("等差数列"),
+    )
+    monkeypatch.setattr("app.routes.library.get_private_library", lambda: library)
+    client = TestClient(app)
+
+    assert client.get(f"/api/v1/library/{mine.library_item_id}").status_code == 200
+    assert client.get(f"/api/v1/library/{other.library_item_id}").status_code == 404
+    assert client.get(f"/api/v1/library/{other.library_item_id}/file").status_code == 404
+    assert client.get(f"/api/v1/library/{other.library_item_id}/revisions").status_code == 404
+    assert client.patch(
+        f"/api/v1/library/{other.library_item_id}/review",
+        json={"corrected_text": "越权修改", "confirm": True},
+    ).status_code == 404
+
+    app.dependency_overrides[get_current_teacher] = lambda: CurrentTeacher(
+        teacher_id="other_teacher", source="authenticated_session"
+    )
+    try:
+        response = client.get(f"/api/v1/library/{other.library_item_id}")
+        assert response.status_code == 200
+        assert response.json()["title"] == "其他教师资料"
+        assert client.get(f"/api/v1/library/{mine.library_item_id}").status_code == 404
+    finally:
+        app.dependency_overrides.pop(get_current_teacher, None)
+
+
+def test_library_public_commands_reject_model_or_browser_supplied_actor_ids() -> None:
+    client = TestClient(app)
+
+    review = client.patch(
+        "/api/v1/library/any-item/review",
+        json={
+            "corrected_text": "函数题",
+            "confirm": False,
+            "reviewer_id": "other_teacher",
+        },
+    )
+    ocr = client.post(
+        "/api/v1/library/any-item/ocr",
+        json={
+            "external_processing_consent": True,
+            "teacher_id": "other_teacher",
+        },
+    )
+
+    assert review.status_code == 422
+    assert ocr.status_code == 422
+
+
+def test_revision_history_returns_only_the_owned_review_chain(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    library = make_library(tmp_path)
+    item = library.ingest(
+        ingest_command(title="函数校对"),
+        filename="lesson.docx",
+        content=docx_bytes("函数 f(x)=x2"),
+    )
+    library.review(
+        item.library_item_id,
+        LibraryTextReviewCommand(
+            corrected_text="函数 $f(x)=x^2$", note="修复公式", confirm=False
+        ),
+        owner_id="owner_teacher",
+        reviewer_id="owner_teacher",
+    )
+    confirmed = library.review(
+        item.library_item_id,
+        LibraryTextReviewCommand(
+            corrected_text="函数 $f(x)=x^2$", note="教师确认", confirm=True
+        ),
+        owner_id="owner_teacher",
+        reviewer_id="owner_teacher",
+    )
+    monkeypatch.setattr("app.routes.library.get_private_library", lambda: library)
+
+    response = TestClient(app).get(
+        f"/api/v1/library/{item.library_item_id}/revisions"
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["current_version"] == confirmed.version == 3
+    assert [revision["version"] for revision in payload["items"]] == [3, 2]
+    assert payload["items"][0]["review_status"] == "confirmed"
+    assert "reviewer_id" not in payload["items"][0]
+
+
+def test_background_jobs_are_visible_only_to_the_starting_owner() -> None:
+    registry = BackgroundJobRegistry()
+    job = registry.start(
+        kind="synthetic",
+        subject_id="lib_1",
+        owner_id="owner_teacher",
+        runner=lambda progress: {"ok": True},
+    )
+
+    assert registry.get(job.job_id, owner_id="owner_teacher").job_id == job.job_id
+    with pytest.raises(KeyError):
+        registry.get(job.job_id, owner_id="other_teacher")
+
+
 def test_image_waits_for_ocr_then_can_be_manually_confirmed(tmp_path: Path) -> None:
     library = make_library(tmp_path)
     item = library.ingest(
@@ -294,6 +431,8 @@ def test_image_waits_for_ocr_then_can_be_manually_confirmed(tmp_path: Path) -> N
             note="教师根据原图完成转录",
             confirm=True,
         ),
+        owner_id="owner_teacher",
+        reviewer_id="owner_teacher",
     )
 
     assert reviewed.text_review_status == "confirmed"
@@ -325,7 +464,7 @@ def test_invalid_file_is_rejected_without_writing(tmp_path: Path) -> None:
             ingest_command(), filename="payload.exe", content=b"not-a-real-file"
         )
 
-    assert library.stats().total == 0
+    assert library.stats(owner_id="owner_teacher").total == 0
     assert list((tmp_path / "files").iterdir()) == []
 
 
@@ -425,7 +564,9 @@ def test_library_ai_repair_returns_editable_latex_without_saving(
     assert response.status_code == 200
     assert response.json()["repaired_text"] == "函数 $f(x)=x^2$"
     assert response.json()["provider"] == "deepseek"
-    assert library.get(item.library_item_id).corrected_text == item.corrected_text
+    assert library.get(
+        item.library_item_id, owner_id="owner_teacher"
+    ).corrected_text == item.corrected_text
 
 
 def test_long_latex_repair_draft_splits_on_page_boundaries() -> None:
@@ -457,7 +598,7 @@ def test_http_rejects_short_rights_statement(
     )
 
     assert response.status_code == 422
-    assert library.stats().total == 0
+    assert library.stats(owner_id="owner_teacher").total == 0
 
 
 def confirmed_question_resource(library: PrivateLibrary):
@@ -476,6 +617,8 @@ A. 1∈A B. 3∈A C. A=∅ D. 2∉A
     return library.review(
         item.library_item_id,
         LibraryTextReviewCommand(corrected_text=text, confirm=True),
+        owner_id="owner_teacher",
+        reviewer_id="owner_teacher",
     )
 
 
@@ -483,7 +626,9 @@ def test_confirmed_text_becomes_editable_question_candidates(tmp_path: Path) -> 
     library = make_library(tmp_path)
     item = confirmed_question_resource(library)
 
-    proposed = library.propose_questions(item.library_item_id)
+    proposed = library.propose_questions(
+        item.library_item_id, owner_id="owner_teacher"
+    )
 
     assert len(proposed.items) == 2
     assert proposed.items[0].question_type == "single_choice"
@@ -501,6 +646,7 @@ def test_confirmed_text_becomes_editable_question_candidates(tmp_path: Path) -> 
             "final_answer": "9",
             "solution_steps": ["代入 x=3，得 f(3)=9。"],
         }),
+        owner_id="owner_teacher",
     )
     assert updated.stem_plain.endswith("f(3)。")
     assert updated.answer_value == "9"
@@ -510,13 +656,18 @@ def test_candidate_import_is_private_auditable_and_idempotent(tmp_path: Path) ->
     library = make_library(tmp_path)
     bank = QuestionBank(tmp_path / "questions.sqlite3", tmp_path / "media")
     item = confirmed_question_resource(library)
-    candidate = library.propose_questions(item.library_item_id).items[0]
+    candidate = library.propose_questions(
+        item.library_item_id, owner_id="owner_teacher"
+    ).items[0]
 
     question = bank.create_private_resource_question(
         candidate.model_dump(), resource=item.model_dump()
     )
     marked = library.mark_candidate_imported(
-        item.library_item_id, candidate.candidate_id, question.question_id
+        item.library_item_id,
+        candidate.candidate_id,
+        question.question_id,
+        owner_id="owner_teacher",
     )
     same = bank.create_private_resource_question(candidate.model_dump(), resource=item.model_dump())
 
@@ -546,6 +697,7 @@ def test_ocr_requires_per_run_consent_and_returns_pending_review(tmp_path: Path)
             item.library_item_id,
             provider=FakeOCR(),
             consent=False,
+            owner_id="owner_teacher",
             teacher_id="teacher",
         )
 
@@ -553,6 +705,7 @@ def test_ocr_requires_per_run_consent_and_returns_pending_review(tmp_path: Path)
         item.library_item_id,
         provider=FakeOCR(),
         consent=True,
+        owner_id="owner_teacher",
         teacher_id="teacher",
     )
     assert provider == "fake-ocr"
@@ -613,8 +766,12 @@ def test_image_resource_is_kept_as_a_bounded_question_image(
             corrected_text="1. 如图，在正方体 ABCD-A₁B₁C₁D₁ 中，求异面直线所成角。\n答案：60°",
             confirm=True,
         ),
+        owner_id="owner_teacher",
+        reviewer_id="owner_teacher",
     )
-    candidate = library.propose_questions(item.library_item_id).items[0]
+    candidate = library.propose_questions(
+        item.library_item_id, owner_id="owner_teacher"
+    ).items[0]
     monkeypatch.setattr("app.routes.library.get_private_library", lambda: library)
     monkeypatch.setattr("app.routes.library.get_library_question_bank", lambda: bank)
     client = TestClient(app)

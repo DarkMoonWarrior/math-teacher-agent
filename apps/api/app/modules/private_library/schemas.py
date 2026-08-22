@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 RightsBasis = Literal["original", "licensed", "private_teaching_only"]
@@ -23,15 +23,17 @@ class LibraryIngestCommand(BaseModel):
 
 
 class LibraryTextReviewCommand(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     corrected_text: str = Field(max_length=2_000_000)
     note: str = Field(default="", max_length=2000)
     confirm: bool = False
-    reviewer_id: str = Field(default="owner_teacher", min_length=1, max_length=120)
 
 
 class LibraryOCRCommand(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     external_processing_consent: bool
-    teacher_id: str = Field(default="owner_teacher", min_length=1, max_length=120)
 
 
 class LibraryOCRResult(BaseModel):
@@ -41,10 +43,11 @@ class LibraryOCRResult(BaseModel):
 
 
 class LibraryAIRepairCommand(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     draft_text: str = Field(min_length=1, max_length=2_000_000)
     instruction: str = Field(default="", max_length=2000)
     external_processing_consent: bool
-    teacher_id: str = Field(default="owner_teacher", min_length=1, max_length=120)
 
 
 class LibraryAIRepairResult(BaseModel):
@@ -141,6 +144,21 @@ class LibraryItemView(LibraryItemSummary):
     adaptation_allowed: bool
     warnings: list[str]
     review_note: str
+
+
+class LibraryTextRevisionView(BaseModel):
+    version: int = Field(ge=2)
+    previous_text: str
+    revised_text: str
+    review_status: TextReviewStatus
+    note: str
+    created_at: str
+
+
+class LibraryTextRevisionList(BaseModel):
+    library_item_id: str
+    current_version: int = Field(ge=1)
+    items: list[LibraryTextRevisionView]
 
 
 class LibraryItemList(BaseModel):

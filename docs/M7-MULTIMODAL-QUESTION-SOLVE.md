@@ -1,0 +1,74 @@
+# M7 多模态题目采集与图片解题
+
+更新日期：2026-08-22
+状态：待开始；M6 Gate E 通过且项目所有者确认前不得启动
+
+## 1. 本阶段唯一目标
+
+让中国高中数学教师在新 Teacher Web 中通过输入文字、粘贴截图或上传单题图片，得到可核对的题面识别结果，并把文字、公式和必要的原图视觉信息一起交给 Solve Agent。M7 解决的是“单题多模态输入到可信解答”的完整工作流，不把 OCR 文本当作图形题的全部信息。
+
+整份 PDF/DOCX 的资料导入、批量 OCR、拆题和私人检索仍属于 M6；自主命题、组卷和教案不属于 M7。
+
+## 2. 永久可信与隐私规则
+
+- 题目图片及其裁剪、OCR 草稿、视觉观察和教师修订全部继承 `private`，只属于当前 owner。
+- 浏览器和 Agent 只使用受控资源 ID，不接触本地路径、对象存储地址、数据库或任意 URL。
+- 本地处理优先；把图片、题面或视觉信息发送给外部 OCR/视觉模型前，教师必须对本次动作明确同意。
+- OCR 只负责转录文字和公式；几何图、函数图、坐标系、统计图和表格必须保留原图或受控裁剪，不能被一段模型描述替代后丢弃。
+- 识别结果默认是可编辑草稿。低置信度文字、公式、图形标签和条件必须显式提示，不能静默补全。
+- 视觉模型对图形的理解不等于数学验证；无法可靠读取图形条件时必须返回 `teacher_review_required` 或明确失败。
+- M7 不新增 private → shared/public/commercial-approved 路径，也不把题目图片用于模型训练。
+
+## 3. 深模块与 seam
+
+`QuestionCapture.prepare(QuestionCaptureCommand) -> QuestionInputBundle` 是本阶段的业务深模块接口。图片验证、方向与清晰度检查、裁剪、OCR、公式识别、图形存在性判断、revision、owner 隔离、逐次外部处理同意和错误语义留在实现内部。
+
+`QuestionInputBundle` 至少包含：
+
+- 教师确认或待确认的 `stem_plain` 与 `stem_latex`；
+- 结构化选项和题型候选；
+- 原图及题目级裁剪的受控 asset 引用；
+- `requires_visual_reasoning`、低置信度区域与识别警告；
+- OCR/视觉 provider、model、revision 和 consent 证据；
+- owner-scoped、不可公开的资源状态。
+
+```text
+Teacher Web
+  → public FastAPI question-capture routes
+  → QuestionCapture
+  → owned private media storage + OCR/Vision adapters
+
+Teacher Web
+  → Solve workflow
+  → controlled solve Tool
+  → SolutionAssistant(question bundle)
+  → MathVerifier
+```
+
+外部 OCR/视觉能力是 true external dependency，只能通过注入的 adapter 使用；测试使用 deterministic adapter。Solve Agent 不直接调用视觉供应商，也不直接读取图片。
+
+## 4. 产品交互
+
+Solve 输入区增加：上传图片、粘贴截图、拍照入口、图片预览、旋转、裁剪和移除。识别完成后展示“原图 / 识别题面”对照，低置信度位置可编辑，并明确标记“图形参与推理”。
+
+教师确认题面后再进入解题；对于图形题，受控原图仍随 `QuestionInputBundle` 参与推理。识别失败、图片模糊、裁剪不完整、包含多道题或视觉服务不可用时，界面提供重试、重新裁剪、人工录入或取消，不把失败伪装成文字题成功。
+
+## 5. 纵向切片顺序
+
+1. **私有单题媒体入口**：上传、粘贴、格式/体积/清晰度检查、旋转裁剪、owner-scoped asset。
+2. **文字与公式识别**：复用 M6 OCR 能力，输出可编辑题面、LaTeX、选项、revision 和低置信度提示。
+3. **图形保真输入**：保留原图/裁剪，检测需要视觉推理的题型，让 Solve 同时消费文字与受控视觉信息。
+4. **可信解题接入**：复用 M5 `SolutionAssistant`、MathVerifier 和可信状态，不复制第二套解题实现。
+5. **固定评测与 Gate E**：覆盖代数公式、函数图像、解析几何、立体几何、统计图表、模糊/截断/多题图片、OCR/视觉服务失败、取消和跨 owner 越权。
+
+## 6. M7 完成 Gate
+
+- 文字题、公式题和带图题都能从单题图片进入可核对的 Solve 工作流。
+- 原图、裁剪、识别草稿、教师修订和最终解答之间可追踪，且始终 owner-scoped/private。
+- 图形题不会只凭 OCR 文本丢失视觉条件；无法可靠理解时诚实降级或失败。
+- 外部处理逐次同意，取消、超时、失败和模型不可用有明确体验且不继续隐形计费。
+- Agent 不获得文件、路径、数据库、对象存储凭据或任意 URL 能力。
+- MathVerifier 证据范围与视觉理解范围清楚分开，模型判断不能升级为 `program_verified`。
+- 固定 synthetic evaluation、跨 owner 安全测试、主要响应式/可访问性、完整工程回归和 Gate E 全部通过。
+
+M7 Gate E 通过并由项目所有者确认前，不进入 M8 私有辅助命题 Agent。

@@ -1,6 +1,6 @@
 # 备课伙伴 · 高中数学教师可信 AI Agent
 
-面向中国高中数学教师的 Agent-first 备课工作台。教师用自然语言描述教学任务，系统通过受控业务能力协助搜题，并逐步扩展到解题、私人资料、组卷和教案；来源、权利、数学验证与教师复核状态始终可追踪。
+面向中国高中数学教师的 Agent-first 备课工作台。教师用自然语言、题目图片或私人资料描述教学任务，系统通过受控业务能力协助搜题，并逐步扩展到多模态解题、私有辅助命题、私人资料、组卷和教案；来源、权利、数学验证与教师复核状态始终可追踪。
 
 这个仓库不是从零重写旧项目，也不会继续沿用旧界面。`high-school-math-ai` 的成熟业务模块与测试是地基；新的产品入口、交互和 Agent 工作流位于 `apps/teacher-web`。
 
@@ -14,9 +14,10 @@
 - Solve 工作台：完整题目输入、Search 题目转入、结构化三页解析与 MathVerifier 证据；
 - M6 第一条切片：Agent 可读取当前教师资料库的聚合处理状态，但看不到私人正文、文件名或路径；
 - M6 第二条切片：新工作台可同源上传 PDF/DOCX/图片，显式记录来源与权利依据，并展示 owner-scoped 私人资料清单；
+- M6 第三条切片：可对照原文件、首次提取文本和教师校对稿，运行本地 PDF OCR 或逐次授权的外部 OCR，并保留 owner-scoped 修订记录；
 - QuestionBank、MathVerifier、Curriculum、PrivateLibrary、PDF、试卷、教案等成熟业务模块。
 
-当前 Search、Solve 与 Private Library 入口已接入新工作台；Solve 的固定 synthetic eval 与完整 M5 Gate E 已严格通过。项目处于 M6，聚合概览 Tool 与同源上传/列表已完成，OCR/校对、拆题/映射和私人检索仍在建设；教案和组卷继续明确标记为预览。最新状态见 [`docs/PROJECT-STATUS.md`](docs/PROJECT-STATUS.md)。
+当前 Search、Solve 与 Private Library 入口已接入新工作台；Solve 的固定 synthetic eval 与完整 M5 Gate E 已严格通过。项目处于 M6，聚合概览、同源上传/列表和 OCR/校对已完成，拆题/映射与私人检索仍在建设；教案和组卷继续明确标记为预览。最新状态见 [`docs/PROJECT-STATUS.md`](docs/PROJECT-STATUS.md)。
 
 ## 核心原则
 
@@ -27,6 +28,7 @@
 5. AI 产物默认 draft；发布必须经过 RightsGate、MathVerifier 与 Teacher Review。
 6. DeepSeek Harness 是可替换运行时，业务系统只依赖产品自有接口。
 7. 每个阶段必须通过功能、可信、隐私/权利和工程 Gate；真实 Beta 验证前不把支付当作主要工程。
+8. 辅助命制题永久只属于创建教师的私题库；公共题库、公共搜索、后台内容管理和其他用户无权读取或管理。
 
 完整边界见 [`docs/DEVELOPMENT-BOUNDARY.md`](docs/DEVELOPMENT-BOUNDARY.md)，量化验证和商业发布条件见 [`docs/PRODUCT-GATES.md`](docs/PRODUCT-GATES.md)。
 
@@ -103,9 +105,9 @@ pnpm build:agent
 
 ## 当前开发顺序
 
-`Search 稳定化（完成） → Solve（完成） → Private Library（进行中） → Paper → Lesson → Memory → Beta 准备 → Beta 验证 → 商业基础 → Teacher Pro → 教研组 → 学校`
+`Search 稳定化（完成） → Solve（完成） → Private Library（进行中） → 多模态图片解题 → 私有辅助命题 → Paper → Lesson → Memory → Beta 准备 → Beta 验证 → 商业基础 → Teacher Pro → 教研组 → 学校`
 
-不要并行铺开后续阶段。最新版 M0-M15 路线见 [`docs/ROADMAP.md`](docs/ROADMAP.md)，每阶段和商业发布门禁见 [`docs/PRODUCT-GATES.md`](docs/PRODUCT-GATES.md)。
+不要并行铺开后续阶段。最新版 M0-M17 路线见 [`docs/ROADMAP.md`](docs/ROADMAP.md)，M7/M8 的固定边界见 [`docs/M7-MULTIMODAL-QUESTION-SOLVE.md`](docs/M7-MULTIMODAL-QUESTION-SOLVE.md) 与 [`docs/M8-PRIVATE-QUESTION-AUTHORING.md`](docs/M8-PRIVATE-QUESTION-AUTHORING.md)，每阶段和商业发布门禁见 [`docs/PRODUCT-GATES.md`](docs/PRODUCT-GATES.md)。
 
 ## 数据与密钥
 

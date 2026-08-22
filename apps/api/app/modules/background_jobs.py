@@ -38,25 +38,31 @@ class BackgroundJobRegistry:
         self._lock = Lock()
         self._jobs: dict[str, dict] = {}
 
-    def start(self, *, kind: str, subject_id: str, runner: Runner) -> BackgroundJobView:
+    def start(
+        self, *, kind: str, subject_id: str, owner_id: str, runner: Runner
+    ) -> BackgroundJobView:
         now = datetime.now(UTC).isoformat()
         job_id = f"job_{uuid4().hex[:16]}"
         with self._lock:
             self._jobs[job_id] = {
                 "job_id": job_id, "kind": kind, "subject_id": subject_id,
+                "owner_id": owner_id,
                 "status": "queued", "current": 0, "total": 0,
                 "message": "任务已排队", "error": "", "result": {},
                 "created_at": now, "updated_at": now,
             }
         Thread(target=self._run, args=(job_id, runner), daemon=True).start()
-        return self.get(job_id)
+        return self.get(job_id, owner_id=owner_id)
 
-    def get(self, job_id: str) -> BackgroundJobView:
+    def get(self, job_id: str, *, owner_id: str) -> BackgroundJobView:
         with self._lock:
             value = self._jobs.get(job_id)
-            if value is None:
+            if value is None or value["owner_id"] != owner_id:
                 raise KeyError(job_id)
-            return BackgroundJobView.model_validate(deepcopy(value))
+            public_value = {
+                key: item for key, item in deepcopy(value).items() if key != "owner_id"
+            }
+            return BackgroundJobView.model_validate(public_value)
 
     def _update(self, job_id: str, **values) -> None:
         with self._lock:
