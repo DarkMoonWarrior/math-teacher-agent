@@ -16,9 +16,10 @@
 - M0-M4：已完成，不因路线重排返工；M4 Gate E 于 2026-08-21 严格通过。
 - M5 Solve Agent：Gate E 已严格通过并完成阶段确认。
 - **M6 Private Library Agent：进行中；聚合概览 Tool 与新工作台同源上传/列表两条切片已完成。**
-- M7-M9：Paper、Lesson、Memory 均未开始。
-- M10-M11：Closed Beta 准备与数据验证，均未开始。
-- M12-M15：商业基础、Teacher Pro、教研组和学校，均未开始。
+- M7 多模态题目采集与图片解题、M8 私有辅助命题：边界已由项目所有者确认，功能未开始；必须依次通过前一阶段 Gate。
+- M9-M11：Paper、Lesson、Memory 均未开始。
+- M12-M13：Closed Beta 准备与数据验证，均未开始。
+- M14-M17：商业基础、Teacher Pro、教研组和学校，均未开始。
 
 最新版顺序见 [`ROADMAP.md`](ROADMAP.md)，量化验证和发布门禁见 [`PRODUCT-GATES.md`](PRODUCT-GATES.md)。历史 PDF 的核心原则继续生效，但其中的 Prompt 编号和“当前下一步”不再代表项目现状。
 
@@ -31,6 +32,8 @@
 | QuestionBank / MathVerifier / Curriculum | 后端已有 | 核心业务资产继续复用，不因新 UI 重写。 |
 | Solve Agent | 可用 | 复用旧 `SolutionAssistant` 可信分层；受控只读 `solve_question` Tool、产品自有 `SolveAgentWorkflow` 与新工作台已接入，支持完整题目输入、Search 转入、同步/真实 SSE/run 快照/取消/同会话恢复和三页可信结果。固定 synthetic eval 与完整 M5 Gate E 已通过。 |
 | Private Library Agent | 进行中 | 成熟 PrivateLibrary/PDF 模块继续复用；owner-scoped 聚合 Tool 与新 Teacher Web 同源上传/列表已接入，来源、权利、private 和处理状态可见。OCR/校对、拆题/映射和私人检索尚未实现。 |
+| 多模态图片解题 | 未开始 | M7 已建立固定边界：单题截图/图片必须保留原图视觉条件、可核对 OCR/公式和逐次外部处理同意；M6 Gate 前不实施。 |
+| 私有辅助命题 | 未开始 | M8 已建立固定边界：生成题永远只进入 owner 独占、可命名分类和自主管理的 `PersonalQuestionLibrary`；公共题库、公共 Search、后台内容管理和其他用户无访问路径。 |
 | Paper | 界面预览 + 后端已有 | 新 UI 可整理组卷需求，但按钮明确禁用；旧 exam_papers 模块不是 Paper Agent 完成证明。 |
 | Lesson | 界面预览 + 后端已有 | 新 UI 可整理教案需求，但按钮明确禁用；旧 lesson_plans 模块不是 Lesson Agent 完成证明。 |
 | Teacher Memory | 未开始 | 等真实教师验证后再定义。 |
@@ -65,6 +68,7 @@
 - 真实教师身份、会话级权限、云端数据隔离和下架流程尚未上线。
 - Closed Beta 指标事件、Week-4 留存、任务采用率、严重数学错误率和单位成本尚未进入真实教师统计阶段。
 - M6 当前已完成聚合概览 Tool 与新工作台资料入口；逐次外部处理同意、OCR/校对、拆题/映射、私人检索，以及详情/文件等全链路 owner 权限 seam 仍待后续切片。
+- M7/M8 的路线与隐私规则已确认，但没有代码或界面实现；M6 Gate E 完成前不得开始 M7。
 
 ## 历史能力与新产品的关系
 

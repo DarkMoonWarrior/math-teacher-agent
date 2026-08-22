@@ -47,4 +47,6 @@ Agent Runtime → inspect_private_library Tool → internal M2M gateway → Priv
 - Agent 只使用 allowlisted Tool，且不获得文件、路径、数据库或任意 URL 能力。
 - 固定 synthetic evaluation、主要 UI 响应式/可访问性、FastAPI、Agent 和 Gate E 全部通过。
 
-M6 Gate E 通过并由项目所有者确认前，不进入 M7 Paper Agent。
+M6 的 OCR/修订能力是后续单题图片采集可复用的地基，但本阶段不接入 Solve，也不提前实现多模态解题。
+
+M6 Gate E 通过并由项目所有者确认前，不进入 M7 多模态题目采集与图片解题。

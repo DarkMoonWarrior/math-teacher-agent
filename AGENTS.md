@@ -18,17 +18,20 @@ The current product line is the new `apps/teacher-web` experience. `apps/web` is
 6. DeepSeek Harness is replaceable infrastructure. Business code depends on the product-owned `TeacherAgentRuntime` interface, not Harness types.
 7. Do not broaden the audience beyond Chinese high-school mathematics teachers or add student, parent, LMS, ERP, community, payment, or multi-tenant scope ahead of the roadmap.
 8. Work on one milestone at a time. A legacy REST module, visible navigation item, or model-generated draft does not prove that the corresponding Agent workflow is complete.
+9. AI-assisted teacher-authored questions are permanently owner-only. They live in `PersonalQuestionLibrary`, never public/shared/team/school/commercial-approved, and must not be visible to public Search, admin content tools, other owners, or model-training flows.
+10. Only the authenticated owner may name, classify, edit, export, trash, restore, or permanently delete an assisted-authored private question. Agent and admin tools cannot permanently delete or override owner content.
 
 ## Current product state
 
 - `Search Agent`: implemented in the FastAPI business backend and exposed in the new teacher workbench.
 - `Solve Agent`: backend workflow and new Teacher Web flow are connected, including structured solution pages, Search-to-Solve transfer, graded MathVerifier evidence, cancellation, and same-run recovery.
 - `TeacherAgentRuntime` and the isolated DeepSeek Harness adapter: implemented with seven controlled read-only tools; the M6 `inspect_private_library` Tool exposes only current-owner aggregate state and no private content.
-- `Private Library Agent`: M6 is active; only the first aggregate overview Tool slice is complete. Upload UI, OCR/review, extraction, mapping and private retrieval are not yet connected in the new workbench.
+- `Private Library Agent`: M6 is active; aggregate overview Tool and owner-scoped upload/list slices are complete. OCR/review, extraction, mapping and private retrieval are not yet connected in the new workbench.
+- `Multimodal Question Capture/Solve` and `Private Question Authoring`: M7/M8 product boundaries are documented, but no implementation has started.
 - `Lesson Agent` and `Paper Agent`: navigation and requirement-drafting previews only in `apps/teacher-web`; their Agent runtimes/tools are not connected.
 - M5 passed its fixed synthetic evaluation and full Gate E audit on 2026-08-21. Mature lesson-plan, paper, import, library, solution, curriculum, question-bank, and verification modules exist in the migrated backend/legacy UI. Existing REST workflows do not mean the corresponding new Agent capability is complete.
 - Teacher identity, cloud isolation, billing, and public commercial operation are not implemented.
-- M0-M5 are complete. The owner confirmed M6 on 2026-08-22; M7 and later must not start until M6 Gate E passes and the owner confirms the next transition.
+- M0-M5 are complete. The owner confirmed M6 on 2026-08-22 and approved the new M0-M17 sequence; M7 and later must not start until M6 Gate E passes and the owner confirms the next transition.
 
 ## Repository seams
 
@@ -38,6 +41,7 @@ The current product line is the new `apps/teacher-web` experience. `apps/web` is
 - `apps/web`: legacy/reference UI. Preserve it for behaviour comparison and incremental extraction; it is not the default product entry.
 - `data/test-fixtures`: synthetic test data only. Never turn fixtures into production content.
 - `data/commercial-approved`: commercial content only after RightsGate + MathVerifier + Teacher Review.
+- Future `PersonalQuestionLibrary`: owner-only assisted-authored questions in a storage namespace separate from public QuestionBank; it has no publish/share path or admin content interface.
 - `data/runtime` and `data/private-runtime`: local/private runtime data, always ignored by Git.
 
 ## Decision policy

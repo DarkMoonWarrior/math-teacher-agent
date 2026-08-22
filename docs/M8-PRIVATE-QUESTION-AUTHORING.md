@@ -1,0 +1,90 @@
+# M8 私有辅助命题 Agent
+
+更新日期：2026-08-22
+状态：待开始；M7 Gate E 通过且项目所有者确认前不得启动
+
+## 1. 已确认的产品规则
+
+教师可以向 Agent 描述命题要求，由系统生成一道可编辑、可验算的高中数学题目草稿。辅助命制题是教师个人工作内容，永久只进入该教师的私题库：
+
+- 不得进入公共题库、商业题库、共享题库、教研组题库或学校题库；
+- 不得出现在公共 Search 结果、公共推荐、运营审核队列、模型训练集或商业内容加工流程；
+- 不存在 private → shared/public/commercial-approved 的产品路径，即使未来商业化也不改变；
+- 只有 owner 可以查看、命名、分类、编辑、复制、导出、移入回收站、恢复或永久删除；
+- 后台运营人员、内容管理员和其他教师没有查看、编辑、审核、移动、发布、恢复或删除这些题目的权限；
+- 系统后台只执行 owner 明确发起的受控存储操作与必要的非内容性运行保障，不以运营、审核、推荐或商业理由干涉题目内容。
+
+这组规则的优先级高于历史“私人题目未来可授权公开”的一般描述。辅助命制题在本产品内永不公开。
+
+## 2. 本阶段唯一目标
+
+建立完整的“教师描述要求 → Agent 生成结构化题目草稿 → 数学与结构检查 → 教师编辑确认 → 保存到个人私题库 → owner 自主管理”工作流。
+
+M8 不建设公共投稿、公共发布、共享协作、商业内容审核、组卷自动补题、学生端或题目交易。Paper Agent 只能在教师明确选择时引用当前 owner 的私题，不能复制或提升其可见性。
+
+## 3. 深模块与 seam
+
+### QuestionAuthoring
+
+`QuestionAuthoring.create_draft(QuestionDesignBrief) -> GeneratedQuestionDraft` 是命题业务深模块接口。需求补全、教材映射、provider 选择、结构化生成、答案/解析一致性检查、选择题唯一性检查、MathVerifier、可信状态和错误语义留在实现内部。
+
+`QuestionDesignBrief` 包含年级、教材/知识点、题型、目标难度、教学用途、预计用时、考查方法、易错点/干扰项要求、可选参考题和教师补充限制。`GeneratedQuestionDraft` 包含题干、LaTeX、选项、答案、分步解析、命题意图、知识点映射、目标难度、预计难度、验证证据、warnings、provider/model/prompt revision 和 `source_type=ai_generated`。
+
+参考母题模式可以复用现有题目变式能力，但只有在母题已验证且 RightsGate 明确允许 adaptation 时可用。完全自主命题不得虚构题源、年份、学校、试卷或教材页码。
+
+### PersonalQuestionLibrary
+
+`PersonalQuestionLibrary` 是独立于公共 `QuestionBank` 的 owner-scoped 深模块。它拥有个人集合命名、分类、题目 CRUD、revision、导出和删除语义；公共题库没有读取它的接口，它也没有 publish/share 接口。
+
+current owner 只能由认证上下文在服务端确定，任何浏览器或模型参数中的 `owner_id` 都必须拒绝。商业化后使用 tenant/owner 隔离的存储 adapter，并以跨 owner、IDOR、备份恢复和删除测试证明隔离，而不是只依赖 UI 隐藏。
+
+```text
+Teacher Web → QuestionAuthoring → MathVerifier/Curriculum/RightsGate
+                         ↓ 生成草稿（尚未保存）
+教师明确保存 → PersonalQuestionLibrary → owner-isolated storage
+
+Public Search / Public QuestionBank / Admin content tools ──X──> PersonalQuestionLibrary
+```
+
+Agent 只生成或提出修改草稿；保存、覆盖、删除和永久删除必须由教师在受认证 UI 中明确确认，并通过 FastAPI 业务模块执行。Agent、后台管理员和模型均无永久删除工具。
+
+## 4. 三个已确认入口
+
+1. Search 结果不合适或为空时，显示“根据当前条件辅助命题”，携带当前检索条件但不把生成题伪装成搜索结果。
+2. “新任务”菜单提供独立“辅助命题”入口。
+3. 未来 Paper Agent 发现题目不足时，只能询问教师是否进入辅助命题；不得为凑题量自动生成或自动加入试卷。
+
+生成结果页提供：修改命题要求、局部重写、重新验算、编辑题面/答案/解析、命名、选择或新建分类、保存为我的私题。保存前后始终显示“仅自己可见”和可信状态。
+
+## 5. 数据与管理规则
+
+- 私题库支持教师自定义题库名称、分类名称、标签和排序，不使用管理员维护的公共分类替代个人分类。
+- 每次 AI 修改形成新 revision；教师可以比较并选择保留版本。
+- 教师可以保留数学验证未通过或 inconclusive 的私人草稿，但界面不能把它标为已验证，也不能自动用于正式试卷。
+- 教师删除只影响自己的私题；删除不得触碰参考母题、公共题库或其他 owner 的内容。
+- 产品可以提供回收站以避免误删，但必须同时提供 owner 明确确认的永久删除能力；后台没有替用户恢复或阻止删除的内容管理入口。
+- 永久删除必须清除活动存储中的题目正文、解析、图片和个人分类关系；商业化前必须公开说明备份到期和最终清除期限，后台不得借备份建立内容查看或恢复工具。
+- Analytics、日志和模型运行记录不得保存完整私题、完整命题提示、答案、解析或可反推出内容的 payload。
+
+## 6. 纵向切片顺序
+
+1. **PersonalQuestionLibrary 基线**：独立存储命名空间、current-owner seam、个人题库命名/分类和跨 owner fail-closed。
+2. **结构化命题草稿**：自然语言 brief、必要追问、题干/答案/解析/命题意图和知识点映射。
+3. **可信检查**：可解性、答案与解析一致性、选择题唯一性、干扰项、MathVerifier 和预计难度披露。
+4. **教师编辑与保存**：局部修改、revision、明确保存到个人分类，不自动写入任何公共业务模块。
+5. **个人管理**：列表、搜索、重命名、分类、复制、导出、回收站、恢复和 owner 确认的永久删除。
+6. **三个入口接入**：Search 空/不合适结果、新任务、Paper 明确询问；生成内容和真实检索内容始终视觉分离。
+7. **固定评测与 Gate E**：覆盖主要高中模块和题型、模型不可用、验证失败、权利拒绝、重复、越权、公共搜索泄漏、后台权限、删除与恢复。
+
+## 7. M8 完成 Gate
+
+- 教师能够从自然语言要求生成一题结构化草稿，编辑、命名、分类并明确保存到自己的私题库。
+- 所有辅助命制题只有 owner 可见；跨 owner、管理员、公共 Search、公共 QuestionBank、共享/商业流程访问均 fail closed。
+- 数据模型和接口不存在 publish/share/public/commercial-approved 状态迁移。
+- 三个入口均不会把 AI 生成题伪装成真实检索题，也不会自动保存或自动加入试卷。
+- 数学验证、预计难度、生成来源和教师复核状态诚实展示；严重错误评测与固定 synthetic set 通过。
+- owner 的编辑、分类、回收站、恢复和永久删除可用；Agent 与后台管理员没有删除工具。
+- Analytics/日志不记录私题正文或完整命题提示；生产 owner/tenant isolation 与 IDOR 测试在商业化前持续保留。
+- FastAPI、Agent、Teacher Web、响应式/可访问性、完整工程回归和 Gate E 全部通过。
+
+M8 Gate E 通过并由项目所有者确认前，不进入 M9 Paper Agent。

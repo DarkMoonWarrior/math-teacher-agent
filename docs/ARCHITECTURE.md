@@ -58,6 +58,23 @@ apps/web (legacy/reference Next.js UI, :3000)
 - Current identity: 本地开发身份暂为 `owner_teacher`；它不是生产认证。M6 Gate 前必须把 current-owner 解析放到可替换 seam，并完成跨 owner 越权测试。
 - Next slices: 新 Teacher Web 上传/列表、逐次同意的 OCR/AI 校对、教师确认后拆题/映射、最小必要的私人检索；全部派生内容保持 private。
 
+### Question Capture module（M7 待开始）
+
+- Seam: `QuestionCapture.prepare(QuestionCaptureCommand) -> QuestionInputBundle`。
+- Interface: 接收文字或 owner-scoped 单题媒体引用，返回可编辑题面、LaTeX、选项、原图/裁剪引用、视觉推理标志、低置信度区域、revision、consent 与 provider 证据。
+- Implementation: 图片验证、旋转裁剪、清晰度、OCR、公式识别、图形存在性判断、owner 隔离和外部处理同意隐藏在模块内部。
+- Adapters: 本地 OCR/图像处理 adapter、外部视觉 adapter 和 deterministic test adapter；Solve Agent 不直接调用供应商或读取文件。
+- Trust: 带图题的原图/裁剪是 `QuestionInputBundle` 的一部分，不能在 OCR 后丢弃；视觉理解与 MathVerifier 证据范围分开。
+
+### Private Question Authoring modules（M8 待开始）
+
+- Seam: `QuestionAuthoring.create_draft(QuestionDesignBrief) -> GeneratedQuestionDraft`，隐藏教材映射、结构化生成、答案/解析一致性、选择题唯一性、MathVerifier、provider 和错误语义。
+- Storage seam: `PersonalQuestionLibrary` 独立拥有 owner 私题的个人题库命名、分类、CRUD、revision、导出和删除语义。
+- Isolation: `PersonalQuestionLibrary` 不只是公共 `QuestionBank` 的一个 visibility 过滤器；它使用独立业务接口和 owner-isolated storage namespace，没有 publish/share/public/commercial-approved 接口。
+- Ownership: current owner 只来自服务端认证上下文；Public Search、Public QuestionBank、后台内容工具、其他 owner、教研组和学校管理员均没有读取接口。
+- Management: Agent 生成或提出修改草稿，教师在受认证 UI 中明确保存；编辑、分类、回收站、恢复和永久删除由 owner 直接调用 FastAPI 业务接口，Agent 与后台管理员无永久删除工具。
+- Reuse: Curriculum、MathVerifier、RightsGate 和已验证且允许 adaptation 的参考母题可被调用，但不得把辅助命制题复制到公共题库。
+
 ### Teacher Agent Runtime module
 
 - Seam: product-owned Python and TypeScript runtime contracts.
@@ -82,6 +99,8 @@ FastAPI runtime adapter → Agent Service
 Agent Service → internal Tool gateway
 internal Tool gateway → business modules
 business modules → their owned storage adapters
+QuestionAuthoring → PersonalQuestionLibrary only after owner save confirmation
+PersonalQuestionLibrary → owner-isolated private storage adapter
 ```
 
 Forbidden:
@@ -93,6 +112,8 @@ Agent Service → database or private files
 Agent Service → public browser routes
 business modules → DeepSeek Harness
 private data → public/commercial data without an explicit authorization workflow
+PersonalQuestionLibrary → public/shared/team/school/commercial-approved data（始终禁止，不存在授权例外）
+Public Search / Admin content tools → PersonalQuestionLibrary
 ```
 
 ## 4. Primary and legacy UI policy
@@ -116,10 +137,12 @@ The primary UI should normally call `/api/v1` on its own origin. Next.js rewrite
 - Search tests target `SearchAgentPipeline` and the HTTP route, not private ranking internals alone.
 - Solve tests target 唯一 Tool 证据、可信字段校验、结构化错误、真实 SSE、取消、恢复和 feature gate。
 - Private Library tests target owner-scoped 结果、private-by-default、revision、逐次外部处理同意、无正文概览 Tool 与越权失败路径。
+- M7 tests target `QuestionCapture` 的图片/公式/图形保真、revision、逐次外部同意、Solve 可观察结果和跨 owner 失败，不测试供应商内部实现。
+- M8 tests target `QuestionAuthoring` 与 `PersonalQuestionLibrary` 的可观察接口，强制公共 Search/QuestionBank/后台访问缺失、跨 owner fail closed、owner 管理和永久删除语义。
 - Runtime conformance tests exercise both runtime adapters through the product-owned interface.
 - Security tests enforce the exact read-only Tool allowlist and absence of database access in `apps/agent`.
 - Business tests use synthetic/local adapters and assert published behaviour, rights, verification and privacy invariants.
 
 ## 7. Future evolution
 
-Keep the modular monolith. Introduce new network services only when deployment constraints make a seam real. PostgreSQL, object storage, persistent jobs and multi-tenant identity are future adapters; they must not leak into current UI or Agent interfaces.
+Keep the modular monolith. Introduce new network services only when deployment constraints make a seam real. PostgreSQL, object storage, persistent jobs and multi-tenant identity are future adapters; they must not leak into current UI or Agent interfaces. 商业化替换存储 adapter 时必须保留 `PersonalQuestionLibrary` 的独立 namespace 和 owner-only 接口，不能为了统一后台而并入公共题库管理。
