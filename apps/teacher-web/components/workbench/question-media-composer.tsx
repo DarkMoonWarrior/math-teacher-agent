@@ -8,6 +8,7 @@ import { teacherWorkspace } from "@/lib/teacher-workspace/http-adapter";
 import { CameraIcon, CloseIcon, CropIcon, ImageIcon, RotateIcon, UploadIcon } from "./icons";
 
 type CropMargins = { top: number; right: number; bottom: number; left: number };
+type RecognitionOption = { key: string; text: string };
 
 const INITIAL_CROP: CropMargins = { top: 4, right: 4, bottom: 4, left: 4 };
 
@@ -26,6 +27,12 @@ export function QuestionMediaComposer({ bundle, disabled = false, onChange }: Qu
   const [hint, setHint] = useState("");
   const [cropOpen, setCropOpen] = useState(false);
   const [crop, setCrop] = useState<CropMargins>(INITIAL_CROP);
+  const [recognitionMode, setRecognitionMode] = useState<"local" | "external">("local");
+  const [externalConsent, setExternalConsent] = useState(false);
+  const [stemPlain, setStemPlain] = useState("");
+  const [stemLatex, setStemLatex] = useState("");
+  const [options, setOptions] = useState<RecognitionOption[]>([]);
+  const [reviewNote, setReviewNote] = useState("");
 
   const currentRevision = useMemo(
     () => bundle?.asset.revisions.find((item) => item.revision === bundle.asset.current_revision) ?? null,
@@ -33,6 +40,13 @@ export function QuestionMediaComposer({ bundle, disabled = false, onChange }: Qu
   );
 
   useEffect(() => () => operationRef.current?.abort(), []);
+
+  useEffect(() => {
+    setStemPlain(bundle?.stem_plain ?? "");
+    setStemLatex(bundle?.stem_latex ?? "");
+    setOptions(bundle?.options ?? []);
+    setReviewNote(bundle?.teacher_review_note ?? "");
+  }, [bundle?.recognition_revision]);
 
   useEffect(() => {
     function receiveClipboardImage(event: globalThis.ClipboardEvent) {
@@ -144,6 +158,58 @@ export function QuestionMediaComposer({ bundle, disabled = false, onChange }: Qu
     if (file) void upload(file, source);
   }
 
+  async function recognize() {
+    if (!bundle) return;
+    setError("");
+    setHint("");
+    operationRef.current?.abort();
+    const controller = new AbortController();
+    operationRef.current = controller;
+    setBusy(true);
+    try {
+      const next = await teacherWorkspace.recognizeQuestionMedia(
+        bundle.asset.asset_id,
+        { mode: recognitionMode, externalProcessingConsent: recognitionMode === "external" && externalConsent },
+        controller.signal,
+      );
+      onChange(next);
+      setHint("识别草稿已生成。请对照原图校对后再确认；当前不会自动交给 Solve。");
+    } catch (cause) {
+      if (cause instanceof DOMException && cause.name === "AbortError") return;
+      setError(cause instanceof TeacherWorkspaceError ? cause.message : "题面识别没有完成，请重试。");
+    } finally {
+      if (operationRef.current === controller) operationRef.current = null;
+      setBusy(false);
+    }
+  }
+
+  async function saveRecognition(confirm: boolean) {
+    if (!bundle || !stemPlain.trim()) {
+      setError("题面不能为空，请先校对识别结果。");
+      return;
+    }
+    setError("");
+    operationRef.current?.abort();
+    const controller = new AbortController();
+    operationRef.current = controller;
+    setBusy(true);
+    try {
+      const next = await teacherWorkspace.reviewQuestionRecognition(
+        bundle.asset.asset_id,
+        { stemPlain, stemLatex, options: options.filter((item) => item.key.trim() && item.text.trim()), note: reviewNote, confirm },
+        controller.signal,
+      );
+      onChange(next);
+      setHint(confirm ? "题面已由你确认，但尚未交给 Solve。" : "校对草稿已保存为新的识别 revision。");
+    } catch (cause) {
+      if (cause instanceof DOMException && cause.name === "AbortError") return;
+      setError(cause instanceof TeacherWorkspaceError ? cause.message : "题面校对没有保存成功，请重试。");
+    } finally {
+      if (operationRef.current === controller) operationRef.current = null;
+      setBusy(false);
+    }
+  }
+
   return (
     <section className={`question-media${bundle ? " has-asset" : ""}`} aria-busy={busy} aria-label="题目图片">
       <input ref={uploadInputRef} hidden type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => selectFile(event, "upload")} />
@@ -204,7 +270,68 @@ export function QuestionMediaComposer({ bundle, disabled = false, onChange }: Qu
             </div>
           )}
           {bundle.asset.warnings.map((warning) => <p className="question-media__warning" key={warning}>{warning}</p>)}
-          <p className="question-media__notice">图片已保留原始版本与修订记录。当前 M7 第一切片尚未运行 OCR，解题前仍需输入文字题面。</p>
+          <section className="question-recognition" aria-label="题面识别与校对">
+            <header>
+              <div>
+                <span>文字与公式识别</span>
+                <strong>{bundle.recognition_status === "not_started" ? "尚未识别" : `OCR REV ${bundle.recognition_revision}`}</strong>
+              </div>
+              <small className={`question-recognition__status is-${bundle.recognition_status}`}>
+                {{ not_started: "待识别", draft: "待校对", confirmed: "教师已确认", stale: "图片已变化" }[bundle.recognition_status]}
+              </small>
+            </header>
+
+            <div className="question-recognition__mode">
+              <label>
+                <span>识别方式</span>
+                <select value={recognitionMode} onChange={(event) => { setRecognitionMode(event.target.value as "local" | "external"); setExternalConsent(false); }} disabled={busy || disabled}>
+                  <option value="local">本地数学 OCR · 图片不离开设备</option>
+                  <option value="external">外部图像 OCR · 需本次同意</option>
+                </select>
+              </label>
+              {recognitionMode === "external" && (
+                <label className="question-recognition__consent">
+                  <input type="checkbox" checked={externalConsent} onChange={(event) => setExternalConsent(event.target.checked)} />
+                  <span>我同意仅将这张图片发送给已配置的外部 OCR；本次有效，不改变私人归属。</span>
+                </label>
+              )}
+              <button type="button" disabled={busy || disabled || (recognitionMode === "external" && !externalConsent)} onClick={() => void recognize()}>
+                {bundle.recognition_status === "not_started" ? "识别题面" : "重新识别当前图片"}
+              </button>
+            </div>
+
+            {bundle.recognition_status !== "not_started" && (
+              <div className="question-recognition__editor">
+                {bundle.recognition_status === "stale" && <p className="question-media__warning">图片 revision 已变化，旧识别只能参考；请重新识别后再校对。</p>}
+                <label><span>可读题面</span><textarea value={stemPlain} onChange={(event) => setStemPlain(event.target.value)} disabled={busy || disabled || bundle.recognition_status === "stale"} rows={4} /></label>
+                <label><span>LaTeX 题面</span><textarea value={stemLatex} onChange={(event) => setStemLatex(event.target.value)} disabled={busy || disabled || bundle.recognition_status === "stale"} rows={3} /></label>
+                {options.length > 0 && (
+                  <fieldset>
+                    <legend>结构化选项</legend>
+                    {options.map((option, index) => (
+                      <div key={`${index}-${option.key}`}>
+                        <input aria-label={`选项 ${index + 1} 标号`} value={option.key} onChange={(event) => setOptions((items) => items.map((item, itemIndex) => itemIndex === index ? { ...item, key: event.target.value } : item))} disabled={busy || disabled || bundle.recognition_status === "stale"} />
+                        <input aria-label={`选项 ${index + 1} 内容`} value={option.text} onChange={(event) => setOptions((items) => items.map((item, itemIndex) => itemIndex === index ? { ...item, text: event.target.value } : item))} disabled={busy || disabled || bundle.recognition_status === "stale"} />
+                      </div>
+                    ))}
+                  </fieldset>
+                )}
+                {bundle.low_confidence_regions.length > 0 && (
+                  <div className="question-recognition__uncertain">
+                    <strong>优先核对 {bundle.low_confidence_regions.length} 处</strong>
+                    {bundle.low_confidence_regions.map((region, index) => <p key={`${index}-${region.reason}`}>{region.text || "未辨认内容"} · {region.reason}{region.confidence === null ? "" : ` · ${Math.round(region.confidence * 100)}%`}</p>)}
+                  </div>
+                )}
+                {bundle.recognition_warnings.map((warning) => <p className="question-media__warning" key={warning}>{warning}</p>)}
+                <label><span>校对备注</span><input value={reviewNote} onChange={(event) => setReviewNote(event.target.value)} disabled={busy || disabled || bundle.recognition_status === "stale"} placeholder="例如：已核对根号范围与选项 B" /></label>
+                <div className="question-recognition__actions">
+                  <button type="button" disabled={busy || disabled || bundle.recognition_status === "stale"} onClick={() => void saveRecognition(false)}>保存草稿</button>
+                  <button type="button" disabled={busy || disabled || bundle.recognition_status === "stale"} onClick={() => void saveRecognition(true)}>确认题面</button>
+                </div>
+              </div>
+            )}
+          </section>
+          <p className="question-media__notice">图片与 OCR revision 均只属于你的私人工作区。M7 第二切片不把图片或识别题面自动交给 Solve。</p>
         </div>
       )}
 

@@ -56,12 +56,14 @@ Solve 输入区增加：上传图片、粘贴截图、拍照入口、图片预�
 ## 5. 纵向切片顺序
 
 1. **私有单题媒体入口**：上传、粘贴、格式/体积/清晰度检查、旋转裁剪、owner-scoped asset；已完成。
-2. **文字与公式识别**：复用 M6 OCR 能力，输出可编辑题面、LaTeX、选项、revision 和低置信度提示；未开始。
+2. **文字与公式识别**：复用 M6 OCR 能力，输出可编辑题面、LaTeX、选项、revision 和低置信度提示；已完成。
 3. **图形保真输入**：保留原图/裁剪，检测需要视觉推理的题型，让 Solve 同时消费文字与受控视觉信息；未开始。
 4. **可信解题接入**：复用 M5 `SolutionAssistant`、MathVerifier 和可信状态，不复制第二套解题实现；未开始。
 5. **固定评测与 Gate E**：覆盖代数公式、函数图像、解析几何、立体几何、统计图表、模糊/截断/多题图片、OCR/视觉服务失败、取消和跨 owner 越权；未开始。
 
-第一条切片实现证据：`QuestionCapture.prepare` 对实际 PNG/JPEG/WebP 内容进行探测，限制 15 MB 与 2500 万像素，拒绝损坏、过小和近乎空白图片，并对低分辨率/低对比度返回可见警告。原图、旋转和裁剪使用同一 owner-scoped `asset_id` 与递增 revision；原始 revision 不覆盖。公开路由从服务端 current-teacher seam 绑定 owner，返回值只有受控相对内容端点，不含 owner、存储名或文件路径。新 Solve composer 提供上传、剪贴板与系统相机入口、预览、旋转、裁剪和本次任务移除；当前明确说明 OCR 与图片参与解题尚未开始。
+第一条切片实现证据：`QuestionCapture.prepare` 对实际 PNG/JPEG/WebP 内容进行探测，限制 15 MB 与 2500 万像素，拒绝损坏、过小和近乎空白图片，并对低分辨率/低对比度返回可见警告。原图、旋转和裁剪使用同一 owner-scoped `asset_id` 与递增 revision；原始 revision 不覆盖。公开路由从服务端 current-teacher seam 绑定 owner，返回值只有受控相对内容端点，不含 owner、存储名或文件路径。新 Solve composer 提供上传、剪贴板与系统相机入口、预览、旋转、裁剪和本次任务移除。
+
+第二条切片实现证据：`QuestionCapture.recognize/review_recognition` 将本地与外部识别隐藏在同一 adapter seam 后，结构化保存普通题面、LaTeX、选项、低置信度区域、provider/model、处理模式、外部同意证据和教师校对备注。识别记录使用独立 append-only revision，并绑定当时的 media revision；图片继续旋转或裁剪后旧识别自动变成 `stale`，不能确认。外部 OCR 只有在当前动作明确同意且配置 OpenAI 图像模型时才调用；本地可选依赖未安装时显式失败。DeepSeek 当前文本接口不被伪装成图像 OCR。教师端可选择识别方式、查看低置信度提示、编辑题面/LaTeX/选项并保存草稿或确认，且明确不会在本切片自动送入 Solve。
 
 ## 6. M7 完成 Gate
 

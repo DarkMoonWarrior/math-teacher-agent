@@ -19,6 +19,8 @@ import {
   type QuestionInputBundle,
   type QuestionMediaTransform,
   type QuestionMediaUpload,
+  type QuestionRecognitionRequest,
+  type QuestionRecognitionReview,
   type SearchTaskOptions,
   type SearchTaskProgressStage,
   type SearchTaskRequest,
@@ -414,6 +416,63 @@ export class HttpTeacherWorkspace implements TeacherWorkspace {
         "NETWORK_ERROR",
         "无法调整题目图片。请确认 FastAPI 已启动。",
       );
+    }
+  }
+
+  async recognizeQuestionMedia(
+    assetId: string,
+    request: QuestionRecognitionRequest,
+    signal?: AbortSignal,
+  ): Promise<QuestionInputBundle> {
+    try {
+      const response = await fetch(
+        apiUrl(`/api/v1/question-capture/assets/${encodeURIComponent(assetId)}/recognize`),
+        {
+          method: "POST",
+          headers: { Accept: "application/json", "Content-Type": "application/json" },
+          body: JSON.stringify({
+            mode: request.mode,
+            external_processing_consent: request.externalProcessingConsent,
+          }),
+          signal,
+        },
+      );
+      if (!response.ok) throw await responseError(response);
+      return await response.json() as QuestionInputBundle;
+    } catch (cause) {
+      if (cause instanceof TeacherWorkspaceError) throw cause;
+      if (cause instanceof DOMException && cause.name === "AbortError") throw cause;
+      throw new TeacherWorkspaceError("NETWORK_ERROR", "无法识别题目图片。请确认 FastAPI 已启动。");
+    }
+  }
+
+  async reviewQuestionRecognition(
+    assetId: string,
+    request: QuestionRecognitionReview,
+    signal?: AbortSignal,
+  ): Promise<QuestionInputBundle> {
+    try {
+      const response = await fetch(
+        apiUrl(`/api/v1/question-capture/assets/${encodeURIComponent(assetId)}/recognition`),
+        {
+          method: "PATCH",
+          headers: { Accept: "application/json", "Content-Type": "application/json" },
+          body: JSON.stringify({
+            stem_plain: request.stemPlain,
+            stem_latex: request.stemLatex,
+            options: request.options,
+            note: request.note,
+            confirm: request.confirm,
+          }),
+          signal,
+        },
+      );
+      if (!response.ok) throw await responseError(response);
+      return await response.json() as QuestionInputBundle;
+    } catch (cause) {
+      if (cause instanceof TeacherWorkspaceError) throw cause;
+      if (cause instanceof DOMException && cause.name === "AbortError") throw cause;
+      throw new TeacherWorkspaceError("NETWORK_ERROR", "无法保存题面校对。请确认 FastAPI 已启动。");
     }
   }
 

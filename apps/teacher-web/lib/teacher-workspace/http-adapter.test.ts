@@ -142,6 +142,11 @@ function questionInputBundleFixture(): QuestionInputBundle {
       updated_at: "2026-08-22T00:00:00Z",
     },
     recognition_status: "not_started",
+    recognition_revision: null,
+    recognition_source_revision: null,
+    recognition_mode: null,
+    recognition_provider: null,
+    recognition_model: null,
     stem_plain: "",
     stem_latex: "",
     options: [],
@@ -149,6 +154,7 @@ function questionInputBundleFixture(): QuestionInputBundle {
     low_confidence_regions: [],
     recognition_warnings: [],
     external_processing_consent: false,
+    teacher_review_note: "",
     visibility: "private",
   };
 }
@@ -223,7 +229,7 @@ describe("HttpTeacherWorkspace", () => {
 
   it("transforms a controlled question asset by id without storage paths", async () => {
     const bundle = questionInputBundleFixture();
-    const fetchMock = vi.fn(async () => new Response(JSON.stringify(bundle), {
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify(bundle), {
       status: 200,
       headers: { "Content-Type": "application/json" },
     }));
@@ -245,6 +251,58 @@ describe("HttpTeacherWorkspace", () => {
         }),
       }),
     );
+  });
+
+  it("recognizes a private question with per-action external consent and no owner selector", async () => {
+    const bundle = { ...questionInputBundleFixture(), recognition_status: "draft" as const };
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify(bundle), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const workspace = new HttpTeacherWorkspace();
+    await workspace.recognizeQuestionMedia("qcap_1", {
+      mode: "external",
+      externalProcessingConsent: true,
+    });
+
+    const init = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/v1/question-capture/assets/qcap_1/recognize");
+    expect(JSON.parse(String(init.body))).toEqual({
+      mode: "external",
+      external_processing_consent: true,
+    });
+    expect(String(init.body)).not.toContain("owner");
+  });
+
+  it("saves a teacher recognition review as a controlled revision", async () => {
+    const bundle = { ...questionInputBundleFixture(), recognition_status: "confirmed" as const };
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify(bundle), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const workspace = new HttpTeacherWorkspace();
+    await workspace.reviewQuestionRecognition("qcap_1", {
+      stemPlain: "校对题面",
+      stemLatex: "$x^2$",
+      options: [{ key: "A", text: "1" }],
+      note: "已核对",
+      confirm: true,
+    });
+
+    const init = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/v1/question-capture/assets/qcap_1/recognition");
+    expect(init.method).toBe("PATCH");
+    expect(JSON.parse(String(init.body))).toEqual({
+      stem_plain: "校对题面",
+      stem_latex: "$x^2$",
+      options: [{ key: "A", text: "1" }],
+      note: "已核对",
+      confirm: true,
+    });
   });
 
   it("requires an explicit one-action consent when searching private excerpts", async () => {

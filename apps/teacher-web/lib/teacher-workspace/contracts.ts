@@ -204,14 +204,25 @@ export type QuestionMediaAsset = {
 
 export type QuestionInputBundle = {
   asset: QuestionMediaAsset;
-  recognition_status: "not_started";
+  recognition_status: "not_started" | "draft" | "confirmed" | "stale";
+  recognition_revision: number | null;
+  recognition_source_revision: number | null;
+  recognition_mode: "local" | "external" | null;
+  recognition_provider: string | null;
+  recognition_model: string | null;
   stem_plain: string;
   stem_latex: string;
-  options: Array<Record<string, string>>;
+  options: Array<{ key: string; text: string }>;
   requires_visual_reasoning: boolean | null;
-  low_confidence_regions: Array<Record<string, unknown>>;
+  low_confidence_regions: Array<{
+    text: string;
+    reason: string;
+    confidence: number | null;
+    box: [number, number, number, number] | null;
+  }>;
   recognition_warnings: string[];
-  external_processing_consent: false;
+  external_processing_consent: boolean;
+  teacher_review_note: string;
   visibility: "private";
 };
 
@@ -224,6 +235,19 @@ export type QuestionMediaUpload = {
 export type QuestionMediaTransform =
   | { operation: "rotate"; degrees: 90 | 180 | 270 }
   | { operation: "crop"; crop: { x: number; y: number; width: number; height: number } };
+
+export type QuestionRecognitionRequest = {
+  mode: "local" | "external";
+  externalProcessingConsent: boolean;
+};
+
+export type QuestionRecognitionReview = {
+  stemPlain: string;
+  stemLatex: string;
+  options: Array<{ key: string; text: string }>;
+  note: string;
+  confirm: boolean;
+};
 
 export type LibraryRightsBasis =
   | "original"
@@ -428,6 +452,18 @@ export interface TeacherWorkspace {
   transformQuestionMedia(
     assetId: string,
     transform: QuestionMediaTransform,
+    signal?: AbortSignal,
+  ): Promise<QuestionInputBundle>;
+
+  recognizeQuestionMedia(
+    assetId: string,
+    request: QuestionRecognitionRequest,
+    signal?: AbortSignal,
+  ): Promise<QuestionInputBundle>;
+
+  reviewQuestionRecognition(
+    assetId: string,
+    request: QuestionRecognitionReview,
     signal?: AbortSignal,
   ): Promise<QuestionInputBundle>;
 

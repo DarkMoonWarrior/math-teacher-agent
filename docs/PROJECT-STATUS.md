@@ -16,7 +16,7 @@
 - M0-M4：已完成，不因路线重排返工；M4 Gate E 于 2026-08-21 严格通过。
 - M5 Solve Agent：Gate E 已严格通过并完成阶段确认。
 - M6 Private Library Agent：已完成；六条纵向切片、12 场景固定评测与完整 Gate E 于 2026-08-22 严格通过。
-- **M7 多模态题目采集与图片解题：进行中；项目所有者已确认阶段转换，第一条私有单题媒体入口已完成。**
+- **M7 多模态题目采集与图片解题：进行中；项目所有者已确认阶段转换，前两条切片（私有媒体、文字与公式识别）已完成。**
 - M8 私有辅助命题：边界已确认但功能未开始；必须等待 M7 Gate E 与下一次阶段确认。
 - M9-M11：Paper、Lesson、Memory 均未开始。
 - M12-M13：Closed Beta 准备与数据验证，均未开始。
@@ -33,7 +33,7 @@
 | QuestionBank / MathVerifier / Curriculum | 后端已有 | 核心业务资产继续复用，不因新 UI 重写。 |
 | Solve Agent | 可用 | 复用旧 `SolutionAssistant` 可信分层；受控只读 `solve_question` Tool、产品自有 `SolveAgentWorkflow` 与新工作台已接入，支持完整题目输入、Search 转入、同步/真实 SSE/run 快照/取消/同会话恢复和三页可信结果。固定 synthetic eval 与完整 M5 Gate E 已通过。 |
 | Private Library Agent | 可用（M6 已完成） | 成熟 PrivateLibrary/PDF/Curriculum/QuestionBank 模块继续复用；owner-scoped 聚合、同源上传/列表、提取/OCR/校对、拆题编辑、可信教材映射和逐次授权的私人检索已接入。检索许可短时、单次、绑定当前教师与查询，只返回确认文本的有界片段；候选导入仍固定为 owner 私有、待审核、待数学验证。固定评测与 Gate E 已通过。 |
-| 多模态图片解题 | 进行中 | 第一条切片已接入：Solve 可上传、粘贴或拍摄单题图片，`QuestionCapture` 负责真实格式、体积/像素/清晰度、owner-scoped 原图、旋转/裁剪和 revision；OCR、图形识别与 Solve bundle 消费尚未开始。 |
+| 多模态图片解题 | 进行中 | 前两条切片已接入：Solve 可上传、粘贴或拍摄单题图片；`QuestionCapture` 负责 owner-scoped 媒体与 OCR revision，可输出并校对普通题面、LaTeX、选项和低置信度提示。图形保真输入与 Solve bundle 消费尚未开始。 |
 | 私有辅助命题 | 未开始 | M8 已建立固定边界：生成题永远只进入 owner 独占、可命名分类和自主管理的 `PersonalQuestionLibrary`；公共题库、公共 Search、后台内容管理和其他用户无访问路径。 |
 | Paper | 界面预览 + 后端已有 | 新 UI 可整理组卷需求，但按钮明确禁用；旧 exam_papers 模块不是 Paper Agent 完成证明。 |
 | Lesson | 界面预览 + 后端已有 | 新 UI 可整理教案需求，但按钮明确禁用；旧 lesson_plans 模块不是 Lesson Agent 完成证明。 |
@@ -65,6 +65,7 @@
 - M6 第五条切片：`PrivateLibrary.search_confirmed_text` 仅检索当前 owner 的 active + confirmed 文本；未确认、回收站和其他 owner 均排除。FastAPI 为每次教师同意签发短时单次许可，绑定 owner/query/limit，重放、改写或伪造 owner 均 fail closed。Agent 只可调用固定 `search_private_library` Tool，返回标题、≤480 字匹配片段、文本版本和权利依据，不返回文件名、路径、整份正文或 owner。真实页面验收覆盖未授权阻断、授权后空结果与真实匹配、结果自动定位、授权自动清空、375px 无横向溢出和零控制台告警；验收资料随后移入回收站。
 - M6 固定评测与 Gate E：12 个项目自建 synthetic 场景覆盖空库、格式/OCR 失败、模型不可用、Tool 超时、取消、许可重放、跨 owner、未确认/回收站过滤、有界返回、失败后新许可恢复和派生题私有状态，8 类违规均为 0。FastAPI 291 项、Agent 39 项、Teacher Web 28 项测试及全部 typecheck/build 通过；legacy build/typecheck、320—1920px 浏览器、静态边界和仓库卫生通过。
 - M7 第一条切片：新增 `QuestionCapture` 深模块和独立 owner-scoped 本地 adapter；实际 PNG/JPEG/WebP、15 MB、2500 万像素、最小尺寸与近空白检查 fail closed，低分辨率/低对比度产生显式警告。原图、旋转、裁剪 revision 可追踪，跨 owner 的详情、内容和变换均返回 404。真实浏览器使用项目 synthetic 图片完成上传、REV 1→旋转 REV 2→裁剪 REV 3、本次任务移除；320/375/768/1440px 无横向溢出，关键入口有可访问名称，控制台零告警。
+- M7 第二条切片：新增本地/外部单题 OCR adapter seam、结构化题面/LaTeX/选项/低置信度结果、逐次外部同意和 append-only 识别 revision。识别绑定 media revision，后续图片变换会把旧结果标为 `stale` 并阻止确认；公开路由继续由服务端绑定 teacher，浏览器无法选择 owner/reviewer。教师端提供识别方式、逐次同意、校对、保存草稿和确认入口，并明确不会在当前切片把内容交给 Solve。
 
 ## 已知未决项
 
@@ -74,7 +75,7 @@
 - 真实教师身份、会话级权限、云端数据隔离和下架流程尚未上线。
 - Closed Beta 指标事件、Week-4 留存、任务采用率、严重数学错误率和单位成本尚未进入真实教师统计阶段。
 - 当前身份 adapter 仍是本地固定教师，不代表生产认证、商业多租户或云端隔离已经完成。
-- M7 目前只完成私有媒体入口；OCR/公式识别、低置信度编辑、图形保真 Solve 输入、可信解题接入和固定 Gate 仍未完成，不得把已保存图片描述成“已经参与解题”。
+- M7 目前完成私有媒体入口与 OCR/公式识别校对；图形保真 Solve 输入、可信解题接入和固定 Gate 仍未完成，不得把已保存或已识别图片描述成“已经参与解题”。
 - M8 及后续阶段没有代码或界面实现；M7 Gate E 完成并再次确认前不得开始 M8。
 
 ## 历史能力与新产品的关系

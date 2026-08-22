@@ -14,7 +14,12 @@ from app.modules.question_capture import (
     QuestionInputBundle,
     QuestionMediaSource,
     QuestionMediaTransformCommand,
+    LocalQuestionRecognitionProvider,
+    OpenAIQuestionRecognitionProvider,
+    QuestionRecognitionCommand,
+    QuestionRecognitionReviewCommand,
 )
+from app.routes.model_operations import get_model_operations_registry
 
 
 router = APIRouter(prefix="/question-capture", tags=["question-capture"])
@@ -23,7 +28,19 @@ router = APIRouter(prefix="/question-capture", tags=["question-capture"])
 @lru_cache
 def get_question_capture() -> QuestionCapture:
     settings = get_settings()
-    return QuestionCapture(settings.question_capture_db, settings.question_capture_dir)
+    providers = {"local": LocalQuestionRecognitionProvider()}
+    if settings.openai_api_key:
+        providers["external"] = OpenAIQuestionRecognitionProvider(
+            api_key=settings.openai_api_key,
+            model=settings.openai_model,
+            timeout_seconds=settings.openai_timeout_seconds,
+            recorder=get_model_operations_registry(),
+        )
+    return QuestionCapture(
+        settings.question_capture_db,
+        settings.question_capture_dir,
+        recognition_providers=providers,
+    )
 
 
 @router.post("/assets", response_model=QuestionInputBundle, status_code=201)
@@ -70,6 +87,36 @@ def transform_question_asset(
 ) -> QuestionInputBundle:
     try:
         return capture.transform(asset_id, command, owner_id=current_teacher.teacher_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="私人题目图片不存在") from exc
+    except QuestionCaptureError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.post("/assets/{asset_id}/recognize", response_model=QuestionInputBundle)
+def recognize_question_asset(
+    asset_id: str,
+    command: QuestionRecognitionCommand,
+    current_teacher: CurrentTeacher = Depends(get_current_teacher),
+    capture: QuestionCapture = Depends(get_question_capture),
+) -> QuestionInputBundle:
+    try:
+        return capture.recognize(asset_id, command, owner_id=current_teacher.teacher_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="私人题目图片不存在") from exc
+    except QuestionCaptureError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.patch("/assets/{asset_id}/recognition", response_model=QuestionInputBundle)
+def review_question_recognition(
+    asset_id: str,
+    command: QuestionRecognitionReviewCommand,
+    current_teacher: CurrentTeacher = Depends(get_current_teacher),
+    capture: QuestionCapture = Depends(get_question_capture),
+) -> QuestionInputBundle:
+    try:
+        return capture.review_recognition(asset_id, command, owner_id=current_teacher.teacher_id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="私人题目图片不存在") from exc
     except QuestionCaptureError as exc:
