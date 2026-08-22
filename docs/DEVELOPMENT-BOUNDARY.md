@@ -44,9 +44,9 @@
 
 辅助命制题使用独立 `PersonalQuestionLibrary` 模块和 owner-isolated storage namespace，不以公共 `QuestionBank` 的一个可变 visibility 字段作为唯一隔离手段。该模块没有 publish/share 接口；后台运营/内容管理员没有内容查看和管理接口。详细规则见 [`M8-PRIVATE-QUESTION-AUTHORING.md`](M8-PRIVATE-QUESTION-AUTHORING.md)。
 
-## 4. 当前阶段：M6 Private Library Agent
+## 4. 已完成阶段：M6 Private Library Agent
 
-M0-M5 已完成，项目所有者已于 2026-08-22 确认进入 M6。当前只建设 Private Library Agent，不继续扩展 Solve，也不启动 Paper、Lesson 或 Memory。详细切片见 [`M6-PRIVATE-LIBRARY-AGENT.md`](M6-PRIVATE-LIBRARY-AGENT.md)。
+M0-M6 已完成；M6 固定评测与 Gate E 于 2026-08-22 严格通过。当前处于阶段转换冻结状态：不再扩展 M6，也不启动 M7、Paper、Lesson 或 Memory，直到项目所有者在 Gate 结论之后明确确认进入 M7。M6 详细切片与证据见 [`M6-PRIVATE-LIBRARY-AGENT.md`](M6-PRIVATE-LIBRARY-AGENT.md)、[`M6-PRIVATE-LIBRARY-EVALUATION.md`](M6-PRIVATE-LIBRARY-EVALUATION.md) 和 [`M6-GATE-REVIEW.md`](M6-GATE-REVIEW.md)。
 
 本阶段允许：
 
@@ -68,12 +68,12 @@ M0-M5 已完成，项目所有者已于 2026-08-22 确认进入 M6。当前只�
 - 自动保存为已确认、自动发布、自动批准、永久删除或新增 private → shared/public 路径；
 - 顺带开发题目变式、组卷、教案或教师记忆；
 - 提前开发账号、付费、多租户、教研组、学校后台或学生功能；
-- 在 M6 Gate 通过前铺开 M7 多模态解题、M8 辅助命题或 M9-M11 Paper/Lesson/Memory；
+- 在项目所有者确认阶段转换前铺开 M7 多模态解题、M8 辅助命题或 M9-M11 Paper/Lesson/Memory；
 - 因为 Harness 不可达而静默切换执行语义。可以提供显式、可观测、由产品决定的 fallback，但默认 fail closed。
 
-## 5. M6 完成 Gate
+## 5. M6 完成 Gate（已全部满足）
 
-M6 必须同时满足以下条件，才能开始 Gate E 审计：
+M6 已用以下条件完成 Gate E 审计：
 
 1. 新工作台完成上传、处理、校对、拆题、映射和私人检索的完整流程；
 2. 原文件、owner、来源/权利声明、revision 和处理状态可追踪；
@@ -87,7 +87,7 @@ M6 必须同时满足以下条件，才能开始 Gate E 审计：
 
 ## 6. 下一阶段启动条件
 
-只有 M6 Gate 完整通过、变更形成可回滚提交并由项目所有者确认后，才进入 M7 多模态题目采集与图片解题。
+M6 Gate 已完整通过；变更形成可回滚提交后，仍需项目所有者明确确认，才进入 M7 多模态题目采集与图片解题。
 
 后续顺序以 [`ROADMAP.md`](ROADMAP.md) 为准：Solve → Private Library → 多模态图片解题 → 私有辅助命题 → Paper → Lesson → Memory → Beta 准备 → Beta 验证 → 商业基础 → Teacher Pro → 教研组 → 学校。
 

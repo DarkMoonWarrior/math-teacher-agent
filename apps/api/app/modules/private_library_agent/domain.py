@@ -22,7 +22,7 @@ class PrivateLibraryAgentResponse(BaseModel):
     request_id: str
     session_id: str = ""
     run_id: str = ""
-    status: Literal["ok", "error"]
+    status: Literal["ok", "error", "cancelled"]
     query: str
     result: PrivateLibrarySearchResult | None = None
     consent_applied: bool = True

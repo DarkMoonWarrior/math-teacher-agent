@@ -374,7 +374,7 @@ export class HttpTeacherWorkspace implements TeacherWorkspace {
       });
       if (!response.ok) throw await responseError(response);
       const payload = await response.json() as {
-        status: "ok" | "error";
+        status: "ok" | "error" | "cancelled";
         result: PrivateLibrarySearchResult | null;
         error?: { code?: string; message?: string; request_id?: string };
       };

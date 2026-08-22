@@ -188,6 +188,18 @@ describe("HttpTeacherWorkspace", () => {
     expect(String(init.body)).not.toContain("owner_id");
   });
 
+  it("does not turn an aborted private retrieval into a successful result", async () => {
+    const fetchMock = vi.fn((_input: RequestInfo | URL, init?: RequestInit) => new Promise<Response>((_resolve, reject) => {
+      init?.signal?.addEventListener("abort", () => reject(new DOMException("cancelled", "AbortError")), { once: true });
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    const controller = new AbortController();
+    const workspace = new HttpTeacherWorkspace();
+    const pending = workspace.searchPrivateLibrary("函数", true, controller.signal);
+    controller.abort();
+    await expect(pending).rejects.toMatchObject({ name: "AbortError" });
+  });
+
   it("loads only the server-scoped private library list", async () => {
     const item = libraryItemFixture();
     const fetchMock = vi.fn(async () => new Response(JSON.stringify({ items: [item], total: 1 }), {

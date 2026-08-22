@@ -22,7 +22,7 @@
 | M3 新 Teacher Web 基础 | 已完成 | 建立完全新的 Agent-first 教师工作台，旧 `apps/web` 仅保留为业务地基。 | 新视觉、能力导航、响应式、动态纸张和诚实的未接入状态可用。 |
 | M4 Search 集成稳定化 | 已完成 | 让新工作台中的 Search 成为稳定、可理解、可恢复的完整入口。 | 同源请求、加载、取消、错误、空结果、可信标签、关键响应式和全量测试全部通过；Gate E 于 2026-08-21 通过。 |
 | M5 Solve Agent | 已完成 | 为题库题和新题提供分层可信解答，不把模型输出冒充 verified。 | 优先复用 verified solution；新解答明确 `teacher_review_required`；MathVerifier 分级、固定 synthetic eval、320—1920px 响应式和 Gate E 通过。 |
-| **M6 Private Library Agent** | **进行中** | 让教师的 PDF/DOCX/图片在 private workspace 内完成导入、OCR、拆题、映射和检索。 | 原文件与 revision 可追踪；private-by-default；owner 隔离与越权测试通过；无自动 public 路径。 |
+| **M6 Private Library Agent** | **已完成，待确认转换** | 让教师的 PDF/DOCX/图片在 private workspace 内完成导入、OCR、拆题、映射和检索。 | 原文件与 revision 可追踪；private-by-default；owner 隔离与越权测试、固定评测和 Gate E 于 2026-08-22 通过；无自动 public 路径。 |
 | M7 多模态题目采集与图片解题 | 待开始 | 让文字、截图和单题图片经过可核对的文字/公式识别，并把必要原图视觉信息安全接入 Solve。 | owner/private、逐次外部同意、原图与 revision 可追踪；带图题不丢失视觉条件；MathVerifier 与视觉判断分层；固定评测和 Gate E 通过。 |
 | M8 私有辅助命题 Agent | 待开始 | 将教师命题要求转换为结构化题目草稿，并保存到 owner 独占、可命名分类和自主管理的私题库。 | 辅助命制题永不进入公共/共享/商业题库；只有 owner 可见和管理；公共 Search、后台内容管理与跨 owner 访问全部 fail closed。 |
 | M9 Paper Agent | 待开始 | 将自然语言转换为 PaperBlueprint，并生成可编辑试卷草稿和双向细目表。 | 权利/验证/重复/相似度/覆盖/难度门禁通过；不为凑题自动生成题；引用私题不改变 owner/visibility；导出闭环可用。 |
@@ -37,8 +37,8 @@
 
 ## 当前启动顺序
 
-`M4 Search 稳定化（已完成） → M5 Solve（已完成） → M6 Private Library（进行中） → M7 多模态图片解题 → M8 私有辅助命题 → M9 Paper → M10 Lesson → M11 Memory → M12 Beta 准备 → M13 Beta 验证 → M14 商业基础 → M15 Teacher Pro → M16 教研组 → M17 学校`
+`M4 Search 稳定化（已完成） → M5 Solve（已完成） → M6 Private Library（已完成，待确认转换） → M7 多模态图片解题 → M8 私有辅助命题 → M9 Paper → M10 Lesson → M11 Memory → M12 Beta 准备 → M13 Beta 验证 → M14 商业基础 → M15 Teacher Pro → M16 教研组 → M17 学校`
 
-M6 的固定范围、纵向切片和完成 Gate 见 [`M6-PRIVATE-LIBRARY-AGENT.md`](M6-PRIVATE-LIBRARY-AGENT.md)。新增阶段的固定边界分别见 [`M7-MULTIMODAL-QUESTION-SOLVE.md`](M7-MULTIMODAL-QUESTION-SOLVE.md) 与 [`M8-PRIVATE-QUESTION-AUTHORING.md`](M8-PRIVATE-QUESTION-AUTHORING.md)。M6 Gate E 通过并由项目所有者确认前，仍不得启动 M7；M7 未通过不得启动 M8。
+M6 的固定范围、评测与完成 Gate 见 [`M6-PRIVATE-LIBRARY-AGENT.md`](M6-PRIVATE-LIBRARY-AGENT.md)、[`M6-PRIVATE-LIBRARY-EVALUATION.md`](M6-PRIVATE-LIBRARY-EVALUATION.md) 和 [`M6-GATE-REVIEW.md`](M6-GATE-REVIEW.md)。新增阶段的固定边界分别见 [`M7-MULTIMODAL-QUESTION-SOLVE.md`](M7-MULTIMODAL-QUESTION-SOLVE.md) 与 [`M8-PRIVATE-QUESTION-AUTHORING.md`](M8-PRIVATE-QUESTION-AUTHORING.md)。M6 Gate E 已通过，但项目所有者确认阶段转换前仍不得启动 M7；M7 未通过不得启动 M8。
 
 任何阶段不得因为后端已有旧模块、界面已经出现入口或模型能够生成文本，就提前宣称完成。详细产品和商业门禁见 [`PRODUCT-GATES.md`](PRODUCT-GATES.md)。

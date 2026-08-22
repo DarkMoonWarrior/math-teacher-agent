@@ -917,7 +917,7 @@ export function TeacherWorkbench() {
               <HistoryIcon />
               {history.length > 0 && <span>{history.length}</span>}
             </button>
-            <button className="new-task-button" type="button" onClick={resetTask}>
+            <button className="new-task-button" type="button" onClick={resetTask} aria-label="新任务">
               <PlusIcon />
               <span>新任务</span>
             </button>

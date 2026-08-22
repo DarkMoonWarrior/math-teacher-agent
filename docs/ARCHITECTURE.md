@@ -50,7 +50,7 @@ apps/web (legacy/reference Next.js UI, :3000)
 - UI: `TeacherWorkspace.solveQuestion` 通过同源无缓冲流接入；教师可输入完整题目或从 Search 结果转入，并在三页纸张中查看结构化解析、课堂提示与独立验证证据。
 - Current boundary: 代码 feature gate 默认关闭，本地显式开启；固定 synthetic eval 与完整 Gate E 已通过。M5 不再扩展。
 
-### Private Library Agent module（M6 进行中）
+### Private Library Agent module（M6 已完成）
 
 - Seam: `PrivateLibrary` 业务接口与版本化 internal Tool gateway；Agent 只看到产品拥有的结构化结果。
 - First slice: `inspect_private_library` 没有 model-supplied owner 参数，只返回本地 current owner 的聚合数量、处理状态和文件类型；`content_included=false`。
@@ -59,7 +59,7 @@ apps/web (legacy/reference Next.js UI, :3000)
 - Third slice: `TeacherWorkspace` 隐藏 OCR 后台任务细节；新 Teacher Web 对照原文件、首次提取文本、可编辑校对稿和 revision。本地 PDF OCR 优先，外部 OCR 每次单独同意，任何 OCR 结果仍为待教师校对草稿。
 - Fourth slice: 拆题候选绑定教师确认的当前文本版本；浏览器可编辑题目内容但不能提交 owner/editor。教材映射只接受 `node_id`，FastAPI 从受控 Curriculum 补全教材路径。QuestionBank 导入固定为 owner 私有、待审核、待数学验证，并保存资料/版本/候选 provenance。
 - Current retrieval seam: 浏览器逐次明确同意后，FastAPI 为当前教师、查询和数量签发短时单次许可；Harness 只能调用固定 `search_private_library` Tool，`PrivateLibrary` 只从 active + confirmed 资源返回有界匹配片段和来源版本/权利状态。owner、原文件、路径与整份正文不越过 seam。
-- Next slice: 只执行固定评测与 Gate E；全部派生内容保持 private，M6 Gate 通过前不进入 M7。
+- Completion: 12 个项目自建 synthetic 场景的 8 类违规均为 0，完整工程、静态边界与 320—1920px 浏览器 Gate E 已通过；项目所有者确认阶段转换前不进入 M7。
 
 ### Question Capture module（M7 待开始）
 
