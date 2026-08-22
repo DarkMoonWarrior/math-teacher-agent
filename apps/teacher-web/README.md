@@ -10,6 +10,7 @@
 - 完整题目输入、Search 结果一键转入解题、三页纸张式解析／课堂提示／MathVerifier 证据；
 - 私人资料同源上传与清单：PDF/DOCX/图片、来源与权利说明、明确确认、private 与处理状态；
 - 私人资料详情与校对：原 PDF/图片预览、首次提取文本、可编辑草稿、本地 PDF OCR、逐次授权外部 OCR 和修订记录；
+- 私人资料拆题：仅使用教师确认的当前文本，逐题编辑题干/选项/答案/解析/难度，搜索并确认可信教材知识点后才允许存入私人题库；
 - 教案与组卷需求草稿及工作流预览（运行时尚未接入，提交按钮禁用）；
 - 桌面与手机响应式动态纸张画布。
 
@@ -39,7 +40,7 @@ MATH_AI_AGENT_PROVIDER=test-mock
 - `lib/teacher-workspace/contracts.ts`：UI 可见的稳定接口和结果模型。
 - `lib/teacher-workspace/http-adapter.ts`：Search/Solve/Private Library 同源 FastAPI adapter；内部处理 SSE、同一 run 恢复、服务端取消、multipart 上传与 OCR 后台任务轮询，不向 React 泄漏传输细节。
 - `components/workbench/teacher-workbench.tsx`：视图与交互状态。
-- `components/workbench/private-library-workspace.tsx`：私人资料上传、权利声明、owner-scoped 清单、原文件对照、OCR 校对与 revision 界面。
+- `components/workbench/private-library-workspace.tsx`：私人资料上传、权利声明、owner-scoped 清单、原文件对照、OCR 校对、revision、拆题编辑和教材映射界面。
 
 React 代码不得依赖数据库、Harness 类型、供应商响应或后端内部存储字段。
 

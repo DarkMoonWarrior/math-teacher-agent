@@ -4,10 +4,15 @@ import {
   type LibraryItemDetail,
   type LibraryItemSummary,
   type LibraryTextRevisionList,
+  type CurriculumSearchResult,
+  type PrivateLibraryCandidateImportResult,
   type PrivateLibraryList,
   type PrivateLibraryOCRRequest,
   type PrivateLibraryOCRResult,
   type PrivateLibraryProcessingOptions,
+  type PrivateLibraryQuestionCandidate,
+  type PrivateLibraryQuestionCandidateDraft,
+  type PrivateLibraryQuestionCandidateList,
   type PrivateLibraryReview,
   type PrivateLibraryUpload,
   type SearchTaskOptions,
@@ -123,6 +128,28 @@ function libraryJobDelay(signal?: AbortSignal): Promise<void> {
       reject(abortError());
     }, { once: true });
   });
+}
+
+async function libraryJsonRequest<T>(
+  path: string,
+  init: RequestInit,
+  networkMessage: string,
+): Promise<T> {
+  try {
+    const response = await fetch(apiUrl(path), {
+      ...init,
+      headers: {
+        Accept: "application/json",
+        ...init.headers,
+      },
+    });
+    if (!response.ok) throw await responseError(response);
+    return await response.json() as T;
+  } catch (cause) {
+    if (cause instanceof TeacherWorkspaceError) throw cause;
+    if (cause instanceof DOMException && cause.name === "AbortError") throw cause;
+    throw new TeacherWorkspaceError("NETWORK_ERROR", networkMessage);
+  }
 }
 
 type SearchStreamContext = {
@@ -514,6 +541,92 @@ export class HttpTeacherWorkspace implements TeacherWorkspace {
         "OCR 处理连接中断。请重新打开资料检查是否已经生成草稿。",
       );
     }
+  }
+
+  listPrivateLibraryQuestionCandidates(
+    itemId: string,
+    signal?: AbortSignal,
+  ): Promise<PrivateLibraryQuestionCandidateList> {
+    return libraryJsonRequest(
+      `/api/v1/library/${encodeURIComponent(itemId)}/question-candidates`,
+      { signal },
+      "无法读取拆题候选。",
+    );
+  }
+
+  preparePrivateLibraryQuestionCandidates(
+    itemId: string,
+    signal?: AbortSignal,
+  ): Promise<PrivateLibraryQuestionCandidateList> {
+    return libraryJsonRequest(
+      `/api/v1/library/${encodeURIComponent(itemId)}/question-candidates`,
+      { method: "POST", signal },
+      "无法从确认文本生成拆题候选。",
+    );
+  }
+
+  updatePrivateLibraryQuestionCandidate(
+    itemId: string,
+    candidateId: string,
+    draft: PrivateLibraryQuestionCandidateDraft,
+    signal?: AbortSignal,
+  ): Promise<PrivateLibraryQuestionCandidate> {
+    return libraryJsonRequest(
+      `/api/v1/library/${encodeURIComponent(itemId)}/question-candidates/${encodeURIComponent(candidateId)}`,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(draft),
+        signal,
+      },
+      "无法保存拆题候选。",
+    );
+  }
+
+  searchCurriculum(
+    query: string,
+    signal?: AbortSignal,
+  ): Promise<CurriculumSearchResult> {
+    const parameters = new URLSearchParams({
+      query: query.trim(),
+      node_type: "knowledge_point",
+      limit: "8",
+    });
+    return libraryJsonRequest(
+      `/api/v1/curriculum/search?${parameters.toString()}`,
+      { signal },
+      "无法读取教材知识点。",
+    );
+  }
+
+  mapPrivateLibraryQuestionCandidateCurriculum(
+    itemId: string,
+    candidateId: string,
+    nodeId: string,
+    signal?: AbortSignal,
+  ): Promise<PrivateLibraryQuestionCandidate> {
+    return libraryJsonRequest(
+      `/api/v1/library/${encodeURIComponent(itemId)}/question-candidates/${encodeURIComponent(candidateId)}/curriculum`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ node_id: nodeId }),
+        signal,
+      },
+      "无法保存教材映射。",
+    );
+  }
+
+  importPrivateLibraryQuestionCandidate(
+    itemId: string,
+    candidateId: string,
+    signal?: AbortSignal,
+  ): Promise<PrivateLibraryCandidateImportResult> {
+    return libraryJsonRequest(
+      `/api/v1/library/${encodeURIComponent(itemId)}/question-candidates/${encodeURIComponent(candidateId)}/import`,
+      { method: "POST", signal },
+      "无法导入私人题库。",
+    );
   }
 
   async searchQuestions(

@@ -68,7 +68,23 @@ class QuestionCandidateOption(BaseModel):
     text: str = Field(default="", max_length=4000)
 
 
+class QuestionCandidateCurriculum(BaseModel):
+    node_id: str = Field(min_length=1, max_length=160)
+    name: str = Field(min_length=1, max_length=300)
+    volume: str = Field(min_length=1, max_length=120)
+    chapter: str = Field(default="", max_length=300)
+    section: str = Field(default="", max_length=300)
+
+
+class QuestionCandidateCurriculumCommand(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    node_id: str = Field(min_length=1, max_length=160)
+
+
 class QuestionCandidateUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     question_type: QuestionType
     stem_plain: str = Field(min_length=1, max_length=20000)
     stem_latex: str | None = Field(default=None, max_length=20000)
@@ -78,7 +94,6 @@ class QuestionCandidateUpdate(BaseModel):
     solution_steps: list[str] = Field(default_factory=list, max_length=100)
     final_answer: str | None = Field(default=None, max_length=4000)
     difficulty: int = Field(default=3, ge=1, le=5)
-    editor_id: str = Field(default="owner_teacher", min_length=1, max_length=120)
 
 
 class QuestionCandidateView(BaseModel):
@@ -95,6 +110,7 @@ class QuestionCandidateView(BaseModel):
     solution_steps: list[str]
     final_answer: str | None
     difficulty: int
+    curriculum: QuestionCandidateCurriculum | None = None
     status: CandidateStatus
     warnings: list[str]
     imported_question_id: str | None

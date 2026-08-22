@@ -57,7 +57,8 @@ apps/web (legacy/reference Next.js UI, :3000)
 - Trust: 标题、文件名、正文、原文件、路径和 owner 标识均不进入第一条 Tool 输出；Agent 不能据此声称已读取资料内容。
 - Current identity: `app/core/identity.py` 是服务端 current-teacher seam；Public 路由不接受浏览器提供的 owner/reviewer，详情、文件、OCR、revision、后台任务和候选访问均通过跨 owner 自动测试。当前 local adapter 固定返回 `owner_teacher`，不是生产认证；真实会话身份在 M12 实现。
 - Third slice: `TeacherWorkspace` 隐藏 OCR 后台任务细节；新 Teacher Web 对照原文件、首次提取文本、可编辑校对稿和 revision。本地 PDF OCR 优先，外部 OCR 每次单独同意，任何 OCR 结果仍为待教师校对草稿。
-- Next slices: 只从教师确认文本进行拆题/映射，再建设最小必要的私人检索；全部派生内容保持 private。
+- Fourth slice: 拆题候选绑定教师确认的当前文本版本；浏览器可编辑题目内容但不能提交 owner/editor。教材映射只接受 `node_id`，FastAPI 从受控 Curriculum 补全教材路径。QuestionBank 导入固定为 owner 私有、待审核、待数学验证，并保存资料/版本/候选 provenance。
+- Next slices: 建设显式同意、最小必要内容的私人检索，再执行固定评测与 Gate E；全部派生内容保持 private。
 
 ### Question Capture module（M7 待开始）
 

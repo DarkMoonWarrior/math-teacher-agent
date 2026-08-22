@@ -1015,7 +1015,11 @@ class QuestionBank:
         return self.get_question(question_id)
 
     def create_private_resource_question(
-        self, candidate: dict[str, Any], *, resource: dict[str, Any]
+        self,
+        candidate: dict[str, Any],
+        *,
+        resource: dict[str, Any],
+        owner_id: str,
     ) -> QuestionDetail:
         """Import one reviewed resource candidate without bypassing question gates."""
         candidate_id = str(candidate.get("candidate_id", ""))
@@ -1026,7 +1030,10 @@ class QuestionBank:
             raise QuestionBankError("已丢弃的拆题候选不能导入题库")
         question_id = f"q_resource_{candidate_id.removeprefix('cand_')}"
         try:
-            return self.get_question(question_id)
+            existing = self.get_question(question_id)
+            if existing.raw.get("provenance", {}).get("owner_id") != owner_id:
+                raise QuestionBankError("私人题目归属冲突，已拒绝复用现有记录")
+            return existing
         except KeyError:
             pass
         now = self._now()
@@ -1045,6 +1052,8 @@ class QuestionBank:
         ]
         solution_steps = [str(step) for step in candidate.get("solution_steps", []) if str(step).strip()]
         answer = candidate.get("answer_value")
+        curriculum = candidate.get("curriculum") or {}
+        curriculum_node_id = curriculum.get("node_id")
         raw = {
             "id": question_id,
             "status": "imported",
@@ -1075,10 +1084,14 @@ class QuestionBank:
             "curriculum": {
                 "standard_version": "普通高中数学课程标准（2017年版2020年修订）",
                 "textbook_version": "人教A版",
-                "volume": None,
-                "chapter": None,
-                "section": None,
-                "knowledge_point_ids": [],
+                "volume": curriculum.get("volume"),
+                "chapter": curriculum.get("chapter"),
+                "section": curriculum.get("section"),
+                "topic": curriculum.get("name"),
+                "knowledge_point_ids": [curriculum_node_id] if curriculum_node_id else [],
+                "mapping_status": "teacher_confirmed" if curriculum_node_id else "unmapped",
+                "mapped_by": owner_id if curriculum_node_id else None,
+                "mapped_at": now if curriculum_node_id else None,
             },
             "exam": {"paper_family": None, "region": None, "year": None, "original_score": None, "competency_tags": []},
             "pedagogy": {
@@ -1103,6 +1116,7 @@ class QuestionBank:
                 "media_references": candidate.get("media_references", []),
             },
             "provenance": {
+                "owner_id": owner_id,
                 "created_by": candidate.get("provenance_type") or "private_resource_question_pipeline",
                 "library_item_id": resource.get("library_item_id"),
                 "library_source_version": candidate.get("source_version"),
@@ -1136,12 +1150,18 @@ class QuestionBank:
                     source_document, source_page_start, source_page_end,
                     license_status, attribution_required, solution_approved,
                     raw_json, created_at, updated_at
-                ) VALUES (?, ?, 'imported', 'pending', 'private', ?, ?, ?, ?, NULL, NULL, NULL,
-                          '[]', ?, 'needs_math_review', ?, ?, ?, ?, ?, 0, ?, ?, ?)
+                ) VALUES (?, ?, 'imported', 'pending', 'private', ?, ?, ?, ?, ?, ?, ?,
+                          ?, ?, 'needs_math_review', ?, ?, ?, ?, ?, 0, ?, ?, ?)
                 """,
                 (
                     question_id, batch_id, raw["question_type"], stem, raw["stem"]["latex"],
-                    answer, difficulty, raw["source"]["document_name"],
+                    answer,
+                    curriculum.get("volume"),
+                    curriculum.get("chapter"),
+                    curriculum.get("section"),
+                    json.dumps([curriculum_node_id] if curriculum_node_id else [], ensure_ascii=False),
+                    difficulty,
+                    raw["source"]["document_name"],
                     candidate.get("start_page"), candidate.get("end_page"), license_status,
                     raw["source"]["attribution_required"], json.dumps(raw, ensure_ascii=False), now, now,
                 ),

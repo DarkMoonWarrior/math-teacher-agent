@@ -86,6 +86,7 @@ def make_workflow(tmp_path: Path) -> tuple[QuestionQualityWorkflow, QuestionBank
             "rights_statement": "教师原创资料",
             "adaptation_allowed": True,
         },
+        owner_id="owner_teacher",
     )
     return QuestionQualityWorkflow(question_bank=bank, curriculum_catalog=catalog), bank, question.question_id
 

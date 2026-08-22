@@ -28,6 +28,8 @@ Public 路由通过 `app/core/identity.py` 的 current-teacher seam 在服务端
 
 本地数学 OCR 当前只支持 PDF；外部 OCR 每次调用都必须重新提交明确同意。两类 OCR 只生成待教师校对草稿，不会改变 private 状态或自动进入题库。
 
+拆题候选只允许从教师确认的当前文本版本生成；候选编辑与教材映射同样由服务端身份绑定 owner/editor。浏览器只能提交 Curriculum `node_id`，可信教材路径由业务端补全。未映射候选不能导入；导入结果固定为 `private`、`pending` 和 `needs_math_review`，并保留 owner 与来源版本证据。
+
 ## Search Agent
 
 默认 feature gate 关闭。新工作台本地使用时，需启动 `apps/agent` 并在 `.env` 设置：
@@ -40,7 +42,7 @@ MATH_AI_AGENT_PROVIDER=test-mock
 
 Search Agent 的结构化结果是事实来源。模型说明不得补充结果中不存在的题目、学校、年份、考试或验证状态。
 
-## Solve Agent（M5 开发中）
+## Solve Agent（M5 已完成）
 
 Solve workflow 已提供同步、真实 SSE、run 快照、取消和同会话恢复接口：
 
@@ -51,7 +53,7 @@ Solve workflow 已提供同步、真实 SSE、run 快照、取消和同会话恢
 - `POST /api/v1/agent/solve/{run_id}/cancel`
 - `POST /api/v1/agent/solve/{run_id}/resume`
 
-默认保持 `MATH_AI_SOLVE_AGENT_ENABLED=false`。最终数学结果只接受唯一一次成功的 `solve_question` Tool 结构化输出；模型自由文本和原始 Tool payload 不会越过业务 seam。该后端接口完成不代表 M5 已完成，新 Teacher Web 解题流程和完整 Gate 仍待实施。
+默认保持 `MATH_AI_SOLVE_AGENT_ENABLED=false`。最终数学结果只接受唯一一次成功的 `solve_question` Tool 结构化输出；模型自由文本和原始 Tool payload 不会越过业务 seam。新 Teacher Web 解题流程、固定 synthetic evaluation 与完整 M5 Gate E 已通过。
 
 ## 测试
 

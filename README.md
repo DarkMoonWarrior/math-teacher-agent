@@ -15,9 +15,10 @@
 - M6 第一条切片：Agent 可读取当前教师资料库的聚合处理状态，但看不到私人正文、文件名或路径；
 - M6 第二条切片：新工作台可同源上传 PDF/DOCX/图片，显式记录来源与权利依据，并展示 owner-scoped 私人资料清单；
 - M6 第三条切片：可对照原文件、首次提取文本和教师校对稿，运行本地 PDF OCR 或逐次授权的外部 OCR，并保留 owner-scoped 修订记录；
+- M6 第四条切片：只从教师确认的当前文本版本生成可编辑候选；教材路径由受控 Curriculum 补全，导入固定为 owner 私有、待审核、待数学验证；
 - QuestionBank、MathVerifier、Curriculum、PrivateLibrary、PDF、试卷、教案等成熟业务模块。
 
-当前 Search、Solve 与 Private Library 入口已接入新工作台；Solve 的固定 synthetic eval 与完整 M5 Gate E 已严格通过。项目处于 M6，聚合概览、同源上传/列表和 OCR/校对已完成，拆题/映射与私人检索仍在建设；教案和组卷继续明确标记为预览。最新状态见 [`docs/PROJECT-STATUS.md`](docs/PROJECT-STATUS.md)。
+当前 Search、Solve 与 Private Library 入口已接入新工作台；Solve 的固定 synthetic eval 与完整 M5 Gate E 已严格通过。项目处于 M6，聚合概览、同源上传/列表、OCR/校对和拆题/教材映射已完成，下一切片是最小必要的私人检索；教案和组卷继续明确标记为预览。最新状态见 [`docs/PROJECT-STATUS.md`](docs/PROJECT-STATUS.md)。
 
 ## 核心原则
 

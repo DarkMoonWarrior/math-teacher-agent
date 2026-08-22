@@ -204,7 +204,7 @@ describe("HttpTeacherWorkspace", () => {
       current_version: 1,
       items: [],
     };
-    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, _init?: RequestInit) => {
       const url = String(input);
       return new Response(JSON.stringify(url.endsWith("/revisions") ? revisions : detail), {
         status: 200,
@@ -314,6 +314,94 @@ describe("HttpTeacherWorkspace", () => {
     const init = fetchMock.mock.calls[0]?.[1] as RequestInit;
     expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/v1/library/lib_1/ocr/jobs");
     expect(JSON.parse(String(init.body))).toEqual({ external_processing_consent: true });
+  });
+
+  it("keeps candidate actors and curriculum labels out of browser-controlled payloads", async () => {
+    const candidate = {
+      candidate_id: "cand_1",
+      library_item_id: "lib_1",
+      source_version: 2,
+      position: 1,
+      question_type: "open_response" as const,
+      stem_plain: "已知函数 f(x)=x²，求 f(2)。",
+      stem_latex: null,
+      options: [],
+      answer_value: "4",
+      solution_method: "代入",
+      solution_steps: ["代入 x=2"],
+      final_answer: "4",
+      difficulty: 2,
+      curriculum: null,
+      status: "draft" as const,
+      warnings: [],
+      imported_question_id: null,
+      updated_at: "2026-08-22T10:00:00+08:00",
+    };
+    const listing = { library_item_id: "lib_1", source_version: 2, items: [candidate] };
+    const curriculum = {
+      query: "函数",
+      total: 1,
+      items: [{
+        node_id: "kp_function",
+        code: "3.1.1",
+        name: "函数的概念",
+        node_type: "knowledge_point" as const,
+        volume: "必修第一册",
+        chapter: "函数的概念与性质",
+        section: "函数的概念",
+        description: "函数定义",
+        match_score: 1,
+      }],
+    };
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, _init?: RequestInit) => {
+      const url = String(input);
+      const payload = url.includes("/curriculum/search")
+        ? curriculum
+        : url.endsWith("/import")
+          ? { candidate, question_id: "q_private_1", already_imported: false }
+          : url.endsWith("/question-candidates")
+            ? listing
+            : candidate;
+      return new Response(JSON.stringify(payload), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const workspace = new HttpTeacherWorkspace();
+    const draft = {
+      question_type: candidate.question_type,
+      stem_plain: candidate.stem_plain,
+      stem_latex: candidate.stem_latex,
+      options: candidate.options,
+      answer_value: candidate.answer_value,
+      solution_method: candidate.solution_method,
+      solution_steps: candidate.solution_steps,
+      final_answer: candidate.final_answer,
+      difficulty: candidate.difficulty,
+    };
+
+    await workspace.listPrivateLibraryQuestionCandidates("lib_1");
+    await workspace.preparePrivateLibraryQuestionCandidates("lib_1");
+    await workspace.updatePrivateLibraryQuestionCandidate("lib_1", "cand_1", draft);
+    await workspace.searchCurriculum("函数");
+    await workspace.mapPrivateLibraryQuestionCandidateCurriculum("lib_1", "cand_1", "kp_function");
+    await workspace.importPrivateLibraryQuestionCandidate("lib_1", "cand_1");
+
+    const calls = fetchMock.mock.calls;
+    expect(calls.map(([url]) => String(url))).toEqual([
+      "/api/v1/library/lib_1/question-candidates",
+      "/api/v1/library/lib_1/question-candidates",
+      "/api/v1/library/lib_1/question-candidates/cand_1",
+      "/api/v1/curriculum/search?query=%E5%87%BD%E6%95%B0&node_type=knowledge_point&limit=8",
+      "/api/v1/library/lib_1/question-candidates/cand_1/curriculum",
+      "/api/v1/library/lib_1/question-candidates/cand_1/import",
+    ]);
+    expect((calls[1]?.[1] as RequestInit).method).toBe("POST");
+    expect(JSON.parse(String((calls[2]?.[1] as RequestInit).body))).toEqual(draft);
+    expect(JSON.parse(String((calls[4]?.[1] as RequestInit).body))).toEqual({ node_id: "kp_function" });
+    expect(String((calls[2]?.[1] as RequestInit).body)).not.toContain("owner_id");
+    expect(String((calls[4]?.[1] as RequestInit).body)).not.toContain("volume");
   });
 
   it("returns the structured result from the terminal stream event", async () => {

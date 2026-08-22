@@ -30,14 +30,18 @@ from app.modules.private_library import (
     PrivateLibrary,
     PrivateLibraryError,
     QuestionCandidateList,
+    QuestionCandidateCurriculum,
+    QuestionCandidateCurriculumCommand,
     QuestionCandidateUpdate,
     QuestionCandidateView,
     RightsBasis,
 )
 from app.modules.question_bank import QuestionBank, QuestionBankError
+from app.modules.curriculum import CsvCurriculumCatalog
 from app.modules.pdf_imports import ImportBatchCommand, ImportBatchResult, PdfImportError
 from app.routes.imports import get_pdf_import_studio
 from app.routes.model_operations import get_model_operations_registry
+from app.routes.curriculum import get_catalog
 from app.modules.private_library.exports import LibraryExportError, LibraryTextRenderer
 from app.modules.deepseek import DeepSeekClientError, DeepSeekJsonClient
 from app.modules.background_jobs import BackgroundJobRegistry, BackgroundJobView
@@ -549,17 +553,50 @@ def update_question_candidate(
     current_teacher: CurrentTeacher = Depends(get_current_teacher),
 ) -> QuestionCandidateView:
     try:
-        secured_command = command.model_copy(
-            update={"editor_id": current_teacher.teacher_id}
-        )
         return get_private_library().update_question_candidate(
             item_id,
             candidate_id,
-            secured_command,
+            command,
             owner_id=current_teacher.teacher_id,
+            editor_id=current_teacher.teacher_id,
         )
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="拆题候选不存在") from exc
+    except PrivateLibraryError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@router.post(
+    "/{item_id}/question-candidates/{candidate_id}/curriculum",
+    response_model=QuestionCandidateView,
+)
+def map_question_candidate_curriculum(
+    item_id: str,
+    candidate_id: str,
+    command: QuestionCandidateCurriculumCommand,
+    current_teacher: CurrentTeacher = Depends(get_current_teacher),
+    catalog: CsvCurriculumCatalog = Depends(get_catalog),
+) -> QuestionCandidateView:
+    try:
+        node = catalog.get_node(command.node_id)
+        if node.node_type != "knowledge_point":
+            raise PrivateLibraryError("必须选择具体知识点，不能只选择册次、章节或小节")
+        path = catalog.path_for(node.node_id)
+        return get_private_library().map_question_candidate_curriculum(
+            item_id,
+            candidate_id,
+            QuestionCandidateCurriculum(
+                node_id=node.node_id,
+                name=node.name,
+                volume=node.volume,
+                chapter=path.get("chapter", ""),
+                section=path.get("section", ""),
+            ),
+            owner_id=current_teacher.teacher_id,
+            editor_id=current_teacher.teacher_id,
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="资料、候选或教材知识点不存在") from exc
     except PrivateLibraryError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
@@ -602,9 +639,13 @@ def import_question_candidate(
                 question_id=candidate.imported_question_id,
                 already_imported=True,
             )
+        if candidate.curriculum is None:
+            raise PrivateLibraryError("导入私人题库前必须确认教材知识点")
         question_bank = get_library_question_bank()
         question = question_bank.create_private_resource_question(
-            candidate.model_dump(), resource=resource.model_dump()
+            candidate.model_dump(),
+            resource=resource.model_dump(),
+            owner_id=current_teacher.teacher_id,
         )
         if resource.file_kind == "image" and not question.images:
             source_path, _ = library.file_for_download(

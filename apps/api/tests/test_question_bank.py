@@ -362,6 +362,7 @@ def test_search_finds_imported_question_by_exact_question_id(tmp_path: Path) -> 
             "rights_statement": "测试资料",
             "adaptation_allowed": True,
         },
+        owner_id="owner_teacher",
     )
 
     result = bank.search(query=question.question_id)

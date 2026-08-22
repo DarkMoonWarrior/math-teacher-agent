@@ -8,21 +8,27 @@ import {
   useState,
 } from "react";
 import type {
+  CurriculumSearchItem,
   LibraryItemDetail,
   LibraryItemSummary,
   LibraryRightsBasis,
   LibraryTextRevision,
+  PrivateLibraryQuestionCandidate,
+  PrivateLibraryQuestionCandidateDraft,
 } from "@/lib/teacher-workspace/contracts";
 import { TeacherWorkspaceError } from "@/lib/teacher-workspace/contracts";
 import { teacherWorkspace } from "@/lib/teacher-workspace/http-adapter";
 import {
   ArrowRightIcon,
+  BookIcon,
   CheckIcon,
   CloseIcon,
   ClockIcon,
   HistoryIcon,
   LibraryIcon,
   LockIcon,
+  PlusIcon,
+  SearchIcon,
   SparkIcon,
   UploadIcon,
 } from "./icons";
@@ -104,6 +110,327 @@ function reviewState(item: LibraryItemSummary): {
   return { label: "等待校对", tone: "pending" };
 }
 
+const QUESTION_TYPE_OPTIONS: Array<{
+  value: PrivateLibraryQuestionCandidate["question_type"];
+  label: string;
+}> = [
+  { value: "single_choice", label: "单选题" },
+  { value: "multiple_choice", label: "多选题" },
+  { value: "fill_blank", label: "填空题" },
+  { value: "open_response", label: "解答题" },
+];
+
+function candidateDraft(
+  candidate: PrivateLibraryQuestionCandidate,
+): PrivateLibraryQuestionCandidateDraft {
+  return {
+    question_type: candidate.question_type,
+    stem_plain: candidate.stem_plain,
+    stem_latex: candidate.stem_latex,
+    options: candidate.options,
+    answer_value: candidate.answer_value,
+    solution_method: candidate.solution_method,
+    solution_steps: candidate.solution_steps,
+    final_answer: candidate.final_answer,
+    difficulty: candidate.difficulty,
+  };
+}
+
+function CandidateEditor({
+  candidate,
+  onSave,
+  onMap,
+  onImport,
+}: {
+  candidate: PrivateLibraryQuestionCandidate;
+  onSave: (draft: PrivateLibraryQuestionCandidateDraft) => Promise<void>;
+  onMap: (nodeId: string) => Promise<void>;
+  onImport: () => Promise<void>;
+}) {
+  const [draft, setDraft] = useState(() => candidateDraft(candidate));
+  const [query, setQuery] = useState(candidate.curriculum?.name ?? "");
+  const [matches, setMatches] = useState<CurriculumSearchItem[]>([]);
+  const [busy, setBusy] = useState<"save" | "search" | "map" | "import" | "">("");
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    setDraft(candidateDraft(candidate));
+    if (candidate.curriculum) setQuery(candidate.curriculum.name);
+  }, [candidate]);
+
+  const locked = candidate.status === "imported";
+  const dirty = JSON.stringify(draft) !== JSON.stringify(candidateDraft(candidate));
+  const choiceQuestion = draft.question_type === "single_choice"
+    || draft.question_type === "multiple_choice";
+
+  function changeDraft<Key extends keyof PrivateLibraryQuestionCandidateDraft>(
+    key: Key,
+    value: PrivateLibraryQuestionCandidateDraft[Key],
+  ) {
+    setDraft((current) => ({ ...current, [key]: value }));
+    setMessage("");
+  }
+
+  async function save() {
+    if (!draft.stem_plain.trim() || locked || busy) return;
+    setBusy("save");
+    setError("");
+    try {
+      await onSave({ ...draft, stem_plain: draft.stem_plain.trim() });
+      setMessage("候选题修改已保存。教材映射仍需单独确认。");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "候选题没有保存成功。");
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function searchCurriculum() {
+    if (!query.trim() || busy) return;
+    setBusy("search");
+    setError("");
+    setMessage("");
+    try {
+      const result = await teacherWorkspace.searchCurriculum(query);
+      setMatches(result.items);
+      if (!result.items.length) setMessage("没有找到匹配知识点，请换一个教材关键词。");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "教材知识点没有加载成功。");
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function mapCurriculum(node: CurriculumSearchItem) {
+    if (busy || locked || dirty) return;
+    setBusy("map");
+    setError("");
+    try {
+      await onMap(node.node_id);
+      setMatches([]);
+      setQuery(node.name);
+      setMessage(`已确认映射：${node.volume} · ${node.name}`);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "教材映射没有保存成功。");
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function importCandidate() {
+    if (busy || locked || dirty || !candidate.curriculum) return;
+    setBusy("import");
+    setError("");
+    try {
+      await onImport();
+      setMessage("已进入你的私人题库，状态为待审核与待数学验证。");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "候选题没有导入成功。");
+    } finally {
+      setBusy("");
+    }
+  }
+
+  return (
+    <article className={`candidate-card${locked ? " is-imported" : ""}`}>
+      <header>
+        <div>
+          <span>候选 {String(candidate.position).padStart(2, "0")}</span>
+          <strong>{locked ? "已存入私人题库" : "等待教师整理"}</strong>
+        </div>
+        <p><LockIcon />private · 来源文本 v{candidate.source_version}</p>
+      </header>
+
+      <div className="candidate-fields">
+        <label>
+          <span>题型</span>
+          <select
+            disabled={locked || Boolean(busy)}
+            onChange={(event) => changeDraft(
+              "question_type",
+              event.target.value as PrivateLibraryQuestionCandidate["question_type"],
+            )}
+            value={draft.question_type}
+          >
+            {QUESTION_TYPE_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>{option.label}</option>
+            ))}
+          </select>
+        </label>
+        <label>
+          <span>难度 <small>{draft.difficulty} / 5</small></span>
+          <input
+            disabled={locked || Boolean(busy)}
+            max={5}
+            min={1}
+            onChange={(event) => changeDraft("difficulty", Number(event.target.value))}
+            type="range"
+            value={draft.difficulty}
+          />
+        </label>
+        <label className="candidate-field--wide">
+          <span>题干</span>
+          <textarea
+            disabled={locked || Boolean(busy)}
+            onChange={(event) => changeDraft("stem_plain", event.target.value)}
+            rows={5}
+            value={draft.stem_plain}
+          />
+        </label>
+
+        {choiceQuestion && (
+          <fieldset className="candidate-options candidate-field--wide">
+            <legend>选项</legend>
+            {draft.options.map((option, index) => (
+              <label key={`${option.key}-${index}`}>
+                <span>{option.key}</span>
+                <input
+                  disabled={locked || Boolean(busy)}
+                  onChange={(event) => changeDraft("options", draft.options.map((entry, optionIndex) => (
+                    optionIndex === index ? { ...entry, text: event.target.value } : entry
+                  )))}
+                  value={option.text}
+                />
+                {!locked && draft.options.length > 2 && (
+                  <button
+                    aria-label={`删除选项 ${option.key}`}
+                    disabled={Boolean(busy)}
+                    onClick={() => changeDraft(
+                      "options",
+                      draft.options
+                        .filter((_, optionIndex) => optionIndex !== index)
+                        .map((entry, optionIndex) => ({
+                          ...entry,
+                          key: String.fromCharCode(65 + optionIndex),
+                        })),
+                    )}
+                    type="button"
+                  ><CloseIcon /></button>
+                )}
+              </label>
+            ))}
+            {!locked && draft.options.length < 8 && (
+              <button
+                className="candidate-option-add"
+                disabled={Boolean(busy)}
+                onClick={() => changeDraft("options", [
+                  ...draft.options,
+                  { key: String.fromCharCode(65 + draft.options.length), text: "" },
+                ])}
+                type="button"
+              ><PlusIcon />增加选项</button>
+            )}
+          </fieldset>
+        )}
+
+        <label>
+          <span>答案</span>
+          <input
+            disabled={locked || Boolean(busy)}
+            onChange={(event) => changeDraft("answer_value", event.target.value)}
+            value={draft.answer_value ?? ""}
+          />
+        </label>
+        <label>
+          <span>解法</span>
+          <input
+            disabled={locked || Boolean(busy)}
+            onChange={(event) => changeDraft("solution_method", event.target.value)}
+            value={draft.solution_method}
+          />
+        </label>
+        <label>
+          <span>最终答案</span>
+          <input
+            disabled={locked || Boolean(busy)}
+            onChange={(event) => changeDraft("final_answer", event.target.value)}
+            value={draft.final_answer ?? ""}
+          />
+        </label>
+        <label className="candidate-field--wide">
+          <span>解析步骤 <small>每行一步</small></span>
+          <textarea
+            disabled={locked || Boolean(busy)}
+            onChange={(event) => changeDraft("solution_steps", event.target.value.split("\n"))}
+            rows={4}
+            value={draft.solution_steps.join("\n")}
+          />
+        </label>
+      </div>
+
+      <div className="candidate-save-row">
+        <p>{dirty ? "有尚未保存的修改" : "题目内容已保存"}</p>
+        <button disabled={locked || Boolean(busy) || !dirty || !draft.stem_plain.trim()} onClick={() => void save()} type="button">
+          {busy === "save" ? <span className="button-loader" /> : <CheckIcon />}
+          保存候选题
+        </button>
+      </div>
+
+      <section className="candidate-curriculum">
+        <header>
+          <div><BookIcon /><span>教材知识点</span></div>
+          <p>{dirty ? "先保存题目修改" : candidate.curriculum ? "教师已确认映射" : "导入前必须确认"}</p>
+        </header>
+        {candidate.curriculum && (
+          <div className="candidate-curriculum__current">
+            <strong>{candidate.curriculum.name}</strong>
+            <span>{[candidate.curriculum.volume, candidate.curriculum.chapter, candidate.curriculum.section].filter(Boolean).join(" · ")}</span>
+          </div>
+        )}
+        {!locked && (
+          <>
+            <div className="candidate-curriculum__search">
+              <input
+                aria-label={`候选 ${candidate.position} 的教材关键词`}
+                disabled={Boolean(busy)}
+                onChange={(event) => setQuery(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    void searchCurriculum();
+                  }
+                }}
+                placeholder="例如：元素与集合、函数单调性"
+                value={query}
+              />
+              <button disabled={Boolean(busy) || !query.trim()} onClick={() => void searchCurriculum()} type="button">
+                {busy === "search" ? <span className="button-loader" /> : <SearchIcon />}搜索教材
+              </button>
+            </div>
+            {matches.length > 0 && (
+              <ol className="candidate-curriculum__matches">
+                {matches.map((node) => (
+                  <li key={node.node_id}>
+                    <button disabled={Boolean(busy) || dirty} onClick={() => void mapCurriculum(node)} type="button">
+                      <span><strong>{node.name}</strong><small>{node.code} · {node.volume}</small></span>
+                      <small>{[node.chapter, node.section].filter(Boolean).join(" / ")}</small>
+                      <ArrowRightIcon />
+                    </button>
+                  </li>
+                ))}
+              </ol>
+            )}
+          </>
+        )}
+      </section>
+
+      {(message || error) && <p className={`candidate-message${error ? " is-error" : ""}`}>{error || message}</p>}
+      <footer>
+        <p><LockIcon /><span>只进入当前教师的私人题库</span><small>待审核 · 待 MathVerifier</small></p>
+        <button
+          disabled={locked || Boolean(busy) || dirty || !candidate.curriculum}
+          onClick={() => void importCandidate()}
+          type="button"
+        >
+          {busy === "import" ? <span className="button-loader" /> : locked ? <CheckIcon /> : <ArrowRightIcon />}
+          {locked ? "已导入" : dirty ? "先保存修改" : !candidate.curriculum ? "先确认教材映射" : "存入私人题库"}
+        </button>
+      </footer>
+    </article>
+  );
+}
+
 export function PrivateLibraryWorkspace() {
   const [items, setItems] = useState<LibraryItemSummary[]>([]);
   const [loading, setLoading] = useState(true);
@@ -120,6 +447,9 @@ export function PrivateLibraryWorkspace() {
   const [selectedItemId, setSelectedItemId] = useState("");
   const [detail, setDetail] = useState<LibraryItemDetail | null>(null);
   const [revisions, setRevisions] = useState<LibraryTextRevision[]>([]);
+  const [candidates, setCandidates] = useState<PrivateLibraryQuestionCandidate[]>([]);
+  const [candidatesLoading, setCandidatesLoading] = useState(false);
+  const [candidateMessage, setCandidateMessage] = useState("");
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState("");
   const [correctedText, setCorrectedText] = useState("");
@@ -151,29 +481,36 @@ export function PrivateLibraryWorkspace() {
     if (!selectedItemId) {
       setDetail(null);
       setRevisions([]);
+      setCandidates([]);
       setDetailError("");
       return;
     }
     const controller = new AbortController();
     setDetailLoading(true);
+    setCandidatesLoading(true);
     setDetailError("");
     setDetailMessage("");
     Promise.all([
       teacherWorkspace.getPrivateLibraryItem(selectedItemId, controller.signal),
       teacherWorkspace.listPrivateLibraryRevisions(selectedItemId, controller.signal),
+      teacherWorkspace.listPrivateLibraryQuestionCandidates(selectedItemId, controller.signal),
     ])
-      .then(([item, history]) => {
+      .then(([item, history, candidateList]) => {
         setDetail(item);
         setCorrectedText(item.corrected_text);
         setReviewNote(item.review_note);
         setRevisions(history.items);
+        setCandidates(candidateList.items);
         requestAnimationFrame(() => detailRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
       })
       .catch((cause: unknown) => {
         if (cause instanceof DOMException && cause.name === "AbortError") return;
         setDetailError(cause instanceof Error ? cause.message : "无法打开这份私人资料。");
       })
-      .finally(() => setDetailLoading(false));
+      .finally(() => {
+        setDetailLoading(false);
+        setCandidatesLoading(false);
+      });
     return () => controller.abort();
   }, [selectedItemId]);
 
@@ -257,6 +594,8 @@ export function PrivateLibraryWorkspace() {
         confirm,
       });
       syncDetail(saved);
+      setCandidates([]);
+      setCandidateMessage("");
       await refreshRevisions(saved.library_item_id);
       setDetailMessage(confirm
         ? "文本已由你确认，仍只保存在私人资料库。"
@@ -294,6 +633,63 @@ export function PrivateLibraryWorkspace() {
       setOcrMode("");
       setOcrProgress("");
     }
+  }
+
+  function replaceCandidate(updated: PrivateLibraryQuestionCandidate) {
+    setCandidates((current) => current.map((candidate) => (
+      candidate.candidate_id === updated.candidate_id ? updated : candidate
+    )));
+  }
+
+  async function prepareCandidates() {
+    if (!detail || detail.text_review_status !== "confirmed" || candidatesLoading) return;
+    setCandidatesLoading(true);
+    setCandidateMessage("");
+    try {
+      const result = await teacherWorkspace.preparePrivateLibraryQuestionCandidates(
+        detail.library_item_id,
+      );
+      setCandidates(result.items);
+      setCandidateMessage(result.items.length
+        ? `已从教师确认的文本 v${result.source_version} 生成 ${result.items.length} 道候选，请逐题核对。`
+        : "当前确认文本中没有识别到可拆分的题目，请先调整题号结构。");
+    } catch (cause) {
+      setCandidateMessage(cause instanceof Error ? cause.message : "没有生成拆题候选。");
+    } finally {
+      setCandidatesLoading(false);
+    }
+  }
+
+  async function saveCandidate(
+    candidate: PrivateLibraryQuestionCandidate,
+    draft: PrivateLibraryQuestionCandidateDraft,
+  ) {
+    if (!detail) return;
+    const updated = await teacherWorkspace.updatePrivateLibraryQuestionCandidate(
+      detail.library_item_id,
+      candidate.candidate_id,
+      draft,
+    );
+    replaceCandidate(updated);
+  }
+
+  async function mapCandidate(candidate: PrivateLibraryQuestionCandidate, nodeId: string) {
+    if (!detail) return;
+    const updated = await teacherWorkspace.mapPrivateLibraryQuestionCandidateCurriculum(
+      detail.library_item_id,
+      candidate.candidate_id,
+      nodeId,
+    );
+    replaceCandidate(updated);
+  }
+
+  async function importCandidate(candidate: PrivateLibraryQuestionCandidate) {
+    if (!detail) return;
+    const result = await teacherWorkspace.importPrivateLibraryQuestionCandidate(
+      detail.library_item_id,
+      candidate.candidate_id,
+    );
+    replaceCandidate(result.candidate);
   }
 
   const fileUrl = detail
@@ -630,8 +1026,49 @@ export function PrivateLibraryWorkspace() {
                 </p>
               )}
 
+              <section className="library-candidates">
+                <header>
+                  <div><span>03</span><div><h3>拆题与教材映射</h3><p>只从你确认过的文本生成；每道题仍需逐项核对。</p></div></div>
+                  <p><LockIcon />导入后仍为 private</p>
+                </header>
+
+                {detail.text_review_status !== "confirmed" ? (
+                  <div className="candidate-gate">
+                    <ClockIcon />
+                    <div><strong>先确认当前文本</strong><p>待校对文本不会进入拆题流程，OCR 草稿也不能绕过教师确认。</p></div>
+                    <button disabled type="button">等待教师确认</button>
+                  </div>
+                ) : candidatesLoading ? (
+                  <div className="candidate-gate"><span className="button-loader" /><p>正在读取当前文本版本的候选题…</p></div>
+                ) : candidates.length === 0 ? (
+                  <div className="candidate-gate candidate-gate--ready">
+                    <SparkIcon />
+                    <div>
+                      <strong>文本 v{detail.version} 已确认，可以开始拆题</strong>
+                      <p>{reviewChanged ? "校对区还有未保存修改，请先确认或撤回修改。" : "系统先按题号生成可编辑候选，不会自动写入任何题库。"}</p>
+                    </div>
+                    <button disabled={reviewChanged} onClick={() => void prepareCandidates()} type="button">
+                      <PlusIcon />生成拆题候选
+                    </button>
+                  </div>
+                ) : (
+                  <div className="candidate-list">
+                    {candidates.map((candidate) => (
+                      <CandidateEditor
+                        candidate={candidate}
+                        key={candidate.candidate_id}
+                        onImport={() => importCandidate(candidate)}
+                        onMap={(nodeId) => mapCandidate(candidate, nodeId)}
+                        onSave={(draft) => saveCandidate(candidate, draft)}
+                      />
+                    ))}
+                  </div>
+                )}
+                {candidateMessage && <p className="candidate-section-message" aria-live="polite">{candidateMessage}</p>}
+              </section>
+
               <section className="library-revisions">
-                <header><div><span>03</span><h3>修订记录</h3></div><p>{revisions.length ? `${revisions.length} 次变更` : "尚无变更"}</p></header>
+                <header><div><span>04</span><h3>修订记录</h3></div><p>{revisions.length ? `${revisions.length} 次变更` : "尚无变更"}</p></header>
                 {revisions.length ? (
                   <ol>
                     {revisions.map((revision) => (

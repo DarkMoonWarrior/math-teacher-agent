@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from functools import lru_cache
 
-from fastapi import APIRouter, File, Form, HTTPException, Query, Response, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Response, UploadFile
 from fastapi.responses import FileResponse
 
 from app.core.config import get_settings
+from app.core.identity import CurrentTeacher, get_current_teacher
 from app.modules.pdf_imports import (
     BoundaryCandidateCreate,
     BoundaryCandidateList,
@@ -484,7 +485,11 @@ def delete_structured_media_crop(file_id: str, draft_id: str, crop_id: str) -> R
     "/files/{file_id}/structured-drafts/{draft_id}/import",
     response_model=StructuredDraftImportResult,
 )
-def import_structured_draft(file_id: str, draft_id: str) -> StructuredDraftImportResult:
+def import_structured_draft(
+    file_id: str,
+    draft_id: str,
+    current_teacher: CurrentTeacher = Depends(get_current_teacher),
+) -> StructuredDraftImportResult:
     try:
         studio = get_pdf_import_studio()
         file = studio.inspect(file_id)
@@ -519,7 +524,7 @@ def import_structured_draft(file_id: str, draft_id: str) -> StructuredDraftImpor
             "adaptation_allowed": batch.rights_basis != "private_research_only",
         }
         question = get_import_question_bank().create_private_resource_question(
-            candidate, resource=resource
+            candidate, resource=resource, owner_id=current_teacher.teacher_id
         )
         for crop in draft.media_crops:
             if crop.imported_image_id:
