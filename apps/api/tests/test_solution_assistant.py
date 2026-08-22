@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import pytest
@@ -12,6 +13,7 @@ from app.modules.solution_assistant import (
     SolutionRequest,
     SolutionResult,
 )
+from app.modules.solution_assistant.providers import OpenAISolutionProvider
 from app.routes.questions import get_question_bank
 
 
@@ -33,6 +35,44 @@ class FakeSolutionProvider:
             common_mistakes=["移项时忘记变号"],
             teaching_notes=["要求学生口述等式性质"],
         )
+
+
+def test_live_provider_requires_human_readable_math_delimiters() -> None:
+    captured: dict = {}
+    provider = OpenAISolutionProvider(api_key="test-key", model="test-model")
+
+    def fake_request(payload: dict, _request) -> dict:
+        captured.update(payload)
+        generated = {
+            "explanation": {
+                "method": "级数法",
+                "steps": [r"由 $S=\sum_{n=1}^{\infty}\frac{1}{n^2}$ 进行计算。"],
+                "final_answer": r"$$S=\frac{\pi^2}{6}$$",
+            },
+            "knowledge_points": ["数列"],
+            "common_mistakes": [],
+            "teaching_notes": [],
+        }
+        return {
+            "output": [
+                {
+                    "type": "message",
+                    "content": [
+                        {
+                            "type": "output_text",
+                            "text": json.dumps(generated, ensure_ascii=False),
+                        }
+                    ],
+                }
+            ]
+        }
+
+    provider._request = fake_request  # type: ignore[method-assign]
+    result = provider.solve(SolutionRequest(question_text="求无穷级数的和。"))
+
+    assert "行内公式用单个 $...$" in captured["instructions"]
+    assert "单独成行的公式用 $$...$$" in captured["instructions"]
+    assert result.explanation.final_answer.startswith("$$")
 
 
 def test_solve_exact_verified_bank_question() -> None:

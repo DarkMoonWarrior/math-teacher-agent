@@ -938,7 +938,7 @@ svg { flex: 0 0 auto; }
   padding: var(--space-md) 0;
 }
 
-.solution-steps li > span {
+.solution-step-number {
   color: var(--color-vermilion);
   font-size: var(--text-xs);
   font-variant-numeric: tabular-nums;
@@ -964,6 +964,50 @@ svg { flex: 0 0 auto; }
 .final-answer__math {
   font-family: var(--font-display);
   font-size: var(--text-lg);
+}
+
+.math-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.inline-math {
+  display: inline-block;
+  max-width: 100%;
+  padding-inline: 0.08em;
+  vertical-align: -0.08em;
+}
+
+.inline-math .katex { font-size: 1.04em; }
+
+.math-display {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: var(--space-sm) 0;
+  scrollbar-width: thin;
+}
+
+.math-display .katex-display {
+  margin: 0;
+  min-width: max-content;
+  text-align: center;
+}
+
+.math-fallback {
+  background: var(--color-paper-soft);
+  color: var(--color-ink-soft);
+  display: inline;
+  font-family: var(--font-body);
+  overflow-wrap: anywhere;
+  padding-inline: 0.2em;
+}
+
+.math-fallback--display {
+  display: block;
+  margin-block: var(--space-xs);
+  padding: var(--space-sm);
 }
 
 .solve-paper__foot {

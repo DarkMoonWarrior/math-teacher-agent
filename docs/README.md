@@ -9,6 +9,7 @@
 - [`ARCHITECTURE.md`](ARCHITECTURE.md)：主应用、业务后端、Agent Runtime 与数据之间的 seam 和依赖方向。
 - [`ROADMAP.md`](ROADMAP.md)：M0-M17 的当前里程碑顺序、单阶段目标和启动门槛。
 - [`PRODUCT-GATES.md`](PRODUCT-GATES.md)：永久可信红线、阶段工程 Gate、Beta 指标和商业发布门禁。
+- [`MATH-CONTENT-PRESENTATION.md`](MATH-CONTENT-PRESENTATION.md)：题面、解题步骤和答案的 KaTeX 输出约定、旧结果兼容、失败降级与可读性 Gate。
 - [`M5-SOLVE-EVALUATION.md`](M5-SOLVE-EVALUATION.md)：Solve 的固定项目自建合成评测、覆盖范围和结果边界。
 - [`M5-GATE-REVIEW.md`](M5-GATE-REVIEW.md)：M5 完成 Gate、工程回归、范围核对和阶段转换结论。
 - [`M6-PRIVATE-LIBRARY-AGENT.md`](M6-PRIVATE-LIBRARY-AGENT.md)：已完成 M6 的范围、隐私边界、纵向切片和完成 Gate。

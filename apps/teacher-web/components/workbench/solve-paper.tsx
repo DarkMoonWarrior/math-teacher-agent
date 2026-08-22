@@ -118,7 +118,7 @@ export function SolvePaper({ page, result }: SolvePaperProps) {
       <ol className="solution-steps">
         {solution.explanation.steps.map((step, index) => (
           <li key={`${index}-${step}`}>
-            <span>{String(index + 1).padStart(2, "0")}</span>
+            <span className="solution-step-number">{String(index + 1).padStart(2, "0")}</span>
             <MathText text={step} />
           </li>
         ))}

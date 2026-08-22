@@ -26,6 +26,7 @@
 11. 现阶段优先模块化单体和清晰接口，不为“架构高级”提前拆微服务。
 12. 辅助命制题永久属于创建教师的 `PersonalQuestionLibrary`，不存在进入 public/shared/team/school/commercial-approved 的产品路径。
 13. 公共 Search、公共 QuestionBank、后台内容管理和其他 owner 均无权读取或管理辅助命制题；教师拥有命名、分类、编辑、导出、删除和永久删除自己私题的权利。
+14. 面向教师展示的数学内容必须渲染为可读公式；不能把 LaTeX 源码作为默认正文，也不能把排版成功冒充数学验证通过。统一规范见 [`MATH-CONTENT-PRESENTATION.md`](MATH-CONTENT-PRESENTATION.md)。
 
 完整量化门禁见 [`PRODUCT-GATES.md`](PRODUCT-GATES.md)。
 
@@ -56,6 +57,7 @@ M0-M6 已完成；项目所有者已于 2026-08-22 在 M6 Gate 结论后明确�
 - 复用 M6 OCR 基础，但为单题公式、选项、低置信度区域和教师修订建立独立可核对结果；
 - 本地处理优先；每次外部 OCR/视觉处理都要求教师明确同意；
 - 让 M5 Solve 最终消费受控 `QuestionInputBundle`，不复制 `SolutionAssistant` 或 MathVerifier；
+- 修复并复用统一数学展示组件，使题面、步骤和答案中的行内/独立公式可读，同时兼容旧题库与旧运行结果；
 - 补齐 synthetic evaluation、跨 owner、取消/失败、响应式/可访问性和 Gate 审计。
 
 本阶段禁止：
@@ -81,8 +83,9 @@ M7 必须同时满足以下条件，才能完成 Gate E：
 4. 外部处理逐次同意，取消、超时、失败和模型不可用均有明确体验；
 5. Agent 不获得文件、路径、数据库、对象存储凭据或任意 URL 能力；
 6. MathVerifier 证据范围与视觉理解范围分开，模型判断不能升级为程序验证；
-7. 固定 synthetic eval、跨 owner、主要响应式/可访问性、完整工程回归与 `PRODUCT-GATES.md` Gate E 通过；
-8. M8 未实现，Paper/Lesson 继续诚实显示为预览或不可用。
+7. 题面、步骤和答案的数学表达以可读公式展示，历史未分隔 LaTeX 有兼容降级，公式不造成页面级横向溢出；
+8. 固定 synthetic eval、跨 owner、主要响应式/可访问性、完整工程回归与 `PRODUCT-GATES.md` Gate E 通过；
+9. M8 未实现，Paper/Lesson 继续诚实显示为预览或不可用。
 
 ## 6. 下一阶段启动条件
 

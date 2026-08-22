@@ -12,6 +12,7 @@
 - 产品自有 `TeacherAgentRuntime` 与隔离的 DeepSeek Harness adapter；
 - M5 Solve 后端编排：唯一可信 Tool 结果、分级数学验证、运行/流式/取消/恢复；
 - Solve 工作台：完整题目输入、Search 题目转入、结构化三页解析与 MathVerifier 证据；
+- 数学内容可读展示：题面、步骤和答案支持行内/独立 KaTeX，并兼容旧结果中的未分隔公式；
 - M6 第一条切片：Agent 可读取当前教师资料库的聚合处理状态，但看不到私人正文、文件名或路径；
 - M6 第二条切片：新工作台可同源上传 PDF/DOCX/图片，显式记录来源与权利依据，并展示 owner-scoped 私人资料清单；
 - M6 第三条切片：可对照原文件、首次提取文本和教师校对稿，运行本地 PDF OCR 或逐次授权的外部 OCR，并保留 owner-scoped 修订记录；

@@ -59,6 +59,9 @@ class OpenAISolutionProvider:
                 "你是中国高中数学教研员，使用人教A版术语和新高考答题规范解题。"
                 "必须检查题目条件是否充分，逐步给出依据，不能虚构题源、数值或验证结论。"
                 "如果题目本身有歧义或无解，应在步骤与最终答案中明确指出。"
+                "所有数学表达必须使用 KaTeX 兼容的 LaTeX：行内公式用单个 $...$ 包裹，"
+                "需要单独成行的公式用 $$...$$ 包裹；中文说明必须放在公式分隔符之外，"
+                "不要使用 Markdown 代码块，也不要把 LaTeX 命令作为未分隔的普通文字输出。"
                 "输出将交由教师复核，不要声称已经程序验证。"
             ),
             "input": json.dumps(prompt, ensure_ascii=False),
@@ -82,7 +85,7 @@ class OpenAISolutionProvider:
             feature="solution_assistant",
             provider=self.name,
             model=self.model,
-            prompt_version="solution-assistant-v1",
+            prompt_version="solution-assistant-v2-math-display",
             actor_id=request_data.teacher_id,
         ) as run:
             raw = self._request(payload, request)
@@ -123,8 +126,19 @@ class OpenAISolutionProvider:
             "additionalProperties": False,
             "properties": {
                 "method": {"type": "string"},
-                "steps": {"type": "array", "items": {"type": "string"}},
-                "final_answer": {"type": "string"},
+                "steps": {
+                    "type": "array",
+                    "description": (
+                        "中文说明在公式分隔符外；行内公式使用 $...$，独立公式使用 $$...$$"
+                    ),
+                    "items": {"type": "string"},
+                },
+                "final_answer": {
+                    "type": "string",
+                    "description": (
+                        "中文说明在公式分隔符外；行内公式使用 $...$，独立公式使用 $$...$$"
+                    ),
+                },
             },
             "required": ["method", "steps", "final_answer"],
         }
