@@ -6,6 +6,7 @@ import type {
   SolveTaskResult,
   LibraryItemDetail,
   LibraryItemSummary,
+  QuestionInputBundle,
 } from "./contracts";
 import { HttpTeacherWorkspace } from "./http-adapter";
 
@@ -110,6 +111,48 @@ function solveResultFixture(): SolveTaskResult {
   };
 }
 
+function questionInputBundleFixture(): QuestionInputBundle {
+  return {
+    asset: {
+      asset_id: "qcap_1",
+      original_filename: "question.png",
+      source: "upload",
+      source_sha256: "synthetic-sha256",
+      current_revision: 1,
+      width: 1200,
+      height: 800,
+      size_bytes: 2048,
+      mime_type: "image/png",
+      clarity_status: "clear",
+      warnings: [],
+      revisions: [{
+        revision: 1,
+        source_revision: null,
+        operation: "original",
+        width: 1200,
+        height: 800,
+        mime_type: "image/png",
+        content_endpoint: "/api/v1/question-capture/assets/qcap_1/content?revision=1",
+        created_at: "2026-08-22T00:00:00Z",
+      }],
+      visibility: "private",
+      public_search_allowed: false,
+      model_training_allowed: false,
+      created_at: "2026-08-22T00:00:00Z",
+      updated_at: "2026-08-22T00:00:00Z",
+    },
+    recognition_status: "not_started",
+    stem_plain: "",
+    stem_latex: "",
+    options: [],
+    requires_visual_reasoning: null,
+    low_confidence_regions: [],
+    recognition_warnings: [],
+    external_processing_consent: false,
+    visibility: "private",
+  };
+}
+
 function libraryItemFixture(): LibraryItemSummary {
   return {
     library_item_id: "lib_1",
@@ -153,6 +196,57 @@ afterEach(() => {
 });
 
 describe("HttpTeacherWorkspace", () => {
+  it("uploads a private question image without exposing owner or external consent", async () => {
+    const bundle = questionInputBundleFixture();
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify(bundle), {
+      status: 201,
+      headers: { "Content-Type": "application/json" },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    const file = new File([new Uint8Array([1, 2, 3])], "question.png", { type: "image/png" });
+
+    const workspace = new HttpTeacherWorkspace();
+    await expect(workspace.uploadQuestionMedia({
+      file,
+      source: "clipboard",
+      privateStorageAcknowledged: true,
+    })).resolves.toEqual(bundle);
+
+    const init = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    const body = init.body as FormData;
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/v1/question-capture/assets");
+    expect(body.get("source")).toBe("clipboard");
+    expect(body.get("private_storage_acknowledged")).toBe("true");
+    expect(body.has("owner_id")).toBe(false);
+    expect(body.has("external_processing_consent")).toBe(false);
+  });
+
+  it("transforms a controlled question asset by id without storage paths", async () => {
+    const bundle = questionInputBundleFixture();
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify(bundle), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const workspace = new HttpTeacherWorkspace();
+    await expect(workspace.transformQuestionMedia("qcap_1", {
+      operation: "crop",
+      crop: { x: 10, y: 20, width: 900, height: 600 },
+    })).resolves.toEqual(bundle);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/v1/question-capture/assets/qcap_1/transform",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          operation: "crop",
+          crop: { x: 10, y: 20, width: 900, height: 600 },
+        }),
+      }),
+    );
+  });
+
   it("requires an explicit one-action consent when searching private excerpts", async () => {
     const result = {
       query: "函数",

@@ -27,11 +27,12 @@ The current product line is the new `apps/teacher-web` experience. `apps/web` is
 - `Solve Agent`: backend workflow and new Teacher Web flow are connected, including structured solution pages, Search-to-Solve transfer, graded MathVerifier evidence, cancellation, and same-run recovery.
 - `TeacherAgentRuntime` and the isolated DeepSeek Harness adapter: implemented with eight controlled read-only tools; `inspect_private_library` exposes only current-owner aggregate state, while `search_private_library` requires a one-use server-issued consent receipt and returns only bounded confirmed excerpts.
 - `Private Library Agent`: M6 is complete; aggregate overview, owner-scoped upload/list, OCR/review, extraction, editable question candidates, trusted curriculum mapping and explicitly consented private retrieval are connected in the new workbench. Its 12-case fixed synthetic evaluation and full Gate E audit passed on 2026-08-22.
-- `Multimodal Question Capture/Solve` and `Private Question Authoring`: M7/M8 product boundaries are documented, but no implementation has started.
+- `Multimodal Question Capture/Solve`: M7 is active. Its first slice is connected: the new Solve composer can upload, paste or capture one private image, and the `QuestionCapture` module owns validation, clarity warnings, owner-scoped storage, rotation/crop and revisions. OCR, visual reasoning and Solve bundle consumption remain unstarted.
+- `Private Question Authoring`: M8 has a documented boundary but no implementation has started.
 - `Lesson Agent` and `Paper Agent`: navigation and requirement-drafting previews only in `apps/teacher-web`; their Agent runtimes/tools are not connected.
 - M5 passed its fixed synthetic evaluation and full Gate E audit on 2026-08-21. Mature lesson-plan, paper, import, library, solution, curriculum, question-bank, and verification modules exist in the migrated backend/legacy UI. Existing REST workflows do not mean the corresponding new Agent capability is complete.
 - Teacher identity, cloud isolation, billing, and public commercial operation are not implemented.
-- M0-M6 are complete. The owner approved the new M0-M17 sequence; M7 and later remain unstarted and must not start until the owner explicitly confirms the post-Gate transition to M7.
+- M0-M6 are complete. The owner explicitly confirmed the post-Gate transition to M7; M8 and later must not start until M7 Gate E passes and the owner confirms the next transition.
 
 ## Repository seams
 

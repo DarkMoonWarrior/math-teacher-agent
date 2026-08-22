@@ -38,7 +38,7 @@ MATH_AI_AGENT_PROVIDER=test-mock
 ## 模块 seam
 
 - `lib/teacher-workspace/contracts.ts`：UI 可见的稳定接口和结果模型。
-- `lib/teacher-workspace/http-adapter.ts`：Search/Solve/Private Library 同源 FastAPI adapter；内部处理 SSE、同一 run 恢复、服务端取消、multipart 上传与 OCR 后台任务轮询，不向 React 泄漏传输细节。
+- `lib/teacher-workspace/http-adapter.ts`：Search/Solve/Private Library/Question Capture 同源 FastAPI adapter；内部处理 SSE、同一 run 恢复、服务端取消、owner-free multipart 上传、受控图片变换与 OCR 后台任务轮询，不向 React 泄漏传输或存储细节。
 - `components/workbench/teacher-workbench.tsx`：视图与交互状态。
 - `components/workbench/private-library-workspace.tsx`：私人资料上传、权利声明、owner-scoped 清单、原文件对照、OCR 校对、revision、拆题编辑和教材映射界面。
 

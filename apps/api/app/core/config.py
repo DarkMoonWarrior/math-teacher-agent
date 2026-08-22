@@ -52,6 +52,12 @@ class Settings(BaseSettings):
     private_library_dir: Path = Field(
         default=PROJECT_ROOT / "data" / "runtime" / "private-library-files"
     )
+    question_capture_db: Path = Field(
+        default=PROJECT_ROOT / "data" / "runtime" / "question-capture.sqlite3"
+    )
+    question_capture_dir: Path = Field(
+        default=PROJECT_ROOT / "data" / "runtime" / "question-capture-files"
+    )
     pdf_import_db: Path = Field(
         default=PROJECT_ROOT / "data" / "runtime" / "pdf-imports.sqlite3"
     )

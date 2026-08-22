@@ -17,9 +17,10 @@
 - M6 第三条切片：可对照原文件、首次提取文本和教师校对稿，运行本地 PDF OCR 或逐次授权的外部 OCR，并保留 owner-scoped 修订记录；
 - M6 第四条切片：只从教师确认的当前文本版本生成可编辑候选；教材路径由受控 Curriculum 补全，导入固定为 owner 私有、待审核、待数学验证；
 - M6 第五条切片：每次私人检索都需教师明确同意；一次性许可绑定当前教师、查询与数量，Agent 只能看到确认文本的有界匹配片段及来源版本/权利状态；
+- M7 第一条切片：Solve 可上传、粘贴或拍摄单题图片；真实格式、体积、像素与清晰度由 `QuestionCapture` 检查，旋转/裁剪保留 owner-scoped private revision；
 - QuestionBank、MathVerifier、Curriculum、PrivateLibrary、PDF、试卷、教案等成熟业务模块。
 
-当前 Search、Solve 与 Private Library 入口已接入新工作台；M6 固定 synthetic evaluation 与完整 Gate E 已于 2026-08-22 严格通过。M7 尚未启动，必须等待项目所有者确认阶段转换；教案和组卷继续明确标记为预览。最新状态见 [`docs/PROJECT-STATUS.md`](docs/PROJECT-STATUS.md)。
+当前 Search、Solve 与 Private Library 入口已接入新工作台；M6 Gate E 已严格通过，项目所有者已确认进入 M7。M7 当前只完成私有单题媒体入口，尚未运行 OCR、视觉推理或把图片交给 Solve；教案和组卷继续明确标记为预览。最新状态见 [`docs/PROJECT-STATUS.md`](docs/PROJECT-STATUS.md)。
 
 ## 核心原则
 
@@ -107,7 +108,7 @@ pnpm build:agent
 
 ## 当前开发顺序
 
-`Search 稳定化（完成） → Solve（完成） → Private Library（完成，等待确认进入下一阶段） → 多模态图片解题 → 私有辅助命题 → Paper → Lesson → Memory → Beta 准备 → Beta 验证 → 商业基础 → Teacher Pro → 教研组 → 学校`
+`Search 稳定化（完成） → Solve（完成） → Private Library（完成） → 多模态图片解题（进行中） → 私有辅助命题 → Paper → Lesson → Memory → Beta 准备 → Beta 验证 → 商业基础 → Teacher Pro → 教研组 → 学校`
 
 不要并行铺开后续阶段。最新版 M0-M17 路线见 [`docs/ROADMAP.md`](docs/ROADMAP.md)，M7/M8 的固定边界见 [`docs/M7-MULTIMODAL-QUESTION-SOLVE.md`](docs/M7-MULTIMODAL-QUESTION-SOLVE.md) 与 [`docs/M8-PRIVATE-QUESTION-AUTHORING.md`](docs/M8-PRIVATE-QUESTION-AUTHORING.md)，每阶段和商业发布门禁见 [`docs/PRODUCT-GATES.md`](docs/PRODUCT-GATES.md)。
 

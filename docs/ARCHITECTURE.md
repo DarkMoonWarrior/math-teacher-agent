@@ -59,15 +59,16 @@ apps/web (legacy/reference Next.js UI, :3000)
 - Third slice: `TeacherWorkspace` 隐藏 OCR 后台任务细节；新 Teacher Web 对照原文件、首次提取文本、可编辑校对稿和 revision。本地 PDF OCR 优先，外部 OCR 每次单独同意，任何 OCR 结果仍为待教师校对草稿。
 - Fourth slice: 拆题候选绑定教师确认的当前文本版本；浏览器可编辑题目内容但不能提交 owner/editor。教材映射只接受 `node_id`，FastAPI 从受控 Curriculum 补全教材路径。QuestionBank 导入固定为 owner 私有、待审核、待数学验证，并保存资料/版本/候选 provenance。
 - Current retrieval seam: 浏览器逐次明确同意后，FastAPI 为当前教师、查询和数量签发短时单次许可；Harness 只能调用固定 `search_private_library` Tool，`PrivateLibrary` 只从 active + confirmed 资源返回有界匹配片段和来源版本/权利状态。owner、原文件、路径与整份正文不越过 seam。
-- Completion: 12 个项目自建 synthetic 场景的 8 类违规均为 0，完整工程、静态边界与 320—1920px 浏览器 Gate E 已通过；项目所有者确认阶段转换前不进入 M7。
+- Completion: 12 个项目自建 synthetic 场景的 8 类违规均为 0，完整工程、静态边界与 320—1920px 浏览器 Gate E 已通过；项目所有者已确认进入 M7。
 
-### Question Capture module（M7 待开始）
+### Question Capture module（M7 进行中）
 
 - Seam: `QuestionCapture.prepare(QuestionCaptureCommand) -> QuestionInputBundle`。
 - Interface: 接收文字或 owner-scoped 单题媒体引用，返回可编辑题面、LaTeX、选项、原图/裁剪引用、视觉推理标志、低置信度区域、revision、consent 与 provider 证据。
 - Implementation: 图片验证、旋转裁剪、清晰度、OCR、公式识别、图形存在性判断、owner 隔离和外部处理同意隐藏在模块内部。
 - Adapters: 本地 OCR/图像处理 adapter、外部视觉 adapter 和 deterministic test adapter；Solve Agent 不直接调用供应商或读取文件。
 - Trust: 带图题的原图/裁剪是 `QuestionInputBundle` 的一部分，不能在 OCR 后丢弃；视觉理解与 MathVerifier 证据范围分开。
+- First slice: `QuestionCapture.prepare/transform/get/content` 隐藏真实格式探测、体积/像素/清晰度、EXIF 方向、owner-scoped SQLite/文件 adapter 和 revision。公开路由只接收图片、来源、私有存储确认与受控 asset ID；浏览器不能提交 owner，也看不到存储路径。新 Solve composer 已接入上传、粘贴、拍照、预览、旋转和裁剪，但不会在识别切片前把图片传给 Solve 或外部模型。
 
 ### Private Question Authoring modules（M8 待开始）
 

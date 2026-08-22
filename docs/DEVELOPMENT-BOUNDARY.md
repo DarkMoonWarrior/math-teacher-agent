@@ -44,50 +44,49 @@
 
 辅助命制题使用独立 `PersonalQuestionLibrary` 模块和 owner-isolated storage namespace，不以公共 `QuestionBank` 的一个可变 visibility 字段作为唯一隔离手段。该模块没有 publish/share 接口；后台运营/内容管理员没有内容查看和管理接口。详细规则见 [`M8-PRIVATE-QUESTION-AUTHORING.md`](M8-PRIVATE-QUESTION-AUTHORING.md)。
 
-## 4. 已完成阶段：M6 Private Library Agent
+## 4. 当前阶段：M7 多模态题目采集与图片解题
 
-M0-M6 已完成；M6 固定评测与 Gate E 于 2026-08-22 严格通过。当前处于阶段转换冻结状态：不再扩展 M6，也不启动 M7、Paper、Lesson 或 Memory，直到项目所有者在 Gate 结论之后明确确认进入 M7。M6 详细切片与证据见 [`M6-PRIVATE-LIBRARY-AGENT.md`](M6-PRIVATE-LIBRARY-AGENT.md)、[`M6-PRIVATE-LIBRARY-EVALUATION.md`](M6-PRIVATE-LIBRARY-EVALUATION.md) 和 [`M6-GATE-REVIEW.md`](M6-GATE-REVIEW.md)。
+M0-M6 已完成；项目所有者已于 2026-08-22 在 M6 Gate 结论后明确确认进入 M7。当前只建设从单题图片到可信 Solve 的工作流，不扩展 Private Library，也不启动 M8、Paper、Lesson 或 Memory。详细切片见 [`M7-MULTIMODAL-QUESTION-SOLVE.md`](M7-MULTIMODAL-QUESTION-SOLVE.md)。
 
 本阶段允许：
 
-- 复用现有 `PrivateLibrary`、PDF 导入、OCR、revision 和拆题业务模块；
-- 在新 Teacher Web 中建立 PDF/DOCX/图片上传、列表、校对、拆题、教材映射和私人检索流程；
-- 增加不含 owner 选择器的受控 Tool，并通过 TeacherAgentRuntime / Harness 编排；
-- 保留原文件、哈希、owner、来源/权利声明、revision 和每一步处理状态；
-- 本地处理优先；外部 OCR/模型处理要求教师对本次动作明确同意；
-- 对 OCR、AI 修复和拆题结果保持待校对/待教师复核；
-- 补齐 synthetic evaluation、越权测试、运行说明和 Gate 审计。
+- 在新 Teacher Web 的 Solve 输入中建立单题图片上传、粘贴、拍照、预览、旋转、裁剪和移除；
+- 通过 `QuestionCapture.prepare(QuestionCaptureCommand) -> QuestionInputBundle` 隐藏验证、存储、revision、识别和视觉 adapter；
+- 保存 owner-scoped 原图与题目级裁剪，浏览器和 Agent 只使用受控 asset ID；
+- 复用 M6 OCR 基础，但为单题公式、选项、低置信度区域和教师修订建立独立可核对结果；
+- 本地处理优先；每次外部 OCR/视觉处理都要求教师明确同意；
+- 让 M5 Solve 最终消费受控 `QuestionInputBundle`，不复制 `SolutionAssistant` 或 MathVerifier；
+- 补齐 synthetic evaluation、跨 owner、取消/失败、响应式/可访问性和 Gate 审计。
 
 本阶段禁止：
 
-- 把旧 `apps/web` 的资料界面直接搬进新工作台；
-- 因为旧 `/api/v1/library` 或 `/api/v1/imports` 已存在就宣称 Private Library Agent 已完成；
-- 让 Agent 读取数据库、文件系统、原文件路径或任意 URL；
-- 未经本次明确同意把私人正文、标题、文件名或图片发送给外部模型/OCR；
-- 把 OCR、AI 修复、拆题、映射或数学验证当作 private → public 授权；
-- 自动保存为已确认、自动发布、自动批准、永久删除或新增 private → shared/public 路径；
-- 顺带开发题目变式、组卷、教案或教师记忆；
+- 把整份 PDF/DOCX 导入、批量 OCR 或资料拆题重新纳入 M7；
+- OCR 后丢弃原图/裁剪，或把模型生成的图形描述当作原图替代品；
+- 让浏览器、Agent 或模型选择 owner、读取文件路径、对象存储地址、数据库或任意 URL；
+- 未经本次明确同意把题目图片、题面或视觉观察发送给外部 OCR/视觉模型；
+- 把 OCR/视觉判断冒充 MathVerifier 证据或升级为 `program_verified`；
+- 静默补全低置信度文字、公式、标签、缺失图形条件或多题裁剪；
+- 新增 private → shared/public/commercial-approved 路径或把图片用于模型训练；
+- 顺带开发辅助命题、组卷、教案、题目变式或教师记忆；
 - 提前开发账号、付费、多租户、教研组、学校后台或学生功能；
-- 在项目所有者确认阶段转换前铺开 M7 多模态解题、M8 辅助命题或 M9-M11 Paper/Lesson/Memory；
-- 因为 Harness 不可达而静默切换执行语义。可以提供显式、可观测、由产品决定的 fallback，但默认 fail closed。
+- 因为 Harness/视觉供应商不可达而静默切换执行语义；默认必须 fail closed。
 
-## 5. M6 完成 Gate（已全部满足）
+## 5. M7 完成 Gate
 
-M6 已用以下条件完成 Gate E 审计：
+M7 必须同时满足以下条件，才能完成 Gate E：
 
-1. 新工作台完成上传、处理、校对、拆题、映射和私人检索的完整流程；
-2. 原文件、owner、来源/权利声明、revision 和处理状态可追踪；
-3. owner 隔离覆盖列表、详情、文件、OCR、修订、候选和检索，越权 fail closed；
-4. 外部处理逐次同意，模型/OCR 结果不会自动成为教师确认内容；
-5. 所有派生对象保持 private，不存在自动 public/shared/commercial-approved 路径；
-6. 模型不可用、Tool 超时、网络失败、空资料库、格式失败、权限拒绝和取消均有明确体验；
-7. Agent 只调用 allowlisted Tool，不访问数据库、文件或任意 URL；
-8. 主要响应式、可访问性、固定 synthetic eval 与完整工程回归通过；
-9. `PRODUCT-GATES.md` 的 Gate E 通过；M7/M8 未实现入口与 Paper/Lesson 继续诚实显示为预览或不可用。
+1. 文字、公式和带图题都能从单题图片进入可核对的 Solve 工作流；
+2. 原图、裁剪、识别草稿、教师修订和解答之间可追踪且始终 owner-scoped/private；
+3. 图形题不丢失视觉条件，无法可靠理解时明确要求教师复核或失败；
+4. 外部处理逐次同意，取消、超时、失败和模型不可用均有明确体验；
+5. Agent 不获得文件、路径、数据库、对象存储凭据或任意 URL 能力；
+6. MathVerifier 证据范围与视觉理解范围分开，模型判断不能升级为程序验证；
+7. 固定 synthetic eval、跨 owner、主要响应式/可访问性、完整工程回归与 `PRODUCT-GATES.md` Gate E 通过；
+8. M8 未实现，Paper/Lesson 继续诚实显示为预览或不可用。
 
 ## 6. 下一阶段启动条件
 
-M6 Gate 已完整通过；变更形成可回滚提交后，仍需项目所有者明确确认，才进入 M7 多模态题目采集与图片解题。
+只有 M7 Gate 完整通过、变更形成可回滚提交并由项目所有者确认后，才进入 M8 私有辅助命题 Agent。
 
 后续顺序以 [`ROADMAP.md`](ROADMAP.md) 为准：Solve → Private Library → 多模态图片解题 → 私有辅助命题 → Paper → Lesson → Memory → Beta 准备 → Beta 验证 → 商业基础 → Teacher Pro → 教研组 → 学校。
 
