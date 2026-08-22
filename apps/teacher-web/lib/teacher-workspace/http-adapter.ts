@@ -1,6 +1,9 @@
 import {
   TeacherWorkspace,
   TeacherWorkspaceError,
+  type LibraryItemSummary,
+  type PrivateLibraryList,
+  type PrivateLibraryUpload,
   type SearchTaskOptions,
   type SearchTaskProgressStage,
   type SearchTaskRequest,
@@ -38,7 +41,23 @@ function apiUrl(path: string): string {
 
 type ErrorEnvelope = {
   error?: { code?: string; message?: string; request_id?: string };
+  detail?: unknown;
 };
+
+function detailMessage(detail: unknown): string | undefined {
+  if (typeof detail === "string") return detail;
+  if (!Array.isArray(detail)) return undefined;
+  const messages = detail
+    .map((item) => {
+      if (typeof item === "string") return item;
+      if (item && typeof item === "object" && "msg" in item && typeof item.msg === "string") {
+        return item.msg;
+      }
+      return "";
+    })
+    .filter(Boolean);
+  return messages.length ? messages.join("；") : undefined;
+}
 
 type TaskStreamEvent = {
   type: "run_started" | "assistant_delta" | "tool_started" | "tool_finished" | "run_completed" | "run_failed" | "run_cancelled";
@@ -76,7 +95,7 @@ async function responseError(response: Response): Promise<TeacherWorkspaceError>
   }
   return new TeacherWorkspaceError(
     payload.error?.code ?? `HTTP_${response.status}`,
-    payload.error?.message ?? `任务未完成（HTTP ${response.status}）。`,
+    payload.error?.message ?? detailMessage(payload.detail) ?? `任务未完成（HTTP ${response.status}）。`,
     payload.error?.request_id ?? "",
   );
 }
@@ -288,6 +307,54 @@ async function readSolveStream(
 }
 
 export class HttpTeacherWorkspace implements TeacherWorkspace {
+  async listPrivateLibrary(signal?: AbortSignal): Promise<PrivateLibraryList> {
+    try {
+      const response = await fetch(apiUrl("/api/v1/library"), {
+        headers: { Accept: "application/json" },
+        signal,
+      });
+      if (!response.ok) throw await responseError(response);
+      return await response.json() as PrivateLibraryList;
+    } catch (cause) {
+      if (cause instanceof TeacherWorkspaceError) throw cause;
+      if (cause instanceof DOMException && cause.name === "AbortError") throw cause;
+      throw new TeacherWorkspaceError(
+        "NETWORK_ERROR",
+        "无法读取私人资料。请确认 FastAPI 已启动。",
+      );
+    }
+  }
+
+  async uploadPrivateLibrary(
+    request: PrivateLibraryUpload,
+    signal?: AbortSignal,
+  ): Promise<LibraryItemSummary> {
+    const body = new FormData();
+    body.set("file", request.file);
+    body.set("title", request.title);
+    body.set("rights_basis", request.rightsBasis);
+    body.set("rights_statement", request.rightsStatement);
+    body.set("rights_acknowledged", String(request.rightsAcknowledged));
+
+    try {
+      const response = await fetch(apiUrl("/api/v1/library"), {
+        method: "POST",
+        headers: { Accept: "application/json" },
+        body,
+        signal,
+      });
+      if (!response.ok) throw await responseError(response);
+      return await response.json() as LibraryItemSummary;
+    } catch (cause) {
+      if (cause instanceof TeacherWorkspaceError) throw cause;
+      if (cause instanceof DOMException && cause.name === "AbortError") throw cause;
+      throw new TeacherWorkspaceError(
+        "NETWORK_ERROR",
+        "无法上传私人资料。请确认 FastAPI 已启动。",
+      );
+    }
+  }
+
   async searchQuestions(
     request: SearchTaskRequest,
     options: SearchTaskOptions = {},

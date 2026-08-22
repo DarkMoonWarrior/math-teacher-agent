@@ -1,12 +1,12 @@
 {
-  "scanned_at": "2026-08-21T13:50:00+08:00",
+  "scanned_at": "2026-08-22T08:30:00+08:00",
   "project_root": "D:\\math-teacher-agent",
   "framework": "Next.js 16 App Router with React 19 and TypeScript",
   "target_route": "/",
   "target_app": "apps/teacher-web",
   "style_entry": "apps/teacher-web/app/globals.css",
   "token_entry": "apps/teacher-web/tokens.css",
-  "existing_business_boundary": "TeacherWorkspace adapter calling same-origin FastAPI Search and Solve SSE workflows",
+  "existing_business_boundary": "TeacherWorkspace adapter calling same-origin FastAPI Search and Solve SSE workflows plus owner-scoped Private Library upload/list",
   "preserved_paths": [
     "apps/teacher-web/lib/teacher-workspace/contracts.ts",
     "apps/teacher-web/lib/teacher-workspace/http-adapter.ts",
@@ -22,7 +22,7 @@
   },
   "constraints": [
     "Chinese high-school mathematics teachers only",
-    "Search and Solve are the only currently usable teacher workflows on this page",
+    "Search, Solve, and Private Library are the currently usable teacher workflows on this page",
     "source, rights, and verification statuses must remain explicit",
     "private and public data boundaries are not changed by this redesign"
   ]

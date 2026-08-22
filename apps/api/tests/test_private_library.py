@@ -221,6 +221,59 @@ def test_library_stats_are_scoped_to_the_current_owner(tmp_path: Path) -> None:
     assert mine.by_file_kind == {"docx": 1}
 
 
+def test_library_list_is_scoped_to_the_current_owner(tmp_path: Path) -> None:
+    library = make_library(tmp_path)
+    mine = library.ingest(
+        ingest_command(owner_id="owner_teacher", title="我的函数讲义"),
+        filename="mine.docx",
+        content=docx_bytes("函数单调性"),
+    )
+    library.ingest(
+        ingest_command(owner_id="other_teacher", title="其他教师资料"),
+        filename="other.docx",
+        content=docx_bytes("数列求和"),
+    )
+
+    listing = library.list(owner_id="owner_teacher")
+
+    assert listing.total == 1
+    assert [item.library_item_id for item in listing.items] == [mine.library_item_id]
+
+
+def test_library_http_uses_the_server_owner_for_list_upload_and_stats(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    library = make_library(tmp_path)
+    library.ingest(
+        ingest_command(owner_id="other_teacher", title="不可见资料"),
+        filename="other.docx",
+        content=docx_bytes("数列求和"),
+    )
+    monkeypatch.setattr("app.routes.library.get_private_library", lambda: library)
+    client = TestClient(app)
+
+    uploaded = client.post(
+        "/api/v1/library",
+        files={"file": ("mine.docx", docx_bytes("函数单调性"), "application/octet-stream")},
+        data={
+            "title": "我的函数讲义",
+            "rights_basis": "private_teaching_only",
+            "rights_statement": "本人确认该文件仅在私人空间用于教学备课。",
+            "rights_acknowledged": "true",
+            "owner_id": "other_teacher",
+        },
+    )
+    listing = client.get("/api/v1/library")
+    stats = client.get("/api/v1/library/stats")
+
+    assert uploaded.status_code == 201
+    assert listing.status_code == 200
+    assert listing.json()["total"] == 1
+    assert listing.json()["items"][0]["title"] == "我的函数讲义"
+    assert stats.json()["total"] == 1
+    assert library.list(owner_id="other_teacher").total == 1
+
+
 def test_image_waits_for_ocr_then_can_be_manually_confirmed(tmp_path: Path) -> None:
     library = make_library(tmp_path)
     item = library.ingest(

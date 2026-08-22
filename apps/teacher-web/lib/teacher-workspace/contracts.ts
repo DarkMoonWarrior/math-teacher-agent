@@ -169,6 +169,47 @@ export type SolveTaskOptions = {
   onProgress?: (progress: SolveTaskProgress) => void;
 };
 
+export type LibraryRightsBasis =
+  | "original"
+  | "licensed"
+  | "private_teaching_only";
+
+export type LibraryItemSummary = {
+  library_item_id: string;
+  title: string;
+  original_filename: string;
+  file_kind: "pdf" | "docx" | "image";
+  mime_type: string;
+  size_bytes: number;
+  page_count: number | null;
+  extraction_status: "extracted" | "needs_ocr" | "failed";
+  text_review_status: "pending" | "confirmed";
+  extracted_char_count: number;
+  corrected_char_count: number;
+  rights_basis: LibraryRightsBasis;
+  lifecycle_state: "active" | "trashed";
+  trashed_at: string | null;
+  visibility: "private";
+  public_search_allowed: false;
+  model_training_allowed: false;
+  version: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type PrivateLibraryList = {
+  items: LibraryItemSummary[];
+  total: number;
+};
+
+export type PrivateLibraryUpload = {
+  file: File;
+  title: string;
+  rightsBasis: LibraryRightsBasis;
+  rightsStatement: string;
+  rightsAcknowledged: true;
+};
+
 export interface TeacherWorkspace {
   searchQuestions(
     request: SearchTaskRequest,
@@ -179,6 +220,13 @@ export interface TeacherWorkspace {
     request: SolveTaskRequest,
     options?: SolveTaskOptions,
   ): Promise<SolveTaskResult>;
+
+  listPrivateLibrary(signal?: AbortSignal): Promise<PrivateLibraryList>;
+
+  uploadPrivateLibrary(
+    request: PrivateLibraryUpload,
+    signal?: AbortSignal,
+  ): Promise<LibraryItemSummary>;
 }
 
 export class TeacherWorkspaceError extends Error {

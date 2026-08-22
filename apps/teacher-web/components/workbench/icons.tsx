@@ -62,6 +62,33 @@ export function PaperIcon(props: IconProps) {
   );
 }
 
+export function LibraryIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <path d="M5 5.5h5l1.5 2H19V19H5V5.5Z" stroke="currentColor" strokeLinejoin="round" strokeWidth="1.6" />
+      <path d="M5 9h14M9 13h6" stroke="currentColor" strokeLinecap="round" strokeWidth="1.6" />
+    </IconBase>
+  );
+}
+
+export function UploadIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.7" />
+      <path d="M5 14.5V20h14v-5.5" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.6" />
+    </IconBase>
+  );
+}
+
+export function LockIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <rect height="10" rx="1.5" stroke="currentColor" strokeWidth="1.6" width="14" x="5" y="10" />
+      <path d="M8 10V7.5a4 4 0 0 1 8 0V10M12 14v2" stroke="currentColor" strokeLinecap="round" strokeWidth="1.6" />
+    </IconBase>
+  );
+}
+
 export function ClockIcon(props: IconProps) {
   return (
     <IconBase {...props}>

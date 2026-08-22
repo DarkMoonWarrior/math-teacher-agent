@@ -123,11 +123,20 @@ class PrivateLibrary:
                 raise
         return self.get(item_id)
 
-    def list(self, *, limit: int = 50, lifecycle_state: str = "active") -> LibraryItemList:
+    def list(
+        self,
+        *,
+        limit: int = 50,
+        lifecycle_state: str = "active",
+        owner_id: str = "owner_teacher",
+    ) -> LibraryItemList:
         if lifecycle_state not in {"active", "trashed", "all"}:
             raise PrivateLibraryError("不支持的资料状态")
-        where = "" if lifecycle_state == "all" else "WHERE lifecycle_state = ?"
-        values = () if lifecycle_state == "all" else (lifecycle_state,)
+        where = "WHERE owner_id = ?"
+        values: tuple[str, ...] = (owner_id,)
+        if lifecycle_state != "all":
+            where += " AND lifecycle_state = ?"
+            values += (lifecycle_state,)
         with self._connect() as connection:
             total = connection.execute(
                 f"SELECT COUNT(*) FROM library_items {where}", values

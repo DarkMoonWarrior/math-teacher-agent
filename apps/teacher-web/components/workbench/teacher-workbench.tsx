@@ -38,15 +38,17 @@ import {
   CloseIcon,
   FormulaIcon,
   HistoryIcon,
+  LibraryIcon,
   PaperIcon,
   PlusIcon,
   SearchIcon,
 } from "./icons";
 import { SolvePaper, SolveResultBrief } from "./solve-paper";
+import { PrivateLibraryWorkspace } from "./private-library-workspace";
 
 type Phase = "idle" | "running" | "success" | "error" | "cancelled";
 type FlipDirection = "next" | "previous";
-type CapabilityId = "search" | "solve" | "lesson" | "paper";
+type CapabilityId = "search" | "solve" | "library" | "lesson" | "paper";
 
 type SearchTaskRecord = {
   id: string;
@@ -111,7 +113,7 @@ type CapabilityDefinition = {
   pages: PreviewPage[];
 };
 
-const CAPABILITY_ORDER: CapabilityId[] = ["search", "solve", "lesson", "paper"];
+const CAPABILITY_ORDER: CapabilityId[] = ["search", "solve", "library", "lesson", "paper"];
 
 const SEARCH_PROGRESS: Record<SearchTaskProgressStage, SearchProgressDefinition> = {
   connecting: {
@@ -282,6 +284,28 @@ const CAPABILITIES: Record<CapabilityId, CapabilityDefinition> = {
       },
     ],
   },
+  library: {
+    id: "library",
+    label: "资料库",
+    ready: true,
+    status: "Private Library 已接入",
+    title: ["我的资料，", "我的工作流。"],
+    intro: "上传 PDF、DOCX 和题目图片；来源、权利与私人边界会随资料一起保留。",
+    inputLabel: "选择私人教学资料",
+    placeholder: "选择 PDF、DOCX 或图片",
+    actionLabel: "存入私人资料",
+    stageLabel: "私人资料",
+    stageTitle: "只属于当前教师的资料空间",
+    examples: [],
+    pages: [
+      {
+        index: "01",
+        eyebrow: "私人资料",
+        title: "文件与来源说明一起保存。",
+        body: "私人内容不会自动进入公共题库或模型训练。",
+      },
+    ],
+  },
   lesson: {
     id: "lesson",
     label: "教案",
@@ -405,6 +429,7 @@ function intentLabels(result: SearchTaskResult): string[] {
 
 function CapabilityIcon({ id }: { id: CapabilityId }) {
   if (id === "solve") return <FormulaIcon />;
+  if (id === "library") return <LibraryIcon />;
   if (id === "lesson") return <BookIcon />;
   if (id === "paper") return <PaperIcon />;
   return <SearchIcon />;
@@ -497,12 +522,14 @@ export function TeacherWorkbench() {
   const [drafts, setDrafts] = useState<Record<CapabilityId, string>>({
     search: "",
     solve: "",
+    library: "",
     lesson: "",
     paper: "",
   });
   const [phases, setPhases] = useState<Record<CapabilityId, Phase>>({
     search: "idle",
     solve: "idle",
+    library: "idle",
     lesson: "idle",
     paper: "idle",
   });
@@ -537,6 +564,7 @@ export function TeacherWorkbench() {
   const phase = phases[capability];
   const searchVisible = capability === "search";
   const solveVisible = capability === "solve";
+  const libraryVisible = capability === "library";
   const runnable = searchVisible || solveVisible;
   const error = runnable ? errors[capability as "search" | "solve"] : null;
   const running = runnable && phase === "running";
@@ -770,6 +798,10 @@ export function TeacherWorkbench() {
   }
 
   function resetTask() {
+    if (libraryVisible) {
+      selectCapability("search");
+      return;
+    }
     requestSequenceRef.current += 1;
     abortRef.current?.abort();
     abortRef.current = null;
@@ -893,6 +925,9 @@ export function TeacherWorkbench() {
         </div>
       </header>
 
+      {libraryVisible ? (
+        <PrivateLibraryWorkspace />
+      ) : (
       <main className="marquee-workspace">
         <section className="task-pane">
           <div className="task-pane__intro">
@@ -1054,6 +1089,7 @@ export function TeacherWorkbench() {
           )}
         </section>
       </main>
+      )}
 
       <footer className="inline-footer">
         <span>备课伙伴</span>

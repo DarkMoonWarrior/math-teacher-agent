@@ -26,12 +26,12 @@ Teacher Web → public FastAPI private-library routes → PrivateLibrary → own
 Agent Runtime → inspect_private_library Tool → internal M2M gateway → PrivateLibrary
 ```
 
-第一条 Agent 接口 `inspect_private_library` 只返回当前教师的聚合数量、处理状态和文件类型统计。接口没有 `owner_id` 参数，也不返回标题、文件名、正文、路径或 owner 标识。当前本地开发身份固定为 `owner_teacher`；这不是生产认证，M6 Gate 前仍须建立可替换的 current-owner seam 与跨 owner 越权测试。
+第一条 Agent 接口 `inspect_private_library` 只返回当前教师的聚合数量、处理状态和文件类型统计。接口没有 `owner_id` 参数，也不返回标题、文件名、正文、路径或 owner 标识。第二条 public UI 接口同样不允许浏览器选择 owner：列表、统计和上传都由服务端绑定到当前本地教师，并以跨 owner 自动测试证明伪造表单字段不会改变归属。当前本地开发身份仍固定为 `owner_teacher`；这不是生产认证，M6 Gate 前仍须建立可替换的 current-owner seam，并把隔离扩展到详情、文件、OCR、修订、候选和检索。
 
 ## 4. 纵向切片顺序
 
 1. **聚合概览 Tool**：owner-scoped 统计、M2M fail closed、无私人正文；已完成。
-2. **新工作台资料入口**：同源上传/列表、权利声明、格式/体积错误和 private 标签；未开始。
+2. **新工作台资料入口**：同源上传/列表、权利声明、格式/体积错误和 private 标签；已完成。
 3. **提取与 OCR 校对**：本地处理优先；外部处理逐次同意；原页、草稿和 revision 可核对；未开始。
 4. **拆题与教材映射**：只从教师确认文本生成可编辑候选，导入后仍为 private + pending review；未开始。
 5. **私人检索 Agent**：显式同意后按最小必要内容检索，结果保留来源/revision/权利状态；未开始。

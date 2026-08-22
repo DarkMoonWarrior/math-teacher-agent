@@ -15,7 +15,7 @@
   --color-accent-ink: oklch(98.9% 0.012 80);
   --color-teal: oklch(37% 0.07 184);
   --color-teal-soft: oklch(89% 0.035 181);
-  --color-focus: oklch(36% 0.13 39);
+  --color-focus: oklch(58% 0.13 39);
   --color-error: oklch(43% 0.17 28);
   --color-error-soft: oklch(93% 0.04 28);
   --color-shadow: oklch(24% 0.02 50 / 0.14);
@@ -52,6 +52,8 @@
   --space-3xl: 6rem;
   --page-gutter: clamp(1rem, 4vw, 4.75rem);
   --nav-height: 3.75rem;
+  --workspace-top: 7.5rem;
+  --workspace-top-mobile: 9.25rem;
 
   --radius-xs: 0.35rem;
   --radius-sm: 0.65rem;
