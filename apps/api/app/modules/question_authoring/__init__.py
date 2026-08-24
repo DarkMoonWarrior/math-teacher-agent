@@ -18,6 +18,7 @@ from .schemas import (
     QuestionDesignBrief,
     QuestionDraftCurriculum,
     QuestionDraftOption,
+    QuestionDraftTrustCheck,
     QuestionDraftVerification,
     QuestionType,
 )
@@ -38,6 +39,7 @@ __all__ = [
     "QuestionDesignBrief",
     "QuestionDraftCurriculum",
     "QuestionDraftOption",
+    "QuestionDraftTrustCheck",
     "QuestionDraftVerification",
     "QuestionType",
 ]

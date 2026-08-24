@@ -81,7 +81,8 @@ apps/web (legacy/reference Next.js UI, :3000)
 - Management: Agent 生成或提出修改草稿，教师在受认证 UI 中明确保存；编辑、分类、回收站、恢复和永久删除由 owner 直接调用 FastAPI 业务接口，Agent 与后台管理员无永久删除工具。
 - Reuse: Curriculum、MathVerifier、RightsGate 和已验证且允许 adaptation 的参考母题可被调用，但不得把辅助命制题复制到公共题库。
 - First slice: `PersonalQuestionLibrary` 已以单独 `data/private-runtime` SQLite namespace 实现个人题库集合与分类；它把名称规范化、owner 隔离、重复约束和固定 owner-only policy 隐藏在小接口后。公开 FastAPI 路由只从 current-teacher seam 注入 owner，payload 中额外的 `owner_id` 被拒绝；跨 owner 的集合/分类详情与更新统一返回不存在。
-- Second slice: `QuestionAuthoring.create_draft` 以严格 `QuestionDesignBrief` 为边界，完成题型补全、受控 Curriculum 映射、可替换 provider、结构验证和诚实错误语义。DeepSeek Harness 只能调用一次 `create_question_draft`；Tool 请求没有 owner/save/publish/share/delete 字段，结果固定为未保存、owner-only、MathVerifier 未运行，并且该调用不写入 `PersonalQuestionLibrary` 或任何公共存储。
+- Second slice: `QuestionAuthoring.create_draft` 以严格 `QuestionDesignBrief` 为界面，完成题型补全、受控 Curriculum 映射、可替换 provider、结构验证和诚实错误语义。DeepSeek Harness 只能调用一次 `create_question_draft`；Tool 请求没有 owner/save/publish/share/delete 字段，并且该调用不写入 `PersonalQuestionLibrary` 或任何公共存储。
+- Third slice: 同一深模块在返回前生成六项固定可信证据，并由 `QuestionDraftVerification` 强制检查项唯一、总状态与阻断项一致、MathVerifier 能力与是否真正运行一致。答案数量、明显答案冲突、选项重复和难度偏差可确定性检查；一般数学可解性、干扰项语义及无受控 rule spec 的任意生成题保持 `inconclusive/unsupported`，模型自述不能升级为 MathVerifier 证据。
 
 ### Teacher Agent Runtime module
 

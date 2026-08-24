@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 
 from app.core.config import get_settings
 from app.core.identity import CurrentTeacher, get_current_teacher
+from app.modules.math_verifier import MathVerifier
 from app.modules.question_authoring import (
     DeepSeekQuestionAuthoringProvider,
     QuestionAuthoring,
@@ -43,6 +44,7 @@ def get_question_authoring() -> QuestionAuthoring:
     return QuestionAuthoring(
         curriculum=_catalog_for_path(str(settings.curriculum_csv.resolve())),
         provider=provider,
+        math_verifier=MathVerifier(),
     )
 
 

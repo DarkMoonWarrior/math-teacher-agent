@@ -178,6 +178,7 @@ def gateway_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClien
     authoring = QuestionAuthoring(
         curriculum=catalog,
         provider=FakeQuestionAuthoringProvider(),
+        math_verifier=MathVerifier(),
     )
     monkeypatch.setattr(gateway, "get_question_authoring", lambda: authoring)
 
@@ -289,7 +290,10 @@ def test_create_question_draft_returns_unsaved_owner_only_content(
     assert draft["visibility"] == "owner_only"
     assert draft["source_type"] == "ai_generated"
     assert draft["saved"] is False
-    assert draft["verification"]["status"] == "not_run"
+    assert draft["verification"]["status"] == "teacher_review_required"
+    assert draft["verification"]["math_verifier_status"] == "unsupported"
+    assert draft["verification"]["math_verifier_checked"] is False
+    assert len(draft["verification"]["checks"]) == 6
     assert draft["public_search_allowed"] is False
     assert draft["share_allowed"] is False
     assert "owner_id" not in draft

@@ -7,10 +7,12 @@
 
 - **切片 1 已完成**：独立 `PersonalQuestionLibrary` 使用 `data/private-runtime/personal-question-library.sqlite3`，不复用公共 `QuestionBank` 表或接口；个人题库集合与分类可由当前 owner 创建、查看和重命名。
 - **切片 2 已完成**：`QuestionAuthoring.create_draft` 将自然语言 brief 转换为结构化题干、选项、答案、分步解析、命题意图、预计难度和受控 Curriculum 映射；知识点不足时要求补充，模型或结构不可用时诚实失败。
-- DeepSeek 只实现可替换 provider adapter；Agent 必须且只能调用一次 `create_question_draft`，模型不能增加 owner、保存、发布、共享或删除参数。返回固定为 `owner_only + saved=false + verification.not_run`，不会写入任何存储。
+- **切片 3 已完成**：每份草稿必须携带可解性、答案/最终答案一致性、选择题答案数量、干扰项结构、MathVerifier 能力和难度披露六项唯一证据；明确矛盾进入 `checks_failed`，其余仍为 `teacher_review_required`。
+- DeepSeek 只实现可替换 provider adapter；Agent 必须且只能调用一次 `create_question_draft`，模型不能增加 owner、保存、发布、共享或删除参数。返回固定为 `owner_only + saved=false`，不会写入任何存储。
+- 当前 MathVerifier 只接受带受控 `verification_spec` 的已知规则；任意模型生成题没有这种独立证据，因此固定诚实披露 `math_verifier_status=unsupported`，不得用模型自述冒充程序验证。结构检查通过也不等于数学正确。
 - FastAPI 只从 `get_current_teacher` 注入 owner；请求模型 `extra=forbid`，浏览器伪造 `owner_id` 返回 422，跨 owner 读取或修改返回 404。
 - 所有返回固定为 `owner_only`，并明确 `public_search_allowed=false`、`share_allowed=false`、`commercial_use_allowed=false`、`model_training_allowed=false`；没有 publish/share/admin/delete 接口。
-- **仍未完成**：可信检查、题目正文/revision 保存、完整个人管理、三个 Teacher Web 入口、固定评测与 Gate E。
+- **仍未完成**：题目正文/revision 保存、完整个人管理、三个 Teacher Web 入口、固定评测与 Gate E。
 
 ## 1. 已确认的产品规则
 

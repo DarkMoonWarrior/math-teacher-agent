@@ -14,7 +14,7 @@ from app.modules.question_authoring.schemas import (
 )
 
 
-PROMPT_REVISION = "question-authoring-v1"
+PROMPT_REVISION = "question-authoring-v2-trust-checks"
 
 
 class QuestionAuthoringProviderError(RuntimeError):
@@ -69,6 +69,8 @@ class DeepSeekQuestionAuthoringProvider:
         instructions = (
             "你是面向中国高中数学教师的辅助命题模块。根据教师要求命制一道完整、可独立作答的中文数学题草稿。"
             "题干、答案与分步解析必须自洽；选择题必须提供明确选项，但不要声称已通过独立数学验证。"
+            "单选题 answer_value 只能包含一个选项编号；多选题用逗号分隔多个编号；"
+            "final_answer 必须明确对应 answer_value，所有选项文字必须互不重复。"
             "不得虚构学校、考试、年份、教材页码、题库来源或版权信息。"
             "所有数学表达在普通文本中可读，stem_latex 使用 $...$ 或 $$...$$ 包裹公式。"
             "只返回 Schema 要求的题目内容；visibility、来源、验证与保存状态由业务模块写入。"

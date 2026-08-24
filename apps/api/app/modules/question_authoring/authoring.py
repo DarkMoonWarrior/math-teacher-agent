@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from uuid import uuid4
 
 from app.modules.curriculum import InMemoryCurriculumCatalog
+from app.modules.math_verifier import MathVerifier
 from app.modules.question_authoring.providers import (
     PROMPT_REVISION,
     QuestionAuthoringContext,
@@ -16,6 +17,7 @@ from app.modules.question_authoring.schemas import (
     ProviderQuestionDraft,
     QuestionDesignBrief,
     QuestionDraftCurriculum,
+    QuestionDraftTrustCheck,
     QuestionDraftVerification,
     QuestionType,
 )
@@ -41,14 +43,16 @@ class QuestionAuthoring:
         *,
         curriculum: InMemoryCurriculumCatalog,
         provider: QuestionAuthoringProvider | None,
+        math_verifier: MathVerifier,
     ) -> None:
         self.curriculum = curriculum
         self.provider = provider
+        self.math_verifier = math_verifier
 
     def create_draft(self, brief: QuestionDesignBrief) -> GeneratedQuestionDraft:
         if brief.reference_question_id:
             raise QuestionAuthoringError(
-                "参考母题模式尚未开放；必须在后续可信检查切片验证母题数学状态与改编权利后才能使用"
+                "参考母题模式尚未开放；只有母题数学状态与改编权利都可独立验证后才能使用"
             )
         question_type = brief.question_type or self._infer_question_type(brief.request_text)
         curriculum = self._resolve_curriculum(brief)
@@ -67,15 +71,25 @@ class QuestionAuthoring:
         except QuestionAuthoringProviderError as exc:
             raise QuestionAuthoringUnavailableError(str(exc)) from exc
         self._validate_structure(content, expected_type=question_type)
+        draft_id = f"qad_{uuid4().hex[:16]}"
+        verification = self._evaluate_trust(
+            content,
+            brief=brief,
+            draft_id=draft_id,
+        )
         warnings = [
-            "本题由 AI 辅助生成，尚未运行 MathVerifier，必须由教师复核。",
+            "本题由 AI 辅助生成；结构检查不等于数学正确，必须由教师复核。",
             "当前草稿尚未保存，仅自己可见；不会进入公共题库或公共搜索。",
             "预计难度来自模型判断，不是统计校准或程序验证结果。",
         ]
+        if verification.math_verifier_status == "unsupported":
+            warnings.append("当前 MathVerifier 不支持对此任意生成题做独立数学验证。")
+        if verification.status == "checks_failed":
+            warnings.append("确定性可信检查发现阻断项；修正前不得作为正式题目使用。")
         if brief.question_type is None:
             warnings.append(f"未明确题型，已从要求推断为 {question_type}。")
         return GeneratedQuestionDraft(
-            draft_id=f"qad_{uuid4().hex[:16]}",
+            draft_id=draft_id,
             request_text=brief.request_text.strip(),
             question_type=content.question_type,
             stem_plain=content.stem_plain.strip(),
@@ -89,9 +103,7 @@ class QuestionAuthoring:
             curriculum=curriculum,
             target_difficulty=brief.target_difficulty,
             estimated_difficulty=content.estimated_difficulty,
-            verification=QuestionDraftVerification(
-                details=["结构化草稿已生成；数学可信检查将在 M8 切片 3 执行。"]
-            ),
+            verification=verification,
             provider=self.provider.name,
             model=self.provider.model,
             prompt_revision=PROMPT_REVISION,
@@ -195,15 +207,334 @@ class QuestionAuthoring:
         if expected_type in {"single_choice", "multiple_choice"}:
             if len(content.options) < 4:
                 raise QuestionAuthoringError("选择题必须至少提供四个可读选项")
-            answers = {
-                item.strip()
-                for item in re.split(r"[,，、;；\s]+", content.answer_value)
-                if item.strip()
-            }
+            answers = QuestionAuthoring._answer_keys(content.answer_value)
             if not answers or not answers.issubset(set(keys)):
                 raise QuestionAuthoringError("选择题答案必须引用现有选项编号")
         elif content.options:
             raise QuestionAuthoringError("非选择题不应返回选项")
+
+    def _evaluate_trust(
+        self,
+        content: ProviderQuestionDraft,
+        *,
+        brief: QuestionDesignBrief,
+        draft_id: str,
+    ) -> QuestionDraftVerification:
+        checks = [
+            self._check_solvability(content),
+            self._check_answer_solution_consistency(content),
+            self._check_choice_answer_cardinality(content),
+            self._check_distractor_quality(content),
+            self._check_difficulty_disclosure(content, brief),
+        ]
+        (
+            math_check,
+            math_status,
+            math_checked,
+            verifier_version,
+        ) = self._check_math_verifier(content, draft_id=draft_id)
+        checks.append(math_check)
+        failed = [check for check in checks if check.status == "failed"]
+        status = "checks_failed" if failed else "teacher_review_required"
+        details = [
+            "已完成确定性结构与披露检查；这些检查不等于完整数学验证。",
+            "一般数学可解性和干扰项语义仍需教师独立复核。",
+        ]
+        if failed:
+            details.append(
+                "阻断项：" + "；".join(check.summary for check in failed)
+            )
+        return QuestionDraftVerification(
+            status=status,
+            math_verifier_status=math_status,
+            math_verifier_checked=math_checked,
+            teacher_review_required=True,
+            verifier_version=verifier_version,
+            checks=checks,
+            details=details,
+        )
+
+    @staticmethod
+    def _check_solvability(content: ProviderQuestionDraft) -> QuestionDraftTrustCheck:
+        combined = " ".join(
+            [content.stem_plain, content.answer_value, *content.solution_steps, content.final_answer]
+        )
+        placeholders = [
+            marker
+            for marker in ("TODO", "TBD", "待补充", "请补充条件", "条件待定")
+            if marker.lower() in combined.lower()
+        ]
+        if placeholders:
+            return QuestionDraftTrustCheck(
+                code="solvability",
+                status="failed",
+                capability="supported",
+                evidence_source="deterministic_structure",
+                summary="题目仍包含未完成占位内容",
+                details=[f"检测到占位标记：{marker}" for marker in placeholders],
+            )
+        return QuestionDraftTrustCheck(
+            code="solvability",
+            status="inconclusive",
+            capability="unsupported",
+            evidence_source="none",
+            summary="字段完整，但一般数学可解性尚无独立证据",
+            details=["题干、答案和解析字段均非空；这只能证明结构完整。"],
+        )
+
+    @classmethod
+    def _check_answer_solution_consistency(
+        cls,
+        content: ProviderQuestionDraft,
+    ) -> QuestionDraftTrustCheck:
+        if content.question_type in {"single_choice", "multiple_choice"}:
+            answer_keys = cls._answer_keys(content.answer_value)
+            explicit_keys = cls._explicit_answer_keys(content.final_answer)
+            if explicit_keys and explicit_keys != answer_keys:
+                return QuestionDraftTrustCheck(
+                    code="answer_solution_consistency",
+                    status="failed",
+                    capability="supported",
+                    evidence_source="deterministic_structure",
+                    summary="最终答案明确指向了不同选项",
+                    details=[
+                        f"结构化答案为 {sorted(answer_keys)}，最终答案写为 {sorted(explicit_keys)}。"
+                    ],
+                )
+            option_by_key = {
+                option.key.strip(): cls._normalize(option.text)
+                for option in content.options
+            }
+            normalized_final = cls._normalize(content.final_answer)
+            selected_texts = [option_by_key[key] for key in answer_keys if key in option_by_key]
+            if explicit_keys == answer_keys or (
+                selected_texts and all(text and text in normalized_final for text in selected_texts)
+            ):
+                return QuestionDraftTrustCheck(
+                    code="answer_solution_consistency",
+                    status="passed",
+                    capability="supported",
+                    evidence_source="deterministic_structure",
+                    summary="结构化答案与最终答案的可见表达一致",
+                    details=["该结论只检查表示一致性，不证明选项在数学上正确。"],
+                )
+            return QuestionDraftTrustCheck(
+                code="answer_solution_consistency",
+                status="inconclusive",
+                capability="supported",
+                evidence_source="deterministic_structure",
+                summary="无法用确定性文本规则确认答案与最终答案等价",
+                details=["可能只是等价表达不同，需教师核对。"],
+            )
+
+        answer = cls._normalize(content.answer_value)
+        final_answer = cls._normalize(content.final_answer)
+        consistent = bool(answer and final_answer and (answer in final_answer or final_answer in answer))
+        return QuestionDraftTrustCheck(
+            code="answer_solution_consistency",
+            status="passed" if consistent else "inconclusive",
+            capability="supported",
+            evidence_source="deterministic_structure",
+            summary=(
+                "结构化答案与最终答案的可见表达一致"
+                if consistent
+                else "无法用确定性文本规则确认答案与最终答案等价"
+            ),
+            details=["该检查不判断推导过程在数学上是否成立。"],
+        )
+
+    @classmethod
+    def _check_choice_answer_cardinality(
+        cls,
+        content: ProviderQuestionDraft,
+    ) -> QuestionDraftTrustCheck:
+        if content.question_type not in {"single_choice", "multiple_choice"}:
+            return QuestionDraftTrustCheck(
+                code="choice_answer_cardinality",
+                status="not_applicable",
+                capability="supported",
+                evidence_source="deterministic_structure",
+                summary="非选择题不适用选项答案数量检查",
+            )
+        answers = cls._answer_keys(content.answer_value)
+        if content.question_type == "single_choice":
+            valid = len(answers) == 1
+            expected = "恰好一个答案选项"
+        else:
+            valid = 2 <= len(answers) < len(content.options)
+            expected = "至少两个且不能覆盖全部选项"
+        return QuestionDraftTrustCheck(
+            code="choice_answer_cardinality",
+            status="passed" if valid else "failed",
+            capability="supported",
+            evidence_source="deterministic_structure",
+            summary=(
+                "答案选项数量符合题型"
+                if valid
+                else f"{content.question_type} 的答案必须{expected}"
+            ),
+            details=[f"当前答案选项：{sorted(answers)}。"],
+        )
+
+    @classmethod
+    def _check_distractor_quality(
+        cls,
+        content: ProviderQuestionDraft,
+    ) -> QuestionDraftTrustCheck:
+        if content.question_type not in {"single_choice", "multiple_choice"}:
+            return QuestionDraftTrustCheck(
+                code="distractor_quality",
+                status="not_applicable",
+                capability="unsupported",
+                evidence_source="none",
+                summary="非选择题不适用干扰项检查",
+            )
+        normalized = [cls._normalize(option.text) for option in content.options]
+        duplicate_text = len(normalized) != len(set(normalized))
+        unreadable_text = any(not value for value in normalized)
+        answers = cls._answer_keys(content.answer_value)
+        distractor_count = sum(option.key.strip() not in answers for option in content.options)
+        minimum = 3 if content.question_type == "single_choice" else 1
+        if duplicate_text or unreadable_text or distractor_count < minimum:
+            reasons = []
+            if duplicate_text:
+                reasons.append("存在文字完全相同的选项")
+            if unreadable_text:
+                reasons.append("存在规范化后为空的不可读选项")
+            if distractor_count < minimum:
+                reasons.append(f"干扰项少于 {minimum} 个")
+            return QuestionDraftTrustCheck(
+                code="distractor_quality",
+                status="failed",
+                capability="supported",
+                evidence_source="deterministic_structure",
+                summary="干扰项结构不合格",
+                details=reasons,
+            )
+        return QuestionDraftTrustCheck(
+            code="distractor_quality",
+            status="inconclusive",
+            capability="unsupported",
+            evidence_source="none",
+            summary="干扰项数量和文字唯一性合格，诊断价值尚未验证",
+            details=["干扰项是否对应真实易错路径仍需教师判断。"],
+        )
+
+    @staticmethod
+    def _check_difficulty_disclosure(
+        content: ProviderQuestionDraft,
+        brief: QuestionDesignBrief,
+    ) -> QuestionDraftTrustCheck:
+        gap = abs(content.estimated_difficulty - brief.target_difficulty)
+        return QuestionDraftTrustCheck(
+            code="difficulty_disclosure",
+            status="passed" if gap <= 1 else "inconclusive",
+            capability="supported",
+            evidence_source="model_estimate",
+            summary=(
+                "模型预计难度接近教师目标"
+                if gap <= 1
+                else "模型预计难度与教师目标偏差较大"
+            ),
+            details=[
+                f"教师目标 {brief.target_difficulty}/5；模型预计 {content.estimated_difficulty}/5。",
+                "预计难度不是统计校准或 MathVerifier 结果。",
+            ],
+        )
+
+    def _check_math_verifier(
+        self,
+        content: ProviderQuestionDraft,
+        *,
+        draft_id: str,
+    ) -> tuple[QuestionDraftTrustCheck, str, bool, str]:
+        candidate = {
+            "question_id": draft_id,
+            "question_type": content.question_type,
+            "stem_plain": content.stem_plain,
+            "options": [option.model_dump(mode="json") for option in content.options],
+            "source_answer": content.answer_value,
+            "solutions": [
+                {
+                    "steps_latex": content.solution_steps,
+                    "final_answer": content.final_answer,
+                }
+            ],
+        }
+        version = self.math_verifier.VERSION
+        if not self.math_verifier.supports(candidate):
+            return (
+                QuestionDraftTrustCheck(
+                    code="math_verifier",
+                    status="inconclusive",
+                    capability="unsupported",
+                    evidence_source="none",
+                    summary="当前 MathVerifier 不支持该生成题",
+                    details=[
+                        "草稿没有受控 verification_spec；不能使用模型自己的重述冒充独立验证证据。"
+                    ],
+                ),
+                "unsupported",
+                False,
+                version,
+            )
+        try:
+            report = self.math_verifier.verify(candidate)
+        except (KeyError, TypeError, ValueError) as exc:
+            return (
+                QuestionDraftTrustCheck(
+                    code="math_verifier",
+                    status="inconclusive",
+                    capability="supported",
+                    evidence_source="math_verifier",
+                    summary="MathVerifier 未能给出确定结论",
+                    details=[str(exc)],
+                ),
+                "inconclusive",
+                False,
+                version,
+            )
+        passed = report.status == "passed"
+        return (
+            QuestionDraftTrustCheck(
+                code="math_verifier",
+                status="passed" if passed else "failed",
+                capability="supported",
+                evidence_source="math_verifier",
+                summary=(
+                    "MathVerifier 独立计算与草稿答案一致"
+                    if passed
+                    else "MathVerifier 独立计算与草稿答案不一致"
+                ),
+                details=list(report.details),
+            ),
+            "passed" if passed else "failed",
+            True,
+            report.verifier_version,
+        )
+
+    @staticmethod
+    def _answer_keys(value: str) -> set[str]:
+        parts = {
+            item.strip()
+            for item in re.split(r"[,，、;；\s]+", value)
+            if item.strip()
+        }
+        if len(parts) == 1:
+            only = next(iter(parts))
+            if re.fullmatch(r"[A-Z]{2,20}", only):
+                return set(only)
+        return parts
+
+    @staticmethod
+    def _explicit_answer_keys(value: str) -> set[str]:
+        match = re.search(
+            r"(?:答案|选择|选项|选)\s*(?:为|是|:|：)?\s*([A-Z](?:\s*[,，、;；]?\s*[A-Z])*)",
+            value.upper(),
+        )
+        if not match:
+            return set()
+        return set(re.findall(r"[A-Z]", match.group(1)))
 
     @staticmethod
     def _normalize(value: str) -> str:

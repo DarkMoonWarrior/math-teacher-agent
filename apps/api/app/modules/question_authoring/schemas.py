@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 QuestionType = Literal[
@@ -12,6 +12,26 @@ QuestionType = Literal[
     "open_response",
 ]
 GradeLevel = Literal["高一", "高二", "高三"]
+QuestionDraftTrustCheckCode = Literal[
+    "solvability",
+    "answer_solution_consistency",
+    "choice_answer_cardinality",
+    "distractor_quality",
+    "math_verifier",
+    "difficulty_disclosure",
+]
+QuestionDraftTrustCheckStatus = Literal[
+    "passed",
+    "failed",
+    "inconclusive",
+    "not_applicable",
+]
+QuestionDraftTrustEvidenceSource = Literal[
+    "deterministic_structure",
+    "math_verifier",
+    "model_estimate",
+    "none",
+]
 
 
 class QuestionDesignBrief(BaseModel):
@@ -52,13 +72,57 @@ class QuestionDraftCurriculum(BaseModel):
     reviewed_by: str
 
 
+class QuestionDraftTrustCheck(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    code: QuestionDraftTrustCheckCode
+    status: QuestionDraftTrustCheckStatus
+    capability: Literal["supported", "unsupported"]
+    evidence_source: QuestionDraftTrustEvidenceSource
+    summary: str = Field(min_length=1, max_length=500)
+    details: list[str] = Field(default_factory=list, max_length=20)
+
+
 class QuestionDraftVerification(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    status: Literal["not_run"] = "not_run"
-    math_verifier_checked: Literal[False] = False
-    teacher_review_required: Literal[True] = True
-    details: list[str] = Field(default_factory=list)
+    status: Literal["checks_failed", "teacher_review_required"]
+    math_verifier_status: Literal[
+        "unsupported",
+        "passed",
+        "failed",
+        "inconclusive",
+    ]
+    math_verifier_checked: bool
+    teacher_review_required: Literal[True]
+    verifier_version: str = Field(min_length=1, max_length=120)
+    checks: list[QuestionDraftTrustCheck] = Field(min_length=6, max_length=6)
+    details: list[str] = Field(min_length=1, max_length=20)
+
+    @model_validator(mode="after")
+    def validate_trust_contract(self) -> "QuestionDraftVerification":
+        expected = {
+            "solvability",
+            "answer_solution_consistency",
+            "choice_answer_cardinality",
+            "distractor_quality",
+            "math_verifier",
+            "difficulty_disclosure",
+        }
+        codes = [check.code for check in self.checks]
+        if set(codes) != expected or len(codes) != len(set(codes)):
+            raise ValueError("可信检查必须恰好包含六个唯一检查项")
+        has_failure = any(check.status == "failed" for check in self.checks)
+        if (self.status == "checks_failed") != has_failure:
+            raise ValueError("可信检查总状态与阻断项不一致")
+        math_check = next(check for check in self.checks if check.code == "math_verifier")
+        if self.math_verifier_status == "unsupported":
+            if self.math_verifier_checked or math_check.capability != "unsupported":
+                raise ValueError("MathVerifier unsupported 状态不得冒充已运行")
+        elif self.math_verifier_status in {"passed", "failed"}:
+            if not self.math_verifier_checked or math_check.status != self.math_verifier_status:
+                raise ValueError("MathVerifier 结果与检查证据不一致")
+        return self
 
 
 class GeneratedQuestionDraft(BaseModel):

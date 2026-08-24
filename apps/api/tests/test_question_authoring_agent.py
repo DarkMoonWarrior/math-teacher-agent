@@ -64,10 +64,62 @@ def draft_payload() -> dict:
         "estimated_difficulty": 2,
         "difficulty_source": "model_estimated",
         "verification": {
-            "status": "not_run",
+            "status": "teacher_review_required",
+            "math_verifier_status": "unsupported",
             "math_verifier_checked": False,
             "teacher_review_required": True,
-            "details": ["尚未运行 MathVerifier。"],
+            "verifier_version": "math-v0.3.0",
+            "checks": [
+                {
+                    "code": "solvability",
+                    "status": "inconclusive",
+                    "capability": "unsupported",
+                    "evidence_source": "none",
+                    "summary": "一般数学可解性尚无独立证据",
+                    "details": [],
+                },
+                {
+                    "code": "answer_solution_consistency",
+                    "status": "passed",
+                    "capability": "supported",
+                    "evidence_source": "deterministic_structure",
+                    "summary": "答案表达一致",
+                    "details": [],
+                },
+                {
+                    "code": "choice_answer_cardinality",
+                    "status": "passed",
+                    "capability": "supported",
+                    "evidence_source": "deterministic_structure",
+                    "summary": "答案数量合格",
+                    "details": [],
+                },
+                {
+                    "code": "distractor_quality",
+                    "status": "inconclusive",
+                    "capability": "unsupported",
+                    "evidence_source": "none",
+                    "summary": "干扰项语义待教师复核",
+                    "details": [],
+                },
+                {
+                    "code": "math_verifier",
+                    "status": "inconclusive",
+                    "capability": "unsupported",
+                    "evidence_source": "none",
+                    "summary": "当前 MathVerifier 不支持该生成题",
+                    "details": [],
+                },
+                {
+                    "code": "difficulty_disclosure",
+                    "status": "passed",
+                    "capability": "supported",
+                    "evidence_source": "model_estimate",
+                    "summary": "预计难度接近目标",
+                    "details": [],
+                },
+            ],
+            "details": ["结构检查不等于完整数学验证。"],
         },
         "source_type": "ai_generated",
         "visibility": "owner_only",
@@ -204,7 +256,8 @@ def test_workflow_accepts_only_exact_structured_tool_result() -> None:
     assert response.draft is not None
     assert response.draft.visibility == "owner_only"
     assert response.draft.saved is False
-    assert response.draft.verification.status == "not_run"
+    assert response.draft.verification.status == "teacher_review_required"
+    assert response.draft.verification.math_verifier_status == "unsupported"
     assert response.tool_call_count == 1
     request = runtime.requests[0]
     assert request.teacher_user_id == "teacher_a"
@@ -257,6 +310,28 @@ def test_workflow_rejects_model_changed_input_extra_calls_and_invalid_private_st
     )
     assert invalid_response.status == "error"
     assert "私有状态" in invalid_response.error["message"]
+
+    inconsistent_trust = draft_payload()
+    inconsistent_trust["verification"]["status"] = "checks_failed"
+    trust_runtime = FakeRuntime(
+        tool_calls=[
+            tool_call(
+                output={
+                    "ok": True,
+                    "draft": inconsistent_trust,
+                    "request_id": "req_bad_trust",
+                }
+            )
+        ]
+    )
+    trust_response = run(
+        QuestionAuthoringAgentWorkflow(runtime=trust_runtime).run(
+            QuestionAuthoringAgentCommand(brief=brief()),
+            owner_id="teacher_a",
+        )
+    )
+    assert trust_response.status == "error"
+    assert "私有状态" in trust_response.error["message"]
 
 
 class FakeQuestionAuthoringWorkflow:

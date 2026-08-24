@@ -67,7 +67,9 @@ M8 第一条切片使用独立 `data/private-runtime/personal-question-library.s
 
 第二条切片新增 `QuestionAuthoring.create_draft`、`POST /api/v1/agent/question-authoring/draft` 与内部 `create_question_draft` Tool。自然语言 brief 经 Curriculum 映射后返回结构化题干、选项、答案、解析和命题意图；模型与结构失败不会伪装成成功。启用需要 DSH Runtime、Agent Service/Tool Gateway，以及 `MATH_AI_QUESTION_AUTHORING_AGENT_ENABLED=true`。
 
-接口返回固定披露 `owner_only`，且公共检索、共享、商业使用与模型训练均为 false。草稿固定 `saved=false`、`verification.status=not_run`；当前没有 publish/share/admin/delete 接口，也尚未实现题目正文保存。
+第三条切片把六项固定可信检查收进同一深模块：可解性、答案/最终答案一致性、选择题答案数量、干扰项结构、MathVerifier 能力与难度披露。明确结构矛盾返回 `checks_failed`；其余仍为 `teacher_review_required`。当前 MathVerifier 不支持任意生成题时返回 `unsupported`，绝不冒充程序验证。
+
+接口返回固定披露 `owner_only`，且公共检索、共享、商业使用与模型训练均为 false。草稿固定 `saved=false`；当前没有 publish/share/admin/delete 接口，也尚未实现题目正文保存。
 
 ## 测试
 

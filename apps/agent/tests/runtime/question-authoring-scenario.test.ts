@@ -51,10 +51,20 @@ describe("Private Question Authoring deterministic harness scenario", () => {
               estimated_difficulty: 2,
               difficulty_source: "model_estimated",
               verification: {
-                status: "not_run",
+                status: "teacher_review_required",
+                math_verifier_status: "unsupported",
                 math_verifier_checked: false,
                 teacher_review_required: true,
-                details: ["尚未运行 MathVerifier。"],
+                verifier_version: "math-v0.3.0",
+                checks: [
+                  { code: "solvability", status: "inconclusive", capability: "unsupported", evidence_source: "none", summary: "可解性待复核", details: [] },
+                  { code: "answer_solution_consistency", status: "passed", capability: "supported", evidence_source: "deterministic_structure", summary: "答案表达一致", details: [] },
+                  { code: "choice_answer_cardinality", status: "passed", capability: "supported", evidence_source: "deterministic_structure", summary: "答案数量合格", details: [] },
+                  { code: "distractor_quality", status: "inconclusive", capability: "unsupported", evidence_source: "none", summary: "干扰项待复核", details: [] },
+                  { code: "math_verifier", status: "inconclusive", capability: "unsupported", evidence_source: "none", summary: "MathVerifier 不支持", details: [] },
+                  { code: "difficulty_disclosure", status: "passed", capability: "supported", evidence_source: "model_estimate", summary: "难度已披露", details: [] },
+                ],
+                details: ["结构检查不等于完整数学验证。"],
               },
               source_type: "ai_generated",
               visibility: "owner_only",
@@ -101,7 +111,7 @@ describe("Private Question Authoring deterministic harness scenario", () => {
     expect(output.draft).toMatchObject({
       visibility: "owner_only",
       saved: false,
-      verification: { status: "not_run" },
+      verification: { status: "teacher_review_required" },
     });
     const call = harness.stub.requests.find(
       (request) => request.route === CREATE_QUESTION_DRAFT_ROUTE,
