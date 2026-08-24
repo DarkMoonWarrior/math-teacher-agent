@@ -19,7 +19,15 @@ from app.modules.personal_question_library.schemas import (
     PersonalCollectionList,
     PersonalCollectionUpdate,
     PersonalCollectionView,
+    PersonalQuestionCopy,
+    PersonalQuestionDeletionReceipt,
+    PersonalQuestionExportArtifact,
+    PersonalQuestionList,
+    PersonalQuestionPermanentDelete,
+    PersonalQuestionRevisionCreate,
     PersonalQuestionSave,
+    PersonalQuestionUpdate,
+    PersonalQuestionVersionCommand,
     PersonalQuestionView,
     SavedPersonalQuestionDraft,
 )
@@ -92,6 +100,7 @@ class PersonalQuestionLibrary:
                         SELECT COUNT(*) FROM personal_questions AS questions
                         WHERE questions.collection_id = collections.collection_id
                           AND questions.owner_id = collections.owner_id
+                          AND questions.lifecycle_state = 'active'
                     ) AS question_count
                 FROM personal_question_collections AS collections
                 WHERE collections.owner_id = ?
@@ -123,6 +132,7 @@ class PersonalQuestionLibrary:
                         SELECT COUNT(*) FROM personal_questions AS questions
                         WHERE questions.collection_id = collections.collection_id
                           AND questions.owner_id = collections.owner_id
+                          AND questions.lifecycle_state = 'active'
                     ) AS question_count
                 FROM personal_question_collections AS collections
                 WHERE collections.collection_id = ? AND collections.owner_id = ?
@@ -224,6 +234,7 @@ class PersonalQuestionLibrary:
                         SELECT COUNT(*) FROM personal_questions AS questions
                         WHERE questions.category_id = categories.category_id
                           AND questions.owner_id = categories.owner_id
+                          AND questions.lifecycle_state = 'active'
                     ) AS question_count
                 FROM personal_question_categories AS categories
                 WHERE categories.collection_id = ? AND categories.owner_id = ?
@@ -252,6 +263,7 @@ class PersonalQuestionLibrary:
                         SELECT COUNT(*) FROM personal_questions AS questions
                         WHERE questions.category_id = categories.category_id
                           AND questions.owner_id = categories.owner_id
+                          AND questions.lifecycle_state = 'active'
                     ) AS question_count
                 FROM personal_question_categories AS categories
                 WHERE categories.category_id = ? AND categories.owner_id = ?
@@ -555,19 +567,500 @@ class PersonalQuestionLibrary:
             ).fetchone()
         if row is None:
             raise KeyError(question_id)
-        question_payload = json.loads(row["question_json"])
-        question_payload["saved"] = True
-        return PersonalQuestionView(
-            question_id=row["question_id"],
-            collection_id=row["collection_id"],
-            category_id=row["category_id"],
-            name=row["name"],
-            source_draft_id=row["source_draft_id"],
-            selected_revision=row["selected_revision"],
-            question=SavedPersonalQuestionDraft.model_validate(question_payload),
-            created_at=row["created_at"],
-            updated_at=row["updated_at"],
+        return self._question_view(row)
+
+    def list_questions(
+        self,
+        *,
+        owner_id: str,
+        query: str = "",
+        collection_id: str | None = None,
+        category_id: str | None = None,
+        lifecycle_state: str = "active",
+        limit: int = 50,
+        offset: int = 0,
+    ) -> PersonalQuestionList:
+        if lifecycle_state not in {"active", "trashed"}:
+            raise PersonalQuestionLibraryError("不支持的私题 lifecycle")
+        if not 1 <= limit <= 200 or offset < 0:
+            raise PersonalQuestionLibraryError("私题分页参数无效")
+        if collection_id:
+            self.get_collection(collection_id, owner_id=owner_id)
+        if category_id:
+            category = self.get_category(category_id, owner_id=owner_id)
+            if collection_id and category.collection_id != collection_id:
+                raise PersonalQuestionLibraryError("个人分类不属于所选题库")
+
+        clauses = ["owner_id = ?", "lifecycle_state = ?"]
+        params: list[object] = [owner_id, lifecycle_state]
+        normalized_query = re.sub(r"\s+", " ", query).strip()
+        if collection_id:
+            clauses.append("collection_id = ?")
+            params.append(collection_id)
+        if category_id:
+            clauses.append("category_id = ?")
+            params.append(category_id)
+        if normalized_query:
+            escaped = (
+                normalized_query.replace("\\", "\\\\")
+                .replace("%", "\\%")
+                .replace("_", "\\_")
+            )
+            pattern = f"%{escaped}%"
+            clauses.append(
+                "(name LIKE ? ESCAPE '\\' OR tags_json LIKE ? ESCAPE '\\' "
+                "OR question_json LIKE ? ESCAPE '\\')"
+            )
+            params.extend([pattern, pattern, pattern])
+        where = " AND ".join(clauses)
+        with self._connect() as connection:
+            total = connection.execute(
+                f"SELECT COUNT(*) FROM personal_questions WHERE {where}",
+                params,
+            ).fetchone()[0]
+            rows = connection.execute(
+                f"""
+                SELECT * FROM personal_questions
+                WHERE {where}
+                ORDER BY sort_order ASC, updated_at DESC, question_id ASC
+                LIMIT ? OFFSET ?
+                """,
+                [*params, limit, offset],
+            ).fetchall()
+        return PersonalQuestionList(
+            query=normalized_query,
+            lifecycle_state=lifecycle_state,
+            items=[self._question_view(row) for row in rows],
+            total=total,
+            limit=limit,
+            offset=offset,
         )
+
+    def append_saved_question_revision(
+        self,
+        question_id: str,
+        revised: GeneratedQuestionDraft,
+        command: PersonalQuestionRevisionCreate,
+        *,
+        owner_id: str,
+    ) -> PersonalQuestionView:
+        summary = re.sub(r"\s+", " ", command.edit_summary).strip()
+        if not summary:
+            raise PersonalQuestionLibraryError("revision 修改说明不能为空")
+        next_revision = command.expected_revision + 1
+        now = self._now()
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                SELECT source_draft_id, selected_revision, lifecycle_state, updated_at
+                FROM personal_questions
+                WHERE question_id = ? AND owner_id = ?
+                """,
+                (question_id, owner_id),
+            ).fetchone()
+            if row is None:
+                raise KeyError(question_id)
+            if row["lifecycle_state"] != "active":
+                raise PersonalQuestionLibraryConflict("请先从回收站恢复私题再修改")
+            if (
+                row["selected_revision"] != command.expected_revision
+                or row["updated_at"] != command.expected_updated_at
+            ):
+                raise PersonalQuestionLibraryConflict("私题版本已变化，请刷新后重试")
+            if revised.draft_id != row["source_draft_id"]:
+                raise PersonalQuestionLibraryError("修订草稿与个人题目来源不一致")
+
+            draft_cursor = connection.execute(
+                """
+                UPDATE personal_authoring_drafts
+                SET current_revision = ?, updated_at = ?
+                WHERE draft_id = ? AND owner_id = ?
+                  AND current_revision = ? AND saved_question_id = ?
+                """,
+                (
+                    next_revision,
+                    now,
+                    revised.draft_id,
+                    owner_id,
+                    command.expected_revision,
+                    question_id,
+                ),
+            )
+            if draft_cursor.rowcount != 1:
+                raise PersonalQuestionLibraryConflict("命题 revision 已变化，请刷新后重试")
+            connection.execute(
+                """
+                INSERT INTO personal_authoring_revisions (
+                    draft_id, owner_id, revision_number, revision_source,
+                    edit_summary, draft_json, created_at
+                ) VALUES (?, ?, ?, 'teacher_edit', ?, ?, ?)
+                """,
+                (
+                    revised.draft_id,
+                    owner_id,
+                    next_revision,
+                    summary,
+                    revised.model_dump_json(),
+                    now,
+                ),
+            )
+            question_cursor = connection.execute(
+                """
+                UPDATE personal_questions
+                SET selected_revision = ?, question_json = ?, updated_at = ?
+                WHERE question_id = ? AND owner_id = ?
+                  AND selected_revision = ? AND updated_at = ?
+                  AND lifecycle_state = 'active'
+                """,
+                (
+                    next_revision,
+                    revised.model_dump_json(),
+                    now,
+                    question_id,
+                    owner_id,
+                    command.expected_revision,
+                    command.expected_updated_at,
+                ),
+            )
+            if question_cursor.rowcount != 1:  # pragma: no cover - transaction safety
+                raise PersonalQuestionLibraryConflict("私题版本已变化，请刷新后重试")
+        return self.get_question(question_id, owner_id=owner_id)
+
+    def update_question(
+        self,
+        question_id: str,
+        command: PersonalQuestionUpdate,
+        *,
+        owner_id: str,
+    ) -> PersonalQuestionView:
+        current = self.get_question(question_id, owner_id=owner_id)
+        if current.lifecycle_state != "active":
+            raise PersonalQuestionLibraryConflict("请先从回收站恢复私题再修改")
+        if current.updated_at != command.expected_updated_at:
+            raise PersonalQuestionLibraryConflict("私题版本已变化，请刷新后重试")
+        collection_id = command.collection_id or current.collection_id
+        category_id = command.category_id or current.category_id
+        name = current.name
+        if command.name is not None:
+            name, _ = self._normalized_name(command.name, kind="私题")
+        tags = current.tags if command.tags is None else self._normalized_tags(command.tags)
+        sort_order = current.sort_order if command.sort_order is None else command.sort_order
+        now = self._now()
+        with self._connect() as connection:
+            self._require_owned_category(
+                connection,
+                collection_id=collection_id,
+                category_id=category_id,
+                owner_id=owner_id,
+            )
+            cursor = connection.execute(
+                """
+                UPDATE personal_questions
+                SET collection_id = ?, category_id = ?, name = ?, tags_json = ?,
+                    sort_order = ?, updated_at = ?
+                WHERE question_id = ? AND owner_id = ? AND lifecycle_state = 'active'
+                  AND updated_at = ?
+                """,
+                (
+                    collection_id,
+                    category_id,
+                    name,
+                    json.dumps(tags, ensure_ascii=False, separators=(",", ":")),
+                    sort_order,
+                    now,
+                    question_id,
+                    owner_id,
+                    command.expected_updated_at,
+                ),
+            )
+            if cursor.rowcount != 1:
+                raise PersonalQuestionLibraryConflict("私题状态已变化，请刷新后重试")
+        return self.get_question(question_id, owner_id=owner_id)
+
+    def copy_question(
+        self,
+        question_id: str,
+        command: PersonalQuestionCopy,
+        *,
+        owner_id: str,
+    ) -> PersonalQuestionView:
+        source = self.get_question(question_id, owner_id=owner_id)
+        if source.lifecycle_state != "active":
+            raise PersonalQuestionLibraryConflict("回收站中的私题不能复制")
+        name = command.name or f"{source.name}（副本）"
+        name, _ = self._normalized_name(name, kind="私题")
+        copied_question_id = f"pqq_{uuid4().hex[:16]}"
+        copied_draft_id = f"qad_{uuid4().hex[:16]}"
+        now = self._now()
+        draft_payload = source.question.model_dump(mode="json")
+        draft_payload.update(
+            {
+                "draft_id": copied_draft_id,
+                "saved": False,
+                "created_at": now,
+            }
+        )
+        copied_draft = GeneratedQuestionDraft.model_validate(draft_payload)
+        tags_json = json.dumps(
+            source.tags,
+            ensure_ascii=False,
+            separators=(",", ":"),
+        )
+        with self._connect() as connection:
+            self._require_owned_category(
+                connection,
+                collection_id=command.collection_id,
+                category_id=command.category_id,
+                owner_id=owner_id,
+            )
+            connection.execute(
+                """
+                INSERT INTO personal_authoring_drafts (
+                    draft_id, owner_id, current_revision, saved_question_id,
+                    created_at, updated_at
+                ) VALUES (?, ?, 1, ?, ?, ?)
+                """,
+                (
+                    copied_draft_id,
+                    owner_id,
+                    copied_question_id,
+                    now,
+                    now,
+                ),
+            )
+            connection.execute(
+                """
+                INSERT INTO personal_authoring_revisions (
+                    draft_id, owner_id, revision_number, revision_source,
+                    edit_summary, draft_json, created_at
+                ) VALUES (?, ?, 1, 'teacher_edit', ?, ?, ?)
+                """,
+                (
+                    copied_draft_id,
+                    owner_id,
+                    f"复制自个人题目 {question_id}",
+                    copied_draft.model_dump_json(),
+                    now,
+                ),
+            )
+            connection.execute(
+                """
+                INSERT INTO personal_questions (
+                    question_id, owner_id, collection_id, category_id, name,
+                    source_draft_id, selected_revision, question_json,
+                    tags_json, sort_order, lifecycle_state, trashed_at,
+                    copied_from_question_id, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?, 'active', NULL, ?, ?, ?)
+                """,
+                (
+                    copied_question_id,
+                    owner_id,
+                    command.collection_id,
+                    command.category_id,
+                    name,
+                    copied_draft_id,
+                    copied_draft.model_dump_json(),
+                    tags_json,
+                    source.sort_order,
+                    question_id,
+                    now,
+                    now,
+                ),
+            )
+        return self.get_question(copied_question_id, owner_id=owner_id)
+
+    def export_question(
+        self,
+        question_id: str,
+        *,
+        owner_id: str,
+        export_format: str,
+    ) -> PersonalQuestionExportArtifact:
+        question = self.get_question(question_id, owner_id=owner_id)
+        safe_name = re.sub(r"[^0-9A-Za-z\u4e00-\u9fff_-]+", "-", question.name).strip("-")
+        safe_name = (safe_name or "personal-question")[:60]
+        if export_format == "json":
+            return PersonalQuestionExportArtifact(
+                filename=f"{safe_name}.json",
+                media_type="application/json",
+                content=json.dumps(
+                    question.model_dump(mode="json"),
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+            )
+        if export_format == "markdown":
+            option_lines = [
+                f"- {option.key}. {option.text}" for option in question.question.options
+            ]
+            step_lines = [
+                f"{index}. {step}"
+                for index, step in enumerate(question.question.solution_steps, start=1)
+            ]
+            content = "\n".join(
+                [
+                    f"# {question.name}",
+                    "",
+                    "> 仅自己可见 · AI 辅助命制 · 必须由教师复核",
+                    "",
+                    f"- 分类：{question.question.curriculum.name}",
+                    f"- 标签：{'、'.join(question.tags) if question.tags else '无'}",
+                    f"- 可信状态：{question.question.verification.status}",
+                    "",
+                    "## 题目",
+                    "",
+                    question.question.stem_plain,
+                    "",
+                    *option_lines,
+                    "",
+                    "## 答案",
+                    "",
+                    question.question.answer_value,
+                    "",
+                    "## 解析",
+                    "",
+                    f"方法：{question.question.solution_method}",
+                    "",
+                    *step_lines,
+                    "",
+                    f"最终答案：{question.question.final_answer}",
+                    "",
+                ]
+            )
+            return PersonalQuestionExportArtifact(
+                filename=f"{safe_name}.md",
+                media_type="text/markdown",
+                content=content,
+            )
+        raise PersonalQuestionLibraryError("仅支持 json 或 markdown 私题导出")
+
+    def trash_question(
+        self,
+        question_id: str,
+        command: PersonalQuestionVersionCommand,
+        *,
+        owner_id: str,
+    ) -> PersonalQuestionView:
+        return self._change_question_lifecycle(
+            question_id,
+            owner_id=owner_id,
+            expected_updated_at=command.expected_updated_at,
+            from_state="active",
+            to_state="trashed",
+        )
+
+    def restore_question(
+        self,
+        question_id: str,
+        command: PersonalQuestionVersionCommand,
+        *,
+        owner_id: str,
+    ) -> PersonalQuestionView:
+        return self._change_question_lifecycle(
+            question_id,
+            owner_id=owner_id,
+            expected_updated_at=command.expected_updated_at,
+            from_state="trashed",
+            to_state="active",
+        )
+
+    def permanently_delete_question(
+        self,
+        question_id: str,
+        command: PersonalQuestionPermanentDelete,
+        *,
+        owner_id: str,
+    ) -> PersonalQuestionDeletionReceipt:
+        now = self._now()
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                SELECT source_draft_id, lifecycle_state, updated_at
+                FROM personal_questions
+                WHERE question_id = ? AND owner_id = ?
+                """,
+                (question_id, owner_id),
+            ).fetchone()
+            if row is None:
+                raise KeyError(question_id)
+            if row["lifecycle_state"] != "trashed":
+                raise PersonalQuestionLibraryConflict("永久删除前必须先把私题移入回收站")
+            if row["updated_at"] != command.expected_updated_at:
+                raise PersonalQuestionLibraryConflict("私题版本已变化，请刷新后重新确认")
+            source_draft_id = row["source_draft_id"]
+            question_cursor = connection.execute(
+                "DELETE FROM personal_questions WHERE question_id = ? AND owner_id = ?",
+                (question_id, owner_id),
+            )
+            revision_cursor = connection.execute(
+                """
+                DELETE FROM personal_authoring_revisions
+                WHERE draft_id = ? AND owner_id = ?
+                """,
+                (source_draft_id, owner_id),
+            )
+            draft_cursor = connection.execute(
+                """
+                DELETE FROM personal_authoring_drafts
+                WHERE draft_id = ? AND owner_id = ?
+                """,
+                (source_draft_id, owner_id),
+            )
+            if (
+                question_cursor.rowcount != 1
+                or revision_cursor.rowcount < 1
+                or draft_cursor.rowcount != 1
+            ):  # pragma: no cover - storage integrity safety
+                raise PersonalQuestionLibraryConflict(
+                    "私题活动存储不完整，已取消永久删除"
+                )
+        return PersonalQuestionDeletionReceipt(
+            question_id=question_id,
+            source_draft_id=source_draft_id,
+            deleted_at=now,
+        )
+
+    def _change_question_lifecycle(
+        self,
+        question_id: str,
+        *,
+        owner_id: str,
+        expected_updated_at: str,
+        from_state: str,
+        to_state: str,
+    ) -> PersonalQuestionView:
+        now = self._now()
+        trashed_at = now if to_state == "trashed" else None
+        with self._connect() as connection:
+            cursor = connection.execute(
+                """
+                UPDATE personal_questions
+                SET lifecycle_state = ?, trashed_at = ?, updated_at = ?
+                WHERE question_id = ? AND owner_id = ?
+                  AND lifecycle_state = ? AND updated_at = ?
+                """,
+                (
+                    to_state,
+                    trashed_at,
+                    now,
+                    question_id,
+                    owner_id,
+                    from_state,
+                    expected_updated_at,
+                ),
+            )
+            if cursor.rowcount == 0:
+                existing = connection.execute(
+                    """
+                    SELECT lifecycle_state, updated_at FROM personal_questions
+                    WHERE question_id = ? AND owner_id = ?
+                    """,
+                    (question_id, owner_id),
+                ).fetchone()
+                if existing is None:
+                    raise KeyError(question_id)
+                raise PersonalQuestionLibraryConflict("私题状态或版本已变化，请刷新后重试")
+        return self.get_question(question_id, owner_id=owner_id)
 
     def _initialize(self) -> None:
         with self._connect() as connection:
@@ -638,6 +1131,12 @@ class PersonalQuestionLibrary:
                     source_draft_id TEXT NOT NULL,
                     selected_revision INTEGER NOT NULL CHECK (selected_revision >= 1),
                     question_json TEXT NOT NULL,
+                    tags_json TEXT NOT NULL DEFAULT '[]',
+                    sort_order INTEGER NOT NULL DEFAULT 0 CHECK (sort_order >= 0),
+                    lifecycle_state TEXT NOT NULL DEFAULT 'active'
+                        CHECK (lifecycle_state IN ('active', 'trashed')),
+                    trashed_at TEXT,
+                    copied_from_question_id TEXT,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL,
                     UNIQUE(question_id, owner_id),
@@ -666,6 +1165,42 @@ class PersonalQuestionLibrary:
                     ON personal_questions(owner_id, collection_id, category_id, updated_at DESC);
                 """
             )
+            self._ensure_column(
+                connection,
+                "personal_questions",
+                "tags_json",
+                "TEXT NOT NULL DEFAULT '[]'",
+            )
+            self._ensure_column(
+                connection,
+                "personal_questions",
+                "sort_order",
+                "INTEGER NOT NULL DEFAULT 0",
+            )
+            self._ensure_column(
+                connection,
+                "personal_questions",
+                "lifecycle_state",
+                "TEXT NOT NULL DEFAULT 'active'",
+            )
+            self._ensure_column(
+                connection,
+                "personal_questions",
+                "trashed_at",
+                "TEXT",
+            )
+            self._ensure_column(
+                connection,
+                "personal_questions",
+                "copied_from_question_id",
+                "TEXT",
+            )
+            connection.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_personal_questions_owner_lifecycle
+                ON personal_questions(owner_id, lifecycle_state, sort_order, updated_at DESC)
+                """
+            )
 
     def _connect(self) -> sqlite3.Connection:
         connection = sqlite3.connect(self.database_path)
@@ -674,11 +1209,56 @@ class PersonalQuestionLibrary:
         return connection
 
     @staticmethod
+    def _ensure_column(
+        connection: sqlite3.Connection,
+        table: str,
+        column: str,
+        definition: str,
+    ) -> None:
+        columns = {
+            row[1] for row in connection.execute(f"PRAGMA table_info({table})").fetchall()
+        }
+        if column not in columns:
+            connection.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+
+    @staticmethod
+    def _require_owned_category(
+        connection: sqlite3.Connection,
+        *,
+        collection_id: str,
+        category_id: str,
+        owner_id: str,
+    ) -> None:
+        row = connection.execute(
+            """
+            SELECT category_id FROM personal_question_categories
+            WHERE category_id = ? AND collection_id = ? AND owner_id = ?
+            """,
+            (category_id, collection_id, owner_id),
+        ).fetchone()
+        if row is None:
+            raise KeyError(category_id)
+
+    @staticmethod
     def _normalized_name(value: str, *, kind: str) -> tuple[str, str]:
         name = re.sub(r"\s+", " ", value).strip()
         if not name:
             raise PersonalQuestionLibraryError(f"{kind}名称不能为空")
         return name, name.casefold()
+
+    @staticmethod
+    def _normalized_tags(values: list[str]) -> list[str]:
+        normalized: list[str] = []
+        seen: set[str] = set()
+        for value in values:
+            tag = re.sub(r"\s+", " ", value).strip()
+            if not tag:
+                raise PersonalQuestionLibraryError("私题标签不能为空")
+            key = tag.casefold()
+            if key not in seen:
+                normalized.append(tag)
+                seen.add(key)
+        return normalized
 
     @staticmethod
     def _collection_view(row: sqlite3.Row) -> PersonalCollectionView:
@@ -732,6 +1312,36 @@ class PersonalQuestionLibrary:
             saved=row["saved_question_id"] is not None,
             saved_question_id=row["saved_question_id"],
             current=current,
+            created_at=row["created_at"],
+            updated_at=row["updated_at"],
+        )
+
+    @staticmethod
+    def _question_view(row: sqlite3.Row) -> PersonalQuestionView:
+        question_payload = json.loads(row["question_json"])
+        question_payload["saved"] = True
+        warnings = [
+            warning
+            for warning in question_payload.get("warnings", [])
+            if "尚未保存" not in warning and "仍在个人命题工作区" not in warning
+        ]
+        saved_warning = "本题已由教师明确保存到个人私题库；始终仅自己可见。"
+        if saved_warning not in warnings:
+            warnings.insert(0, saved_warning)
+        question_payload["warnings"] = warnings
+        return PersonalQuestionView(
+            question_id=row["question_id"],
+            collection_id=row["collection_id"],
+            category_id=row["category_id"],
+            name=row["name"],
+            source_draft_id=row["source_draft_id"],
+            selected_revision=row["selected_revision"],
+            tags=json.loads(row["tags_json"]),
+            sort_order=row["sort_order"],
+            lifecycle_state=row["lifecycle_state"],
+            trashed_at=row["trashed_at"],
+            copied_from_question_id=row["copied_from_question_id"],
+            question=SavedPersonalQuestionDraft.model_validate(question_payload),
             created_at=row["created_at"],
             updated_at=row["updated_at"],
         )

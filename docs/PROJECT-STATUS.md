@@ -17,7 +17,7 @@
 - M5 Solve Agent：Gate E 已严格通过并完成阶段确认。
 - M6 Private Library Agent：已完成；六条纵向切片、12 场景固定评测与完整 Gate E 于 2026-08-22 严格通过。
 - **M7 多模态题目采集与图片解题：已完成；15 场景固定评测 9 类违规为 0，Gate E 于 2026-08-24 通过。**
-- **M8 私有辅助命题：进行中；项目所有者已确认阶段转换，前四条切片（隔离基线、结构化草稿、可信检查、教师 revision/明确保存）完成。**
+- **M8 私有辅助命题：进行中；项目所有者已确认阶段转换，前五条切片（隔离基线、结构化草稿、可信检查、教师 revision/明确保存、完整个人管理）完成。**
 - M9-M11：Paper、Lesson、Memory 均未开始。
 - M12-M13：Closed Beta 准备与数据验证，均未开始。
 - M14-M17：商业基础、Teacher Pro、教研组和学校，均未开始。
@@ -34,7 +34,7 @@
 | Solve Agent | 可用 | 复用旧 `SolutionAssistant` 可信分层；受控只读 `solve_question` Tool、产品自有 `SolveAgentWorkflow` 与新工作台已接入，支持完整题目输入、Search 转入、同步/真实 SSE/run 快照/取消/同会话恢复和三页可信结果。题面、步骤和答案现统一渲染行内/独立数学公式，并兼容旧式未分隔 LaTeX；固定 synthetic eval 与完整 M5 Gate E 已通过。 |
 | Private Library Agent | 可用（M6 已完成） | 成熟 PrivateLibrary/PDF/Curriculum/QuestionBank 模块继续复用；owner-scoped 聚合、同源上传/列表、提取/OCR/校对、拆题编辑、可信教材映射和逐次授权的私人检索已接入。检索许可短时、单次、绑定当前教师与查询，只返回确认文本的有界片段；候选导入仍固定为 owner 私有、待审核、待数学验证。固定评测与 Gate E 已通过。 |
 | 多模态图片解题 | 可用；M7 Gate E 已通过 | Solve 可上传、粘贴或拍摄单题图片并校对题面；教师确认后，canonical 题面和精确 media/OCR revision 通过短时一次性许可接入 Solve。只有图形依赖题在逐次同意后读取受控原图；Agent 不获得路径或字节，结果展示实际视觉 provider/model/revision，且不冒充 MathVerifier。15 场景固定评测和完整 Gate E 已通过。 |
-| 私有辅助命题 | 进行中 | 独立 `PersonalQuestionLibrary` 与结构化 `QuestionAuthoring.create_draft` 已实现；自然语言 brief 可生成题干、选项、答案、解析、命题意图和 Curriculum 映射，并附六项分级可信证据。生成结果只暂存为 owner 工作区草稿；教师编辑形成 append-only revision 并重跑检查，明确选择个人分类后才能保存为私题。Agent 无保存写权限；完整个人管理和三入口尚未实现。 |
+| 私有辅助命题 | 进行中 | 独立 `PersonalQuestionLibrary` 与结构化 `QuestionAuthoring.create_draft` 已实现；生成结果只暂存为 owner 工作区草稿，保存前后教师编辑均形成 append-only revision 并重跑六项可信检查。明确保存后支持 owner 列表/搜索、重命名、分类、标签排序、复制、私有导出、回收站、恢复和确认永久删除。Agent 无管理写权限；三个 Teacher Web 入口尚未实现。 |
 | Paper | 界面预览 + 后端已有 | 新 UI 可整理组卷需求，但按钮明确禁用；旧 exam_papers 模块不是 Paper Agent 完成证明。 |
 | Lesson | 界面预览 + 后端已有 | 新 UI 可整理教案需求，但按钮明确禁用；旧 lesson_plans 模块不是 Lesson Agent 完成证明。 |
 | Teacher Memory | 未开始 | 等真实教师验证后再定义。 |
@@ -75,6 +75,7 @@
 - M8 第二条切片：新增 `QuestionAuthoring.create_draft` 深模块、DeepSeek provider adapter、公开 Agent workflow 与第 9 个受控 `create_question_draft` Tool。自然语言 brief 必须映射到受控 Curriculum 知识点，并原样披露其审核状态；缺少必要信息会要求补充，参考母题在 Rights/MathVerifier 检查完成前 fail closed。模型只控制题目内容，不控制隐私与可信字段；结果固定 `owner_only + saved=false + verification.not_run`，没有存储写入。FastAPI 334 项、Agent 42 项与 Agent typecheck 通过。
 - M8 第三条切片：`QuestionAuthoring` 返回前强制生成可解性、答案/最终答案一致性、答案数量、干扰项结构、MathVerifier 能力和难度披露六项唯一证据。总状态必须与阻断项一致；明确选项数量错误、最终答案冲突或重复干扰项进入 `checks_failed`。结构完整不等于可解，模型难度不等于校准，当前通用 MathVerifier 不支持任意生成题时固定 `unsupported` 且 `math_verifier_checked=false`。FastAPI 338 项、Agent 42 项、Agent typecheck/build 通过。
 - M8 第四条切片：`PersonalQuestionLibrary` 新增 current-owner 私有 authoring workspace、append-only revision 和显式保存到 owned collection/category 的闭环。浏览器只能提交题面内容和期望版本，owner、隐私状态、可信证据均由服务端控制；每次教师编辑由 `QuestionAuthoring.revise_draft` 重跑结构/可信检查，过期版本返回 409。生成接口只登记未保存草稿，Agent Tool 未新增任何保存、覆盖或删除能力；跨 owner、伪造 owner、错误分类、重复保存与计数均有专项测试。FastAPI 342 项、Agent 42 项及 Agent typecheck/build 通过。
+- M8 第五条切片：保存后的私题可以继续追加 teacher revision，并在服务端重跑可信检查；个人管理支持 owner-scoped 列表/搜索、重命名、跨个人分类移动、标签/排序、独立复制和 JSON/Markdown 私有下载。回收站、恢复和永久删除均绑定 current owner 与乐观版本；永久删除还要求固定确认短语，并事务性清除该题活动快照、草稿和全部 revision，独立副本不受影响。公开接口没有 publish/share/admin 路径，Agent Tool 未增加管理或删除能力。FastAPI 347 项通过。
 - 2026-08-22 DeepSeek Vision 更正与实测：官方新增 `deepseek-v4-flash-vision-exp` 图片输入；已作为第二个真实外部 adapter 接入现有识别 seam，复用 DeepSeek Key、base URL、逐次同意与模型运行记录。仓库 synthetic 数学题真实调用准确返回题面、LaTeX、A–D 选项且无低置信度项；旧的“DeepSeek 仅文本”判断已移除。
 
 ## 已知未决项
@@ -86,7 +87,7 @@
 - Closed Beta 指标事件、Week-4 留存、任务采用率、严重数学错误率和单位成本尚未进入真实教师统计阶段。
 - 当前身份 adapter 仍是本地固定教师，不代表生产认证、商业多租户或云端隔离已经完成。
 - M7 已完成；只有结果中的 `visual_context.image_used=true` 才能描述为“原图参与本次推理”。固定评测和 Gate E 证据见 `M7-MULTIMODAL-SOLVE-EVALUATION.md` 与 `M7-GATE-REVIEW.md`。
-- M8 当前完成独立存储/个人分类基线、结构化命题草稿、分级可信检查和教师 revision/明确保存后端闭环；保存后的完整个人管理和 Teacher Web 三入口仍未实现。M9 及后续阶段不得开始。
+- M8 当前完成独立存储/个人分类基线、结构化命题草稿、分级可信检查、教师 revision/明确保存和完整个人管理后端闭环；Teacher Web 三入口仍未实现。M9 及后续阶段不得开始。
 
 ## 历史能力与新产品的关系
 

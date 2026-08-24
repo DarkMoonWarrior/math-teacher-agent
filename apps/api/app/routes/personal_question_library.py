@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 from functools import lru_cache
-from typing import NoReturn
+from typing import Literal, NoReturn
+from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 
 from app.core.config import get_settings
 from app.core.identity import CurrentTeacher, get_current_teacher
@@ -19,13 +20,24 @@ from app.modules.personal_question_library import (
     PersonalCollectionList,
     PersonalCollectionUpdate,
     PersonalCollectionView,
+    PersonalQuestionCopy,
+    PersonalQuestionDeletionReceipt,
+    PersonalQuestionList,
+    PersonalQuestionPermanentDelete,
+    PersonalQuestionRevisionCreate,
     PersonalQuestionSave,
+    PersonalQuestionUpdate,
+    PersonalQuestionVersionCommand,
     PersonalQuestionView,
     PersonalQuestionLibrary,
     PersonalQuestionLibraryConflict,
     PersonalQuestionLibraryError,
 )
-from app.modules.question_authoring import QuestionAuthoring, QuestionAuthoringError
+from app.modules.question_authoring import (
+    GeneratedQuestionDraft,
+    QuestionAuthoring,
+    QuestionAuthoringError,
+)
 
 
 router = APIRouter(
@@ -260,6 +272,33 @@ def save_personal_authoring_draft(
         _raise_library_error(exc)
 
 
+@router.get("/questions", response_model=PersonalQuestionList)
+def list_personal_questions(
+    query: str = Query(default="", max_length=300),
+    collection_id: str | None = Query(default=None, max_length=160),
+    category_id: str | None = Query(default=None, max_length=160),
+    lifecycle_state: Literal["active", "trashed"] = Query(default="active"),
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    teacher: CurrentTeacher = Depends(get_current_teacher),
+    library: PersonalQuestionLibrary = Depends(get_personal_question_library),
+) -> PersonalQuestionList:
+    try:
+        return library.list_questions(
+            owner_id=teacher.teacher_id,
+            query=query,
+            collection_id=collection_id,
+            category_id=category_id,
+            lifecycle_state=lifecycle_state,
+            limit=limit,
+            offset=offset,
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="个人题库或分类不存在") from exc
+    except PersonalQuestionLibraryError as exc:
+        _raise_library_error(exc)
+
+
 @router.get("/questions/{question_id}", response_model=PersonalQuestionView)
 def get_personal_question(
     question_id: str,
@@ -270,3 +309,175 @@ def get_personal_question(
         return library.get_question(question_id, owner_id=teacher.teacher_id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="个人题目不存在") from exc
+
+
+@router.get(
+    "/questions/{question_id}/revisions",
+    response_model=PersonalAuthoringRevisionList,
+)
+def list_personal_question_revisions(
+    question_id: str,
+    teacher: CurrentTeacher = Depends(get_current_teacher),
+    library: PersonalQuestionLibrary = Depends(get_personal_question_library),
+) -> PersonalAuthoringRevisionList:
+    try:
+        question = library.get_question(question_id, owner_id=teacher.teacher_id)
+        return library.list_authoring_revisions(
+            question.source_draft_id,
+            owner_id=teacher.teacher_id,
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="个人题目不存在") from exc
+
+
+@router.post(
+    "/questions/{question_id}/revisions",
+    response_model=PersonalQuestionView,
+    status_code=201,
+)
+def revise_saved_personal_question(
+    question_id: str,
+    command: PersonalQuestionRevisionCreate,
+    teacher: CurrentTeacher = Depends(get_current_teacher),
+    library: PersonalQuestionLibrary = Depends(get_personal_question_library),
+    authoring: QuestionAuthoring = Depends(get_question_authoring_editor),
+) -> PersonalQuestionView:
+    try:
+        current = library.get_question(question_id, owner_id=teacher.teacher_id)
+        draft_payload = current.question.model_dump(mode="json")
+        draft_payload["saved"] = False
+        current_draft = GeneratedQuestionDraft.model_validate(draft_payload)
+        revised = authoring.revise_draft(current_draft, command.content)
+        return library.append_saved_question_revision(
+            question_id,
+            revised,
+            command,
+            owner_id=teacher.teacher_id,
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="个人题目不存在") from exc
+    except QuestionAuthoringError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except PersonalQuestionLibraryError as exc:
+        _raise_library_error(exc)
+
+
+@router.patch("/questions/{question_id}", response_model=PersonalQuestionView)
+def update_personal_question(
+    question_id: str,
+    command: PersonalQuestionUpdate,
+    teacher: CurrentTeacher = Depends(get_current_teacher),
+    library: PersonalQuestionLibrary = Depends(get_personal_question_library),
+) -> PersonalQuestionView:
+    try:
+        return library.update_question(question_id, command, owner_id=teacher.teacher_id)
+    except KeyError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail="个人题目、题库或分类不存在",
+        ) from exc
+    except PersonalQuestionLibraryError as exc:
+        _raise_library_error(exc)
+
+
+@router.post(
+    "/questions/{question_id}/copy",
+    response_model=PersonalQuestionView,
+    status_code=201,
+)
+def copy_personal_question(
+    question_id: str,
+    command: PersonalQuestionCopy,
+    teacher: CurrentTeacher = Depends(get_current_teacher),
+    library: PersonalQuestionLibrary = Depends(get_personal_question_library),
+) -> PersonalQuestionView:
+    try:
+        return library.copy_question(question_id, command, owner_id=teacher.teacher_id)
+    except KeyError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail="个人题目、题库或分类不存在",
+        ) from exc
+    except PersonalQuestionLibraryError as exc:
+        _raise_library_error(exc)
+
+
+@router.get("/questions/{question_id}/export")
+def export_personal_question(
+    question_id: str,
+    export_format: Literal["json", "markdown"] = Query(alias="format"),
+    teacher: CurrentTeacher = Depends(get_current_teacher),
+    library: PersonalQuestionLibrary = Depends(get_personal_question_library),
+) -> Response:
+    try:
+        artifact = library.export_question(
+            question_id,
+            owner_id=teacher.teacher_id,
+            export_format=export_format,
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="个人题目不存在") from exc
+    except PersonalQuestionLibraryError as exc:
+        _raise_library_error(exc)
+    return Response(
+        content=artifact.content,
+        media_type=artifact.media_type,
+        headers={
+            "Cache-Control": "private, no-store",
+            "Content-Disposition": (
+                "attachment; filename*=UTF-8''" + quote(artifact.filename)
+            ),
+        },
+    )
+
+
+@router.post("/questions/{question_id}/trash", response_model=PersonalQuestionView)
+def trash_personal_question(
+    question_id: str,
+    command: PersonalQuestionVersionCommand,
+    teacher: CurrentTeacher = Depends(get_current_teacher),
+    library: PersonalQuestionLibrary = Depends(get_personal_question_library),
+) -> PersonalQuestionView:
+    try:
+        return library.trash_question(question_id, command, owner_id=teacher.teacher_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="个人题目不存在") from exc
+    except PersonalQuestionLibraryError as exc:
+        _raise_library_error(exc)
+
+
+@router.post("/questions/{question_id}/restore", response_model=PersonalQuestionView)
+def restore_personal_question(
+    question_id: str,
+    command: PersonalQuestionVersionCommand,
+    teacher: CurrentTeacher = Depends(get_current_teacher),
+    library: PersonalQuestionLibrary = Depends(get_personal_question_library),
+) -> PersonalQuestionView:
+    try:
+        return library.restore_question(question_id, command, owner_id=teacher.teacher_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="个人题目不存在") from exc
+    except PersonalQuestionLibraryError as exc:
+        _raise_library_error(exc)
+
+
+@router.delete(
+    "/questions/{question_id}",
+    response_model=PersonalQuestionDeletionReceipt,
+)
+def permanently_delete_personal_question(
+    question_id: str,
+    command: PersonalQuestionPermanentDelete,
+    teacher: CurrentTeacher = Depends(get_current_teacher),
+    library: PersonalQuestionLibrary = Depends(get_personal_question_library),
+) -> PersonalQuestionDeletionReceipt:
+    try:
+        return library.permanently_delete_question(
+            question_id,
+            command,
+            owner_id=teacher.teacher_id,
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="个人题目不存在") from exc
+    except PersonalQuestionLibraryError as exc:
+        _raise_library_error(exc)

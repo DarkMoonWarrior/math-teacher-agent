@@ -14,7 +14,12 @@ from app.modules.personal_question_library import (
     PersonalCategoryUpdate,
     PersonalCollectionCreate,
     PersonalCollectionUpdate,
+    PersonalQuestionCopy,
+    PersonalQuestionPermanentDelete,
+    PersonalQuestionRevisionCreate,
     PersonalQuestionSave,
+    PersonalQuestionUpdate,
+    PersonalQuestionVersionCommand,
     PersonalQuestionLibrary,
     PersonalQuestionLibraryConflict,
 )
@@ -124,6 +129,35 @@ def editable_content(draft: GeneratedQuestionDraft, *, stem: str) -> QuestionDra
         final_answer=draft.final_answer,
         authoring_intent=draft.authoring_intent,
     )
+
+
+def create_saved_question(
+    library: PersonalQuestionLibrary,
+    *,
+    owner_id: str = "teacher_a",
+    suffix: str = "base",
+):
+    collection = library.create_collection(
+        PersonalCollectionCreate(name=f"个人命题-{suffix}"), owner_id=owner_id
+    )
+    category = library.create_category(
+        collection.collection_id,
+        PersonalCategoryCreate(name="函数"),
+        owner_id=owner_id,
+    )
+    draft = generated_draft(f"qad_private_{suffix}")
+    library.stage_generated_draft(draft, owner_id=owner_id)
+    question = library.save_authoring_draft(
+        draft.draft_id,
+        PersonalQuestionSave(
+            expected_revision=1,
+            collection_id=collection.collection_id,
+            category_id=category.category_id,
+            name="函数单调性诊断题",
+        ),
+        owner_id=owner_id,
+    )
+    return collection, category, question
 
 
 def test_collections_are_owner_only_and_never_expose_owner_or_public_transitions(
@@ -327,6 +361,8 @@ def test_teacher_explicitly_saves_selected_revision_to_owned_category(
     )
 
     assert saved.question.saved is True
+    assert any("明确保存" in warning for warning in saved.question.warnings)
+    assert all("尚未保存" not in warning for warning in saved.question.warnings)
     assert saved.visibility == "owner_only"
     assert saved.public_search_allowed is False
     assert library.get_collection(collection.collection_id, owner_id="teacher_a").question_count == 1
@@ -344,6 +380,265 @@ def test_teacher_explicitly_saves_selected_revision_to_owned_category(
             ),
             owner_id="teacher_a",
         )
+
+
+def test_owner_can_list_search_rename_move_tag_sort_and_copy_questions(
+    tmp_path: Path,
+) -> None:
+    library = make_library(tmp_path)
+    source_collection, source_category, source = create_saved_question(
+        library, suffix="manage"
+    )
+    target_collection = library.create_collection(
+        PersonalCollectionCreate(name="课堂精选"), owner_id="teacher_a"
+    )
+    target_category = library.create_category(
+        target_collection.collection_id,
+        PersonalCategoryCreate(name="易错题"),
+        owner_id="teacher_a",
+    )
+
+    updated = library.update_question(
+        source.question_id,
+        PersonalQuestionUpdate(
+            expected_updated_at=source.updated_at,
+            name="函数单调性课堂诊断",
+            collection_id=target_collection.collection_id,
+            category_id=target_category.category_id,
+            tags=[" 高一 ", "课堂诊断", "高一"],
+            sort_order=7,
+        ),
+        owner_id="teacher_a",
+    )
+    found = library.list_questions(
+        owner_id="teacher_a",
+        query="单调性",
+        collection_id=target_collection.collection_id,
+        category_id=target_category.category_id,
+    )
+    copied = library.copy_question(
+        source.question_id,
+        PersonalQuestionCopy(
+            collection_id=target_collection.collection_id,
+            category_id=target_category.category_id,
+        ),
+        owner_id="teacher_a",
+    )
+
+    assert updated.name == "函数单调性课堂诊断"
+    assert updated.tags == ["高一", "课堂诊断"]
+    assert updated.sort_order == 7
+    assert found.total == 1
+    assert found.items[0].question_id == source.question_id
+    assert copied.question_id != source.question_id
+    assert copied.source_draft_id != source.source_draft_id
+    assert copied.copied_from_question_id == source.question_id
+    assert copied.question.stem_plain == source.question.stem_plain
+    assert library.get_collection(source_collection.collection_id, owner_id="teacher_a").question_count == 0
+    assert library.get_category(source_category.category_id, owner_id="teacher_a").question_count == 0
+    assert library.get_collection(target_collection.collection_id, owner_id="teacher_a").question_count == 2
+    assert library.list_questions(owner_id="teacher_b", query="单调性").total == 0
+    with pytest.raises(PersonalQuestionLibraryConflict, match="版本已变化"):
+        library.update_question(
+            source.question_id,
+            PersonalQuestionUpdate(
+                expected_updated_at=source.updated_at,
+                name="使用旧版本覆盖",
+            ),
+            owner_id="teacher_a",
+        )
+    with pytest.raises(KeyError):
+        library.copy_question(
+            source.question_id,
+            PersonalQuestionCopy(
+                collection_id=target_collection.collection_id,
+                category_id=target_category.category_id,
+            ),
+            owner_id="teacher_b",
+        )
+
+
+def test_owner_can_revise_saved_question_with_new_trust_evidence(
+    tmp_path: Path,
+) -> None:
+    library = make_library(tmp_path)
+    _, _, question = create_saved_question(library, suffix="saved-revision")
+    editor = QuestionAuthoring(
+        curriculum=InMemoryCurriculumCatalog([]),
+        provider=None,
+        math_verifier=MathVerifier(),
+    )
+    current_payload = question.question.model_dump(mode="json")
+    current_payload["saved"] = False
+    current_draft = GeneratedQuestionDraft.model_validate(current_payload)
+    command = PersonalQuestionRevisionCreate(
+        expected_revision=1,
+        expected_updated_at=question.updated_at,
+        content=QuestionDraftEditableContent(
+            question_type=current_draft.question_type,
+            stem_plain="保存后由教师修订的函数单调性题干。",
+            stem_latex=current_draft.stem_latex,
+            options=current_draft.options,
+            answer_value="B",
+            solution_method=current_draft.solution_method,
+            solution_steps=current_draft.solution_steps,
+            final_answer="答案为 A。",
+            authoring_intent=current_draft.authoring_intent,
+        ),
+        edit_summary="保存后修订题干和最终答案",
+    )
+    revised_draft = editor.revise_draft(current_draft, command.content)
+    revised = library.append_saved_question_revision(
+        question.question_id,
+        revised_draft,
+        command,
+        owner_id="teacher_a",
+    )
+
+    assert revised.selected_revision == 2
+    assert revised.question.stem_plain.startswith("保存后由教师修订")
+    assert revised.question.verification.status == "checks_failed"
+    history = library.list_authoring_revisions(
+        revised.source_draft_id,
+        owner_id="teacher_a",
+    )
+    assert [item.revision_number for item in history.items] == [2, 1]
+    with pytest.raises(PersonalQuestionLibraryConflict, match="版本已变化"):
+        library.append_saved_question_revision(
+            question.question_id,
+            revised_draft,
+            command,
+            owner_id="teacher_a",
+        )
+
+
+def test_private_export_contains_no_owner_selector_or_public_transition(
+    tmp_path: Path,
+) -> None:
+    library = make_library(tmp_path)
+    _, _, question = create_saved_question(library, suffix="export")
+    library.update_question(
+        question.question_id,
+        PersonalQuestionUpdate(
+            expected_updated_at=question.updated_at,
+            tags=["函数", "诊断"],
+        ),
+        owner_id="teacher_a",
+    )
+
+    json_export = library.export_question(
+        question.question_id,
+        owner_id="teacher_a",
+        export_format="json",
+    )
+    markdown_export = library.export_question(
+        question.question_id,
+        owner_id="teacher_a",
+        export_format="markdown",
+    )
+
+    assert json_export.filename.endswith(".json")
+    assert '"visibility": "owner_only"' in json_export.content
+    assert "owner_id" not in json_export.content
+    assert markdown_export.filename.endswith(".md")
+    assert "仅自己可见" in markdown_export.content
+    assert "## 题目" in markdown_export.content
+    assert "## 答案" in markdown_export.content
+    with pytest.raises(KeyError):
+        library.export_question(
+            question.question_id,
+            owner_id="teacher_b",
+            export_format="json",
+        )
+
+
+def test_trash_restore_and_permanent_delete_clear_only_owned_active_storage(
+    tmp_path: Path,
+) -> None:
+    library = make_library(tmp_path)
+    collection, category, question = create_saved_question(library, suffix="delete")
+    copied = library.copy_question(
+        question.question_id,
+        PersonalQuestionCopy(
+            collection_id=collection.collection_id,
+            category_id=category.category_id,
+            name="保留的独立副本",
+        ),
+        owner_id="teacher_a",
+    )
+
+    with pytest.raises(PersonalQuestionLibraryConflict, match="回收站"):
+        library.permanently_delete_question(
+            question.question_id,
+            PersonalQuestionPermanentDelete(
+                expected_updated_at=question.updated_at,
+                confirmation="永久删除我的私题",
+            ),
+            owner_id="teacher_a",
+        )
+    trashed = library.trash_question(
+        question.question_id,
+        PersonalQuestionVersionCommand(expected_updated_at=question.updated_at),
+        owner_id="teacher_a",
+    )
+    assert trashed.lifecycle_state == "trashed"
+    assert trashed.trashed_at is not None
+    assert library.list_questions(owner_id="teacher_a").total == 1
+    assert library.list_questions(owner_id="teacher_a", lifecycle_state="trashed").total == 1
+    assert library.get_collection(collection.collection_id, owner_id="teacher_a").question_count == 1
+
+    with pytest.raises(PersonalQuestionLibraryConflict, match="状态或版本"):
+        library.restore_question(
+            question.question_id,
+            PersonalQuestionVersionCommand(expected_updated_at=question.updated_at),
+            owner_id="teacher_a",
+        )
+    restored = library.restore_question(
+        question.question_id,
+        PersonalQuestionVersionCommand(expected_updated_at=trashed.updated_at),
+        owner_id="teacher_a",
+    )
+    trashed_again = library.trash_question(
+        question.question_id,
+        PersonalQuestionVersionCommand(expected_updated_at=restored.updated_at),
+        owner_id="teacher_a",
+    )
+    with pytest.raises(KeyError):
+        library.permanently_delete_question(
+            question.question_id,
+            PersonalQuestionPermanentDelete(
+                expected_updated_at=trashed_again.updated_at,
+                confirmation="永久删除我的私题",
+            ),
+            owner_id="teacher_b",
+        )
+
+    receipt = library.permanently_delete_question(
+        question.question_id,
+        PersonalQuestionPermanentDelete(
+            expected_updated_at=trashed_again.updated_at,
+            confirmation="永久删除我的私题",
+        ),
+        owner_id="teacher_a",
+    )
+
+    assert receipt.active_storage_deleted is True
+    with pytest.raises(KeyError):
+        library.get_question(question.question_id, owner_id="teacher_a")
+    assert library.get_question(copied.question_id, owner_id="teacher_a").name == "保留的独立副本"
+    with sqlite3.connect(library.database_path) as connection:
+        assert connection.execute(
+            "SELECT COUNT(*) FROM personal_authoring_drafts WHERE draft_id = ?",
+            (question.source_draft_id,),
+        ).fetchone()[0] == 0
+        assert connection.execute(
+            "SELECT COUNT(*) FROM personal_authoring_revisions WHERE draft_id = ?",
+            (question.source_draft_id,),
+        ).fetchone()[0] == 0
+        assert connection.execute(
+            "SELECT COUNT(*) FROM personal_authoring_drafts WHERE draft_id = ?",
+            (copied.source_draft_id,),
+        ).fetchone()[0] == 1
 
 
 def test_http_identity_binding_rejects_owner_selection_and_cross_owner_access(
@@ -471,7 +766,107 @@ def test_http_authoring_revision_and_explicit_save_are_teacher_bound(
         app.dependency_overrides.pop(get_personal_question_library, None)
 
 
-def test_public_routes_have_no_publish_share_admin_or_delete_interface() -> None:
+def test_http_personal_management_export_and_delete_are_owner_bound(
+    tmp_path: Path,
+) -> None:
+    library = make_library(tmp_path)
+    _, _, question = create_saved_question(library, suffix="http-manage")
+    editor = QuestionAuthoring(
+        curriculum=InMemoryCurriculumCatalog([]),
+        provider=None,
+        math_verifier=MathVerifier(),
+    )
+    app.dependency_overrides[get_personal_question_library] = lambda: library
+    app.dependency_overrides[get_question_authoring_editor] = lambda: editor
+    app.dependency_overrides[get_current_teacher] = teacher("teacher_a")
+    try:
+        with TestClient(app) as client:
+            forged = client.patch(
+                f"/api/v1/personal-question-library/questions/{question.question_id}",
+                json={"name": "伪造", "owner_id": "teacher_b"},
+            )
+            revised = client.post(
+                f"/api/v1/personal-question-library/questions/{question.question_id}/revisions",
+                json={
+                    "expected_revision": 1,
+                    "expected_updated_at": question.updated_at,
+                    "content": editable_content(
+                        question.question,
+                        stem="HTTP 保存后修订的函数题。",
+                    ).model_dump(mode="json"),
+                    "edit_summary": "HTTP 修订",
+                },
+            )
+            updated = client.patch(
+                f"/api/v1/personal-question-library/questions/{question.question_id}",
+                json={
+                    "expected_updated_at": revised.json()["updated_at"],
+                    "name": "HTTP 管理题",
+                    "tags": ["函数", "课堂"],
+                },
+            )
+            listed = client.get(
+                "/api/v1/personal-question-library/questions",
+                params={"query": "HTTP 管理"},
+            )
+            exported = client.get(
+                f"/api/v1/personal-question-library/questions/{question.question_id}/export",
+                params={"format": "markdown"},
+            )
+            trashed = client.post(
+                f"/api/v1/personal-question-library/questions/{question.question_id}/trash",
+                json={"expected_updated_at": updated.json()["updated_at"]},
+            )
+            wrong_confirmation = client.request(
+                "DELETE",
+                f"/api/v1/personal-question-library/questions/{question.question_id}",
+                json={
+                    "expected_updated_at": trashed.json()["updated_at"],
+                    "confirmation": "delete",
+                },
+            )
+
+            assert forged.status_code == 422
+            assert revised.status_code == 201
+            assert revised.json()["selected_revision"] == 2
+            assert updated.status_code == 200
+            assert listed.json()["total"] == 1
+            assert exported.status_code == 200
+            assert exported.headers["cache-control"] == "private, no-store"
+            assert "attachment" in exported.headers["content-disposition"]
+            assert "仅自己可见" in exported.text
+            assert trashed.status_code == 200
+            assert wrong_confirmation.status_code == 422
+
+            app.dependency_overrides[get_current_teacher] = teacher("teacher_b")
+            cross_owner = client.request(
+                "DELETE",
+                f"/api/v1/personal-question-library/questions/{question.question_id}",
+                json={
+                    "expected_updated_at": trashed.json()["updated_at"],
+                    "confirmation": "永久删除我的私题",
+                },
+            )
+            assert cross_owner.status_code == 404
+
+            app.dependency_overrides[get_current_teacher] = teacher("teacher_a")
+            deleted = client.request(
+                "DELETE",
+                f"/api/v1/personal-question-library/questions/{question.question_id}",
+                json={
+                    "expected_updated_at": trashed.json()["updated_at"],
+                    "confirmation": "永久删除我的私题",
+                },
+            )
+            assert deleted.status_code == 200
+            assert deleted.json()["active_storage_deleted"] is True
+    finally:
+        app.dependency_overrides.pop(get_current_teacher, None)
+        app.dependency_overrides.pop(get_question_authoring_editor, None)
+        app.dependency_overrides.pop(get_personal_question_library, None)
+
+
+def test_public_routes_have_no_publish_share_or_admin_interface() -> None:
     personal_paths = {
         path: operations
         for path, operations in app.openapi()["paths"].items()
@@ -480,10 +875,10 @@ def test_public_routes_have_no_publish_share_admin_or_delete_interface() -> None
     serialized = str(personal_paths).lower()
 
     assert personal_paths
-    methods = {
-        method for operations in personal_paths.values() for method in operations
+    delete_paths = {
+        path for path, operations in personal_paths.items() if "delete" in operations
     }
-    assert "delete" not in methods
+    assert delete_paths == {"/api/v1/personal-question-library/questions/{question_id}"}
     assert "publish" not in serialized
     assert "share" not in serialized
     assert "admin" not in serialized

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -8,6 +8,9 @@ from app.modules.question_authoring import (
     GeneratedQuestionDraft,
     QuestionDraftEditableContent,
 )
+
+
+PersonalQuestionTag = Annotated[str, Field(min_length=1, max_length=40)]
 
 
 class PersonalCollectionCreate(BaseModel):
@@ -100,6 +103,15 @@ class PersonalAuthoringRevisionCreate(BaseModel):
     edit_summary: str = Field(default="教师编辑", min_length=1, max_length=500)
 
 
+class PersonalQuestionRevisionCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    expected_revision: int = Field(ge=1)
+    expected_updated_at: str = Field(min_length=1, max_length=80)
+    content: QuestionDraftEditableContent
+    edit_summary: str = Field(default="教师编辑已保存私题", min_length=1, max_length=500)
+
+
 class PersonalAuthoringRevisionView(BaseModel):
     draft_id: str
     revision_number: int = Field(ge=1)
@@ -135,6 +147,44 @@ class PersonalQuestionSave(BaseModel):
     name: str = Field(min_length=1, max_length=120)
 
 
+class PersonalQuestionUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    expected_updated_at: str = Field(min_length=1, max_length=80)
+    name: str | None = Field(default=None, min_length=1, max_length=120)
+    collection_id: str | None = Field(default=None, min_length=1, max_length=160)
+    category_id: str | None = Field(default=None, min_length=1, max_length=160)
+    tags: list[PersonalQuestionTag] | None = Field(default=None, max_length=20)
+    sort_order: int | None = Field(default=None, ge=0, le=100_000)
+
+    @model_validator(mode="after")
+    def validate_update(self) -> "PersonalQuestionUpdate":
+        fields = (self.name, self.collection_id, self.category_id, self.tags, self.sort_order)
+        if all(value is None for value in fields):
+            raise ValueError("至少提供一个需要修改的字段")
+        if (self.collection_id is None) != (self.category_id is None):
+            raise ValueError("移动私题时必须同时提供个人题库和分类")
+        return self
+
+
+class PersonalQuestionCopy(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    collection_id: str = Field(min_length=1, max_length=160)
+    category_id: str = Field(min_length=1, max_length=160)
+    name: str | None = Field(default=None, min_length=1, max_length=120)
+
+
+class PersonalQuestionVersionCommand(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    expected_updated_at: str = Field(min_length=1, max_length=80)
+
+
+class PersonalQuestionPermanentDelete(PersonalQuestionVersionCommand):
+    confirmation: Literal["永久删除我的私题"]
+
+
 class SavedPersonalQuestionDraft(GeneratedQuestionDraft):
     saved: Literal[True] = True
 
@@ -146,6 +196,33 @@ class PersonalQuestionView(OwnerOnlyContentPolicy):
     name: str
     source_draft_id: str
     selected_revision: int = Field(ge=1)
+    tags: list[PersonalQuestionTag] = Field(default_factory=list, max_length=20)
+    sort_order: int = Field(default=0, ge=0)
+    lifecycle_state: Literal["active", "trashed"] = "active"
+    trashed_at: str | None = None
+    copied_from_question_id: str | None = None
     question: SavedPersonalQuestionDraft
     created_at: str
     updated_at: str
+
+
+class PersonalQuestionList(BaseModel):
+    query: str = ""
+    lifecycle_state: Literal["active", "trashed"]
+    items: list[PersonalQuestionView]
+    total: int = Field(ge=0)
+    limit: int = Field(ge=1)
+    offset: int = Field(ge=0)
+
+
+class PersonalQuestionExportArtifact(BaseModel):
+    filename: str
+    media_type: Literal["application/json", "text/markdown"]
+    content: str
+
+
+class PersonalQuestionDeletionReceipt(BaseModel):
+    question_id: str
+    source_draft_id: str
+    active_storage_deleted: Literal[True] = True
+    deleted_at: str
