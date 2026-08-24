@@ -13,6 +13,7 @@
 - 私人资料同源上传与清单：PDF/DOCX/图片、来源与权利说明、明确确认、private 与处理状态；
 - 私人资料详情与校对：原 PDF/图片预览、首次提取文本、可编辑草稿、本地 PDF OCR、逐次授权外部 OCR 和修订记录；
 - 私人资料拆题：仅使用教师确认的当前文本，逐题编辑题干/选项/答案/解析/难度，搜索并确认可信教材知识点后才允许存入私人题库；
+- 私有辅助命题：从新任务、Search 空/不合适结果或 Paper 缺题提示进入独立命题工作区；填写结构化要求后生成未保存草稿，编辑并重跑六项检查，明确选择或新建个人题库/分类后才保存；我的私题支持 owner 自主管理、私有导出、回收、恢复和固定短语永久删除；
 - 教案与组卷需求草稿及工作流预览（运行时尚未接入，提交按钮禁用）；
 - 桌面与手机响应式动态纸张画布。
 
@@ -26,11 +27,12 @@ pnpm dev:teacher
 
 访问 <http://127.0.0.1:3001>。Next.js 将同源 `/api/v1/*` 转发到 `MATH_AI_API_INTERNAL_URL`，默认是 `http://127.0.0.1:8000`。
 
-要使用 Search 与 Solve Agent，需要同时启动 FastAPI 与 `apps/agent`，并设置：
+要使用 Search、Solve 与私有辅助命题 Agent，需要同时启动 FastAPI 与 `apps/agent`，并设置：
 
 ```dotenv
 MATH_AI_SEARCH_AGENT_ENABLED=true
 MATH_AI_SOLVE_AGENT_ENABLED=true
+MATH_AI_QUESTION_AUTHORING_AGENT_ENABLED=true
 MATH_AI_AGENT_RUNTIME=dsh
 MATH_AI_AGENT_PROVIDER=test-mock
 ```
@@ -40,9 +42,10 @@ MATH_AI_AGENT_PROVIDER=test-mock
 ## 模块 seam
 
 - `lib/teacher-workspace/contracts.ts`：UI 可见的稳定接口和结果模型。
-- `lib/teacher-workspace/http-adapter.ts`：Search/Solve/Private Library/Question Capture 同源 FastAPI adapter；内部处理 SSE、同一 run 恢复、服务端取消、owner-free multipart 上传、受控图片变换与 OCR 后台任务轮询，不向 React 泄漏传输或存储细节。
+- `lib/teacher-workspace/http-adapter.ts`：Search/Solve/Private Library/Question Capture/Private Question Authoring 同源 FastAPI adapter；内部处理 SSE、同一 run 恢复、服务端取消、owner-free multipart 上传、受控图片变换、OCR 后台任务轮询及 owner-bound 私题版本动作，不向 React 泄漏传输或存储细节。
 - `components/workbench/teacher-workbench.tsx`：视图与交互状态。
 - `components/workbench/private-library-workspace.tsx`：私人资料上传、权利声明、owner-scoped 清单、原文件对照、OCR 校对、revision、拆题编辑和教材映射界面。
+- `components/workbench/personal-question-authoring-workspace.tsx`：结构化 brief、未保存草稿、教师 revision、六项可信状态、明确保存、个人题库/分类和 owner 私题 lifecycle 界面。
 
 React 代码不得依赖数据库、Harness 类型、供应商响应或后端内部存储字段。
 

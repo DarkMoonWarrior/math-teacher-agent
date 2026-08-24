@@ -84,6 +84,7 @@ apps/web (legacy/reference Next.js UI, :3000)
 - Second/third slices: `QuestionAuthoring.create_draft` 以严格 `QuestionDesignBrief` 为界面，完成题型补全、受控 Curriculum 映射、可替换 provider、结构验证、六项分级可信检查和诚实错误语义。DeepSeek Harness 只能调用一次 `create_question_draft`；Tool 请求没有 owner/save/publish/share/delete 字段。
 - Fourth slice: 公开 FastAPI 在成功生成后把结果登记为当前 owner 的未保存 authoring workspace revision；Agent 本身仍不写存储。浏览器只能提交可编辑题面和 `expected_revision`，`QuestionAuthoring.revise_draft` 在服务端重建可信证据，`PersonalQuestionLibrary` 以 append-only revision 和乐观版本冲突保护修改。显式保存还必须验证 collection/category 属于 current owner，且只写独立的 `personal_questions`，公共 `QuestionBank` 不参与。
 - Fifth slice: `PersonalQuestionLibrary` 的同一 interface 隐藏 owner 私题列表/搜索、保存后内容 revision、元数据与分类、标签排序、独立复制、JSON/Markdown 导出及 lifecycle。复制创建独立 draft/revision 链；永久删除只对已 trashed 的当前版本生效，并在事务中删除个人题目快照及其独占 revision 链。公开路由只做认证绑定和下载响应适配，Agent/Internal Tool Gateway 没有这些管理能力。
+- Sixth slice: `apps/teacher-web` 只依赖产品自有 `TeacherWorkspace` contract，把新任务、Search 空/不合适结果和 Paper 缺题提示转入独立 authoring workspace。生成、教师 revision、明确保存和 owner 管理是可观察的不同动作；生成题保持 `AI GENERATED · UNSAVED`，不进入 Search result，Paper 也不会自动生成、保存或加题。浏览器 payload 不暴露 owner、policy 或可信证据控制面。
 - Third slice: 同一深模块在返回前生成六项固定可信证据，并由 `QuestionDraftVerification` 强制检查项唯一、总状态与阻断项一致、MathVerifier 能力与是否真正运行一致。答案数量、明显答案冲突、选项重复和难度偏差可确定性检查；一般数学可解性、干扰项语义及无受控 rule spec 的任意生成题保持 `inconclusive/unsupported`，模型自述不能升级为 MathVerifier 证据。
 
 ### Teacher Agent Runtime module
@@ -153,7 +154,7 @@ The primary UI should normally call `/api/v1` on its own origin. Next.js rewrite
 - Solve tests target 唯一 Tool 证据、可信字段校验、结构化错误、真实 SSE、取消、恢复和 feature gate。
 - Private Library tests target owner-scoped 结果、private-by-default、revision、逐次外部处理同意、无正文概览 Tool 与越权失败路径。
 - M7 tests target `QuestionCapture` 的图片/公式/图形保真、revision、逐次外部同意、Solve 可观察结果和跨 owner 失败，不测试供应商内部实现。15 场景固定 synthetic evaluation 与 Gate E 已于 2026-08-24 通过。
-- M8 tests target `QuestionAuthoring` 与 `PersonalQuestionLibrary` 的可观察接口，强制公共 Search/QuestionBank/后台访问缺失、跨 owner fail closed、owner 管理和永久删除语义。
+- M8 tests target `QuestionAuthoring`、`PersonalQuestionLibrary` 与 Teacher Web adapter 的可观察接口，强制公共 Search/QuestionBank/后台访问缺失、跨 owner fail closed、浏览器无 owner/policy/trust 控制面、生成与明确保存分离、owner 管理和永久删除语义。
 - Runtime conformance tests exercise both runtime adapters through the product-owned interface.
 - Security tests enforce the exact Tool allowlist and absence of database access in `apps/agent`；当前 8 个 Tool 只读，第 9 个 `create_question_draft` 只生成未保存草稿且不执行业务写入。
 - Business tests use synthetic/local adapters and assert published behaviour, rights, verification and privacy invariants.

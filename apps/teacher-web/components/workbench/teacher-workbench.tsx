@@ -13,6 +13,7 @@ import { MathText } from "@/components/math-text";
 import {
   type SearchQuestion,
   type QuestionInputBundle,
+  type QuestionAuthoringEntrySource,
   type SearchTaskProgressStage,
   type SearchTaskResult,
   type SolveTaskProgressStage,
@@ -43,10 +44,12 @@ import {
   PaperIcon,
   PlusIcon,
   SearchIcon,
+  SparkIcon,
 } from "./icons";
 import { SolvePaper, SolveResultBrief } from "./solve-paper";
 import { PrivateLibraryWorkspace } from "./private-library-workspace";
 import { QuestionMediaComposer } from "./question-media-composer";
+import { PersonalQuestionAuthoringWorkspace } from "./personal-question-authoring-workspace";
 
 type Phase = "idle" | "running" | "success" | "error" | "cancelled";
 type FlipDirection = "next" | "previous";
@@ -548,6 +551,11 @@ export function TeacherWorkbench() {
   const [history, setHistory] = useState<TaskRecord[]>([]);
   const [touched, setTouched] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [newTaskOpen, setNewTaskOpen] = useState(false);
+  const [authoringEntry, setAuthoringEntry] = useState<{
+    source: QuestionAuthoringEntrySource;
+    brief: string;
+  } | null>(null);
   const [previewPage, setPreviewPage] = useState(0);
   const [questionPage, setQuestionPage] = useState(0);
   const [solvePage, setSolvePage] = useState(0);
@@ -562,6 +570,7 @@ export function TeacherWorkbench() {
   const historyTriggerRef = useRef<HTMLButtonElement | null>(null);
   const historyDrawerRef = useRef<HTMLElement | null>(null);
   const historyCloseRef = useRef<HTMLButtonElement | null>(null);
+  const newTaskMenuRef = useRef<HTMLDivElement | null>(null);
 
   const definition = CAPABILITIES[capability];
   const query = drafts[capability];
@@ -569,6 +578,7 @@ export function TeacherWorkbench() {
   const searchVisible = capability === "search";
   const solveVisible = capability === "solve";
   const libraryVisible = capability === "library";
+  const authoringVisible = authoringEntry !== null;
   const runnable = searchVisible || solveVisible;
   const error = runnable ? errors[capability as "search" | "solve"] : null;
   const running = runnable && phase === "running";
@@ -704,6 +714,23 @@ export function TeacherWorkbench() {
     };
   }, [historyOpen]);
 
+  useEffect(() => {
+    if (!newTaskOpen) return;
+    function closeMenu(event: MouseEvent | globalThis.KeyboardEvent) {
+      if (event instanceof globalThis.KeyboardEvent) {
+        if (event.key === "Escape") setNewTaskOpen(false);
+        return;
+      }
+      if (!newTaskMenuRef.current?.contains(event.target as Node)) setNewTaskOpen(false);
+    }
+    window.addEventListener("mousedown", closeMenu);
+    window.addEventListener("keydown", closeMenu);
+    return () => {
+      window.removeEventListener("mousedown", closeMenu);
+      window.removeEventListener("keydown", closeMenu);
+    };
+  }, [newTaskOpen]);
+
   async function runTask(event?: FormEvent<HTMLFormElement>) {
     event?.preventDefault();
     if (!runnable) return;
@@ -804,7 +831,12 @@ export function TeacherWorkbench() {
   }
 
   function selectCapability(nextCapability: CapabilityId) {
-    if (nextCapability === capability || turning) return;
+    if (turning) return;
+    if (nextCapability === capability) {
+      setAuthoringEntry(null);
+      setNewTaskOpen(false);
+      return;
+    }
     if (running) {
       requestSequenceRef.current += 1;
       abortRef.current?.abort();
@@ -816,6 +848,8 @@ export function TeacherWorkbench() {
     const nextIndex = CAPABILITY_ORDER.indexOf(nextCapability);
     setFlipDirection(nextIndex > currentIndex ? "next" : "previous");
     setTurning(true);
+    setAuthoringEntry(null);
+    setNewTaskOpen(false);
     setTouched(false);
     if (turnTimerRef.current !== null) window.clearTimeout(turnTimerRef.current);
     turnTimerRef.current = window.setTimeout(() => {
@@ -826,6 +860,12 @@ export function TeacherWorkbench() {
   }
 
   function resetTask() {
+    if (authoringVisible) {
+      setAuthoringEntry(null);
+      setNewTaskOpen(false);
+      window.setTimeout(returnToComposer, 0);
+      return;
+    }
     if (libraryVisible) {
       selectCapability("search");
       return;
@@ -851,6 +891,13 @@ export function TeacherWorkbench() {
       setSolvePage(0);
     }
     returnToComposer();
+  }
+
+  function openAuthoring(source: QuestionAuthoringEntrySource, brief = "") {
+    if (running || turning) return;
+    setNewTaskOpen(false);
+    setAuthoringEntry({ source, brief: brief.trim() });
+    window.requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "auto" }));
   }
 
   function openTask(task: TaskRecord) {
@@ -951,15 +998,29 @@ export function TeacherWorkbench() {
               <HistoryIcon />
               {history.length > 0 && <span>{history.length}</span>}
             </button>
-            <button className="new-task-button" type="button" onClick={resetTask} aria-label="新任务">
-              <PlusIcon />
-              <span>新任务</span>
-            </button>
+            <div className="new-task-menu" ref={newTaskMenuRef}>
+              <button className="new-task-button" type="button" onClick={() => setNewTaskOpen((current) => !current)} aria-expanded={newTaskOpen} aria-haspopup="menu" aria-label="新任务菜单">
+                <PlusIcon />
+                <span>新任务</span>
+              </button>
+              {newTaskOpen && (
+                <div className="new-task-popover" role="menu">
+                  <button role="menuitem" type="button" onClick={resetTask}><PlusIcon /><span><strong>清空当前任务</strong><small>保留当前 Agent</small></span></button>
+                  <button role="menuitem" type="button" onClick={() => openAuthoring("new_task")}><SparkIcon /><span><strong>辅助命题</strong><small>生成草稿 · 仅自己可见</small></span></button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </header>
 
-      {libraryVisible ? (
+      {authoringEntry ? (
+        <PersonalQuestionAuthoringWorkspace
+          entrySource={authoringEntry.source}
+          initialBrief={authoringEntry.brief}
+          onExit={() => setAuthoringEntry(null)}
+        />
+      ) : libraryVisible ? (
         <PrivateLibraryWorkspace />
       ) : (
       <main className="marquee-workspace">
@@ -1044,6 +1105,12 @@ export function TeacherWorkbench() {
               ))}
             </div>
           </section>
+          {capability === "paper" && (
+            <section className="paper-authoring-entry" aria-label="题目不足时辅助命题">
+              <div><SparkIcon /><p><strong>题目不足时，由你决定是否命题。</strong><span>这里不会自动生成、自动保存，也不会把私题加入试卷。</span></p></div>
+              <button type="button" onClick={() => openAuthoring("paper", query)}>进入辅助命题 <ArrowRightIcon /></button>
+            </section>
+          )}
         </section>
 
         <section className="visual-pane" aria-live="polite" ref={resultRegionRef}>
@@ -1114,6 +1181,7 @@ export function TeacherWorkbench() {
                   {result.suggestions[0] && (
                     <button type="button" onClick={() => updateQuery(result.suggestions[0])}>采用放宽建议 <ArrowRightIcon /></button>
                   )}
+                  <button className="authoring-entry-link" type="button" onClick={() => openAuthoring("search", result.raw_query || query)}>根据当前条件辅助命题 <SparkIcon /></button>
                 </section>
               )}
               {solveVisible && phase === "success" && solveResult?.solution && (
@@ -1138,6 +1206,9 @@ export function TeacherWorkbench() {
                   <MathText text={result.assistant_explanation} />
                 </details>
               )}
+              <button className="result-authoring-entry" type="button" onClick={() => openAuthoring("search", result.raw_query || query)}>
+                <span>这些题不合适</span><strong>根据当前条件辅助命题</strong><SparkIcon />
+              </button>
             </section>
           )}
           {solveVisible && phase === "success" && solveResult?.solution && (
@@ -1149,7 +1220,7 @@ export function TeacherWorkbench() {
 
       <footer className="inline-footer">
         <span>备课伙伴</span>
-        <span>{definition.label} · {definition.ready ? "已接入" : "界面预览"}</span>
+        <span>{authoringVisible ? "辅助命题 · 已接入" : `${definition.label} · ${definition.ready ? "已接入" : "界面预览"}`}</span>
         <span>高中数学 · 私有工作区</span>
       </footer>
 

@@ -450,6 +450,195 @@ export type PrivateLibraryUpload = {
   rightsAcknowledged: true;
 };
 
+export type QuestionAuthoringEntrySource = "new_task" | "search" | "paper";
+
+export type QuestionAuthoringBrief = {
+  requestText: string;
+  grade?: "高一" | "高二" | "高三";
+  curriculumNodeId?: string;
+  knowledgePointQuery?: string;
+  questionType?: "single_choice" | "multiple_choice" | "fill_blank" | "open_response";
+  targetDifficulty: number;
+  teachingPurpose: string;
+  expectedMinutes?: number;
+  assessedMethod?: string;
+  misconceptionRequirements?: string;
+  additionalConstraints?: string;
+  referenceQuestionId?: string;
+  sessionId?: string;
+};
+
+export type QuestionDraftOption = {
+  key: string;
+  text: string;
+};
+
+export type QuestionDraftEditableContent = {
+  question_type: "single_choice" | "multiple_choice" | "fill_blank" | "open_response";
+  stem_plain: string;
+  stem_latex: string | null;
+  options: QuestionDraftOption[];
+  answer_value: string;
+  solution_method: string;
+  solution_steps: string[];
+  final_answer: string;
+  authoring_intent: string;
+};
+
+export type QuestionDraftTrustCheck = {
+  code: "solvability" | "answer_solution_consistency" | "choice_answer_cardinality" | "distractor_quality" | "math_verifier" | "difficulty_disclosure";
+  status: "passed" | "failed" | "inconclusive" | "not_applicable";
+  capability: "supported" | "unsupported";
+  evidence_source: "deterministic_structure" | "math_verifier" | "model_estimate" | "none";
+  summary: string;
+  details: string[];
+};
+
+export type GeneratedQuestionDraft = QuestionDraftEditableContent & {
+  draft_id: string;
+  request_text: string;
+  curriculum: {
+    node_id: string;
+    name: string;
+    volume: string;
+    chapter: string;
+    section: string;
+    mapping_source: "teacher_selected" | "brief_match";
+    match_confidence: number;
+    curriculum_status: string;
+    reviewed_by: string;
+  };
+  target_difficulty: number;
+  estimated_difficulty: number;
+  difficulty_source: "model_estimated";
+  verification: {
+    status: "checks_failed" | "teacher_review_required";
+    math_verifier_status: "unsupported" | "passed" | "failed" | "inconclusive";
+    math_verifier_checked: boolean;
+    teacher_review_required: true;
+    verifier_version: string;
+    checks: QuestionDraftTrustCheck[];
+    details: string[];
+  };
+  source_type: "ai_generated";
+  visibility: "owner_only";
+  public_search_allowed: false;
+  share_allowed: false;
+  commercial_use_allowed: false;
+  model_training_allowed: false;
+  saved: boolean;
+  provider: string;
+  model: string;
+  prompt_revision: string;
+  warnings: string[];
+  created_at: string;
+};
+
+export type QuestionAuthoringAgentResult = {
+  request_id: string;
+  session_id: string;
+  run_id: string;
+  status: "ok" | "error" | "cancelled";
+  draft: GeneratedQuestionDraft | null;
+  tool_request_id: string;
+  tool_call_count: number;
+  error: { code?: string; message?: string; request_id?: string } | null;
+};
+
+export type OwnerOnlyPolicy = {
+  visibility: "owner_only";
+  public_search_allowed: false;
+  share_allowed: false;
+  commercial_use_allowed: false;
+  model_training_allowed: false;
+};
+
+export type PersonalQuestionCollection = OwnerOnlyPolicy & {
+  collection_id: string;
+  name: string;
+  description: string;
+  category_count: number;
+  question_count: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type PersonalQuestionCollectionList = { items: PersonalQuestionCollection[]; total: number };
+
+export type PersonalQuestionCategory = OwnerOnlyPolicy & {
+  category_id: string;
+  collection_id: string;
+  name: string;
+  description: string;
+  sort_order: number;
+  question_count: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type PersonalQuestionCategoryList = {
+  collection_id: string;
+  items: PersonalQuestionCategory[];
+  total: number;
+};
+
+export type PersonalAuthoringRevision = {
+  draft_id: string;
+  revision_number: number;
+  revision_source: "ai_generated" | "teacher_edit";
+  edit_summary: string;
+  draft: GeneratedQuestionDraft;
+  created_at: string;
+};
+
+export type PersonalAuthoringDraft = OwnerOnlyPolicy & {
+  draft_id: string;
+  current_revision: number;
+  saved: boolean;
+  saved_question_id: string | null;
+  current: PersonalAuthoringRevision;
+  created_at: string;
+  updated_at: string;
+};
+
+export type PersonalAuthoringRevisionList = {
+  draft_id: string;
+  current_revision: number;
+  items: PersonalAuthoringRevision[];
+  total: number;
+};
+
+export type PersonalQuestion = OwnerOnlyPolicy & {
+  question_id: string;
+  collection_id: string;
+  category_id: string;
+  name: string;
+  source_draft_id: string;
+  selected_revision: number;
+  tags: string[];
+  sort_order: number;
+  lifecycle_state: "active" | "trashed";
+  trashed_at: string | null;
+  copied_from_question_id: string | null;
+  question: GeneratedQuestionDraft;
+  created_at: string;
+  updated_at: string;
+};
+
+export type PersonalQuestionList = {
+  query: string;
+  lifecycle_state: "active" | "trashed";
+  items: PersonalQuestion[];
+  total: number;
+  limit: number;
+  offset: number;
+};
+
+export type PersonalQuestionExport = {
+  blob: Blob;
+  filename: string;
+};
+
 export interface TeacherWorkspace {
   searchQuestions(
     request: SearchTaskRequest,
@@ -553,6 +742,86 @@ export interface TeacherWorkspace {
     candidateId: string,
     signal?: AbortSignal,
   ): Promise<PrivateLibraryCandidateImportResult>;
+
+  createQuestionAuthoringDraft(
+    request: QuestionAuthoringBrief,
+    signal?: AbortSignal,
+  ): Promise<QuestionAuthoringAgentResult>;
+
+  getPersonalAuthoringDraft(draftId: string, signal?: AbortSignal): Promise<PersonalAuthoringDraft>;
+
+  listPersonalAuthoringRevisions(draftId: string, signal?: AbortSignal): Promise<PersonalAuthoringRevisionList>;
+
+  revisePersonalAuthoringDraft(
+    draftId: string,
+    expectedRevision: number,
+    content: QuestionDraftEditableContent,
+    editSummary: string,
+    signal?: AbortSignal,
+  ): Promise<PersonalAuthoringDraft>;
+
+  savePersonalAuthoringDraft(
+    draftId: string,
+    request: { expectedRevision: number; collectionId: string; categoryId: string; name: string },
+    signal?: AbortSignal,
+  ): Promise<PersonalQuestion>;
+
+  listPersonalQuestionCollections(signal?: AbortSignal): Promise<PersonalQuestionCollectionList>;
+
+  createPersonalQuestionCollection(
+    name: string,
+    description?: string,
+    signal?: AbortSignal,
+  ): Promise<PersonalQuestionCollection>;
+
+  listPersonalQuestionCategories(collectionId: string, signal?: AbortSignal): Promise<PersonalQuestionCategoryList>;
+
+  createPersonalQuestionCategory(
+    collectionId: string,
+    name: string,
+    description?: string,
+    signal?: AbortSignal,
+  ): Promise<PersonalQuestionCategory>;
+
+  listPersonalQuestions(
+    request: { query?: string; lifecycleState?: "active" | "trashed"; collectionId?: string; categoryId?: string },
+    signal?: AbortSignal,
+  ): Promise<PersonalQuestionList>;
+
+  revisePersonalQuestion(
+    question: PersonalQuestion,
+    content: QuestionDraftEditableContent,
+    editSummary: string,
+    signal?: AbortSignal,
+  ): Promise<PersonalQuestion>;
+
+  updatePersonalQuestion(
+    question: PersonalQuestion,
+    request: { name?: string; collectionId?: string; categoryId?: string; tags?: string[]; sortOrder?: number },
+    signal?: AbortSignal,
+  ): Promise<PersonalQuestion>;
+
+  copyPersonalQuestion(
+    questionId: string,
+    request: { collectionId: string; categoryId: string; name?: string },
+    signal?: AbortSignal,
+  ): Promise<PersonalQuestion>;
+
+  exportPersonalQuestion(
+    questionId: string,
+    format: "json" | "markdown",
+    signal?: AbortSignal,
+  ): Promise<PersonalQuestionExport>;
+
+  trashPersonalQuestion(question: PersonalQuestion, signal?: AbortSignal): Promise<PersonalQuestion>;
+
+  restorePersonalQuestion(question: PersonalQuestion, signal?: AbortSignal): Promise<PersonalQuestion>;
+
+  permanentlyDeletePersonalQuestion(
+    question: PersonalQuestion,
+    confirmation: "永久删除我的私题",
+    signal?: AbortSignal,
+  ): Promise<{ question_id: string; active_storage_deleted: true; deleted_at: string }>;
 }
 
 export class TeacherWorkspaceError extends Error {

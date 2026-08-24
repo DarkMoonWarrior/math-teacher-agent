@@ -1,5 +1,17 @@
 [
   {
+    "date": "2026-08-24",
+    "scope": "capability",
+    "macrostructure": "Authoring Ledger",
+    "theme": "studied-DNA",
+    "theme_axes": "warm-paper / Chinese editorial serif / vermilion-mineral-teal",
+    "vibe": "owner-only mathematical authoring desk with an append-only trust ledger",
+    "enrichment": "existing mathematical paper atlas",
+    "nav": "N1b five-capability navigation with a new-task action menu",
+    "footer": "Ft2 Inline single line",
+    "brief": "Add three explicit entries into a visibly separate private question-authoring workspace with unsaved generation, teacher revisions, trust checks, explicit owner save, personal management and no public or automatic Paper path."
+  },
+  {
     "date": "2026-08-22",
     "scope": "capability",
     "macrostructure": "Marquee Hero extension",

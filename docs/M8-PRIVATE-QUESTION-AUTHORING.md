@@ -10,11 +10,12 @@
 - **切片 3 已完成**：每份草稿必须携带可解性、答案/最终答案一致性、选择题答案数量、干扰项结构、MathVerifier 能力和难度披露六项唯一证据；明确矛盾进入 `checks_failed`，其余仍为 `teacher_review_required`。
 - **切片 4 已完成**：成功生成的内容只暂存为当前 owner 的未保存命题工作区草稿；教师提交完整编辑快照会追加不可覆盖的 revision 并重跑结构/可信检查。只有认证教师明确指定自己拥有的个人题库、分类、名称和当前版本后才创建私题，旧版本提交返回冲突。
 - **切片 5 已完成**：active 私题可按 owner 列表/搜索、重命名、移动分类、标签排序、保存后继续追加 revision、独立复制及以 JSON/Markdown 私有导出；回收站与恢复使用乐观版本。永久删除只接受已进回收站的当前版本和固定 owner 确认短语，并在同一事务中清除该题独占的活动快照、命题草稿与全部 revision；独立副本不受影响。
+- **切片 6 已完成**：Teacher Web 已从“新任务”、Search 空结果/不合适结果和 Paper 题量不足提示三个位置接入独立辅助命题工作区。教师可填写结构化 brief、查看并编辑未保存草稿、记录 revision、重新执行六项检查、明确选择或新建个人题库/分类后保存；保存后可在同一 owner 工作区管理、导出、回收、恢复或确认永久删除。生成题始终以 `AI GENERATED · UNSAVED` 与真实检索题分开，Paper 入口不自动生成、不自动保存，也不自动加入试卷。
 - DeepSeek 只实现可替换 provider adapter；Agent 必须且只能调用一次 `create_question_draft`，模型不能增加 owner、保存、发布、共享或删除参数。Agent Tool 仍只返回 `owner_only + saved=false`；暂存和保存由公开 FastAPI 在认证业务层分别执行，Agent 没有相应写 Tool。
 - 当前 MathVerifier 只接受带受控 `verification_spec` 的已知规则；任意模型生成题没有这种独立证据，因此固定诚实披露 `math_verifier_status=unsupported`，不得用模型自述冒充程序验证。结构检查通过也不等于数学正确。
 - FastAPI 只从 `get_current_teacher` 注入 owner；请求模型 `extra=forbid`，浏览器伪造 `owner_id` 返回 422，跨 owner 读取或修改返回 404。
 - 所有返回固定为 `owner_only`，并明确 `public_search_allowed=false`、`share_allowed=false`、`commercial_use_allowed=false`、`model_training_allowed=false`；没有 publish/share/admin 接口。唯一 DELETE 路由只属于认证 owner 的私题，且受回收站、版本与固定确认三重门禁保护。
-- **仍未完成**：三个 Teacher Web 入口、固定评测与 Gate E。
+- **仍未完成**：固定 synthetic evaluation、完整隐私/可信/工程审计与 Gate E/Gate P。M8 尚未完成，不得进入 M9。
 
 ## 1. 已确认的产品规则
 
