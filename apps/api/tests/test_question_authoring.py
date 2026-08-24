@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import json
+
 import pytest
 
 from app.modules.curriculum import CurriculumNode, InMemoryCurriculumCatalog
 from app.modules.math_verifier import MathVerifier, VerificationReport
 from app.modules.question_authoring import (
+    DeepSeekQuestionAuthoringProvider,
     ProviderQuestionDraft,
     QuestionAuthoring,
     QuestionAuthoringClarificationRequired,
@@ -173,6 +176,65 @@ class FakeProvider:
                 common_mistakes=self.common_mistakes,
             )
         return ProviderQuestionDraft(**payload)
+
+
+def test_deepseek_provider_recovers_empty_non_choice_answer_value() -> None:
+    payload = {
+        "question_type": "open_response",
+        "stem_plain": "已知椭圆的离心率与一个过点条件，求其标准方程。",
+        "stem_latex": r"已知椭圆的离心率与一个过点条件，求其标准方程。",
+        "options": [],
+        "answer_value": "",
+        "solution_method": "利用离心率和过点条件建立方程组。",
+        "solution_steps": ["设出椭圆标准方程。", "代入条件求出参数。"],
+        "final_answer": r"$\frac{x^2}{4}+\frac{y^2}{3}=1$",
+        "authoring_intent": "考查椭圆标准方程。",
+        "estimated_difficulty": 5,
+        "curriculum_node_id": None,
+        "knowledge_points": ["椭圆的标准方程"],
+        "assessed_methods": ["待定系数法"],
+        "common_mistakes": ["混淆焦距与半焦距"],
+    }
+
+    class FakeDeepSeekClient:
+        def request(self, **_kwargs: object) -> dict:
+            return {
+                "output": [
+                    {
+                        "type": "message",
+                        "content": [
+                            {
+                                "type": "output_text",
+                                "text": json.dumps(payload, ensure_ascii=False),
+                            }
+                        ],
+                    }
+                ]
+            }
+
+    provider = DeepSeekQuestionAuthoringProvider(
+        api_key="test-key",
+        model="deepseek-v4-flash",
+        base_url="https://api.deepseek.com",
+    )
+    provider.client = FakeDeepSeekClient()  # type: ignore[assignment]
+
+    content = provider.generate(
+        QuestionAuthoringContext(
+            brief=QuestionDesignBrief(
+                request_text="给我出一道圆锥曲线压轴题",
+                grade="高三",
+                question_type="open_response",
+                target_difficulty=5,
+            ),
+            question_type="open_response",
+            curriculum=None,
+            curriculum_options=(),
+        )
+    )
+
+    assert content.answer_value == payload["final_answer"]
+    assert content.final_answer == payload["final_answer"]
 
 
 def test_create_draft_resolves_curriculum_and_forces_unsaved_owner_only_state() -> None:

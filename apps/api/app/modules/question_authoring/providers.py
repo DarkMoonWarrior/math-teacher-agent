@@ -112,7 +112,11 @@ class DeepSeekQuestionAuthoringProvider:
                 )
                 run.capture_response(raw)
             content = self._extract_output_text(raw)
-            return ProviderQuestionDraft.model_validate_json(content)
+            payload = json.loads(content)
+            if not isinstance(payload, dict):
+                raise ValueError("顶层结果必须是 JSON 对象")
+            self._normalize_non_choice_answer(payload)
+            return ProviderQuestionDraft.model_validate(payload)
         except DeepSeekClientError as exc:
             raise QuestionAuthoringProviderError(str(exc)) from exc
         except (KeyError, TypeError, ValueError) as exc:
@@ -129,6 +133,14 @@ class DeepSeekQuestionAuthoringProvider:
                 if content.get("type") == "output_text":
                     return str(content["text"])
         raise KeyError("output_text")
+
+    @staticmethod
+    def _normalize_non_choice_answer(payload: dict) -> None:
+        if payload.get("question_type") not in {"fill_blank", "open_response"}:
+            return
+        final_answer = payload.get("final_answer")
+        if isinstance(final_answer, str) and final_answer.strip():
+            payload["answer_value"] = final_answer.strip()
 
     @staticmethod
     def _output_schema() -> dict:
@@ -154,10 +166,10 @@ class DeepSeekQuestionAuthoringProvider:
             "stem_plain": {"type": "string"},
             "stem_latex": {"type": ["string", "null"]},
             "options": {"type": "array", "items": option},
-            "answer_value": {"type": "string"},
+            "answer_value": {"type": "string", "minLength": 1},
             "solution_method": {"type": "string"},
             "solution_steps": {"type": "array", "items": {"type": "string"}},
-            "final_answer": {"type": "string"},
+            "final_answer": {"type": "string", "minLength": 1},
             "authoring_intent": {"type": "string"},
             "estimated_difficulty": {"type": "integer", "minimum": 1, "maximum": 5},
             "curriculum_node_id": {"type": ["string", "null"]},
