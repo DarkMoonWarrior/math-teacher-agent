@@ -61,7 +61,7 @@ apps/web (legacy/reference Next.js UI, :3000)
 - Current retrieval seam: 浏览器逐次明确同意后，FastAPI 为当前教师、查询和数量签发短时单次许可；Harness 只能调用固定 `search_private_library` Tool，`PrivateLibrary` 只从 active + confirmed 资源返回有界匹配片段和来源版本/权利状态。owner、原文件、路径与整份正文不越过 seam。
 - Completion: 12 个项目自建 synthetic 场景的 8 类违规均为 0，完整工程、静态边界与 320—1920px 浏览器 Gate E 已通过；项目所有者已确认进入 M7。
 
-### Question Capture module（M7 进行中）
+### Question Capture module（M7 已完成）
 
 - Seam: `QuestionCapture.prepare(QuestionCaptureCommand) -> QuestionInputBundle`。
 - Interface: 接收文字或 owner-scoped 单题媒体引用，返回可编辑题面、LaTeX、选项、原图/裁剪引用、视觉推理标志、低置信度区域、revision、consent 与 provider 证据。
@@ -143,7 +143,7 @@ The primary UI should normally call `/api/v1` on its own origin. Next.js rewrite
 - Search tests target `SearchAgentPipeline` and the HTTP route, not private ranking internals alone.
 - Solve tests target 唯一 Tool 证据、可信字段校验、结构化错误、真实 SSE、取消、恢复和 feature gate。
 - Private Library tests target owner-scoped 结果、private-by-default、revision、逐次外部处理同意、无正文概览 Tool 与越权失败路径。
-- M7 tests target `QuestionCapture` 的图片/公式/图形保真、revision、逐次外部同意、Solve 可观察结果和跨 owner 失败，不测试供应商内部实现。
+- M7 tests target `QuestionCapture` 的图片/公式/图形保真、revision、逐次外部同意、Solve 可观察结果和跨 owner 失败，不测试供应商内部实现。15 场景固定 synthetic evaluation 与 Gate E 已于 2026-08-24 通过。
 - M8 tests target `QuestionAuthoring` 与 `PersonalQuestionLibrary` 的可观察接口，强制公共 Search/QuestionBank/后台访问缺失、跨 owner fail closed、owner 管理和永久删除语义。
 - Runtime conformance tests exercise both runtime adapters through the product-owned interface.
 - Security tests enforce the exact read-only Tool allowlist and absence of database access in `apps/agent`.

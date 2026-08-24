@@ -1,6 +1,6 @@
 # 当前开发边界
 
-更新日期：2026-08-22
+更新日期：2026-08-24
 状态：当前 source of truth；历史 PDF 和旧 Prompt 保留为决策证据，但不再决定当前阶段编号。
 
 ## 1. 产品定位与唯一目标用户
@@ -45,9 +45,9 @@
 
 辅助命制题使用独立 `PersonalQuestionLibrary` 模块和 owner-isolated storage namespace，不以公共 `QuestionBank` 的一个可变 visibility 字段作为唯一隔离手段。该模块没有 publish/share 接口；后台运营/内容管理员没有内容查看和管理接口。详细规则见 [`M8-PRIVATE-QUESTION-AUTHORING.md`](M8-PRIVATE-QUESTION-AUTHORING.md)。
 
-## 4. 当前阶段：M7 多模态题目采集与图片解题
+## 4. 当前阶段：M7 已完成，等待 M8 阶段确认
 
-M0-M6 已完成；项目所有者已于 2026-08-22 在 M6 Gate 结论后明确确认进入 M7。当前只建设从单题图片到可信 Solve 的工作流，不扩展 Private Library，也不启动 M8、Paper、Lesson 或 Memory。详细切片见 [`M7-MULTIMODAL-QUESTION-SOLVE.md`](M7-MULTIMODAL-QUESTION-SOLVE.md)。
+M0-M7 已完成；M7 固定评测和 Gate E 于 2026-08-24 通过。项目所有者尚未在 Gate 结论之后确认进入 M8，因此当前不得实现私有辅助命题、Paper、Lesson、Memory 或其他后续阶段。M7 完整证据见 [`M7-MULTIMODAL-QUESTION-SOLVE.md`](M7-MULTIMODAL-QUESTION-SOLVE.md)、[`M7-MULTIMODAL-SOLVE-EVALUATION.md`](M7-MULTIMODAL-SOLVE-EVALUATION.md) 和 [`M7-GATE-REVIEW.md`](M7-GATE-REVIEW.md)。
 
 本阶段允许：
 
