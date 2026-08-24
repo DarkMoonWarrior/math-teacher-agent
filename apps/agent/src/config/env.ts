@@ -69,7 +69,7 @@ export function loadAgentServiceConfig(env: NodeJS.ProcessEnv = process.env): Ag
     model: env.MATH_AI_AGENT_MODEL ?? (env.MATH_AI_DEEPSEEK_API_KEY ? "deepseek-v4-flash" : "mock-model"),
     sessionRoot: path.resolve(env.MATH_AI_AGENT_SESSION_ROOT ?? DEFAULT_SESSION_ROOT),
     toolTimeoutMs: positiveInt("MATH_AI_AGENT_TOOL_TIMEOUT_MS", 30_000),
-    runHardTimeoutMs: positiveInt("MATH_AI_AGENT_RUN_HARD_TIMEOUT_MS", 120_000),
+    runHardTimeoutMs: positiveInt("MATH_AI_AGENT_RUN_HARD_TIMEOUT_MS", 360_000),
     searchToolCallLimit: positiveInt("MATH_AI_SEARCH_TOOL_CALL_LIMIT", 6),
     host: env.MATH_AI_AGENT_HOST ?? "127.0.0.1",
     port: positiveInt("MATH_AI_AGENT_PORT", 4100),
@@ -77,4 +77,3 @@ export function loadAgentServiceConfig(env: NodeJS.ProcessEnv = process.env): Ag
     dshVersion,
   };
 }
-

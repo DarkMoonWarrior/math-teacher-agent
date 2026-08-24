@@ -1,4 +1,3 @@
-import { MathText } from "@/components/math-text";
 import type { SolveTaskResult } from "@/lib/teacher-workspace/contracts";
 import {
   evidenceSourceLabel,
@@ -8,6 +7,7 @@ import {
   verificationScopeLabel,
 } from "@/lib/teacher-workspace/labels";
 import { CheckIcon, ClockIcon } from "./icons";
+import { MathSolutionView } from "./math-solution-view";
 
 type SolvePaperProps = {
   page: number;
@@ -128,19 +128,13 @@ export function SolvePaper({ page, result }: SolvePaperProps) {
         <span className="paper-count">01 / 03</span>
       </header>
 
-      <div className="solve-question"><MathText text={result.question_text} /></div>
-      <ol className="solution-steps">
-        {solution.explanation.steps.map((step, index) => (
-          <li key={`${index}-${step}`}>
-            <span className="solution-step-number">{String(index + 1).padStart(2, "0")}</span>
-            <MathText text={step} />
-          </li>
-        ))}
-      </ol>
-      <section className="final-answer">
-        <span>最终答案</span>
-        <div className="final-answer__math"><MathText text={solution.explanation.final_answer} /></div>
-      </section>
+      <MathSolutionView
+        finalAnswer={solution.explanation.final_answer}
+        method={solution.explanation.method}
+        question={result.question_text}
+        showHeading={false}
+        steps={solution.explanation.steps}
+      />
       <footer className="solve-paper__foot"><TrustMark result={result} /></footer>
     </article>
   );

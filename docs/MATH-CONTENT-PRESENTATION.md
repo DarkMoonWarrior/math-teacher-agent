@@ -1,7 +1,7 @@
 # 数学内容可读展示规范
 
 更新日期：2026-08-22
-状态：当前跨阶段展示边界；M7 继续前的阻断修复已实现
+状态：当前跨阶段展示边界；Solve 与 M8 私有辅助命题已复用
 
 ## 1. 目标
 
@@ -13,9 +13,9 @@
 - 行内公式使用单个 `$...$`；
 - 需要单独成行的公式使用 `$$...$$`；
 - 公式使用 KaTeX 兼容 LaTeX，不使用 Markdown 代码块包装；
-- Solution provider 的提示版本必须可追踪，当前为 `solution-assistant-v2-math-display`。
+- Solution 与 Question Authoring provider 必须共用同一数学输出约定，提示版本分别可追踪；命题当前为 `question-authoring-v4-staged-long-form`。
 
-这一约定继续保留现有 `steps: string[]` 与 `final_answer: string` 业务契约，避免为了展示问题改动可信状态和 Agent Tool 接口。
+这一约定继续保留现有 `steps: string[]` 与 `final_answer: string` 业务契约，避免为了展示问题改动可信状态和 Agent Tool 接口。长解析由命题 provider 分段生成和组装，但每段中的中文与公式仍遵守同一约定。
 
 ## 3. 渲染与兼容
 
@@ -36,7 +36,7 @@ Teacher Web 的唯一数学展示组件负责：
 - 显式行内公式、独立公式和旧式未分隔公式均有确定性测试；
 - KaTeX 失败有可见降级内容；
 - 320—1920px 不因公式造成页面级横向溢出；
-- Search 说明、Solve 题面/步骤/答案以及后续 M7/M8/Paper/Lesson 复用同一组件；
+- Search 说明、Solve 题面/步骤/答案、M8 命题草稿和已保存私题以及后续 Paper/Lesson 复用同一底层数学渲染组件；
 - 前后端测试、类型检查和生产构建通过。
 
 ## 5. 明确不在本修复范围

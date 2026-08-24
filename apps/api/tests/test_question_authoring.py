@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+from collections import Counter
+from threading import Lock
 
 import pytest
 
@@ -19,6 +21,7 @@ from app.modules.question_authoring import (
     QuestionDraftEditableContent,
     QuestionDraftOption,
 )
+from app.modules.deepseek import DeepSeekJsonResponseError
 
 
 def curriculum() -> InMemoryCurriculumCatalog:
@@ -179,17 +182,22 @@ class FakeProvider:
 
 
 def test_deepseek_provider_recovers_empty_non_choice_answer_value() -> None:
-    payload = {
+    core_payload = {
         "question_type": "open_response",
         "stem_plain": "已知椭圆的离心率与一个过点条件，求其标准方程。",
         "stem_latex": r"已知椭圆的离心率与一个过点条件，求其标准方程。",
         "options": [],
         "answer_value": "",
-        "solution_method": "利用离心率和过点条件建立方程组。",
-        "solution_steps": ["设出椭圆标准方程。", "代入条件求出参数。"],
         "final_answer": r"$\frac{x^2}{4}+\frac{y^2}{3}=1$",
-        "authoring_intent": "考查椭圆标准方程。",
         "estimated_difficulty": 5,
+    }
+    plan_payload = {
+        "solution_method": "利用离心率和过点条件建立方程组。",
+        "sections": [
+            {"order": 1, "title": "设元", "goal": "设出椭圆标准方程"},
+            {"order": 2, "title": "求解", "goal": "代入条件求出参数"},
+        ],
+        "authoring_intent": "考查椭圆标准方程。",
         "curriculum_node_id": None,
         "knowledge_points": ["椭圆的标准方程"],
         "assessed_methods": ["待定系数法"],
@@ -197,7 +205,18 @@ def test_deepseek_provider_recovers_empty_non_choice_answer_value() -> None:
     }
 
     class FakeDeepSeekClient:
-        def request(self, **_kwargs: object) -> dict:
+        def request(self, **kwargs: object) -> dict:
+            schema_name = kwargs["output_schema"]["name"]  # type: ignore[index]
+            if schema_name == "private_question_authoring_core":
+                payload = core_payload
+            elif schema_name == "private_question_authoring_solution_plan":
+                payload = plan_payload
+            else:
+                section = json.loads(str(kwargs["input_text"]))["section"]
+                payload = {
+                    "order": section["order"],
+                    "steps": [f"{section['title']}：{section['goal']}。"],
+                }
             return {
                 "output": [
                     {
@@ -233,21 +252,216 @@ def test_deepseek_provider_recovers_empty_non_choice_answer_value() -> None:
         )
     )
 
-    assert content.answer_value == payload["final_answer"]
-    assert content.final_answer == payload["final_answer"]
+    assert content.answer_value == core_payload["final_answer"]
+    assert content.final_answer == core_payload["final_answer"]
+    assert content.solution_steps == ["设元：设出椭圆标准方程。", "求解：代入条件求出参数。"]
 
 
-def test_deepseek_provider_schema_bounds_verbose_authoring_fields() -> None:
-    schema = DeepSeekQuestionAuthoringProvider._output_schema()["schema"]
-    properties = schema["properties"]
+def test_deepseek_provider_assembles_a_long_solution_from_bounded_sections() -> None:
+    long_stem = "已知圆锥曲线综合条件，完成下列多问。" + "补充条件；" * 450
+    long_step = "由 $x^2+y^2=1$ 结合题设逐项推导，保留必要的中文依据。" * 80
+    calls: list[str] = []
 
-    assert properties["stem_plain"]["maxLength"] == 1600
-    assert properties["stem_latex"]["maxLength"] == 1800
-    assert properties["solution_steps"]["maxItems"] == 12
-    assert properties["solution_steps"]["items"]["maxLength"] == 220
-    assert properties["knowledge_points"]["maxItems"] == 6
-    assert properties["assessed_methods"]["maxItems"] == 6
-    assert properties["common_mistakes"]["maxItems"] == 6
+    class FakeDeepSeekClient:
+        def request(self, **kwargs: object) -> dict:
+            schema_name = kwargs["output_schema"]["name"]  # type: ignore[index]
+            calls.append(schema_name)
+            if schema_name == "private_question_authoring_core":
+                payload = {
+                    "question_type": "open_response",
+                    "stem_plain": long_stem,
+                    "stem_latex": long_stem,
+                    "options": [],
+                    "answer_value": "结论见最终答案",
+                    "final_answer": "三问结论依次为 $1$、$2$、$3$。",
+                    "estimated_difficulty": 5,
+                }
+            elif schema_name == "private_question_authoring_solution_plan":
+                payload = {
+                    "solution_method": "解析几何与代数运算综合法",
+                    "sections": [
+                        {"order": index, "title": f"第{index}问", "goal": f"完成第{index}问推导"}
+                        for index in range(1, 5)
+                    ],
+                    "authoring_intent": "考查圆锥曲线综合推理。",
+                    "curriculum_node_id": None,
+                    "knowledge_points": ["圆锥曲线综合"],
+                    "assessed_methods": ["设而不求"],
+                    "common_mistakes": ["遗漏参数范围"],
+                }
+            else:
+                section = json.loads(str(kwargs["input_text"]))["section"]
+                payload = {
+                    "order": section["order"],
+                    "steps": [long_step, *[f"补充推导步骤 {index}。" for index in range(1, 14)]],
+                }
+            text = json.dumps(payload, ensure_ascii=False)
+            return {"output": [{"type": "message", "content": [{"type": "output_text", "text": text}]}]}
+
+    provider = DeepSeekQuestionAuthoringProvider(
+        api_key="test-key",
+        model="deepseek-v4-flash",
+        base_url="https://api.deepseek.com",
+    )
+    provider.client = FakeDeepSeekClient()  # type: ignore[assignment]
+
+    content = provider.generate(
+        QuestionAuthoringContext(
+            brief=QuestionDesignBrief(
+                request_text="生成一道包含多个小问和完整长解析的圆锥曲线压轴题",
+                grade="高三",
+                question_type="open_response",
+                target_difficulty=5,
+            ),
+            question_type="open_response",
+            curriculum=None,
+            curriculum_options=(),
+        )
+    )
+
+    assert len(content.stem_plain) > 1600
+    assert sum(len(step) for step in content.solution_steps) > 6000
+    assert len(content.solution_steps) == 56
+    assert calls.count("private_question_authoring_core") == 1
+    assert calls.count("private_question_authoring_solution_plan") == 1
+    assert calls.count("private_question_authoring_solution_section") == 4
+
+
+def test_deepseek_provider_retries_only_the_failed_solution_section() -> None:
+    attempts: Counter[int] = Counter()
+    lock = Lock()
+
+    class FakeDeepSeekClient:
+        def request(self, **kwargs: object) -> dict:
+            schema_name = kwargs["output_schema"]["name"]  # type: ignore[index]
+            if schema_name == "private_question_authoring_core":
+                payload = {
+                    "question_type": "open_response",
+                    "stem_plain": "已知椭圆条件，完成两问并给出完整证明。",
+                    "stem_latex": "已知椭圆条件，完成两问并给出完整证明。",
+                    "options": [],
+                    "answer_value": "最终结论",
+                    "final_answer": "最终结论",
+                    "estimated_difficulty": 5,
+                }
+            elif schema_name == "private_question_authoring_solution_plan":
+                payload = {
+                    "solution_method": "解析几何法",
+                    "sections": [
+                        {"order": 1, "title": "第一问", "goal": "完成第一问"},
+                        {"order": 2, "title": "第二问", "goal": "完成第二问"},
+                        {"order": 3, "title": "总结", "goal": "整理最终结论"},
+                    ],
+                    "authoring_intent": "综合考查。",
+                    "curriculum_node_id": None,
+                    "knowledge_points": [],
+                    "assessed_methods": [],
+                    "common_mistakes": [],
+                }
+            else:
+                section = json.loads(str(kwargs["input_text"]))["section"]
+                order = int(section["order"])
+                with lock:
+                    attempts[order] += 1
+                    current_attempt = attempts[order]
+                if order == 2 and current_attempt == 1:
+                    raise DeepSeekJsonResponseError("第二段 JSON 截断")
+                payload = {"order": order, "steps": [f"第{order}段完整解析。"]}
+            text = json.dumps(payload, ensure_ascii=False)
+            return {"output": [{"type": "message", "content": [{"type": "output_text", "text": text}]}]}
+
+    provider = DeepSeekQuestionAuthoringProvider(
+        api_key="test-key",
+        model="deepseek-v4-flash",
+        base_url="https://api.deepseek.com",
+    )
+    provider.client = FakeDeepSeekClient()  # type: ignore[assignment]
+
+    content = provider.generate(
+        QuestionAuthoringContext(
+            brief=QuestionDesignBrief(
+                request_text="生成一道圆锥曲线长解析题",
+                question_type="open_response",
+                target_difficulty=5,
+            ),
+            question_type="open_response",
+            curriculum=None,
+            curriculum_options=(),
+        )
+    )
+
+    assert content.solution_steps == ["第1段完整解析。", "第2段完整解析。", "第3段完整解析。"]
+    assert attempts == Counter({2: 2, 1: 1, 3: 1})
+
+
+def test_deepseek_provider_subdivides_only_a_persistently_truncated_section() -> None:
+    calls: Counter[str] = Counter()
+
+    class FakeDeepSeekClient:
+        def request(self, **kwargs: object) -> dict:
+            schema_name = kwargs["output_schema"]["name"]  # type: ignore[index]
+            calls[schema_name] += 1
+            input_value = json.loads(str(kwargs["input_text"]))
+            if schema_name == "private_question_authoring_core":
+                payload = {
+                    "question_type": "open_response",
+                    "stem_plain": "一道需要完整长解析的圆锥曲线综合题。",
+                    "stem_latex": "一道需要完整长解析的圆锥曲线综合题。",
+                    "options": [],
+                    "answer_value": "最终结论",
+                    "final_answer": "最终结论",
+                    "estimated_difficulty": 5,
+                }
+            elif schema_name == "private_question_authoring_solution_plan":
+                payload = {
+                    "solution_method": "解析几何法",
+                    "sections": [{"order": 1, "title": "长推导", "goal": "完成全部推导"}],
+                    "authoring_intent": "综合考查。",
+                    "curriculum_node_id": None,
+                    "knowledge_points": [],
+                    "assessed_methods": [],
+                    "common_mistakes": [],
+                }
+            elif schema_name == "private_question_authoring_solution_subplan":
+                payload = {
+                    "parts": [
+                        {"order": 1, "title": "前半段", "goal": "建立关系"},
+                        {"order": 2, "title": "后半段", "goal": "求解并核对"},
+                    ]
+                }
+            elif "parent_section" not in input_value:
+                raise DeepSeekJsonResponseError("当前段持续截断")
+            else:
+                part = input_value["section"]
+                payload = {"order": part["order"], "steps": [f"{part['title']}完整解析。"]}
+            text = json.dumps(payload, ensure_ascii=False)
+            return {"output": [{"type": "message", "content": [{"type": "output_text", "text": text}]}]}
+
+    provider = DeepSeekQuestionAuthoringProvider(
+        api_key="test-key",
+        model="deepseek-v4-flash",
+        base_url="https://api.deepseek.com",
+    )
+    provider.client = FakeDeepSeekClient()  # type: ignore[assignment]
+
+    content = provider.generate(
+        QuestionAuthoringContext(
+            brief=QuestionDesignBrief(
+                request_text="生成一道需要完整长解析的圆锥曲线综合题",
+                question_type="open_response",
+                target_difficulty=5,
+            ),
+            question_type="open_response",
+            curriculum=None,
+            curriculum_options=(),
+        )
+    )
+
+    assert content.solution_steps == ["前半段完整解析。", "后半段完整解析。"]
+    assert calls["private_question_authoring_core"] == 1
+    assert calls["private_question_authoring_solution_plan"] == 1
+    assert calls["private_question_authoring_solution_section"] == 4
+    assert calls["private_question_authoring_solution_subplan"] == 1
 
 
 def test_create_draft_resolves_curriculum_and_forces_unsaved_owner_only_state() -> None:

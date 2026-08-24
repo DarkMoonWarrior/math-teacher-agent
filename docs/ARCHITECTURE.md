@@ -86,6 +86,7 @@ apps/web (legacy/reference Next.js UI, :3000)
 - Fifth slice: `PersonalQuestionLibrary` 的同一 interface 隐藏 owner 私题列表/搜索、保存后内容 revision、元数据与分类、标签排序、独立复制、JSON/Markdown 导出及 lifecycle。复制创建独立 draft/revision 链；永久删除只对已 trashed 的当前版本生效，并在事务中删除个人题目快照及其独占 revision 链。公开路由只做认证绑定和下载响应适配，Agent/Internal Tool Gateway 没有这些管理能力。
 - Sixth slice: `apps/teacher-web` 只依赖产品自有 `TeacherWorkspace` contract，把新任务、Search 空/不合适结果和 Paper 缺题提示转入独立 authoring workspace。生成、教师 revision、明确保存和 owner 管理是可观察的不同动作；生成题保持 `AI GENERATED · UNSAVED`，不进入 Search result，Paper 也不会自动生成、保存或加题。浏览器 payload 不暴露 owner、policy 或可信证据控制面。
 - Seventh slice: 教师不再需要在生成前填写教材知识点、考查方法或易错点。provider 在完成题目后返回细分知识点、方法、常见错误和一个可空的 Curriculum node ID；业务层只接受 catalog allowlist 内的知识点，并把 Agent 映射标记为待确认。教师可在结果页检索目录并用普通 teacher revision 确认/修正，未知或无法映射的节点不会阻断 owner-only 草稿，也不会获得可信状态。
+- Long-form hardening: `QuestionAuthoring` 对外仍只有一次 `create_draft`，Agent 仍只能调用一次 `create_question_draft`。DeepSeek adapter 内部把生成拆成不可变题面/最终答案、解析提纲和若干解析段，解析段并行展开、按序组装，只有失败段可局部重试。该实现不截短题目，不新增模型权限，也不改变 owner-only 未保存状态。命题和 Solve 共用数学内容输出规范与 Teacher Web `MathText`/`MathSolutionView` 渲染路径。
 - Third slice: 同一深模块在返回前生成六项固定可信证据，并由 `QuestionDraftVerification` 强制检查项唯一、总状态与阻断项一致、MathVerifier 能力与是否真正运行一致。答案数量、明显答案冲突、选项重复和难度偏差可确定性检查；一般数学可解性、干扰项语义及无受控 rule spec 的任意生成题保持 `inconclusive/unsupported`，模型自述不能升级为 MathVerifier 证据。
 
 ### Teacher Agent Runtime module

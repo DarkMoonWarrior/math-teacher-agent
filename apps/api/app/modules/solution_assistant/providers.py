@@ -8,6 +8,7 @@ from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 from app.modules.model_operations import ModelRunRecorder, NullModelRunRecorder
+from app.modules.math_content import MATH_DISPLAY_INSTRUCTIONS
 from app.modules.deepseek import (
     DeepSeekClientError,
     DeepSeekJsonClient,
@@ -110,9 +111,7 @@ class OpenAISolutionProvider:
                 "你是中国高中数学教研员，使用人教A版术语和新高考答题规范解题。"
                 "必须检查题目条件是否充分，逐步给出依据，不能虚构题源、数值或验证结论。"
                 "如果题目本身有歧义或无解，应在步骤与最终答案中明确指出。"
-                "所有数学表达必须使用 KaTeX 兼容的 LaTeX：行内公式用单个 $...$ 包裹，"
-                "需要单独成行的公式用 $$...$$ 包裹；中文说明必须放在公式分隔符之外，"
-                "不要使用 Markdown 代码块，也不要把 LaTeX 命令作为未分隔的普通文字输出。"
+                f"{MATH_DISPLAY_INSTRUCTIONS}"
                 "输出将交由教师复核，不要声称已经程序验证。"
             ),
             "input": provider_input,

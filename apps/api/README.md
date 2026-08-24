@@ -65,7 +65,7 @@ DeepSeek JSON 输出先做确定性的代码块、控制字符和 LaTeX 转义�
 
 M8 第一条切片使用独立 `data/private-runtime/personal-question-library.sqlite3`，不复用公共 `QuestionBank` 表。`/api/v1/personal-question-library` 当前只提供个人题库集合与分类的创建、列表、查看和局部更新；owner 由 current-teacher seam 注入，浏览器提交 `owner_id` 会被拒绝，跨 owner 访问统一返回不存在。
 
-第二条切片新增 `QuestionAuthoring.create_draft`、`POST /api/v1/agent/question-authoring/draft` 与内部 `create_question_draft` Tool。自然语言 brief 经 Curriculum 映射后返回结构化题干、选项、答案、解析和命题意图；模型与结构失败不会伪装成成功。启用需要 DSH Runtime、Agent Service/Tool Gateway，以及 `MATH_AI_QUESTION_AUTHORING_AGENT_ENABLED=true`。
+第二条切片新增 `QuestionAuthoring.create_draft`、`POST /api/v1/agent/question-authoring/draft` 与内部 `create_question_draft` Tool。自然语言 brief 返回结构化题干、选项、答案、解析和命题意图；模型与结构失败不会伪装成成功。长题在 DeepSeek adapter 内按题面/答案、解析提纲、解析段分阶段生成，失败段局部重试后统一组装，不改变一次 Tool 调用契约。启用需要 DSH Runtime、Agent Service/Tool Gateway，以及 `MATH_AI_QUESTION_AUTHORING_AGENT_ENABLED=true`。
 
 第三条切片把六项固定可信检查收进同一深模块：可解性、答案/最终答案一致性、选择题答案数量、干扰项结构、MathVerifier 能力与难度披露。明确结构矛盾返回 `checks_failed`；其余仍为 `teacher_review_required`。当前 MathVerifier 不支持任意生成题时返回 `unsupported`，绝不冒充程序验证。
 

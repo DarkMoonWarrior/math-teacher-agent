@@ -26,6 +26,7 @@ import {
   SparkIcon,
 } from "./icons";
 import { WorkbenchNoticeDialog } from "./workbench-notice-dialog";
+import { MathSolutionView } from "./math-solution-view";
 
 type WorkspaceSection = "compose" | "mine" | "trash";
 type BusyAction = "loading" | "generating" | "revising" | "saving" | "managing" | null;
@@ -719,8 +720,9 @@ export function PersonalQuestionAuthoringWorkspace({
                 </div>
               </details>
               <div className="authoring-submit">
-                <button disabled={!canGenerate} type="submit"><span>{busy === "generating" ? "正在命题…" : "生成私有草稿"}</span><ArrowRightIcon /></button>
+                <button disabled={!canGenerate} type="submit"><span>{busy === "generating" ? "正在分阶段生成…" : "生成私有草稿"}</span><ArrowRightIcon /></button>
               </div>
+              {busy === "generating" && <p className="authoring-stage-note" aria-live="polite">正在先锁定完整题面，再分段展开长解析；生成结果仍需教师复核。</p>}
             </form>
           </section>
 
@@ -749,11 +751,17 @@ export function PersonalQuestionAuthoringWorkspace({
                   </form>
                 )}
               </section>
-              <div className="authoring-draft__preview">
-                <span>题面预览</span>
-                <MathText text={draftEditor.stem_latex || draftEditor.stem_plain} />
-              </div>
-              <QuestionEditor content={draftEditor} idPrefix="draft" onChange={setDraftEditor} />
+              <MathSolutionView
+                className="authoring-draft__solution"
+                finalAnswer={draftEditor.final_answer}
+                method={draftEditor.solution_method}
+                question={draftEditor.stem_latex || draftEditor.stem_plain}
+                steps={draftEditor.solution_steps}
+              />
+              <details className="personal-question-edit authoring-draft__editor">
+                <summary>编辑题面、答案与解析</summary>
+                <QuestionEditor content={draftEditor} idPrefix="draft" onChange={setDraftEditor} />
+              </details>
               <div className="authoring-revision-actions">
                 <label htmlFor="authoring-edit-summary"><span>本次修改说明</span><input id="authoring-edit-summary" value={editSummary} onChange={(event) => setEditSummary(event.target.value)} /></label>
                 <button disabled={busy !== null} type="button" onClick={() => void reviseDraft()}>{busy === "revising" ? "正在重检…" : "记录校订并重检"}</button>
@@ -817,6 +825,13 @@ export function PersonalQuestionAuthoringWorkspace({
                     <label htmlFor="manage-category"><span>个人分类</span><select id="manage-category" value={manageCategoryId} onChange={(event) => setManageCategoryId(event.target.value)}>{manageCategories.map((item) => <option value={item.category_id} key={item.category_id}>{item.name}</option>)}</select></label>
                     <button type="button" disabled={!manageName.trim() || !manageCategoryId || busy !== null} onClick={() => void saveQuestionMetadata()}>保存名称与分类</button>
                   </div>
+                  <MathSolutionView
+                    className="personal-question-detail__solution"
+                    finalAnswer={savedEditor.final_answer}
+                    method={savedEditor.solution_method}
+                    question={savedEditor.stem_latex || savedEditor.stem_plain}
+                    steps={savedEditor.solution_steps}
+                  />
                   <details className="personal-question-edit">
                     <summary>编辑题面、答案与解析</summary>
                     <QuestionEditor content={savedEditor} idPrefix="saved" onChange={setSavedEditor} />

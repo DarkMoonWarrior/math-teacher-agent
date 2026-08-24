@@ -712,7 +712,7 @@ async def create_question_draft(
             request,
             get_question_authoring().create_draft,
             body,
-            timeout_seconds=get_settings().solve_tool_timeout_seconds,
+            timeout_seconds=get_settings().question_authoring_tool_timeout_seconds,
         )
     except QuestionAuthoringClarificationRequired as exc:
         raise _GatewayHttpError(
