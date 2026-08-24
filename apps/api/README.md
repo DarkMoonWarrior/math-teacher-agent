@@ -61,11 +61,13 @@ M7 图片解题只接受当前 owner 已确认且与当前媒体 revision 一致
 
 DeepSeek JSON 输出先做确定性的代码块、控制字符和 LaTeX 转义容错；若长解答仍因截断或格式不完整无法读取，adapter 只执行一次格式恢复重试，并把输出预算提高到配置上限。重试仍失败时返回明确的响应格式错误，不把未完成任务伪装成成功，也不会无限重试。
 
-## Personal Question Library（M8 进行中）
+## Private Question Authoring（M8 进行中）
 
 M8 第一条切片使用独立 `data/private-runtime/personal-question-library.sqlite3`，不复用公共 `QuestionBank` 表。`/api/v1/personal-question-library` 当前只提供个人题库集合与分类的创建、列表、查看和局部更新；owner 由 current-teacher seam 注入，浏览器提交 `owner_id` 会被拒绝，跨 owner 访问统一返回不存在。
 
-接口返回固定披露 `owner_only`，且公共检索、共享、商业使用与模型训练均为 false。当前没有 publish/share/admin/delete 接口，也尚未实现结构化命题或题目正文保存。
+第二条切片新增 `QuestionAuthoring.create_draft`、`POST /api/v1/agent/question-authoring/draft` 与内部 `create_question_draft` Tool。自然语言 brief 经 Curriculum 映射后返回结构化题干、选项、答案、解析和命题意图；模型与结构失败不会伪装成成功。启用需要 DSH Runtime、Agent Service/Tool Gateway，以及 `MATH_AI_QUESTION_AUTHORING_AGENT_ENABLED=true`。
+
+接口返回固定披露 `owner_only`，且公共检索、共享、商业使用与模型训练均为 false。草稿固定 `saved=false`、`verification.status=not_run`；当前没有 publish/share/admin/delete 接口，也尚未实现题目正文保存。
 
 ## 测试
 

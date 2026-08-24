@@ -24,6 +24,7 @@ FEATURE_LABELS = {
     "lesson_block_rewrite": "教案局部改写",
     "question_variant": "题目变式",
     "question_variant_polish": "教师变式润色",
+    "question_authoring": "私有辅助命题",
     "solution_assistant": "解题助手",
     "private_resource_ocr": "私人资料 OCR",
     "private_question_ocr": "私人单题 OCR",

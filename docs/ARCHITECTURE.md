@@ -81,6 +81,7 @@ apps/web (legacy/reference Next.js UI, :3000)
 - Management: Agent 生成或提出修改草稿，教师在受认证 UI 中明确保存；编辑、分类、回收站、恢复和永久删除由 owner 直接调用 FastAPI 业务接口，Agent 与后台管理员无永久删除工具。
 - Reuse: Curriculum、MathVerifier、RightsGate 和已验证且允许 adaptation 的参考母题可被调用，但不得把辅助命制题复制到公共题库。
 - First slice: `PersonalQuestionLibrary` 已以单独 `data/private-runtime` SQLite namespace 实现个人题库集合与分类；它把名称规范化、owner 隔离、重复约束和固定 owner-only policy 隐藏在小接口后。公开 FastAPI 路由只从 current-teacher seam 注入 owner，payload 中额外的 `owner_id` 被拒绝；跨 owner 的集合/分类详情与更新统一返回不存在。
+- Second slice: `QuestionAuthoring.create_draft` 以严格 `QuestionDesignBrief` 为边界，完成题型补全、受控 Curriculum 映射、可替换 provider、结构验证和诚实错误语义。DeepSeek Harness 只能调用一次 `create_question_draft`；Tool 请求没有 owner/save/publish/share/delete 字段，结果固定为未保存、owner-only、MathVerifier 未运行，并且该调用不写入 `PersonalQuestionLibrary` 或任何公共存储。
 
 ### Teacher Agent Runtime module
 
@@ -147,7 +148,7 @@ The primary UI should normally call `/api/v1` on its own origin. Next.js rewrite
 - M7 tests target `QuestionCapture` 的图片/公式/图形保真、revision、逐次外部同意、Solve 可观察结果和跨 owner 失败，不测试供应商内部实现。15 场景固定 synthetic evaluation 与 Gate E 已于 2026-08-24 通过。
 - M8 tests target `QuestionAuthoring` 与 `PersonalQuestionLibrary` 的可观察接口，强制公共 Search/QuestionBank/后台访问缺失、跨 owner fail closed、owner 管理和永久删除语义。
 - Runtime conformance tests exercise both runtime adapters through the product-owned interface.
-- Security tests enforce the exact read-only Tool allowlist and absence of database access in `apps/agent`.
+- Security tests enforce the exact Tool allowlist and absence of database access in `apps/agent`；当前 8 个 Tool 只读，第 9 个 `create_question_draft` 只生成未保存草稿且不执行业务写入。
 - Business tests use synthetic/local adapters and assert published behaviour, rights, verification and privacy invariants.
 
 ## 7. Future evolution

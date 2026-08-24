@@ -38,6 +38,12 @@ from app.modules.question_capture import (
 )
 from app.modules.question_quality import QuestionQualityWorkflow
 from app.modules.question_similarity import QuestionSimilarityRegistry
+from app.modules.question_authoring import (
+    ProviderQuestionDraft,
+    QuestionAuthoring,
+    QuestionAuthoringContext,
+    QuestionDraftOption,
+)
 from app.modules.solution_assistant import (
     GeneratedSolution,
     SolutionAssistant,
@@ -142,6 +148,39 @@ def gateway_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClien
     monkeypatch.setattr(gateway, "get_solution_assistant", lambda: solution_assistant)
     monkeypatch.setattr(gateway, "_catalog_for_path", lambda _path: catalog)
 
+    class FakeQuestionAuthoringProvider:
+        name = "synthetic_provider"
+        model = "synthetic-author-v1"
+
+        def generate(self, context: QuestionAuthoringContext) -> ProviderQuestionDraft:
+            return ProviderQuestionDraft(
+                question_type=context.question_type,
+                stem_plain="设集合 A={1,2}，B={2,3}，求 A∩B。",
+                stem_latex=r"设集合 $A=\{1,2\}$，$B=\{2,3\}$，求 $A\cap B$。",
+                options=(
+                    [
+                        QuestionDraftOption(key="A", text="{1}"),
+                        QuestionDraftOption(key="B", text="{2}"),
+                        QuestionDraftOption(key="C", text="{3}"),
+                        QuestionDraftOption(key="D", text="{1,2,3}"),
+                    ]
+                    if context.question_type == "single_choice"
+                    else []
+                ),
+                answer_value="B" if context.question_type == "single_choice" else "{2}",
+                solution_method="集合运算",
+                solution_steps=["找出同时属于 A 和 B 的元素。"],
+                final_answer="{2}",
+                authoring_intent="考查交集的基本定义。",
+                estimated_difficulty=1,
+            )
+
+    authoring = QuestionAuthoring(
+        curriculum=catalog,
+        provider=FakeQuestionAuthoringProvider(),
+    )
+    monkeypatch.setattr(gateway, "get_question_authoring", lambda: authoring)
+
     class FakePrivateLibrary:
         def stats(self, *, owner_id: str) -> LibraryStats:
             assert owner_id == "owner_teacher"
@@ -226,6 +265,41 @@ def test_private_search_rejects_model_owner_selector(gateway_client: TestClient)
         headers=_auth(),
     )
     assert response.status_code == 422
+
+
+def test_create_question_draft_returns_unsaved_owner_only_content(
+    gateway_client: TestClient,
+) -> None:
+    body = {
+        "request_text": "围绕集合的基本运算命制一道单选题。",
+        "curriculum_node_id": "kp_test_01",
+        "question_type": "single_choice",
+        "target_difficulty": 1,
+    }
+    response = gateway_client.post(
+        "/internal/agent-tools/v1/create-question-draft",
+        json=body,
+        headers=_auth(),
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    draft = payload["draft"]
+    assert draft["request_text"] == body["request_text"]
+    assert draft["visibility"] == "owner_only"
+    assert draft["source_type"] == "ai_generated"
+    assert draft["saved"] is False
+    assert draft["verification"]["status"] == "not_run"
+    assert draft["public_search_allowed"] is False
+    assert draft["share_allowed"] is False
+    assert "owner_id" not in draft
+
+    forged = gateway_client.post(
+        "/internal/agent-tools/v1/create-question-draft",
+        json={**body, "owner_id": "other_teacher", "publish": True},
+        headers=_auth(),
+    )
+    assert forged.status_code == 422
 
 
 def test_gateway_disabled_when_token_unconfigured(monkeypatch: pytest.MonkeyPatch) -> None:

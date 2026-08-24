@@ -19,10 +19,10 @@
 - M6 第四条切片：只从教师确认的当前文本版本生成可编辑候选；教材路径由受控 Curriculum 补全，导入固定为 owner 私有、待审核、待数学验证；
 - M6 第五条切片：每次私人检索都需教师明确同意；一次性许可绑定当前教师、查询与数量，Agent 只能看到确认文本的有界匹配片段及来源版本/权利状态；
 - M7 多模态 Solve：可上传、粘贴或拍摄单题图片；`QuestionCapture` 保留 owner-scoped private media/OCR revision，并通过本地、DeepSeek Vision 或 OpenAI adapter 输出可校对题面；教师确认后，精确图片/识别 revision 通过短时一次性许可接入 Solve，带图题才逐次授权发送受控原图；15 场景固定评测与 Gate E 已通过；
-- M8 第一条切片：独立 `PersonalQuestionLibrary` 已建立个人题库与分类基线；owner 由服务端身份确定，跨 owner fail closed，模块无 publish/share/admin/delete 接口；
+- M8 切片 1–2：独立 `PersonalQuestionLibrary` 已建立个人题库与分类基线；结构化命题模块可把自然语言要求转换为题干、答案、解析、命题意图和 Curriculum 映射，并只返回 `owner_only + saved=false + verification.not_run` 草稿；Agent 无保存、发布、共享或删除能力；
 - QuestionBank、MathVerifier、Curriculum、PrivateLibrary、PDF、试卷、教案等成熟业务模块。
 
-当前 Search、Solve、Private Library 与多模态图片解题入口已接入新工作台；M7 Gate E 于 2026-08-24 严格通过，项目所有者已确认进入 M8。私有辅助命题当前只完成隔离存储与个人分类基线，尚未接入生成界面；教案和组卷继续明确标记为预览。最新状态见 [`docs/PROJECT-STATUS.md`](docs/PROJECT-STATUS.md)。
+当前 Search、Solve、Private Library 与多模态图片解题入口已接入新工作台；M7 Gate E 于 2026-08-24 严格通过，项目所有者已确认进入 M8。私有辅助命题已完成隔离存储和结构化未保存草稿，尚未接入生成界面与保存；教案和组卷继续明确标记为预览。最新状态见 [`docs/PROJECT-STATUS.md`](docs/PROJECT-STATUS.md)。
 
 ## 核心原则
 

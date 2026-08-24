@@ -36,6 +36,13 @@ from app.modules.question_capture import (
     get_question_solve_grants,
 )
 from app.modules.question_similarity import QuestionSimilarityRegistry
+from app.modules.question_authoring import (
+    GeneratedQuestionDraft,
+    QuestionAuthoringClarificationRequired,
+    QuestionAuthoringError,
+    QuestionAuthoringUnavailableError,
+    QuestionDesignBrief,
+)
 from app.modules.solution_assistant import (
     SolutionAssistantError,
     SolutionAssistantUnavailableError,
@@ -52,6 +59,7 @@ from app.routes.question_similarity import get_question_similarity_registry
 from app.routes.library import get_private_library
 from app.routes.solutions import get_solution_assistant
 from app.routes.question_capture import get_question_capture
+from app.routes.question_authoring import get_question_authoring
 
 logger = logging.getLogger("math_ai.internal_agent_tools")
 
@@ -276,8 +284,13 @@ class SearchPrivateLibraryResponse(BaseModel):
     request_id: str
 
 
+class CreateQuestionDraftResponse(BaseModel):
+    draft: GeneratedQuestionDraft
+    request_id: str
+
+
 # ---------------------------------------------------------------------------
-# Endpoints（全部只读）
+# Endpoints（不直接写入任何业务存储；命题 Tool 只返回未保存草稿）
 # ---------------------------------------------------------------------------
 
 @router.post("/search-questions", response_model=SearchQuestionsResponse)
@@ -685,6 +698,57 @@ async def search_private_library(
         logger.exception("search_private_library_failed", extra={"request_id": request_id})
         raise _GatewayHttpError(500, "TOOL_EXECUTION_ERROR", "私人资料检索失败", request_id) from None
     return SearchPrivateLibraryResponse(**result.model_dump(), request_id=request_id)
+
+
+@router.post("/create-question-draft", response_model=CreateQuestionDraftResponse)
+async def create_question_draft(
+    body: QuestionDesignBrief,
+    request: Request,
+    _token: None = Depends(_require_tool_gateway_token),
+) -> CreateQuestionDraftResponse:
+    request_id = _request_id_from(request)
+    try:
+        draft = await _run_with_timeout(
+            request,
+            get_question_authoring().create_draft,
+            body,
+            timeout_seconds=get_settings().solve_tool_timeout_seconds,
+        )
+    except QuestionAuthoringClarificationRequired as exc:
+        raise _GatewayHttpError(
+            422,
+            "TOOL_VALIDATION_ERROR",
+            str(exc),
+            request_id,
+        ) from exc
+    except QuestionAuthoringUnavailableError as exc:
+        raise _GatewayHttpError(
+            503,
+            "MODEL_UNAVAILABLE",
+            str(exc),
+            request_id,
+        ) from exc
+    except QuestionAuthoringError as exc:
+        raise _GatewayHttpError(
+            422,
+            "TOOL_VALIDATION_ERROR",
+            str(exc),
+            request_id,
+        ) from exc
+    except _GatewayHttpError:
+        raise
+    except Exception:
+        logger.exception(
+            "create_question_draft_failed",
+            extra={"request_id": request_id},
+        )
+        raise _GatewayHttpError(
+            500,
+            "TOOL_EXECUTION_ERROR",
+            "辅助命题失败",
+            request_id,
+        ) from None
+    return CreateQuestionDraftResponse(draft=draft, request_id=request_id)
 
 async def gateway_error_handler(
     _request: Request, exc: _GatewayHttpError

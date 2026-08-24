@@ -12,6 +12,7 @@ import { defineTool, type ToolDefinition, type ToolRunContext, type JsonValue } 
 import {
   ToolGatewayClient,
   ToolGatewayError,
+  type CreateQuestionDraftInput,
   type GatewayRequestOptions,
   type SolutionMode,
 } from "../transport/gateway-client.js";
@@ -557,6 +558,66 @@ export function defineTeacherTools(options: TeacherToolOptions): ToolDefinition[
     },
   });
 
+  const createQuestionDraft = defineTool({
+    name: "create_question_draft",
+    description:
+      "根据教师原始命题要求生成一份未保存、仅自己可见、尚未运行 MathVerifier 的结构化题目草稿。该工具不能保存、发布、共享或删除题目。",
+    parameters: {
+      request_text: { type: "string", description: "教师原始命题要求，必须原样传递", required: true },
+      grade: { type: "string", description: "高一、高二或高三（可选）" },
+      curriculum_node_id: { type: "string", description: "教师明确选择的知识点节点 ID（可选）" },
+      knowledge_point_query: { type: "string", description: "知识点名称或查询（可选）" },
+      question_type: { type: "string", description: "single_choice、multiple_choice、fill_blank 或 open_response（可选）" },
+      target_difficulty: { type: "integer", description: "目标难度 1-5" },
+      teaching_purpose: { type: "string", description: "课堂用途" },
+      expected_minutes: { type: "integer", description: "预计用时（分钟，可选）" },
+      assessed_method: { type: "string", description: "考查方法（可选）" },
+      misconception_requirements: { type: "string", description: "易错点或干扰项要求（可选）" },
+      additional_constraints: { type: "string", description: "教师补充限制（可选）" },
+      reference_question_id: { type: "string", description: "参考母题 ID；当前可信检查未开放时会 fail closed" },
+    },
+    output: {
+      schema: {
+        type: "object",
+        properties: {
+          ok: { type: "boolean", required: true },
+          draft: { type: "json" },
+          request_id: { type: "string", required: true },
+          error: { type: "json" },
+        },
+        additionalProperties: false,
+      },
+      render: (_args, value) => JSON_OUTPUT(JSON.stringify(value)),
+    },
+    timeoutMs: 120_000,
+    async execute(args, exec) {
+      const requestId = callOptions(exec).requestId;
+      const input: CreateQuestionDraftInput = {
+        ...args,
+        grade: args.grade as CreateQuestionDraftInput["grade"],
+        question_type: args.question_type as CreateQuestionDraftInput["question_type"],
+      };
+      const result = await gateway.createQuestionDraft(
+        input,
+        { ...callOptions(exec), timeoutMs: 120_000 },
+      );
+      if (result.ok) {
+        return {
+          ok: true,
+          draft: result.data.draft as unknown as JsonValue,
+          request_id: result.data.request_id ?? requestId,
+          error: null,
+        };
+      }
+      return {
+        ok: false,
+        draft: null,
+        request_id: result.error.request_id ?? requestId,
+        error: gatewayErrorEnvelope(requestId, new ToolGatewayError(result.error)),
+      };
+    },
+  });
+
   return [
     searchQuestions,
     getQuestion,
@@ -566,6 +627,7 @@ export function defineTeacherTools(options: TeacherToolOptions): ToolDefinition[
     getCurriculumNode,
     inspectPrivateLibrary,
     searchPrivateLibrary,
+    createQuestionDraft,
   ];
 }
 
@@ -579,6 +641,7 @@ export const TEACHER_TOOL_ALLOWLIST: readonly string[] = [
   "get_curriculum_node",
   "inspect_private_library",
   "search_private_library",
+  "create_question_draft",
 ];
 
 export type { TeacherAgentError };

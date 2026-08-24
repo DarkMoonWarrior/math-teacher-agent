@@ -54,6 +54,7 @@ export async function createRuntimeHarness(options: RuntimeHarnessOptions = {}):
 export const SEARCH_ROUTE = "/internal/agent-tools/v1/search-questions";
 export const GET_QUESTION_ROUTE = "/internal/agent-tools/v1/get-question";
 export const SOLVE_QUESTION_ROUTE = "/internal/agent-tools/v1/solve-question";
+export const CREATE_QUESTION_DRAFT_ROUTE = "/internal/agent-tools/v1/create-question-draft";
 
 export function searchResponse(items: unknown[] = [], total: number = items.length): { status: number; body: unknown } {
   return {

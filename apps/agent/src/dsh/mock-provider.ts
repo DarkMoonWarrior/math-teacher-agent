@@ -65,6 +65,29 @@ function currentUserText(messages: GenerateOptions["messages"]): string {
 
 function defaultScriptFor(messages: GenerateOptions["messages"]): MockScript {
   const conversation = currentUserText(messages);
+  if (conversation.includes("create_question_draft")) {
+    const rawBrief = conversation.match(/命题请求JSON：(\{[^\n]+\})/)?.[1];
+    let brief: Record<string, unknown> = {
+      request_text: "围绕函数单调性命制一道单选题。",
+      question_type: "single_choice",
+      target_difficulty: 3,
+      teaching_purpose: "课堂练习",
+      assessed_method: "",
+      misconception_requirements: "",
+      additional_constraints: "",
+    };
+    if (rawBrief) {
+      try {
+        brief = JSON.parse(rawBrief) as Record<string, unknown>;
+      } catch {
+        // Keep the deterministic fallback; FastAPI will still validate it.
+      }
+    }
+    return {
+      steps: [{ kind: "tool", toolName: "create_question_draft", arguments: brief }],
+      finalText: "已返回未保存、仅自己可见的结构化命题草稿。",
+    };
+  }
   if (conversation.includes("search_private_library")) {
     const query = conversation.match(/检索查询：([^\n]+)/)?.[1]?.trim() || "函数";
     const limit = Number(conversation.match(/返回上限：(\d+)/)?.[1] || "5");

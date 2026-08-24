@@ -189,6 +189,26 @@ export interface SearchPrivateLibraryResponse {
   request_id: string;
 }
 
+export interface CreateQuestionDraftInput {
+  request_text: string;
+  grade?: "高一" | "高二" | "高三";
+  curriculum_node_id?: string;
+  knowledge_point_query?: string;
+  question_type?: "single_choice" | "multiple_choice" | "fill_blank" | "open_response";
+  target_difficulty?: number;
+  teaching_purpose?: string;
+  expected_minutes?: number;
+  assessed_method?: string;
+  misconception_requirements?: string;
+  additional_constraints?: string;
+  reference_question_id?: string;
+}
+
+export interface CreateQuestionDraftResponse {
+  draft: Record<string, unknown>;
+  request_id: string;
+}
+
 const KNOWN_STATUS_ERROR_CODES: Record<number, TeacherAgentErrorCode> = {
   401: "TOOL_UNAUTHORIZED",
   403: "TOOL_UNAUTHORIZED",
@@ -355,5 +375,9 @@ export class ToolGatewayClient {
 
   searchPrivateLibrary(input: SearchPrivateLibraryInput, options: GatewayRequestOptions): Promise<GatewayResult<SearchPrivateLibraryResponse>> {
     return this.post("/internal/agent-tools/v1/search-private-library", input, options);
+  }
+
+  createQuestionDraft(input: CreateQuestionDraftInput, options: GatewayRequestOptions): Promise<GatewayResult<CreateQuestionDraftResponse>> {
+    return this.post("/internal/agent-tools/v1/create-question-draft", input, options);
   }
 }

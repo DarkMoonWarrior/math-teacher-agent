@@ -94,6 +94,7 @@ class Settings(BaseSettings):
     cjk_font_bold: Path | None = None
     lesson_plan_provider: str = "auto"
     question_variant_provider: str = "auto"
+    question_authoring_provider: str = "auto"
     solution_provider: str = "auto"
     openai_api_key: str = ""
     openai_model: str = "gpt-5.6-terra"
@@ -143,6 +144,7 @@ class Settings(BaseSettings):
     # 默认关闭：现有传统页面行为不变。仅在相应 Runtime/Tool/UI Gate 就绪后开启。
     search_agent_enabled: bool = False
     solve_agent_enabled: bool = False
+    question_authoring_agent_enabled: bool = False
     search_agent_max_query_length: int = 2000
 
     @property
