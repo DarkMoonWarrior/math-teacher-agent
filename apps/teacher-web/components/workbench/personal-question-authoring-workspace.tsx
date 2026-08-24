@@ -17,7 +17,6 @@ import { teacherWorkspace } from "@/lib/teacher-workspace/http-adapter";
 import {
   ArrowLeftIcon,
   ArrowRightIcon,
-  CheckIcon,
   ClockIcon,
   LibraryIcon,
   LockIcon,
@@ -31,15 +30,6 @@ import { WorkbenchNoticeDialog } from "./workbench-notice-dialog";
 type WorkspaceSection = "compose" | "mine" | "trash";
 type BusyAction = "loading" | "generating" | "revising" | "saving" | "managing" | null;
 
-const TRUST_LABELS: Record<string, string> = {
-  solvability: "可解性",
-  answer_solution_consistency: "答案与解析一致",
-  choice_answer_cardinality: "答案数量",
-  distractor_quality: "干扰项结构",
-  math_verifier: "MathVerifier",
-  difficulty_disclosure: "难度披露",
-};
-
 const ENTRY_COPY: Record<QuestionAuthoringEntrySource, string> = {
   new_task: "从新任务进入",
   search: "来自当前搜题条件",
@@ -47,12 +37,13 @@ const ENTRY_COPY: Record<QuestionAuthoringEntrySource, string> = {
 };
 
 function editableContent(draft: GeneratedQuestionDraft): QuestionDraftEditableContent {
+  const choiceQuestion = draft.question_type === "single_choice" || draft.question_type === "multiple_choice";
   return {
     question_type: draft.question_type,
     stem_plain: draft.stem_plain,
     stem_latex: draft.stem_latex,
     options: draft.options.map((option) => ({ ...option })),
-    answer_value: draft.answer_value,
+    answer_value: choiceQuestion ? draft.answer_value : draft.final_answer,
     solution_method: draft.solution_method,
     solution_steps: [...draft.solution_steps],
     final_answer: draft.final_answer,
@@ -125,13 +116,21 @@ function QuestionEditor({
           <textarea id={`${idPrefix}-options`} rows={5} value={content.options.map((option) => `${option.key}. ${option.text}`).join("\n")} onChange={(event) => patch("options", parseOptions(event.target.value))} />
         </label>
       )}
-      <label htmlFor={`${idPrefix}-answer`}>
-        <span>答案</span>
-        <textarea id={`${idPrefix}-answer`} rows={3} value={content.answer_value} onChange={(event) => patch("answer_value", event.target.value)} />
-      </label>
-      <label htmlFor={`${idPrefix}-final`}>
+      <label className="authoring-editor__wide" htmlFor={`${idPrefix}-final`}>
         <span>最终答案</span>
-        <textarea id={`${idPrefix}-final`} rows={3} value={content.final_answer} onChange={(event) => patch("final_answer", event.target.value)} />
+        <textarea
+          id={`${idPrefix}-final`}
+          rows={3}
+          value={choiceQuestion ? content.answer_value : content.final_answer}
+          onChange={(event) => {
+            const value = event.target.value;
+            onChange({
+              ...content,
+              answer_value: value,
+              final_answer: value,
+            });
+          }}
+        />
       </label>
       <label htmlFor={`${idPrefix}-method`}>
         <span>解题方法</span>
@@ -163,28 +162,6 @@ function QuestionEditor({
         </div>
       </details>
     </div>
-  );
-}
-
-function TrustLedger({ draft }: { draft: GeneratedQuestionDraft }) {
-  return (
-    <section className="authoring-trust" aria-label="草稿可信状态">
-      <header>
-        <div>
-          <span>六项检查</span>
-          <h3>{draft.verification.status === "checks_failed" ? "存在阻断项，仍需修改" : "结构检查完成，仍需教师复核"}</h3>
-        </div>
-        <strong>{draft.verification.math_verifier_checked ? "已运行 MathVerifier" : "MathVerifier 当前不支持此题"}</strong>
-      </header>
-      <ol>
-        {draft.verification.checks.map((check) => (
-          <li data-status={check.status} key={check.code}>
-            {check.status === "passed" || check.status === "not_applicable" ? <CheckIcon /> : <ClockIcon />}
-            <div><strong>{TRUST_LABELS[check.code] ?? check.code}</strong><span>{check.summary}</span></div>
-          </li>
-        ))}
-      </ol>
-    </section>
   );
 }
 
@@ -354,7 +331,7 @@ export function PersonalQuestionAuthoringWorkspace({
       setSaveName(`${staged.current.draft.curriculum?.name ?? "待确认知识点"} · 自主命题`);
       setCurriculumQuery(staged.current.draft.curriculum?.name ?? "");
       setCurriculumMatches([]);
-      setNotice("草稿已生成，但尚未保存。请先核对题面、答案与六项可信状态。");
+      setNotice("草稿已生成，但尚未保存。请先核对题面、最终答案与解析。");
       window.requestAnimationFrame(() => document.querySelector<HTMLElement>("#authoring-draft")?.scrollIntoView({ behavior: "smooth", block: "start" }));
     } catch (cause) {
       setError(errorMessage(cause));
@@ -709,7 +686,7 @@ export function PersonalQuestionAuthoringWorkspace({
       {section === "compose" && (
         <>
           <section className="authoring-brief">
-            <header><div><span>先写命题意图</span><h2>教师说要什么，Agent 补全教学结构。</h2></div><strong>不会引用虚构题源</strong></header>
+            <header><div><span>先写命题意图</span><h2>告诉我要出一道什么题</h2></div></header>
             <form onSubmit={generateDraft}>
               <label className="authoring-field authoring-field--wide" htmlFor="authoring-request">
                 <span>命题要求</span>
@@ -742,7 +719,6 @@ export function PersonalQuestionAuthoringWorkspace({
                 </div>
               </details>
               <div className="authoring-submit">
-                <p><LockIcon /> 生成后仍是未保存草稿；严重冲突会明确标记。</p>
                 <button disabled={!canGenerate} type="submit"><span>{busy === "generating" ? "正在命题…" : "生成私有草稿"}</span><ArrowRightIcon /></button>
               </div>
             </form>
@@ -751,12 +727,12 @@ export function PersonalQuestionAuthoringWorkspace({
           {draft && draftView && draftEditor && (
             <section className="authoring-draft" id="authoring-draft">
               <header>
-                <div><span>AI GENERATED · UNSAVED · REV {draftView.current_revision}</span><h2>草稿与真实检索题分开。</h2></div>
-                <div className="authoring-draft__policy"><LockIcon /><strong>仅自己可见</strong><small>{draft.curriculum?.name ?? "教材映射待补充"} · 预计难度 {draft.estimated_difficulty}/5</small></div>
+                <div><h2>已生成属于你的题目</h2></div>
+                <div className="authoring-draft__policy"><LockIcon /><strong>仅自己可见</strong><small>命题 Agent 生成 · 尚未保存 · 需教师复核</small><small>{draft.curriculum?.name ?? "教材映射待补充"} · 预计难度 {draft.estimated_difficulty}/5</small></div>
               </header>
               <section className="authoring-inference" aria-label="Agent 归纳的命题信息">
                 <header>
-                  <div><span>生成后归纳</span><h3>知识点、方法与易错点</h3></div>
+                  <div><h3>知识点、方法与易错点</h3></div>
                   <strong data-status={draft.curriculum?.mapping_status ?? "unmapped"}>{draft.curriculum?.mapping_status === "teacher_confirmed" ? "教师已确认" : draft.curriculum ? "待教师确认" : "尚未映射"}</strong>
                 </header>
                 <div className="authoring-inference__grid">
@@ -783,9 +759,9 @@ export function PersonalQuestionAuthoringWorkspace({
                 <button disabled={busy !== null} type="button" onClick={() => void reviseDraft()}>{busy === "revising" ? "正在重检…" : "记录校订并重检"}</button>
                 <button className="is-secondary" disabled={busy !== null} type="button" onClick={() => void reviseDraft("教师要求重新验算当前草稿")}>重新验算</button>
               </div>
-              <TrustLedger draft={draft} />
+              {draft.verification.status === "checks_failed" && <p className="personal-question-warning">这道题存在阻断检查，不能把它理解为数学正确或可直接用于正式试卷。</p>}
               <section className="authoring-save">
-                <header><div><span>明确保存</span><h3>选择你自己的题库与分类。</h3></div><p>不自动保存，不存在 public 转换。</p></header>
+                <header><div><h3>选择你自己的题库与分类。</h3></div></header>
                 <div className="authoring-save__grid">
                   <label htmlFor="authoring-save-name"><span>题目名称</span><input id="authoring-save-name" value={saveName} onChange={(event) => setSaveName(event.target.value)} /></label>
                   <label htmlFor="authoring-collection"><span>个人题库</span><select id="authoring-collection" value={collectionId} onChange={(event) => setCollectionId(event.target.value)}><option value="">请选择</option>{collections.map((item) => <option value={item.collection_id} key={item.collection_id}>{item.name}</option>)}</select></label>
@@ -815,7 +791,7 @@ export function PersonalQuestionAuthoringWorkspace({
               {busy === "loading" ? <p>正在读取你的私题…</p> : questions.length === 0 ? (
                 <div className="personal-question-empty"><PaperIcon /><strong>{section === "trash" ? "回收站是空的" : "还没有保存私题"}</strong><span>{section === "trash" ? "移入回收站的题目会出现在这里。" : "回到命题书桌生成并明确保存第一道题。"}</span>{section === "mine" && <button type="button" onClick={() => void switchSection("compose")}>开始命题</button>}</div>
               ) : (
-                <ol>{questions.map((question) => <li key={question.question_id}><button aria-pressed={selectedQuestion?.question_id === question.question_id} type="button" onClick={() => openQuestion(question)}><span>{question.name}</span><small>REV {question.selected_revision} · {question.question.curriculum?.name ?? "教材映射待确认"}</small><p>{question.question.stem_plain}</p></button></li>)}</ol>
+                <ol>{questions.map((question) => <li key={question.question_id}><button aria-pressed={selectedQuestion?.question_id === question.question_id} type="button" onClick={() => openQuestion(question)}><span>{question.name}</span><p>{question.question.stem_plain}</p></button></li>)}</ol>
               )}
             </aside>
             <article className="personal-question-detail">
@@ -833,7 +809,7 @@ export function PersonalQuestionAuthoringWorkspace({
                 </div>
               ) : (
                 <>
-                  <header><div><span>OWNER ONLY · REV {selectedQuestion.selected_revision}</span><h3>{selectedQuestion.name}</h3></div><LockIcon /></header>
+                  <header><div><h3>{selectedQuestion.name}</h3><small>命题 Agent 生成 · 仅自己可见 · 需教师复核</small></div><LockIcon /></header>
                   <div className="personal-question-meta">
                     <label htmlFor="manage-name"><span>名称</span><input id="manage-name" value={manageName} onChange={(event) => setManageName(event.target.value)} /></label>
                     <label htmlFor="manage-tags"><span>标签 · 用顿号或逗号分隔</span><input id="manage-tags" value={manageTags} onChange={(event) => setManageTags(event.target.value)} /></label>
@@ -846,7 +822,6 @@ export function PersonalQuestionAuthoringWorkspace({
                     <QuestionEditor content={savedEditor} idPrefix="saved" onChange={setSavedEditor} />
                     <button type="button" disabled={busy !== null} onClick={() => void reviseSavedQuestion()}>{busy === "revising" ? "正在重检…" : "保存新 revision 并重检"}</button>
                   </details>
-                  <TrustLedger draft={selectedQuestion.question} />
                   <footer>
                     <button type="button" disabled={busy !== null} onClick={() => void copyQuestion()}>建立独立副本</button>
                     <button type="button" disabled={busy !== null} onClick={() => void exportQuestion("markdown")}>导出 Markdown</button>

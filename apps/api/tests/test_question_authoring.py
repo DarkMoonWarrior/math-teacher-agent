@@ -260,6 +260,31 @@ def test_teacher_revision_rechecks_structure_and_cannot_supply_trust_evidence() 
     assert any("教师编辑" in warning for warning in revised.warnings)
 
 
+def test_non_choice_draft_has_one_canonical_final_answer() -> None:
+    authoring = QuestionAuthoring(
+        curriculum=curriculum(),
+        provider=FakeProvider(
+            question_type="fill_blank",
+            answer_value="√3/2 ≤ d ≤ 1",
+            final_answer="d = 2√5/5",
+        ),
+        math_verifier=MathVerifier(),
+    )
+
+    draft = authoring.create_draft(
+        QuestionDesignBrief(
+            request_text="命制一道圆锥曲线填空题。",
+            curriculum_node_id="kp_ellipse_geometry",
+            question_type="fill_blank",
+        )
+    )
+
+    assert draft.answer_value == "d = 2√5/5"
+    assert draft.final_answer == "d = 2√5/5"
+    checks = {item.code: item for item in draft.verification.checks}
+    assert checks["answer_solution_consistency"].status == "passed"
+
+
 def test_natural_language_infers_question_type_and_reviewed_curriculum_mapping() -> None:
     provider = FakeProvider()
     authoring = QuestionAuthoring(

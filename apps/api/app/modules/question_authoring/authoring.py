@@ -73,6 +73,7 @@ class QuestionAuthoring:
             )
         except QuestionAuthoringProviderError as exc:
             raise QuestionAuthoringUnavailableError(str(exc)) from exc
+        content = self._canonicalize_answer(content)
         self._validate_structure(content, expected_type=question_type)
         curriculum, curriculum_warning = self._ground_generated_curriculum(
             content,
@@ -130,24 +131,26 @@ class QuestionAuthoring:
     ) -> GeneratedQuestionDraft:
         """Create a teacher-edited snapshot with fresh server-owned trust evidence."""
 
-        revised = ProviderQuestionDraft(
-            question_type=content.question_type,
-            stem_plain=content.stem_plain,
-            stem_latex=content.stem_latex,
-            options=content.options,
-            answer_value=content.answer_value,
-            solution_method=content.solution_method,
-            solution_steps=content.solution_steps,
-            final_answer=content.final_answer,
-            authoring_intent=content.authoring_intent,
-            estimated_difficulty=current.estimated_difficulty,
-            curriculum_node_id=(
-                content.curriculum_confirmation_node_id
-                or (current.curriculum.node_id if current.curriculum else None)
-            ),
-            knowledge_points=content.knowledge_points,
-            assessed_methods=content.assessed_methods,
-            common_mistakes=content.common_mistakes,
+        revised = self._canonicalize_answer(
+            ProviderQuestionDraft(
+                question_type=content.question_type,
+                stem_plain=content.stem_plain,
+                stem_latex=content.stem_latex,
+                options=content.options,
+                answer_value=content.answer_value,
+                solution_method=content.solution_method,
+                solution_steps=content.solution_steps,
+                final_answer=content.final_answer,
+                authoring_intent=content.authoring_intent,
+                estimated_difficulty=current.estimated_difficulty,
+                curriculum_node_id=(
+                    content.curriculum_confirmation_node_id
+                    or (current.curriculum.node_id if current.curriculum else None)
+                ),
+                knowledge_points=content.knowledge_points,
+                assessed_methods=content.assessed_methods,
+                common_mistakes=content.common_mistakes,
+            )
         )
         self._validate_structure(revised, expected_type=content.question_type)
         confirmed_curriculum = current.curriculum
@@ -355,6 +358,14 @@ class QuestionAuthoring:
         if "填空" in text:
             return "fill_blank"
         return "open_response"
+
+    @staticmethod
+    def _canonicalize_answer(content: ProviderQuestionDraft) -> ProviderQuestionDraft:
+        if content.question_type in {"single_choice", "multiple_choice"}:
+            return content
+        return content.model_copy(
+            update={"answer_value": content.final_answer.strip()}
+        )
 
     @staticmethod
     def _validate_structure(

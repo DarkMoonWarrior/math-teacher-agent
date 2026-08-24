@@ -1,6 +1,18 @@
 [
   {
     "date": "2026-08-24",
+    "scope": "capability-polish",
+    "macrostructure": "Authoring Ledger",
+    "theme": "studied-DNA",
+    "theme_axes": "warm-paper / Chinese editorial serif / vermilion-mineral-teal",
+    "vibe": "quiet owner-only authoring desk with one canonical final answer",
+    "enrichment": "existing mathematical paper atlas",
+    "nav": "N1b six-capability navigation with a new-task action menu",
+    "footer": "Ft2 Inline single line",
+    "brief": "Remove redundant revision and check ledgers, strengthen field-label hierarchy and inference containment, and expose one authoritative final-answer field without hiding private or teacher-review status."
+  },
+  {
+    "date": "2026-08-24",
     "scope": "capability",
     "macrostructure": "Authoring Ledger",
     "theme": "studied-DNA",
