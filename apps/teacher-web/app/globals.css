@@ -428,7 +428,6 @@ svg { flex: 0 0 auto; }
 .question-media__crop-controls small { color: var(--color-muted); text-align: right; }
 .question-media__crop-controls > div { display: flex; gap: var(--space-xs); justify-content: flex-end; }
 .question-media__crop-controls > div button:last-child { background: var(--color-ink); color: var(--color-paper); }
-.question-media__notice,
 .question-media__status,
 .question-media__hint,
 .question-media__error,

@@ -70,6 +70,8 @@ Solve 输入区增加：上传图片、粘贴截图、拍照入口、图片预�
 
 2026-08-22 空间几何故障修复：真实运行记录证明两次视觉模型已经响应，但解答 JSON 中未转义的 `\perp`、`\underbrace` 等 LaTeX 反斜杠导致严格解析失败，界面曾错误归类为 `MODEL_UNAVAILABLE`。DeepSeek JSON adapter 现按 JSON 字符串边界修复未转义数学命令并保留已有合法转义；格式仍不可恢复时返回 `TOOL_EXECUTION_ERROR`，不再冒充模型未上线。视觉解题 prompt 同时要求核对原图标签、连线与虚实线，不得仅凭 OCR 文本猜测空间关系。
 
+2026-08-24 长解答截断修复：真实运行记录显示复杂轨迹题的模型回答在 JSON 字符串中途结束，并以 `Unterminated string` 进入 `TOOL_EXECUTION_ERROR`。DeepSeek JSON adapter 现仅在本地容错仍无法读取时执行一次受控格式恢复重试，沿用同一教师动作与既定 Schema、提高但封顶输出预算，并要求压缩表述而不遗漏必填字段；第二次仍异常即明确失败，不循环调用。Teacher Web 同时移除纯文字题确认后的被动视觉说明，只为确实依赖或可能依赖图形的题目保留逐次原图授权。
+
 2026-08-22 能力更正：DeepSeek 官方文档新增 `deepseek-v4-flash-vision-exp` 图片输入能力；仓库先前“DeepSeek 仅支持文本”的判断已废止。项目使用 OpenAI-compatible Chat Completions 图片块、JSON 输出和 `detail=original`，真实 synthetic 数学题验证已准确返回题面、LaTeX、四个选项与视觉依赖标记。该模型仍按 true external adapter 治理，实验状态不会降低逐次同意、教师校对或 private 约束。
 
 ## 6. M7 完成 Gate

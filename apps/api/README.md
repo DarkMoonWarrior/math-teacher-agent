@@ -59,6 +59,8 @@ Solve workflow 已提供同步、真实 SSE、run 快照、取消和同会话恢
 
 M7 图片解题只接受当前 owner 已确认且与当前媒体 revision 一致的题面。外部单题识别除文字、公式和选项外，还返回可由教师对照原图核查的 `visual_observations`（点/线/面标签、连线、虚实线、坐标轴、曲线或表格关系）；它只记录可见结构，不是证明或 MathVerifier 证据。公开 Solve workflow 把 canonical 题面、解题模式/要求、owner、asset/media/OCR revision 和本次视觉同意封装为短时一次性 capability；内部 Tool 在读取图片前消费许可并从服务端恢复完整意图。Agent 只转发 capability，不能提交 owner/resource selector、读取路径或获得图片字节，模型改写普通 Tool 参数也不能改变授权内容。视觉解答仍为 `teacher_review_required`，其 provider/model/revision 证据不属于 MathVerifier。
 
+DeepSeek JSON 输出先做确定性的代码块、控制字符和 LaTeX 转义容错；若长解答仍因截断或格式不完整无法读取，adapter 只执行一次格式恢复重试，并把输出预算提高到配置上限。重试仍失败时返回明确的响应格式错误，不把未完成任务伪装成成功，也不会无限重试。
+
 ## 测试
 
 ```powershell

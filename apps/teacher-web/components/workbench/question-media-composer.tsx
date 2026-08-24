@@ -213,7 +213,7 @@ export function QuestionMediaComposer({
       );
       onChange(next);
       if (confirm) onConfirmed(next);
-      setHint(confirm ? "题面已确认并锁定到当前图片 revision，可以交给 Solve。" : "校对草稿已保存为新的识别 revision。");
+      setHint(confirm ? "" : "校对草稿已保存为新的识别 revision。");
     } catch (cause) {
       if (cause instanceof DOMException && cause.name === "AbortError") return;
       setError(cause instanceof TeacherWorkspaceError ? cause.message : "题面校对没有保存成功，请重试。");
@@ -359,35 +359,24 @@ export function QuestionMediaComposer({
               </div>
             )}
           </section>
-          {bundle.recognition_status === "confirmed" && (
+          {bundle.recognition_status === "confirmed" && bundle.requires_visual_reasoning !== false && (
             <section className="question-visual-consent" aria-label="本次视觉解题权限">
               <div>
                 <span>图形保真输入</span>
-                <strong>
-                  {bundle.requires_visual_reasoning === false
-                    ? "确认题面足够，本次不发送原图"
-                    : "本题依赖或可能依赖图形"}
-                </strong>
-                <small>
-                  {bundle.requires_visual_reasoning === false
-                    ? "Solve 只消费教师确认的文字与公式 revision。"
-                    : "如开始解题，原图仅发送给已配置的视觉解题模型；这不构成 MathVerifier 证据。"}
-                </small>
+                <strong>本题依赖或可能依赖图形</strong>
+                <small>如开始解题，原图仅发送给已配置的视觉解题模型；这不构成 MathVerifier 证据。</small>
               </div>
-              {bundle.requires_visual_reasoning !== false && (
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={visualProcessingConsent}
-                    disabled={busy || disabled}
-                    onChange={(event) => onVisualProcessingConsentChange(event.target.checked)}
-                  />
-                  <span>我同意本次解题使用 REV {bundle.asset.current_revision} 原图；仅本次有效。</span>
-                </label>
-              )}
+              <label>
+                <input
+                  type="checkbox"
+                  checked={visualProcessingConsent}
+                  disabled={busy || disabled}
+                  onChange={(event) => onVisualProcessingConsentChange(event.target.checked)}
+                />
+                <span>我同意本次解题使用 REV {bundle.asset.current_revision} 原图；仅本次有效。</span>
+              </label>
             </section>
           )}
-          <p className="question-media__notice">图片与识别 revision 始终属于你的私人工作区；Agent 只转发本次任务的一次性许可，不能选择资源、读取路径或获得图片字节。</p>
         </div>
       )}
 

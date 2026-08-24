@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import json
 
-from app.modules.deepseek import DeepSeekJsonClient
+import pytest
+
+from app.modules.deepseek import DeepSeekJsonClient, DeepSeekJsonResponseError
 from app.modules.lesson_plans import DeepSeekLessonPlanProvider
 from app.modules.question_variants import DeepSeekQuestionVariantProvider
 from app.modules.solution_assistant import (
@@ -92,6 +94,122 @@ def test_deepseek_normalizes_unescaped_geometry_latex_commands() -> None:
         ],
         "already_escaped": r"$\underbrace{x}_{1}$",
     }
+
+
+def test_deepseek_retries_once_when_json_response_is_truncated(monkeypatch) -> None:
+    requests = []
+
+    class Response:
+        def __init__(self, payload):
+            self.payload = payload
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self):
+            return json.dumps(self.payload, ensure_ascii=False).encode()
+
+    responses = iter(
+        [
+            Response(
+                {
+                    "choices": [
+                        {
+                            "finish_reason": "length",
+                            "message": {
+                                "content": '{"explanation":{"method":"解析几何","steps":["设点 Q 的坐标为'
+                            },
+                        }
+                    ]
+                }
+            ),
+            Response(
+                {
+                    "choices": [
+                        {
+                            "finish_reason": "stop",
+                            "message": {
+                                "content": json.dumps(
+                                    {
+                                        "explanation": {
+                                            "method": "解析几何",
+                                            "steps": ["建立参数方程并消去参数。"],
+                                            "final_answer": "点 Q 在一条定直线上。",
+                                        },
+                                        "knowledge_points": ["轨迹方程"],
+                                        "common_mistakes": [],
+                                        "teaching_notes": [],
+                                    },
+                                    ensure_ascii=False,
+                                )
+                            },
+                        }
+                    ]
+                }
+            ),
+        ]
+    )
+
+    def fake_urlopen(request, timeout):
+        requests.append(json.loads(request.data.decode()))
+        return next(responses)
+
+    monkeypatch.setattr("app.modules.deepseek.urlopen", fake_urlopen)
+    result = DeepSeekJsonClient(api_key="test-secret").request(
+        instructions="test",
+        input_text='{"question":"轨迹题"}',
+        action="解题",
+        max_tokens=4096,
+    )
+
+    assert len(requests) == 2
+    assert requests[1]["max_tokens"] > requests[0]["max_tokens"]
+    assert "上一份回答因长度截断" in requests[1]["messages"][-1]["content"]
+    parsed = json.loads(result["output"][0]["content"][0]["text"])
+    assert parsed["explanation"]["final_answer"] == "点 Q 在一条定直线上。"
+
+
+def test_deepseek_stops_after_one_json_recovery_retry(monkeypatch) -> None:
+    requests = []
+
+    class Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self):
+            return json.dumps(
+                {
+                    "choices": [
+                        {
+                            "finish_reason": "length",
+                            "message": {"content": '{"answer":"仍然只有半截'},
+                        }
+                    ]
+                },
+                ensure_ascii=False,
+            ).encode()
+
+    def fake_urlopen(request, timeout):
+        requests.append(json.loads(request.data.decode()))
+        return Response()
+
+    monkeypatch.setattr("app.modules.deepseek.urlopen", fake_urlopen)
+
+    with pytest.raises(DeepSeekJsonResponseError, match="格式恢复重试仍未成功"):
+        DeepSeekJsonClient(api_key="test-secret").request(
+            instructions="test",
+            input_text='{"question":"轨迹题"}',
+            action="解题",
+            max_tokens=3000,
+        )
+
+    assert len(requests) == 2
 
 
 def test_deepseek_solution_provider_uses_configured_vision_model_and_image_block(monkeypatch) -> None:

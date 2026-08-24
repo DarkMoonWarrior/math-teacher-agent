@@ -74,6 +74,49 @@ class DeepSeekJsonClient:
             "max_tokens": max(256, min(max_tokens, 8192)),
             "stream": False,
         }
+        first_parse_error: json.JSONDecodeError | ValueError | None = None
+        for attempt in range(2):
+            raw = self._post_json(payload=payload, action=action)
+            try:
+                content = raw["choices"][0]["message"]["content"]
+                if not isinstance(content, str) or not content.strip():
+                    raise ValueError("返回内容为空")
+            except (KeyError, IndexError, TypeError, ValueError) as exc:
+                raise DeepSeekClientError(f"DeepSeek 返回结构异常：{exc}") from exc
+            try:
+                normalized = self._normalize_json(content)
+            except (json.JSONDecodeError, ValueError) as exc:
+                if attempt == 1:
+                    cause = first_parse_error or exc
+                    raise DeepSeekJsonResponseError(
+                        f"DeepSeek 返回的 JSON 无法解析：{cause}；格式恢复重试仍未成功：{exc}"
+                    ) from exc
+                first_parse_error = exc
+                payload = {
+                    **payload,
+                    "messages": [
+                        *payload["messages"],
+                        {
+                            "role": "user",
+                            "content": (
+                                "上一份回答因长度截断或 JSON 格式不完整而无法读取。"
+                                "请重新从头输出完整、合法且符合既定 Schema 的 JSON；"
+                                "适当压缩表述，但不得省略必填字段。"
+                            ),
+                        },
+                    ],
+                    "max_tokens": min(8192, max(4096, int(payload["max_tokens"]) * 2)),
+                }
+                continue
+            return {
+                **raw,
+                "output": [
+                    {"type": "message", "content": [{"type": "output_text", "text": normalized}]}
+                ],
+            }
+        raise AssertionError("unreachable")
+
+    def _post_json(self, *, payload: dict, action: str) -> dict:
         request = Request(
             f"{self.base_url}/chat/completions",
             data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
@@ -85,7 +128,7 @@ class DeepSeekJsonClient:
         )
         try:
             with urlopen(request, timeout=self.timeout_seconds) as response:
-                raw = json.loads(response.read().decode("utf-8"))
+                return json.loads(response.read().decode("utf-8"))
         except HTTPError as exc:
             details = exc.read().decode("utf-8", errors="replace")[:500]
             raise DeepSeekClientError(
@@ -93,24 +136,6 @@ class DeepSeekJsonClient:
             ) from exc
         except (URLError, TimeoutError, OSError, json.JSONDecodeError) as exc:
             raise DeepSeekClientError(f"DeepSeek {action}失败：{exc}") from exc
-        try:
-            content = raw["choices"][0]["message"]["content"]
-            if not isinstance(content, str) or not content.strip():
-                raise ValueError("返回内容为空")
-        except (KeyError, IndexError, TypeError, ValueError) as exc:
-            raise DeepSeekClientError(f"DeepSeek 返回结构异常：{exc}") from exc
-        try:
-            normalized = self._normalize_json(content)
-        except (json.JSONDecodeError, ValueError) as exc:
-            raise DeepSeekJsonResponseError(
-                f"DeepSeek 返回的 JSON 无法解析：{exc}"
-            ) from exc
-        return {
-            **raw,
-            "output": [
-                {"type": "message", "content": [{"type": "output_text", "text": normalized}]}
-            ],
-        }
 
     @staticmethod
     def _normalize_json(content: str) -> str:
