@@ -173,6 +173,14 @@ def gateway_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClien
                 final_answer="{2}",
                 authoring_intent="考查交集的基本定义。",
                 estimated_difficulty=1,
+                curriculum_node_id=(
+                    context.curriculum.node_id
+                    if context.curriculum is not None
+                    else context.curriculum_options[-1].node_id
+                ),
+                knowledge_points=["集合的交集"],
+                assessed_methods=["根据定义筛选公共元素"],
+                common_mistakes=["把交集误写成并集"],
             )
 
     authoring = QuestionAuthoring(
@@ -297,6 +305,21 @@ def test_create_question_draft_returns_unsaved_owner_only_content(
     assert draft["public_search_allowed"] is False
     assert draft["share_allowed"] is False
     assert "owner_id" not in draft
+
+    inference = gateway_client.post(
+        "/internal/agent-tools/v1/create-question-draft",
+        json={
+            "request_text": "命制一道用于考试的填空压轴题。",
+            "question_type": "fill_blank",
+            "target_difficulty": 5,
+        },
+        headers=_auth(),
+    )
+    assert inference.status_code == 200
+    inferred = inference.json()["draft"]
+    assert inferred["curriculum"]["mapping_source"] == "agent_inferred"
+    assert inferred["curriculum"]["mapping_status"] == "pending_teacher_confirmation"
+    assert inferred["knowledge_points"] == ["集合的交集"]
 
     forged = gateway_client.post(
         "/internal/agent-tools/v1/create-question-draft",

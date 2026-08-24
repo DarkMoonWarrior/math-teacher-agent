@@ -483,6 +483,10 @@ export type QuestionDraftEditableContent = {
   solution_steps: string[];
   final_answer: string;
   authoring_intent: string;
+  knowledge_points: string[];
+  assessed_methods: string[];
+  common_mistakes: string[];
+  curriculum_confirmation_node_id?: string | null;
 };
 
 export type QuestionDraftTrustCheck = {
@@ -503,11 +507,13 @@ export type GeneratedQuestionDraft = QuestionDraftEditableContent & {
     volume: string;
     chapter: string;
     section: string;
-    mapping_source: "teacher_selected" | "brief_match";
-    match_confidence: number;
+    mapping_source: "teacher_selected" | "brief_match" | "agent_inferred";
+    mapping_status: "teacher_confirmed" | "pending_teacher_confirmation";
+    match_confidence: number | null;
     curriculum_status: string;
     reviewed_by: string;
-  };
+  } | null;
+  pedagogy_source: "model_generated" | "teacher_edited";
   target_difficulty: number;
   estimated_difficulty: number;
   difficulty_source: "model_estimated";

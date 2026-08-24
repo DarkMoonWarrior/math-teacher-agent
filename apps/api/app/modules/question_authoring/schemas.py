@@ -66,8 +66,12 @@ class QuestionDraftCurriculum(BaseModel):
     volume: str
     chapter: str
     section: str
-    mapping_source: Literal["teacher_selected", "brief_match"]
-    match_confidence: float = Field(ge=0, le=1)
+    mapping_source: Literal["teacher_selected", "brief_match", "agent_inferred"]
+    mapping_status: Literal[
+        "teacher_confirmed",
+        "pending_teacher_confirmation",
+    ] = "pending_teacher_confirmation"
+    match_confidence: float | None = Field(default=None, ge=0, le=1)
     curriculum_status: str
     reviewed_by: str
 
@@ -139,6 +143,10 @@ class QuestionDraftEditableContent(BaseModel):
     solution_steps: list[str] = Field(min_length=1, max_length=100)
     final_answer: str = Field(min_length=1, max_length=4000)
     authoring_intent: str = Field(min_length=1, max_length=2000)
+    knowledge_points: list[str] = Field(default_factory=list, max_length=20)
+    assessed_methods: list[str] = Field(default_factory=list, max_length=20)
+    common_mistakes: list[str] = Field(default_factory=list, max_length=20)
+    curriculum_confirmation_node_id: str | None = Field(default=None, max_length=160)
 
 
 class GeneratedQuestionDraft(BaseModel):
@@ -155,7 +163,11 @@ class GeneratedQuestionDraft(BaseModel):
     solution_steps: list[str] = Field(min_length=1, max_length=100)
     final_answer: str = Field(min_length=1, max_length=4000)
     authoring_intent: str = Field(min_length=1, max_length=2000)
-    curriculum: QuestionDraftCurriculum
+    curriculum: QuestionDraftCurriculum | None = None
+    knowledge_points: list[str] = Field(default_factory=list, max_length=20)
+    assessed_methods: list[str] = Field(default_factory=list, max_length=20)
+    common_mistakes: list[str] = Field(default_factory=list, max_length=20)
+    pedagogy_source: Literal["model_generated", "teacher_edited"] = "model_generated"
     target_difficulty: int = Field(ge=1, le=5)
     estimated_difficulty: int = Field(ge=1, le=5)
     difficulty_source: Literal["model_estimated"] = "model_estimated"
@@ -189,3 +201,7 @@ class ProviderQuestionDraft(BaseModel):
     final_answer: str = Field(min_length=1, max_length=4000)
     authoring_intent: str = Field(min_length=1, max_length=2000)
     estimated_difficulty: int = Field(ge=1, le=5)
+    curriculum_node_id: str | None = Field(default=None, max_length=160)
+    knowledge_points: list[str] = Field(default_factory=list, max_length=20)
+    assessed_methods: list[str] = Field(default_factory=list, max_length=20)
+    common_mistakes: list[str] = Field(default_factory=list, max_length=20)

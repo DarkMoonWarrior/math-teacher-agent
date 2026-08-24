@@ -14,7 +14,7 @@ from app.modules.question_authoring.schemas import (
 )
 
 
-PROMPT_REVISION = "question-authoring-v2-trust-checks"
+PROMPT_REVISION = "question-authoring-v3-post-generation-grounding"
 
 
 class QuestionAuthoringProviderError(RuntimeError):
@@ -25,7 +25,8 @@ class QuestionAuthoringProviderError(RuntimeError):
 class QuestionAuthoringContext:
     brief: QuestionDesignBrief
     question_type: QuestionType
-    curriculum: QuestionDraftCurriculum
+    curriculum: QuestionDraftCurriculum | None
+    curriculum_options: tuple[QuestionDraftCurriculum, ...]
 
 
 class QuestionAuthoringProvider(Protocol):
@@ -64,7 +65,21 @@ class DeepSeekQuestionAuthoringProvider:
                 exclude={"reference_question_id"},
             ),
             "resolved_question_type": context.question_type,
-            "trusted_curriculum_mapping": context.curriculum.model_dump(mode="json"),
+            "teacher_curriculum_guidance": (
+                context.curriculum.model_dump(mode="json")
+                if context.curriculum is not None
+                else None
+            ),
+            "allowed_curriculum_nodes": [
+                {
+                    "node_id": item.node_id,
+                    "name": item.name,
+                    "volume": item.volume,
+                    "chapter": item.chapter,
+                    "section": item.section,
+                }
+                for item in context.curriculum_options
+            ],
         }
         instructions = (
             "你是面向中国高中数学教师的辅助命题模块。根据教师要求命制一道完整、可独立作答的中文数学题草稿。"
@@ -72,6 +87,11 @@ class DeepSeekQuestionAuthoringProvider:
             "单选题 answer_value 只能包含一个选项编号；多选题用逗号分隔多个编号；"
             "final_answer 必须明确对应 answer_value，所有选项文字必须互不重复。"
             "不得虚构学校、考试、年份、教材页码、题库来源或版权信息。"
+            "教师可以只描述想要的题，不得因缺少知识点、考查方法或易错点而拒绝命题。"
+            "生成题目后，再从 allowed_curriculum_nodes 中选择最贴切的 curriculum_node_id；"
+            "只能返回列表内的 ID，无法可靠映射时返回 null。"
+            "knowledge_points、assessed_methods 与 common_mistakes 应依据最终题目归纳，"
+            "不要照抄空白输入，也不要把模型推断冒充教师确认。"
             "所有数学表达在普通文本中可读，stem_latex 使用 $...$ 或 $$...$$ 包裹公式。"
             "只返回 Schema 要求的题目内容；visibility、来源、验证与保存状态由业务模块写入。"
         )
@@ -139,6 +159,10 @@ class DeepSeekQuestionAuthoringProvider:
             "final_answer": {"type": "string"},
             "authoring_intent": {"type": "string"},
             "estimated_difficulty": {"type": "integer", "minimum": 1, "maximum": 5},
+            "curriculum_node_id": {"type": ["string", "null"]},
+            "knowledge_points": {"type": "array", "items": {"type": "string"}},
+            "assessed_methods": {"type": "array", "items": {"type": "string"}},
+            "common_mistakes": {"type": "array", "items": {"type": "string"}},
         }
         return {
             "type": "json_schema",

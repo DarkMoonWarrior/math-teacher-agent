@@ -76,6 +76,33 @@ def curriculum() -> InMemoryCurriculumCatalog:
                 name="函数单调性的判断",
                 **common,
             ),
+            CurriculumNode(
+                node_id="ch_ellipse",
+                parent_id="vol_1",
+                volume="选择性必修第一册",
+                node_type="chapter",
+                code="3.1",
+                name="圆锥曲线的方程",
+                **common,
+            ),
+            CurriculumNode(
+                node_id="sec_ellipse",
+                parent_id="ch_ellipse",
+                volume="选择性必修第一册",
+                node_type="section",
+                code="3.1.1",
+                name="椭圆",
+                **common,
+            ),
+            CurriculumNode(
+                node_id="kp_ellipse_geometry",
+                parent_id="sec_ellipse",
+                volume="选择性必修第一册",
+                node_type="knowledge_point",
+                code="3.1.1.3",
+                name="椭圆的几何性质",
+                **common,
+            ),
         ]
     )
 
@@ -92,6 +119,10 @@ class FakeProvider:
         final_answer: str = "函数在负半轴递减，在正半轴递增。",
         duplicate_option_text: bool = False,
         estimated_difficulty: int = 2,
+        curriculum_node_id: str | None = None,
+        knowledge_points: list[str] | None = None,
+        assessed_methods: list[str] | None = None,
+        common_mistakes: list[str] | None = None,
         fail: bool = False,
     ) -> None:
         self.question_type = question_type
@@ -99,6 +130,10 @@ class FakeProvider:
         self.final_answer = final_answer
         self.duplicate_option_text = duplicate_option_text
         self.estimated_difficulty = estimated_difficulty
+        self.curriculum_node_id = curriculum_node_id
+        self.knowledge_points = knowledge_points or []
+        self.assessed_methods = assessed_methods or []
+        self.common_mistakes = common_mistakes or []
         self.fail = fail
         self.contexts: list[QuestionAuthoringContext] = []
 
@@ -118,7 +153,7 @@ class FakeProvider:
         )
         if self.duplicate_option_text and options:
             options[-1] = QuestionDraftOption(key="D", text=options[-2].text)
-        return ProviderQuestionDraft(
+        payload = dict(
             question_type=self.question_type,
             stem_plain="已知函数 f(x)=x²，判断其在实数范围内的单调性。",
             stem_latex=r"已知函数 $f(x)=x^2$，判断其在实数范围内的单调性。",
@@ -130,6 +165,14 @@ class FakeProvider:
             authoring_intent="考查函数单调性的分区判断。",
             estimated_difficulty=self.estimated_difficulty,
         )
+        if self.curriculum_node_id is not None:
+            payload.update(
+                curriculum_node_id=self.curriculum_node_id,
+                knowledge_points=self.knowledge_points,
+                assessed_methods=self.assessed_methods,
+                common_mistakes=self.common_mistakes,
+            )
+        return ProviderQuestionDraft(**payload)
 
 
 def test_create_draft_resolves_curriculum_and_forces_unsaved_owner_only_state() -> None:
@@ -237,18 +280,106 @@ def test_natural_language_infers_question_type_and_reviewed_curriculum_mapping()
     assert any("推断" in warning for warning in draft.warnings)
 
 
-def test_missing_knowledge_point_requires_clarification_before_model_call() -> None:
-    provider = FakeProvider(question_type="open_response")
+def test_model_can_infer_curriculum_and_pedagogy_after_generation() -> None:
+    provider = FakeProvider(
+        question_type="fill_blank",
+        curriculum_node_id="kp_ellipse_geometry",
+        knowledge_points=["椭圆离心率", "参数范围"],
+        assessed_methods=["利用离心率定义建立参数关系"],
+        common_mistakes=["混淆半焦距 c 与焦距 2c"],
+    )
     authoring = QuestionAuthoring(
         curriculum=curriculum(), provider=provider, math_verifier=MathVerifier()
     )
 
-    with pytest.raises(QuestionAuthoringClarificationRequired, match="知识点"):
-        authoring.create_draft(
-            QuestionDesignBrief(request_text="请给我出一道适合课堂使用的题目。")
+    draft = authoring.create_draft(
+        QuestionDesignBrief(
+            request_text="命制一道考试用的椭圆离心率填空题。",
+            question_type="fill_blank",
+            target_difficulty=5,
         )
+    )
 
-    assert provider.contexts == []
+    assert provider.contexts[0].curriculum is None
+    assert any(
+        item.node_id == "kp_ellipse_geometry"
+        for item in provider.contexts[0].curriculum_options
+    )
+    assert draft.curriculum is not None
+    assert draft.curriculum.node_id == "kp_ellipse_geometry"
+    assert draft.curriculum.mapping_source == "agent_inferred"
+    assert draft.curriculum.mapping_status == "pending_teacher_confirmation"
+    assert draft.knowledge_points == ["椭圆离心率", "参数范围"]
+    assert draft.assessed_methods == ["利用离心率定义建立参数关系"]
+    assert draft.common_mistakes == ["混淆半焦距 c 与焦距 2c"]
+    assert draft.pedagogy_source == "model_generated"
+    assert draft.saved is False
+    assert draft.visibility == "owner_only"
+
+
+def test_teacher_can_confirm_inferred_curriculum_and_edit_derived_metadata() -> None:
+    authoring = QuestionAuthoring(
+        curriculum=curriculum(),
+        provider=FakeProvider(
+            question_type="fill_blank",
+            curriculum_node_id="kp_ellipse_geometry",
+            knowledge_points=["椭圆离心率"],
+            assessed_methods=["定义法"],
+            common_mistakes=["混淆焦距与半焦距"],
+        ),
+        math_verifier=MathVerifier(),
+    )
+    draft = authoring.create_draft(
+        QuestionDesignBrief(
+            request_text="命制一道椭圆离心率填空题。",
+            question_type="fill_blank",
+        )
+    )
+
+    revised = authoring.revise_draft(
+        draft,
+        QuestionDraftEditableContent(
+            question_type=draft.question_type,
+            stem_plain=draft.stem_plain,
+            stem_latex=draft.stem_latex,
+            options=draft.options,
+            answer_value=draft.answer_value,
+            solution_method=draft.solution_method,
+            solution_steps=draft.solution_steps,
+            final_answer=draft.final_answer,
+            authoring_intent=draft.authoring_intent,
+            knowledge_points=["离心率定义", "参数范围"],
+            assessed_methods=["由 e=c/a 建立关系"],
+            common_mistakes=["误把 2c 当作 c"],
+            curriculum_confirmation_node_id="kp_ellipse_geometry",
+        ),
+    )
+
+    assert revised.curriculum is not None
+    assert revised.curriculum.mapping_source == "teacher_selected"
+    assert revised.curriculum.mapping_status == "teacher_confirmed"
+    assert revised.knowledge_points == ["离心率定义", "参数范围"]
+    assert revised.pedagogy_source == "teacher_edited"
+
+
+def test_unknown_model_curriculum_is_discarded_without_blocking_private_draft() -> None:
+    draft = QuestionAuthoring(
+        curriculum=curriculum(),
+        provider=FakeProvider(
+            question_type="fill_blank",
+            curriculum_node_id="model_invented_node",
+        ),
+        math_verifier=MathVerifier(),
+    ).create_draft(
+        QuestionDesignBrief(
+            request_text="命制一道考试用填空题。",
+            question_type="fill_blank",
+        )
+    )
+
+    assert draft.curriculum is None
+    assert draft.saved is False
+    assert any("不在受控目录" in warning for warning in draft.warnings)
 
 
 def test_reference_question_mode_fails_closed_until_rights_checks_exist() -> None:

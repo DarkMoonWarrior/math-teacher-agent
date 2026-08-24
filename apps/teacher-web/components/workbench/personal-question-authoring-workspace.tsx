@@ -8,6 +8,7 @@ import {
   type PersonalQuestion,
   type PersonalQuestionCategory,
   type PersonalQuestionCollection,
+  type CurriculumSearchItem,
   type QuestionAuthoringEntrySource,
   type QuestionDraftEditableContent,
   TeacherWorkspaceError,
@@ -56,7 +57,14 @@ function editableContent(draft: GeneratedQuestionDraft): QuestionDraftEditableCo
     solution_steps: [...draft.solution_steps],
     final_answer: draft.final_answer,
     authoring_intent: draft.authoring_intent,
+    knowledge_points: [...draft.knowledge_points],
+    assessed_methods: [...draft.assessed_methods],
+    common_mistakes: [...draft.common_mistakes],
   };
+}
+
+function lines(value: string) {
+  return value.split("\n").map((item) => item.trim()).filter(Boolean);
 }
 
 function parseOptions(value: string) {
@@ -137,6 +145,23 @@ function QuestionEditor({
         <span>解析步骤 · 每行一步</span>
         <textarea id={`${idPrefix}-steps`} rows={7} value={content.solution_steps.join("\n")} onChange={(event) => patch("solution_steps", event.target.value.split("\n").map((line) => line.trim()).filter(Boolean))} />
       </label>
+      <details className="authoring-editor__wide authoring-pedagogy-editor">
+        <summary>校订 Agent 归纳的教学信息</summary>
+        <div>
+          <label htmlFor={`${idPrefix}-knowledge-points`}>
+            <span>细分知识点 · 每行一项</span>
+            <textarea id={`${idPrefix}-knowledge-points`} rows={4} value={content.knowledge_points.join("\n")} onChange={(event) => patch("knowledge_points", lines(event.target.value))} />
+          </label>
+          <label htmlFor={`${idPrefix}-assessed-methods`}>
+            <span>考查方法 · 每行一项</span>
+            <textarea id={`${idPrefix}-assessed-methods`} rows={4} value={content.assessed_methods.join("\n")} onChange={(event) => patch("assessed_methods", lines(event.target.value))} />
+          </label>
+          <label htmlFor={`${idPrefix}-common-mistakes`}>
+            <span>常见易错点 · 每行一项</span>
+            <textarea id={`${idPrefix}-common-mistakes`} rows={4} value={content.common_mistakes.join("\n")} onChange={(event) => patch("common_mistakes", lines(event.target.value))} />
+          </label>
+        </div>
+      </details>
     </div>
   );
 }
@@ -175,14 +200,14 @@ export function PersonalQuestionAuthoringWorkspace({
   const [section, setSection] = useState<WorkspaceSection>("compose");
   const [requestText, setRequestText] = useState(initialBrief);
   const [grade, setGrade] = useState<"" | "高一" | "高二" | "高三">("");
-  const [knowledgePoint, setKnowledgePoint] = useState("");
   const [questionType, setQuestionType] = useState<QuestionDraftEditableContent["question_type"]>("open_response");
   const [difficulty, setDifficulty] = useState(3);
   const [teachingPurpose, setTeachingPurpose] = useState("课堂练习");
   const [expectedMinutes, setExpectedMinutes] = useState("");
-  const [assessedMethod, setAssessedMethod] = useState("");
-  const [misconceptions, setMisconceptions] = useState("");
   const [constraints, setConstraints] = useState("");
+  const [curriculumQuery, setCurriculumQuery] = useState("");
+  const [curriculumMatches, setCurriculumMatches] = useState<CurriculumSearchItem[]>([]);
+  const [curriculumBusy, setCurriculumBusy] = useState(false);
   const [draftView, setDraftView] = useState<PersonalAuthoringDraft | null>(null);
   const [draftEditor, setDraftEditor] = useState<QuestionDraftEditableContent | null>(null);
   const [editSummary, setEditSummary] = useState("教师校订题面与解析");
@@ -213,7 +238,7 @@ export function PersonalQuestionAuthoringWorkspace({
   const requestRef = useRef(0);
 
   const draft = draftView?.current.draft ?? null;
-  const canGenerate = requestText.trim().length >= 5 && knowledgePoint.trim().length >= 2 && busy === null;
+  const canGenerate = requestText.trim().length >= 5 && busy === null;
   const canSave = Boolean(draftView && !draftView.saved && saveName.trim() && collectionId && categoryId && busy === null);
   const activeCount = section === "mine" ? questions.length : 0;
 
@@ -314,13 +339,10 @@ export function PersonalQuestionAuthoringWorkspace({
       const response = await teacherWorkspace.createQuestionAuthoringDraft({
         requestText: requestText.trim(),
         grade: grade || undefined,
-        knowledgePointQuery: knowledgePoint.trim(),
         questionType,
         targetDifficulty: difficulty,
         teachingPurpose: teachingPurpose.trim() || "课堂练习",
         expectedMinutes: expectedMinutes ? Number(expectedMinutes) : undefined,
-        assessedMethod: assessedMethod.trim(),
-        misconceptionRequirements: misconceptions.trim(),
         additionalConstraints: constraints.trim(),
         sessionId: sessionRef.current,
       });
@@ -329,13 +351,53 @@ export function PersonalQuestionAuthoringWorkspace({
       if (sequence !== requestRef.current) return;
       setDraftView(staged);
       setDraftEditor(editableContent(staged.current.draft));
-      setSaveName(`${staged.current.draft.curriculum.name} · 自主命题`);
+      setSaveName(`${staged.current.draft.curriculum?.name ?? "待确认知识点"} · 自主命题`);
+      setCurriculumQuery(staged.current.draft.curriculum?.name ?? "");
+      setCurriculumMatches([]);
       setNotice("草稿已生成，但尚未保存。请先核对题面、答案与六项可信状态。");
       window.requestAnimationFrame(() => document.querySelector<HTMLElement>("#authoring-draft")?.scrollIntoView({ behavior: "smooth", block: "start" }));
     } catch (cause) {
       setError(errorMessage(cause));
     } finally {
       if (sequence === requestRef.current) setBusy(null);
+    }
+  }
+
+  async function searchDraftCurriculum(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (curriculumQuery.trim().length < 2 || curriculumBusy) return;
+    setCurriculumBusy(true);
+    try {
+      const result = await teacherWorkspace.searchCurriculum(curriculumQuery.trim());
+      setCurriculumMatches(result.items);
+      if (result.items.length === 0) setError("教材目录中没有找到匹配项，可以换一个更宽的关键词。");
+    } catch (cause) {
+      setError(errorMessage(cause));
+    } finally {
+      setCurriculumBusy(false);
+    }
+  }
+
+  async function confirmDraftCurriculum(node: CurriculumSearchItem) {
+    if (!draftView || !draftEditor || busy) return;
+    clearFeedback();
+    setBusy("revising");
+    try {
+      const revised = await teacherWorkspace.revisePersonalAuthoringDraft(
+        draftView.draft_id,
+        draftView.current_revision,
+        { ...draftEditor, curriculum_confirmation_node_id: node.node_id },
+        `教师确认教材映射：${node.name}`,
+      );
+      setDraftView(revised);
+      setDraftEditor(editableContent(revised.current.draft));
+      setCurriculumQuery(node.name);
+      setCurriculumMatches([]);
+      setNotice(`已确认教材映射“${node.name}”，并记录为 REV ${revised.current_revision}。`);
+    } catch (cause) {
+      setError(errorMessage(cause));
+    } finally {
+      setBusy(null);
     }
   }
 
@@ -647,15 +709,11 @@ export function PersonalQuestionAuthoringWorkspace({
       {section === "compose" && (
         <>
           <section className="authoring-brief">
-            <header><div><span>先写命题边界</span><h2>一句话负责方向，明确条件负责约束。</h2></div><strong>不会引用虚构题源</strong></header>
+            <header><div><span>先写命题意图</span><h2>教师说要什么，Agent 补全教学结构。</h2></div><strong>不会引用虚构题源</strong></header>
             <form onSubmit={generateDraft}>
               <label className="authoring-field authoring-field--wide" htmlFor="authoring-request">
                 <span>命题要求</span>
                 <textarea id="authoring-request" aria-required="true" rows={5} value={requestText} onChange={(event) => setRequestText(event.target.value)} placeholder="例如：命一道高二椭圆离心率单选题，中等难度，干扰项体现公式混淆" />
-              </label>
-              <label className="authoring-field" htmlFor="authoring-knowledge">
-                <span>知识点</span>
-                <input id="authoring-knowledge" aria-required="true" value={knowledgePoint} onChange={(event) => setKnowledgePoint(event.target.value)} placeholder="例如：椭圆离心率" />
               </label>
               <label className="authoring-field" htmlFor="authoring-grade">
                 <span>年级（可选）</span>
@@ -678,11 +736,9 @@ export function PersonalQuestionAuthoringWorkspace({
                 <input id="authoring-minutes" min="1" max="120" type="number" value={expectedMinutes} onChange={(event) => setExpectedMinutes(event.target.value)} />
               </label>
               <details className="authoring-advanced">
-                <summary>补充考查方法、易错点与限制</summary>
+                <summary>补充必须遵守的限制（可选）</summary>
                 <div>
-                  <label htmlFor="authoring-method"><span>考查方法</span><textarea id="authoring-method" rows={3} value={assessedMethod} onChange={(event) => setAssessedMethod(event.target.value)} /></label>
-                  <label htmlFor="authoring-misconceptions"><span>易错点／干扰项要求</span><textarea id="authoring-misconceptions" rows={3} value={misconceptions} onChange={(event) => setMisconceptions(event.target.value)} /></label>
-                  <label htmlFor="authoring-constraints"><span>其他限制</span><textarea id="authoring-constraints" rows={3} value={constraints} onChange={(event) => setConstraints(event.target.value)} /></label>
+                  <label htmlFor="authoring-constraints"><span>其他限制</span><textarea id="authoring-constraints" rows={3} value={constraints} onChange={(event) => setConstraints(event.target.value)} placeholder="例如：计算量控制在 10 分钟内；不要使用参数方程" /></label>
                 </div>
               </details>
               <div className="authoring-submit">
@@ -696,8 +752,27 @@ export function PersonalQuestionAuthoringWorkspace({
             <section className="authoring-draft" id="authoring-draft">
               <header>
                 <div><span>AI GENERATED · UNSAVED · REV {draftView.current_revision}</span><h2>草稿与真实检索题分开。</h2></div>
-                <div className="authoring-draft__policy"><LockIcon /><strong>仅自己可见</strong><small>{draft.curriculum.name} · 预计难度 {draft.estimated_difficulty}/5</small></div>
+                <div className="authoring-draft__policy"><LockIcon /><strong>仅自己可见</strong><small>{draft.curriculum?.name ?? "教材映射待补充"} · 预计难度 {draft.estimated_difficulty}/5</small></div>
               </header>
+              <section className="authoring-inference" aria-label="Agent 归纳的命题信息">
+                <header>
+                  <div><span>生成后归纳</span><h3>知识点、方法与易错点</h3></div>
+                  <strong data-status={draft.curriculum?.mapping_status ?? "unmapped"}>{draft.curriculum?.mapping_status === "teacher_confirmed" ? "教师已确认" : draft.curriculum ? "待教师确认" : "尚未映射"}</strong>
+                </header>
+                <div className="authoring-inference__grid">
+                  <article><span>教材知识点</span><strong>{draft.curriculum?.name ?? "Agent 未能可靠判断"}</strong><p>{draft.curriculum ? [draft.curriculum.volume, draft.curriculum.chapter, draft.curriculum.section].filter(Boolean).join(" · ") : "不阻断私人草稿生成，可在下方检索教材目录。"}</p></article>
+                  <article><span>细分知识点</span><p>{draft.knowledge_points.join("、") || "待教师补充"}</p></article>
+                  <article><span>考查方法</span><p>{draft.assessed_methods.join("、") || "待教师补充"}</p></article>
+                  <article><span>常见易错点</span><p>{draft.common_mistakes.join("、") || "待教师补充"}</p></article>
+                </div>
+                {draft.curriculum?.mapping_status !== "teacher_confirmed" && (
+                  <form className="authoring-curriculum-review" onSubmit={searchDraftCurriculum}>
+                    <label htmlFor="authoring-curriculum-query"><span>确认或修正教材映射</span><input id="authoring-curriculum-query" value={curriculumQuery} onChange={(event) => setCurriculumQuery(event.target.value)} placeholder="搜索教材目录，例如：椭圆" /></label>
+                    <button disabled={curriculumQuery.trim().length < 2 || curriculumBusy} type="submit">{curriculumBusy ? "正在查找…" : "查教材目录"}</button>
+                    {curriculumMatches.length > 0 && <ol>{curriculumMatches.map((item) => <li key={item.node_id}><button type="button" onClick={() => void confirmDraftCurriculum(item)}><strong>{item.name}</strong><span>{[item.volume, item.chapter, item.section].filter(Boolean).join(" · ")}</span></button></li>)}</ol>}
+                  </form>
+                )}
+              </section>
               <div className="authoring-draft__preview">
                 <span>题面预览</span>
                 <MathText text={draftEditor.stem_latex || draftEditor.stem_plain} />
@@ -740,7 +815,7 @@ export function PersonalQuestionAuthoringWorkspace({
               {busy === "loading" ? <p>正在读取你的私题…</p> : questions.length === 0 ? (
                 <div className="personal-question-empty"><PaperIcon /><strong>{section === "trash" ? "回收站是空的" : "还没有保存私题"}</strong><span>{section === "trash" ? "移入回收站的题目会出现在这里。" : "回到命题书桌生成并明确保存第一道题。"}</span>{section === "mine" && <button type="button" onClick={() => void switchSection("compose")}>开始命题</button>}</div>
               ) : (
-                <ol>{questions.map((question) => <li key={question.question_id}><button aria-pressed={selectedQuestion?.question_id === question.question_id} type="button" onClick={() => openQuestion(question)}><span>{question.name}</span><small>REV {question.selected_revision} · {question.question.curriculum.name}</small><p>{question.question.stem_plain}</p></button></li>)}</ol>
+                <ol>{questions.map((question) => <li key={question.question_id}><button aria-pressed={selectedQuestion?.question_id === question.question_id} type="button" onClick={() => openQuestion(question)}><span>{question.name}</span><small>REV {question.selected_revision} · {question.question.curriculum?.name ?? "教材映射待确认"}</small><p>{question.question.stem_plain}</p></button></li>)}</ol>
               )}
             </aside>
             <article className="personal-question-detail">

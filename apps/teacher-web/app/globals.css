@@ -1715,6 +1715,39 @@ svg { flex: 0 0 auto; }
 
 .authoring-editor { display: grid; gap: var(--space-md); min-width: 0; }
 .authoring-editor__wide { grid-column: 1 / -1; }
+.authoring-pedagogy-editor { border-bottom: 0.0625rem solid var(--color-rule); border-top: 0.0625rem solid var(--color-rule); padding: var(--space-sm) 0; }
+.authoring-pedagogy-editor > summary { cursor: pointer; font-weight: 700; min-height: 2.75rem; padding: var(--space-xs) 0; }
+.authoring-pedagogy-editor > div { display: grid; gap: var(--space-md); padding: var(--space-sm) 0; }
+.authoring-pedagogy-editor label { display: grid; gap: var(--space-2xs); }
+
+.authoring-inference {
+  background: color-mix(in oklch, var(--color-teal) 3%, var(--color-paper));
+  border-bottom: 0.0625rem solid var(--color-rule-strong);
+  border-top: 0.0625rem solid var(--color-rule-strong);
+  display: grid;
+  gap: var(--space-md);
+  padding: var(--space-lg) 0;
+}
+.authoring-inference > header { align-items: start; display: flex; gap: var(--space-md); justify-content: space-between; }
+.authoring-inference > header > div { display: grid; gap: var(--space-2xs); }
+.authoring-inference > header span,
+.authoring-inference__grid article > span,
+.authoring-curriculum-review label > span { color: var(--color-teal); font-size: var(--text-xs); font-weight: 700; letter-spacing: 0.06em; }
+.authoring-inference > header h3 { font-family: var(--font-display); font-size: var(--text-xl); font-weight: 500; }
+.authoring-inference > header > strong { border: 0.0625rem solid var(--color-rule-strong); border-radius: 999px; font-size: var(--text-xs); padding: var(--space-2xs) var(--space-sm); }
+.authoring-inference > header > strong[data-status="teacher_confirmed"] { border-color: var(--color-teal); color: var(--color-teal); }
+.authoring-inference__grid { display: grid; }
+.authoring-inference__grid article { align-content: start; border-top: 0.0625rem solid var(--color-rule); display: grid; gap: var(--space-xs); min-height: 8rem; padding: var(--space-md) 0; }
+.authoring-inference__grid article strong { font-family: var(--font-display); font-size: var(--text-md); font-weight: 500; }
+.authoring-inference__grid article p { color: var(--color-muted); line-height: 1.65; }
+.authoring-curriculum-review { align-items: end; border-top: 0.0625rem solid var(--color-rule); display: grid; gap: var(--space-xs); padding-top: var(--space-md); }
+.authoring-curriculum-review label { display: grid; gap: var(--space-2xs); }
+.authoring-curriculum-review input { background: var(--color-paper); border: 0.0625rem solid var(--color-rule-strong); border-radius: var(--radius-sm); min-height: 2.75rem; padding: var(--space-xs) var(--space-sm); width: 100%; }
+.authoring-curriculum-review > button { background: var(--color-ink); color: var(--color-paper); min-height: 2.75rem; padding: var(--space-xs) var(--space-md); }
+.authoring-curriculum-review ol { display: grid; gap: 0; grid-column: 1 / -1; list-style: none; padding: 0; }
+.authoring-curriculum-review li { border-top: 0.0625rem solid var(--color-rule); }
+.authoring-curriculum-review li button { background: transparent; display: grid; gap: var(--space-2xs); min-height: 3.5rem; padding: var(--space-sm) 0; text-align: left; width: 100%; }
+.authoring-curriculum-review li span { color: var(--color-muted); font-size: var(--text-xs); }
 .authoring-revision-actions { align-items: end; border-bottom: 0.0625rem solid var(--color-rule); border-top: 0.0625rem solid var(--color-rule); display: grid; gap: var(--space-sm); padding: var(--space-md) 0; }
 .authoring-revision-actions button,
 .authoring-create-taxonomy button,
@@ -1816,8 +1849,13 @@ svg { flex: 0 0 auto; }
 @media (min-width: 40rem) {
   .authoring-workspace { padding: var(--workspace-top) var(--page-gutter) var(--space-3xl); }
   .authoring-brief > form { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .authoring-advanced > div { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .authoring-advanced > div { grid-template-columns: minmax(0, 1fr); }
   .authoring-editor { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .authoring-pedagogy-editor > div { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .authoring-inference__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .authoring-inference__grid article:nth-child(odd) { padding-inline-end: var(--space-md); }
+  .authoring-inference__grid article:nth-child(even) { border-inline-start: 0.0625rem solid var(--color-rule); padding-inline-start: var(--space-md); }
+  .authoring-curriculum-review { grid-template-columns: minmax(0, 1fr) auto; }
   .authoring-revision-actions { grid-template-columns: minmax(0, 1fr) auto auto; }
   .authoring-trust ol { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .authoring-trust li:nth-child(odd) { padding-inline-end: var(--space-md); }

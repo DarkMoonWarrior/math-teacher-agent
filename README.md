@@ -19,10 +19,10 @@
 - M6 第四条切片：只从教师确认的当前文本版本生成可编辑候选；教材路径由受控 Curriculum 补全，导入固定为 owner 私有、待审核、待数学验证；
 - M6 第五条切片：每次私人检索都需教师明确同意；一次性许可绑定当前教师、查询与数量，Agent 只能看到确认文本的有界匹配片段及来源版本/权利状态；
 - M7 多模态 Solve：可上传、粘贴或拍摄单题图片；`QuestionCapture` 保留 owner-scoped private media/OCR revision，并通过本地、DeepSeek Vision 或 OpenAI adapter 输出可校对题面；教师确认后，精确图片/识别 revision 通过短时一次性许可接入 Solve，带图题才逐次授权发送受控原图；15 场景固定评测与 Gate E 已通过；
-- M8 切片 1–5：独立 `PersonalQuestionLibrary` 已建立个人题库/分类、owner 私有命题工作区、append-only revision 与完整个人管理；教师可在保存前后修订题面并重跑可信检查，明确保存后可列表/搜索、重命名、分类、标签排序、复制、私有导出、移入回收站、恢复及确认永久删除。Agent 仍无保存、管理、发布、共享或删除能力；
+- M8 切片 1–7：独立 `PersonalQuestionLibrary` 已建立个人题库/分类、owner 私有命题工作区、append-only revision 与完整个人管理；命题只要求自然语言意图，教材知识点、考查方法和易错点由 Agent 在生成后归纳并交给教师确认/校订。教师可在保存前后修订并重跑可信检查，明确保存后可列表/搜索、重命名、分类、标签排序、复制、私有导出、回收或永久删除。Agent 仍无保存、管理、发布、共享或删除能力；
 - QuestionBank、MathVerifier、Curriculum、PrivateLibrary、PDF、试卷、教案等成熟业务模块。
 
-当前 Search、Solve、Private Library 与多模态图片解题入口已接入新工作台；M7 Gate E 于 2026-08-24 严格通过，项目所有者已确认进入 M8。私有辅助命题已完成隔离存储、结构化草稿、分级可信检查、教师 revision、明确保存与完整个人管理后端闭环，尚未接入三个 Teacher Web 入口；教案和组卷继续明确标记为预览。最新状态见 [`docs/PROJECT-STATUS.md`](docs/PROJECT-STATUS.md)。
+当前 Search、Solve、Private Library、多模态图片解题与私有辅助命题入口已接入新工作台；M7 Gate E 于 2026-08-24 严格通过，项目所有者已确认进入 M8。辅助命题已完成隔离存储、结构化草稿、分级可信检查、生成后教学元数据归纳、教师 revision、明确保存、完整个人管理及四个 Teacher Web 入口；固定评测与 M8 Gate 尚未完成，教案和组卷继续明确标记为预览。最新状态见 [`docs/PROJECT-STATUS.md`](docs/PROJECT-STATUS.md)。
 
 ## 核心原则
 

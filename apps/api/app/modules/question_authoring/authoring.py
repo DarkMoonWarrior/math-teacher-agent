@@ -56,7 +56,8 @@ class QuestionAuthoring:
                 "参考母题模式尚未开放；只有母题数学状态与改编权利都可独立验证后才能使用"
             )
         question_type = brief.question_type or self._infer_question_type(brief.request_text)
-        curriculum = self._resolve_curriculum(brief)
+        curriculum_guidance = self._resolve_curriculum_guidance(brief)
+        curriculum_options = self._curriculum_options()
         if self.provider is None:
             raise QuestionAuthoringUnavailableError(
                 "当前没有可用的辅助命题模型；请配置 DeepSeek 后重试"
@@ -66,12 +67,17 @@ class QuestionAuthoring:
                 QuestionAuthoringContext(
                     brief=brief,
                     question_type=question_type,
-                    curriculum=curriculum,
+                    curriculum=curriculum_guidance,
+                    curriculum_options=curriculum_options,
                 )
             )
         except QuestionAuthoringProviderError as exc:
             raise QuestionAuthoringUnavailableError(str(exc)) from exc
         self._validate_structure(content, expected_type=question_type)
+        curriculum, curriculum_warning = self._ground_generated_curriculum(
+            content,
+            guidance=curriculum_guidance,
+        )
         draft_id = f"qad_{uuid4().hex[:16]}"
         verification = self._evaluate_trust(
             content,
@@ -89,6 +95,8 @@ class QuestionAuthoring:
             warnings.append("确定性可信检查发现阻断项；修正前不得作为正式题目使用。")
         if brief.question_type is None:
             warnings.append(f"未明确题型，已从要求推断为 {question_type}。")
+        if curriculum_warning:
+            warnings.append(curriculum_warning)
         return GeneratedQuestionDraft(
             draft_id=draft_id,
             request_text=brief.request_text.strip(),
@@ -102,6 +110,9 @@ class QuestionAuthoring:
             final_answer=content.final_answer.strip(),
             authoring_intent=content.authoring_intent.strip(),
             curriculum=curriculum,
+            knowledge_points=self._clean_list(content.knowledge_points),
+            assessed_methods=self._clean_list(content.assessed_methods),
+            common_mistakes=self._clean_list(content.common_mistakes),
             target_difficulty=brief.target_difficulty,
             estimated_difficulty=content.estimated_difficulty,
             verification=verification,
@@ -130,11 +141,25 @@ class QuestionAuthoring:
             final_answer=content.final_answer,
             authoring_intent=content.authoring_intent,
             estimated_difficulty=current.estimated_difficulty,
+            curriculum_node_id=(
+                content.curriculum_confirmation_node_id
+                or (current.curriculum.node_id if current.curriculum else None)
+            ),
+            knowledge_points=content.knowledge_points,
+            assessed_methods=content.assessed_methods,
+            common_mistakes=content.common_mistakes,
         )
         self._validate_structure(revised, expected_type=content.question_type)
+        confirmed_curriculum = current.curriculum
+        if content.curriculum_confirmation_node_id:
+            confirmed_curriculum = self._teacher_confirmed_curriculum(
+                content.curriculum_confirmation_node_id
+            )
         brief = QuestionDesignBrief(
             request_text=current.request_text,
-            curriculum_node_id=current.curriculum.node_id,
+            curriculum_node_id=(
+                confirmed_curriculum.node_id if confirmed_curriculum else None
+            ),
             question_type=content.question_type,
             target_difficulty=current.target_difficulty,
         )
@@ -163,13 +188,21 @@ class QuestionAuthoring:
                 "solution_steps": [step.strip() for step in revised.solution_steps],
                 "final_answer": revised.final_answer.strip(),
                 "authoring_intent": revised.authoring_intent.strip(),
+                "curriculum": confirmed_curriculum,
+                "knowledge_points": self._clean_list(revised.knowledge_points),
+                "assessed_methods": self._clean_list(revised.assessed_methods),
+                "common_mistakes": self._clean_list(revised.common_mistakes),
+                "pedagogy_source": "teacher_edited",
                 "verification": verification,
                 "warnings": warnings,
                 "created_at": datetime.now(timezone.utc).isoformat(),
             }
         )
 
-    def _resolve_curriculum(self, brief: QuestionDesignBrief) -> QuestionDraftCurriculum:
+    def _resolve_curriculum_guidance(
+        self,
+        brief: QuestionDesignBrief,
+    ) -> QuestionDraftCurriculum | None:
         if brief.curriculum_node_id:
             try:
                 node = self.curriculum.get_node(brief.curriculum_node_id)
@@ -181,6 +214,7 @@ class QuestionAuthoring:
                 node.node_id,
                 mapping_source="teacher_selected",
                 confidence=1.0,
+                mapping_status="teacher_confirmed",
             )
 
         query = (brief.knowledge_point_query or "").strip()
@@ -198,6 +232,7 @@ class QuestionAuthoring:
                 selected.node_id,
                 mapping_source="brief_match",
                 confidence=0.92,
+                mapping_status="pending_teacher_confirmation",
             )
         if query:
             matches = self.curriculum.search(
@@ -207,16 +242,84 @@ class QuestionAuthoring:
             )
             if matches and matches[0].match_score >= 0.65:
                 if len(matches) > 1 and matches[0].match_score == matches[1].match_score:
-                    raise QuestionAuthoringClarificationRequired(
-                        "命题要求匹配到多个知识点，请从教材目录中明确选择一个知识点"
-                    )
+                    return None
                 return self._curriculum_view(
                     matches[0].node_id,
                     mapping_source="brief_match",
                     confidence=matches[0].match_score,
+                    mapping_status="pending_teacher_confirmation",
                 )
-        raise QuestionAuthoringClarificationRequired(
-            "请补充明确的高中数学知识点，或从教材目录中选择一个知识点"
+        return None
+
+    def _curriculum_options(self) -> tuple[QuestionDraftCurriculum, ...]:
+        return tuple(
+            self._curriculum_view(
+                node.node_id,
+                mapping_source="agent_inferred",
+                confidence=None,
+                mapping_status="pending_teacher_confirmation",
+            )
+            for node in self.curriculum.list_nodes()
+            if node.node_type == "knowledge_point"
+        )
+
+    def _ground_generated_curriculum(
+        self,
+        content: ProviderQuestionDraft,
+        *,
+        guidance: QuestionDraftCurriculum | None,
+    ) -> tuple[QuestionDraftCurriculum | None, str | None]:
+        selected_id = (content.curriculum_node_id or "").strip()
+        if not selected_id and guidance is not None:
+            return guidance, None
+        if not selected_id:
+            return (
+                None,
+                "Agent 未能可靠映射教材知识点；草稿仍已生成，请在保存前由教师补充映射。",
+            )
+        try:
+            node = self.curriculum.get_node(selected_id)
+        except KeyError:
+            return (
+                None,
+                "Agent 返回的教材节点不在受控目录中，已丢弃该映射；题目内容仍需教师复核。",
+            )
+        if node.node_type != "knowledge_point":
+            return (
+                None,
+                "Agent 返回的教材节点不是知识点，已丢弃该映射；题目内容仍需教师复核。",
+            )
+        if guidance is not None and guidance.mapping_source == "teacher_selected":
+            if selected_id != guidance.node_id:
+                return (
+                    guidance,
+                    "Agent 建议的教材节点与教师选择不同；已保留教师确认的映射。",
+                )
+            return guidance, None
+        if guidance is not None and selected_id == guidance.node_id:
+            return guidance, None
+        return (
+            self._curriculum_view(
+                selected_id,
+                mapping_source="agent_inferred",
+                confidence=None,
+                mapping_status="pending_teacher_confirmation",
+            ),
+            "教材映射由 Agent 根据生成后的题目推断，尚待教师确认。",
+        )
+
+    def _teacher_confirmed_curriculum(self, node_id: str) -> QuestionDraftCurriculum:
+        try:
+            node = self.curriculum.get_node(node_id)
+        except KeyError as exc:
+            raise QuestionAuthoringError("所选教材知识点不存在") from exc
+        if node.node_type != "knowledge_point":
+            raise QuestionAuthoringError("教材映射必须选择具体知识点节点")
+        return self._curriculum_view(
+            node_id,
+            mapping_source="teacher_selected",
+            confidence=1.0,
+            mapping_status="teacher_confirmed",
         )
 
     def _curriculum_view(
@@ -224,7 +327,8 @@ class QuestionAuthoring:
         node_id: str,
         *,
         mapping_source: str,
-        confidence: float,
+        confidence: float | None,
+        mapping_status: str,
     ) -> QuestionDraftCurriculum:
         node = self.curriculum.get_node(node_id)
         path = self.curriculum.path_for(node_id)
@@ -235,6 +339,7 @@ class QuestionAuthoring:
             chapter=path.get("chapter", ""),
             section=path.get("section", ""),
             mapping_source=mapping_source,
+            mapping_status=mapping_status,
             match_confidence=confidence,
             curriculum_status=node.status,
             reviewed_by=node.reviewed_by,
@@ -609,3 +714,12 @@ class QuestionAuthoring:
     @staticmethod
     def _normalize(value: str) -> str:
         return re.sub(r"[^0-9a-z\u4e00-\u9fff]+", "", value.lower())
+
+    @staticmethod
+    def _clean_list(values: list[str]) -> list[str]:
+        cleaned: list[str] = []
+        for value in values:
+            item = value.strip()
+            if item and item not in cleaned:
+                cleaned.append(item)
+        return cleaned

@@ -74,17 +74,18 @@ apps/web (legacy/reference Next.js UI, :3000)
 
 ### Private Question Authoring modules（M8 进行中）
 
-- Seam: `QuestionAuthoring.create_draft(QuestionDesignBrief) -> GeneratedQuestionDraft`，隐藏教材映射、结构化生成、答案/解析一致性、选择题唯一性、MathVerifier、provider 和错误语义。
+- Seam: `QuestionAuthoring.create_draft(QuestionDesignBrief) -> GeneratedQuestionDraft`，隐藏可选命题约束、结构化生成、生成后教学元数据归纳、受控教材映射、答案/解析一致性、选择题唯一性、MathVerifier、provider 和错误语义。
 - Storage seam: `PersonalQuestionLibrary` 独立拥有 owner 私题的个人题库命名、分类、CRUD、revision、导出和删除语义。
 - Isolation: `PersonalQuestionLibrary` 不只是公共 `QuestionBank` 的一个 visibility 过滤器；它使用独立业务接口和 owner-isolated storage namespace，没有 publish/share/public/commercial-approved 接口。
 - Ownership: current owner 只来自服务端认证上下文；Public Search、Public QuestionBank、后台内容工具、其他 owner、教研组和学校管理员均没有读取接口。
 - Management: Agent 生成或提出修改草稿，教师在受认证 UI 中明确保存；编辑、分类、回收站、恢复和永久删除由 owner 直接调用 FastAPI 业务接口，Agent 与后台管理员无永久删除工具。
 - Reuse: Curriculum、MathVerifier、RightsGate 和已验证且允许 adaptation 的参考母题可被调用，但不得把辅助命制题复制到公共题库。
 - First slice: `PersonalQuestionLibrary` 已以单独 `data/private-runtime` SQLite namespace 实现个人题库集合与分类；它把名称规范化、owner 隔离、重复约束和固定 owner-only policy 隐藏在小接口后。公开 FastAPI 路由只从 current-teacher seam 注入 owner，payload 中额外的 `owner_id` 被拒绝；跨 owner 的集合/分类详情与更新统一返回不存在。
-- Second/third slices: `QuestionAuthoring.create_draft` 以严格 `QuestionDesignBrief` 为界面，完成题型补全、受控 Curriculum 映射、可替换 provider、结构验证、六项分级可信检查和诚实错误语义。DeepSeek Harness 只能调用一次 `create_question_draft`；Tool 请求没有 owner/save/publish/share/delete 字段。
+- Second/third slices: `QuestionAuthoring.create_draft` 以严格 `QuestionDesignBrief` 为界面，完成题型补全、可替换 provider、结构验证、六项分级可信检查和诚实错误语义。DeepSeek Harness 只能调用一次 `create_question_draft`；Tool 请求没有 owner/save/publish/share/delete 字段。
 - Fourth slice: 公开 FastAPI 在成功生成后把结果登记为当前 owner 的未保存 authoring workspace revision；Agent 本身仍不写存储。浏览器只能提交可编辑题面和 `expected_revision`，`QuestionAuthoring.revise_draft` 在服务端重建可信证据，`PersonalQuestionLibrary` 以 append-only revision 和乐观版本冲突保护修改。显式保存还必须验证 collection/category 属于 current owner，且只写独立的 `personal_questions`，公共 `QuestionBank` 不参与。
 - Fifth slice: `PersonalQuestionLibrary` 的同一 interface 隐藏 owner 私题列表/搜索、保存后内容 revision、元数据与分类、标签排序、独立复制、JSON/Markdown 导出及 lifecycle。复制创建独立 draft/revision 链；永久删除只对已 trashed 的当前版本生效，并在事务中删除个人题目快照及其独占 revision 链。公开路由只做认证绑定和下载响应适配，Agent/Internal Tool Gateway 没有这些管理能力。
 - Sixth slice: `apps/teacher-web` 只依赖产品自有 `TeacherWorkspace` contract，把新任务、Search 空/不合适结果和 Paper 缺题提示转入独立 authoring workspace。生成、教师 revision、明确保存和 owner 管理是可观察的不同动作；生成题保持 `AI GENERATED · UNSAVED`，不进入 Search result，Paper 也不会自动生成、保存或加题。浏览器 payload 不暴露 owner、policy 或可信证据控制面。
+- Seventh slice: 教师不再需要在生成前填写教材知识点、考查方法或易错点。provider 在完成题目后返回细分知识点、方法、常见错误和一个可空的 Curriculum node ID；业务层只接受 catalog allowlist 内的知识点，并把 Agent 映射标记为待确认。教师可在结果页检索目录并用普通 teacher revision 确认/修正，未知或无法映射的节点不会阻断 owner-only 草稿，也不会获得可信状态。
 - Third slice: 同一深模块在返回前生成六项固定可信证据，并由 `QuestionDraftVerification` 强制检查项唯一、总状态与阻断项一致、MathVerifier 能力与是否真正运行一致。答案数量、明显答案冲突、选项重复和难度偏差可确定性检查；一般数学可解性、干扰项语义及无受控 rule spec 的任意生成题保持 `inconclusive/unsupported`，模型自述不能升级为 MathVerifier 证据。
 
 ### Teacher Agent Runtime module
