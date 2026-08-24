@@ -1499,20 +1499,104 @@ svg { flex: 0 0 auto; }
 .authoring-sections button svg { height: 1rem; width: 1rem; }
 .authoring-sections button > span { color: var(--color-teal); font-size: var(--text-xs); }
 
-.authoring-feedback {
-  align-items: center;
-  background: color-mix(in oklch, var(--color-teal) 6%, var(--color-paper));
-  border: 0.0625rem solid color-mix(in oklch, var(--color-teal) 34%, var(--color-rule));
+/* Hallmark · component: notice dialog · genre: editorial · theme: existing Authoring Ledger
+ * states: default · hover · focus · active · disabled · loading · error · success
+ * contrast: pass (40–41)
+ */
+.workbench-notice-dialog {
+  background: transparent;
+  border: 0;
   color: var(--color-ink);
-  display: flex;
-  gap: var(--space-sm);
-  min-height: 3.5rem;
-  padding: var(--space-sm) var(--space-md);
+  height: fit-content;
+  inset: 0;
+  margin: auto;
+  max-height: min(82dvh, 42rem);
+  max-width: min(calc(100% - (2 * var(--space-md))), 38rem);
+  overflow: visible;
+  padding: 0;
+  position: fixed;
+  width: 100%;
+  z-index: var(--z-modal);
 }
 
-.authoring-feedback.is-error { background: var(--color-error-soft); border-color: var(--color-error); color: var(--color-error); }
-.authoring-feedback svg { height: 1rem; width: 1rem; }
-.authoring-feedback button { background: transparent; border-bottom: 0.0625rem solid currentColor; margin-inline-start: auto; min-height: 2.75rem; }
+.workbench-notice-dialog::backdrop {
+  background: var(--color-overlay);
+  animation: workbench-dialog-backdrop var(--duration-short) var(--ease-out);
+}
+
+.workbench-notice-dialog[open] .workbench-notice-dialog__paper {
+  animation: workbench-dialog-enter var(--duration-short) var(--ease-out);
+}
+
+.workbench-notice-dialog__paper {
+  background: var(--color-paper);
+  border: 0.0625rem solid var(--color-rule-strong);
+  border-top: 0.25rem solid var(--color-teal);
+  box-shadow: 0 1rem 3rem var(--color-shadow);
+  color: var(--color-ink);
+  display: grid;
+  gap: var(--space-lg);
+  max-height: min(82dvh, 42rem);
+  overflow-y: auto;
+  padding: clamp(var(--space-lg), 5vw, var(--space-xl));
+}
+
+.workbench-notice-dialog[data-tone="error"] .workbench-notice-dialog__paper,
+.workbench-notice-dialog[data-tone="danger"] .workbench-notice-dialog__paper { border-top-color: var(--color-error); }
+.workbench-notice-dialog[data-tone="warning"] .workbench-notice-dialog__paper { border-top-color: var(--color-vermilion); }
+
+.workbench-notice-dialog__mark {
+  align-items: center;
+  border: 0.0625rem solid currentColor;
+  color: var(--color-teal);
+  display: flex;
+  height: 2.75rem;
+  justify-content: center;
+  width: 2.75rem;
+}
+
+.workbench-notice-dialog[data-tone="error"] .workbench-notice-dialog__mark,
+.workbench-notice-dialog[data-tone="danger"] .workbench-notice-dialog__mark { color: var(--color-error); }
+.workbench-notice-dialog[data-tone="warning"] .workbench-notice-dialog__mark { color: var(--color-vermilion); }
+.workbench-notice-dialog__mark svg { height: 1.2rem; width: 1.2rem; }
+
+.workbench-notice-dialog__copy { display: grid; gap: var(--space-xs); min-width: 0; }
+.workbench-notice-dialog__copy h2 { font-size: clamp(1.75rem, 6vw, 2.8rem); font-style: normal; font-weight: 500; letter-spacing: -0.045em; overflow-wrap: anywhere; }
+.workbench-notice-dialog__copy p { color: var(--color-muted); max-width: 56ch; }
+.workbench-notice-dialog__body { border-top: 0.0625rem solid var(--color-rule); padding-top: var(--space-md); }
+.workbench-notice-dialog__confirmation { display: grid; gap: var(--space-xs); }
+.workbench-notice-dialog__confirmation span { color: var(--color-muted); font-size: var(--text-sm); }
+.workbench-notice-dialog__confirmation input {
+  background: var(--color-paper);
+  border: 0.0625rem solid var(--color-rule-strong);
+  border-radius: var(--radius-sm);
+  min-height: 2.75rem;
+  outline: 0.125rem solid transparent;
+  outline-offset: 0.0625rem;
+  padding: var(--space-xs) var(--space-sm);
+  width: 100%;
+}
+
+.workbench-notice-dialog footer { display: flex; flex-wrap: wrap; gap: var(--space-xs); justify-content: flex-end; }
+.workbench-notice-dialog footer button { min-height: 2.75rem; padding: var(--space-xs) var(--space-md); }
+.workbench-notice-dialog__primary { background: var(--color-ink); color: var(--color-paper); }
+.workbench-notice-dialog[data-tone="danger"] .workbench-notice-dialog__primary { border: 0.0625rem solid var(--color-error); }
+.workbench-notice-dialog__secondary { background: transparent; border: 0.0625rem solid var(--color-rule-strong); color: var(--color-ink); }
+.workbench-notice-dialog footer button:active { transform: translateY(0.0625rem); }
+.workbench-notice-dialog footer button:disabled,
+.workbench-notice-dialog footer button[data-state="loading"] { cursor: not-allowed; opacity: 0.5; }
+.workbench-notice-dialog footer button[data-state="error"] { border-color: var(--color-error); }
+.workbench-notice-dialog footer button[data-state="success"] { border-color: var(--color-teal); }
+
+@keyframes workbench-dialog-enter {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes workbench-dialog-backdrop {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
 
 .authoring-brief,
 .authoring-draft,
@@ -1706,9 +1790,7 @@ svg { flex: 0 0 auto; }
 .personal-question-delete button.is-danger { border-color: var(--color-error); color: var(--color-error); }
 .personal-question-warning { background: var(--color-error-soft); color: var(--color-error); padding: var(--space-sm); }
 .personal-question-delete { align-content: start; display: grid; gap: var(--space-lg); }
-.personal-question-delete > div { display: flex; }
-.personal-question-delete > section { border-top: 0.125rem solid var(--color-error); display: grid; gap: var(--space-sm); padding-top: var(--space-lg); }
-.personal-question-delete h4 { font-family: var(--font-display); font-size: var(--text-lg); font-weight: 500; }
+.personal-question-delete > div { display: flex; flex-wrap: wrap; gap: var(--space-xs); }
 .personal-question-delete p { color: var(--color-muted); }
 
 @media (hover: hover) and (pointer: fine) {
@@ -1719,6 +1801,8 @@ svg { flex: 0 0 auto; }
   .authoring-submit button:hover:not(:disabled),
   .authoring-save__button:hover:not(:disabled) { background: var(--color-ink-soft); }
   .result-authoring-entry:hover { border-color: var(--color-teal); }
+  .workbench-notice-dialog footer button:hover:not(:disabled) { transform: translateY(-0.0625rem); }
+  .workbench-notice-dialog__confirmation input:hover { background: var(--color-paper-soft); }
   .authoring-field input:hover,
   .authoring-field select:hover,
   .authoring-field textarea:hover,

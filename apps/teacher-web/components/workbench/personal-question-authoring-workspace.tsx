@@ -18,7 +18,6 @@ import {
   ArrowRightIcon,
   CheckIcon,
   ClockIcon,
-  CloseIcon,
   LibraryIcon,
   LockIcon,
   PaperIcon,
@@ -26,6 +25,7 @@ import {
   SearchIcon,
   SparkIcon,
 } from "./icons";
+import { WorkbenchNoticeDialog } from "./workbench-notice-dialog";
 
 type WorkspaceSection = "compose" | "mine" | "trash";
 type BusyAction = "loading" | "generating" | "revising" | "saving" | "managing" | null;
@@ -203,10 +203,12 @@ export function PersonalQuestionAuthoringWorkspace({
   const [manageCategories, setManageCategories] = useState<PersonalQuestionCategory[]>([]);
   const [manageCategoryId, setManageCategoryId] = useState("");
   const [deleteConfirmation, setDeleteConfirmation] = useState("");
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [lastTrashed, setLastTrashed] = useState<PersonalQuestion | null>(null);
   const [busy, setBusy] = useState<BusyAction>("loading");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const feedbackReturnFocusRef = useRef<HTMLElement | null>(null);
   const sessionRef = useRef(`authoring_${Date.now().toString(36)}`);
   const requestRef = useRef(0);
 
@@ -289,8 +291,17 @@ export function PersonalQuestionAuthoringWorkspace({
   const selectedTrust = useMemo(() => selectedQuestion?.question.verification, [selectedQuestion]);
 
   function clearFeedback() {
+    if (document.activeElement instanceof HTMLElement && !document.activeElement.closest(".workbench-notice-dialog")) {
+      feedbackReturnFocusRef.current = document.activeElement;
+    }
     setError("");
     setNotice("");
+  }
+
+  function dismissFeedback() {
+    setError("");
+    setNotice("");
+    setLastTrashed(null);
   }
 
   async function generateDraft(event: FormEvent<HTMLFormElement>) {
@@ -414,6 +425,7 @@ export function PersonalQuestionAuthoringWorkspace({
     setManageCollectionId(question.collection_id);
     setManageCategoryId(question.category_id);
     setDeleteConfirmation("");
+    setDeleteDialogOpen(false);
   }
 
   function openQuestion(question: PersonalQuestion) {
@@ -583,6 +595,7 @@ export function PersonalQuestionAuthoringWorkspace({
 
   async function permanentlyDeleteQuestion() {
     if (!selectedQuestion || deleteConfirmation !== "永久删除我的私题" || busy) return;
+    setDeleteDialogOpen(false);
     setBusy("managing");
     clearFeedback();
     try {
@@ -620,13 +633,16 @@ export function PersonalQuestionAuthoringWorkspace({
         <button aria-pressed={section === "trash"} type="button" onClick={() => void switchSection("trash")}><ClockIcon /> 回收站</button>
       </nav>
 
-      {(error || notice) && (
-        <div className={`authoring-feedback${error ? " is-error" : " is-success"}`} role={error ? "alert" : "status"}>
-          {error ? <CloseIcon /> : <CheckIcon />}
-          <span>{error || notice}</span>
-          {!error && lastTrashed && <button type="button" onClick={() => void undoTrash()}>撤销移入回收站</button>}
-        </div>
-      )}
+      <WorkbenchNoticeDialog
+        actionLabel={!error && lastTrashed ? "撤销移入回收站" : undefined}
+        message={error || notice}
+        onAction={!error && lastTrashed ? () => void undoTrash() : undefined}
+        onDismiss={dismissFeedback}
+        open={Boolean(error || notice)}
+        returnFocusRef={feedbackReturnFocusRef}
+        title={error ? "操作没有完成" : "操作已完成"}
+        tone={error ? "error" : "success"}
+      />
 
       {section === "compose" && (
         <>
@@ -735,13 +751,10 @@ export function PersonalQuestionAuthoringWorkspace({
                   <span>TRASHED · REV {selectedQuestion.selected_revision}</span>
                   <h3>{selectedQuestion.name}</h3>
                   <MathText text={selectedQuestion.question.stem_plain} />
-                  <div><button type="button" disabled={busy !== null} onClick={() => void restoreQuestion()}>恢复到我的私题</button></div>
-                  <section>
-                    <h4>永久删除</h4>
-                    <p>这会删除活动存储中的题面、解析和这道题独占的全部 revision；独立副本不受影响。</p>
-                    <label htmlFor="permanent-delete-confirmation"><span>输入“永久删除我的私题”</span><input id="permanent-delete-confirmation" value={deleteConfirmation} onChange={(event) => setDeleteConfirmation(event.target.value)} /></label>
-                    <button className="is-danger" type="button" disabled={deleteConfirmation !== "永久删除我的私题" || busy !== null} onClick={() => void permanentlyDeleteQuestion()}>永久删除</button>
-                  </section>
+                  <div>
+                    <button type="button" disabled={busy !== null} onClick={() => void restoreQuestion()}>恢复到我的私题</button>
+                    <button className="is-danger" type="button" disabled={busy !== null} onClick={() => setDeleteDialogOpen(true)}>永久删除</button>
+                  </div>
                 </div>
               ) : (
                 <>
@@ -772,6 +785,32 @@ export function PersonalQuestionAuthoringWorkspace({
           </div>
         </section>
       )}
+      <WorkbenchNoticeDialog
+        actionDisabled={deleteConfirmation !== "永久删除我的私题"}
+        actionLabel="永久删除"
+        busy={busy === "managing" && deleteDialogOpen}
+        closeLabel="保留这道题"
+        message="这会删除活动存储中的题面、解析和这道题独占的全部 revision；独立副本不受影响。"
+        onAction={() => void permanentlyDeleteQuestion()}
+        onDismiss={() => {
+          setDeleteDialogOpen(false);
+          setDeleteConfirmation("");
+        }}
+        open={deleteDialogOpen && Boolean(selectedQuestion)}
+        title="永久删除这道私题？"
+        tone="danger"
+      >
+        <label className="workbench-notice-dialog__confirmation" htmlFor="permanent-delete-confirmation">
+          <span>输入“永久删除我的私题”后才能继续</span>
+          <input
+            autoComplete="off"
+            data-dialog-initial
+            id="permanent-delete-confirmation"
+            value={deleteConfirmation}
+            onChange={(event) => setDeleteConfirmation(event.target.value)}
+          />
+        </label>
+      </WorkbenchNoticeDialog>
     </main>
   );
 }

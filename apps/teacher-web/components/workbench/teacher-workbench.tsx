@@ -119,6 +119,7 @@ type CapabilityDefinition = {
 };
 
 const CAPABILITY_ORDER: CapabilityId[] = ["search", "solve", "library", "lesson", "paper"];
+const WORKBENCH_NAV_ORDER: Array<CapabilityId | "authoring"> = ["search", "solve", "library", "authoring", "lesson", "paper"];
 
 const SEARCH_PROGRESS: Record<SearchTaskProgressStage, SearchProgressDefinition> = {
   connecting: {
@@ -973,13 +974,30 @@ export function TeacherWorkbench() {
           </button>
 
           <nav className="capability-tabs" aria-label="Agent 能力">
-            {CAPABILITY_ORDER.map((id) => {
+            {WORKBENCH_NAV_ORDER.map((id) => {
+              if (id === "authoring") {
+                return (
+                  <button
+                    aria-label="命题，已接入"
+                    aria-pressed={authoringVisible}
+                    className={authoringVisible ? "is-active" : ""}
+                    disabled={turning || running}
+                    key={id}
+                    onClick={() => openAuthoring("new_task")}
+                    type="button"
+                  >
+                    <SparkIcon />
+                    <span>命题</span>
+                    <i className="is-ready" aria-hidden="true" />
+                  </button>
+                );
+              }
               const item = CAPABILITIES[id];
               return (
                 <button
                   aria-label={`${item.label}${item.ready ? "，已接入" : "，运行时待接入"}`}
-                  aria-pressed={capability === id}
-                  className={capability === id ? "is-active" : ""}
+                  aria-pressed={!authoringVisible && capability === id}
+                  className={!authoringVisible && capability === id ? "is-active" : ""}
                   disabled={turning}
                   key={id}
                   onClick={() => selectCapability(id)}
