@@ -1,6 +1,6 @@
 # 项目当前状态
 
-更新日期：2026-08-22
+更新日期：2026-08-24
 分支基线：`codex/teacher-workbench-v1`
 
 ## 状态说明
@@ -17,7 +17,7 @@
 - M5 Solve Agent：Gate E 已严格通过并完成阶段确认。
 - M6 Private Library Agent：已完成；六条纵向切片、12 场景固定评测与完整 Gate E 于 2026-08-22 严格通过。
 - **M7 多模态题目采集与图片解题：已完成；15 场景固定评测 9 类违规为 0，Gate E 于 2026-08-24 通过。**
-- M8 私有辅助命题：边界已确认但功能未开始；必须等待项目所有者在 M7 Gate 结论后明确确认阶段转换。
+- **M8 私有辅助命题：进行中；项目所有者已确认阶段转换，第一条 `PersonalQuestionLibrary` 基线切片完成。**
 - M9-M11：Paper、Lesson、Memory 均未开始。
 - M12-M13：Closed Beta 准备与数据验证，均未开始。
 - M14-M17：商业基础、Teacher Pro、教研组和学校，均未开始。
@@ -34,7 +34,7 @@
 | Solve Agent | 可用 | 复用旧 `SolutionAssistant` 可信分层；受控只读 `solve_question` Tool、产品自有 `SolveAgentWorkflow` 与新工作台已接入，支持完整题目输入、Search 转入、同步/真实 SSE/run 快照/取消/同会话恢复和三页可信结果。题面、步骤和答案现统一渲染行内/独立数学公式，并兼容旧式未分隔 LaTeX；固定 synthetic eval 与完整 M5 Gate E 已通过。 |
 | Private Library Agent | 可用（M6 已完成） | 成熟 PrivateLibrary/PDF/Curriculum/QuestionBank 模块继续复用；owner-scoped 聚合、同源上传/列表、提取/OCR/校对、拆题编辑、可信教材映射和逐次授权的私人检索已接入。检索许可短时、单次、绑定当前教师与查询，只返回确认文本的有界片段；候选导入仍固定为 owner 私有、待审核、待数学验证。固定评测与 Gate E 已通过。 |
 | 多模态图片解题 | 可用；M7 Gate E 已通过 | Solve 可上传、粘贴或拍摄单题图片并校对题面；教师确认后，canonical 题面和精确 media/OCR revision 通过短时一次性许可接入 Solve。只有图形依赖题在逐次同意后读取受控原图；Agent 不获得路径或字节，结果展示实际视觉 provider/model/revision，且不冒充 MathVerifier。15 场景固定评测和完整 Gate E 已通过。 |
-| 私有辅助命题 | 未开始 | M8 已建立固定边界：生成题永远只进入 owner 独占、可命名分类和自主管理的 `PersonalQuestionLibrary`；公共题库、公共 Search、后台内容管理和其他用户无访问路径。 |
+| 私有辅助命题 | 进行中 | 独立 `PersonalQuestionLibrary` SQLite namespace、个人题库/分类创建/查看/重命名和 current-owner FastAPI seam 已实现；跨 owner、伪造 owner、publish/share/admin/delete 接口缺失均有测试。结构化生成、可信检查、题目保存、个人管理和三入口尚未实现。 |
 | Paper | 界面预览 + 后端已有 | 新 UI 可整理组卷需求，但按钮明确禁用；旧 exam_papers 模块不是 Paper Agent 完成证明。 |
 | Lesson | 界面预览 + 后端已有 | 新 UI 可整理教案需求，但按钮明确禁用；旧 lesson_plans 模块不是 Lesson Agent 完成证明。 |
 | Teacher Memory | 未开始 | 等真实教师验证后再定义。 |
@@ -43,7 +43,7 @@
 
 ## 2026-08-24 验证快照
 
-- FastAPI：318 项测试通过；另有 1 条来自 Starlette TestClient 的依赖弃用提示。
+- FastAPI：324 项测试通过；另有 1 条来自 Starlette TestClient 的依赖弃用提示。
 - Agent Runtime：类型检查、40 项测试和生产构建通过（含 Search/Solve seam、M6 私人聚合与一次性许可检索 Tool、M7 图片 Solve 单一 capability 透传、开发 mock 能力分流、验证冲突/模型不可用失败路径与 SSE 客户端断开取消）。
 - 新教师工作台：类型检查、38 项 TeacherWorkspace / Search/Solve / Private Library / Question Capture / 数学展示契约测试和生产构建通过；图片上传不提交 owner，Solve 只提交 canonical 题面、opaque asset/media/OCR revision 与本次视觉同意，不提交内容端点、路径或图片字节。
 - 新教师工作台浏览器验收：320px 无关键横向溢出；记录抽屉的初始焦点、Tab 约束、Escape 关闭、焦点返回和关闭态 `inert` 通过；检索完成与历史恢复会自动定位结果区，新任务会返回输入区并恢复焦点；延迟 SSE 下理解、搜索、可信核对、中途取消和同一 run 恢复状态均可见。
@@ -70,7 +70,8 @@
 - M7 第三条切片：`QuestionCapture.prepare_for_solve` 只接受当前 owner、confirmed、current 且精确匹配的 media/OCR revision，canonical 题面与结构化选项由服务端重建。`SolveAgentWorkflow` 签发短时一次性 capability，绑定 owner、canonical 题面、解题模式/要求、asset/media/OCR revision 和本次视觉同意；模型只传递 capability，内部 Tool 在读取图片前消费并恢复完整 server-owned 意图，模型改写普通参数不会改变实际资源或授权。许可重放、跨 owner、未确认或 stale 均 fail closed。只有视觉依赖题读取原图；DeepSeek/OpenAI solution adapter 支持受控图片块，结果显示实际 provider/model/revision 并固定教师复核，视觉理解不升级 MathVerifier。真实 DeepSeek Vision 浏览器验收已确认 `deepseek-v4-flash-vision-exp` 使用原图、证据页显示图片/OCR revision、逐次同意提交后清空且控制台无告警。
 - M7 空间几何故障收口：外部识别契约新增 `visual_observations`，把点/线/面标签、连线、虚实线、坐标轴、曲线和表格等直接可见结构作为独立教师核对草稿；旧 revision 保持不可变并提示重新授权识别。真实失败记录定位到 DeepSeek 已响应但 LaTeX 反斜杠未按 JSON 转义，现已增加几何常见命令的确定性回归测试与容错解析；不可恢复的响应格式错误改报 `TOOL_EXECUTION_ERROR`，不再误报 `MODEL_UNAVAILABLE`。视觉解题 prompt 明确禁止只凭 OCR 猜测图形关系。
 - M7 长解答格式恢复：复杂轨迹题的真实失败记录定位到模型回答在 JSON 字符串中途截断。DeepSeek adapter 在确定性本地容错失败后只执行一次格式恢复重试，提高但封顶输出预算并继续强制既定 Schema；重试仍失败时保持诚实失败，不循环调用。纯文字题确认后的无操作说明已从 Teacher Web 移除，图形题的一次性原图授权保持不变。
-- M7 固定评测与 Gate E：15 个项目自建 synthetic 场景覆盖代数公式、函数图、解析几何、立体几何、统计图、低对比度、截断、多题、外部同意、OCR/视觉失败、取消、许可重放、跨 owner 和 MathVerifier 分层，9 类违规均为 0。FastAPI 318 项、Agent 40 项、Teacher Web 38 项测试及全部 typecheck/build 通过；legacy 回归、320—1920px 浏览器、静态权限和仓库卫生通过。M7 完成，但 M8 尚待项目所有者确认。
+- M7 固定评测与 Gate E：15 个项目自建 synthetic 场景覆盖代数公式、函数图、解析几何、立体几何、统计图、低对比度、截断、多题、外部同意、OCR/视觉失败、取消、许可重放、跨 owner 和 MathVerifier 分层，9 类违规均为 0。FastAPI 318 项、Agent 40 项、Teacher Web 38 项测试及全部 typecheck/build 通过；legacy 回归、320—1920px 浏览器、静态权限和仓库卫生通过。M7 完成，项目所有者随后已确认进入 M8。
+- M8 第一条切片：新增与公共 `QuestionBank` 完全分离的 `PersonalQuestionLibrary` 深模块和 `data/private-runtime` SQLite namespace；个人题库/分类支持 owner-scoped 创建、列表、查看与重命名。FastAPI 仅从 current-teacher seam 确定 owner，浏览器额外提交 `owner_id` 返回 422，跨 owner 详情与修改返回 404；响应固定披露 owner-only、不可公共检索/共享/商用/训练，且没有 publish/share/admin/delete 路由。6 项专项测试与 324 项完整后端回归通过。
 - 2026-08-22 DeepSeek Vision 更正与实测：官方新增 `deepseek-v4-flash-vision-exp` 图片输入；已作为第二个真实外部 adapter 接入现有识别 seam，复用 DeepSeek Key、base URL、逐次同意与模型运行记录。仓库 synthetic 数学题真实调用准确返回题面、LaTeX、A–D 选项且无低置信度项；旧的“DeepSeek 仅文本”判断已移除。
 
 ## 已知未决项
@@ -82,7 +83,7 @@
 - Closed Beta 指标事件、Week-4 留存、任务采用率、严重数学错误率和单位成本尚未进入真实教师统计阶段。
 - 当前身份 adapter 仍是本地固定教师，不代表生产认证、商业多租户或云端隔离已经完成。
 - M7 已完成；只有结果中的 `visual_context.image_used=true` 才能描述为“原图参与本次推理”。固定评测和 Gate E 证据见 `M7-MULTIMODAL-SOLVE-EVALUATION.md` 与 `M7-GATE-REVIEW.md`。
-- M8 及后续阶段没有代码或界面实现；项目所有者明确确认阶段转换前不得开始 M8。
+- M8 当前只完成独立存储及个人题库/分类基线；生成、可信检查、题目正文保存、个人管理和 Teacher Web 入口仍未实现。M9 及后续阶段不得开始。
 
 ## 历史能力与新产品的关系
 

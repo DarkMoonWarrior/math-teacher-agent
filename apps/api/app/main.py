@@ -18,6 +18,7 @@ from app.routes.model_operations import router as model_operations_router
 from app.routes.questions import router as questions_router
 from app.routes.question_similarity import router as question_similarity_router
 from app.routes.private_library_agent import router as private_library_agent_router
+from app.routes.personal_question_library import router as personal_question_library_router
 from app.routes.question_capture import router as question_capture_router
 from app.routes.search_agent import (
     _SearchAgentHttpError,
@@ -65,5 +66,6 @@ app.include_router(search_agent_router, prefix="/api/v1")
 app.include_router(solve_agent_router, prefix="/api/v1")
 app.include_router(private_library_agent_router, prefix="/api/v1")
 app.include_router(question_capture_router, prefix="/api/v1")
+app.include_router(personal_question_library_router, prefix="/api/v1")
 # Internal-only Agent Tool Gateway（不进入公开 API 文档，M2M token 保护）
 app.include_router(internal_agent_tools_router)

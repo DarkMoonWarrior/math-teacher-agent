@@ -1,7 +1,14 @@
 # M8 私有辅助命题 Agent
 
-更新日期：2026-08-22
-状态：待开始；M7 Gate E 通过且项目所有者确认前不得启动
+更新日期：2026-08-24
+状态：进行中；M7 Gate E 已通过且项目所有者已确认阶段转换
+
+## 实施进度
+
+- **切片 1 已完成**：独立 `PersonalQuestionLibrary` 使用 `data/private-runtime/personal-question-library.sqlite3`，不复用公共 `QuestionBank` 表或接口；个人题库集合与分类可由当前 owner 创建、查看和重命名。
+- FastAPI 只从 `get_current_teacher` 注入 owner；请求模型 `extra=forbid`，浏览器伪造 `owner_id` 返回 422，跨 owner 读取或修改返回 404。
+- 所有返回固定为 `owner_only`，并明确 `public_search_allowed=false`、`share_allowed=false`、`commercial_use_allowed=false`、`model_training_allowed=false`；没有 publish/share/admin/delete 接口。
+- 结构化命题、可信检查、题目正文/revision 保存、完整个人管理、三个入口、固定评测与 Gate E 尚未完成。
 
 ## 1. 已确认的产品规则
 

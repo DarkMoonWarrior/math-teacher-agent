@@ -72,7 +72,7 @@ apps/web (legacy/reference Next.js UI, :3000)
 - Second slice: `QuestionCapture.recognize/review_recognition` 隐藏本地/外部 OCR adapter、逐次外部同意、结构化题面与 append-only 识别 revision。生产 adapter 包括本地 pix2text、DeepSeek `deepseek-v4-flash-vision-exp` 与 OpenAI 图像模型，DeepSeek 优先级只属于路由装配，不进入业务 interface。识别与具体 media revision 绑定；媒体变化后结果显式 `stale`。教师端能校对普通题面、LaTeX、选项和低置信度区域；只有教师确认的 current revision 才能进入第三切片。
 - Third slice: `QuestionCapture.prepare_for_solve` 是 owner-scoped、revision-pinned 的深模块 seam；只把教师确认的 canonical 题面和必要视觉字节交给 `SolutionAssistant`。FastAPI 在 Agent 运行前签发一次性 `QuestionSolveGrant`，绑定 owner、canonical 题面、解题模式/要求、asset/media/OCR revision 与本次视觉同意；模型只转发 capability，Tool 在读取图片前消费并从中恢复完整 server-owned 意图，因此模型改写参数不能替换私人资源或改变授权。Agent/Web 不接触文件路径或字节。视觉结果携带实际 provider/model/revision，始终与 MathVerifier 证据分层。
 
-### Private Question Authoring modules（M8 待开始）
+### Private Question Authoring modules（M8 进行中）
 
 - Seam: `QuestionAuthoring.create_draft(QuestionDesignBrief) -> GeneratedQuestionDraft`，隐藏教材映射、结构化生成、答案/解析一致性、选择题唯一性、MathVerifier、provider 和错误语义。
 - Storage seam: `PersonalQuestionLibrary` 独立拥有 owner 私题的个人题库命名、分类、CRUD、revision、导出和删除语义。
@@ -80,6 +80,7 @@ apps/web (legacy/reference Next.js UI, :3000)
 - Ownership: current owner 只来自服务端认证上下文；Public Search、Public QuestionBank、后台内容工具、其他 owner、教研组和学校管理员均没有读取接口。
 - Management: Agent 生成或提出修改草稿，教师在受认证 UI 中明确保存；编辑、分类、回收站、恢复和永久删除由 owner 直接调用 FastAPI 业务接口，Agent 与后台管理员无永久删除工具。
 - Reuse: Curriculum、MathVerifier、RightsGate 和已验证且允许 adaptation 的参考母题可被调用，但不得把辅助命制题复制到公共题库。
+- First slice: `PersonalQuestionLibrary` 已以单独 `data/private-runtime` SQLite namespace 实现个人题库集合与分类；它把名称规范化、owner 隔离、重复约束和固定 owner-only policy 隐藏在小接口后。公开 FastAPI 路由只从 current-teacher seam 注入 owner，payload 中额外的 `owner_id` 被拒绝；跨 owner 的集合/分类详情与更新统一返回不存在。
 
 ### Teacher Agent Runtime module
 

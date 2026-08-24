@@ -22,7 +22,7 @@
 
 Agent 不得直接访问本目录的数据库实现；它只能经过内部 Tool gateway 调用业务模块。
 
-## Private Library（M6 进行中）
+## Private Library（M6 已完成）
 
 除 owner-scoped 上传、OCR/校对、拆题和教材映射外，当前已提供 `/api/v1/agent/private-library/search`：调用方必须逐次提交明确同意，服务端身份签发短时单次检索许可；内部 Tool 只可获得 active + confirmed 资源的有界匹配片段、来源版本与权利依据。浏览器和模型都不能选择 owner，原文件、路径与整份正文不会进入 Agent 输出。
 
@@ -60,6 +60,12 @@ Solve workflow 已提供同步、真实 SSE、run 快照、取消和同会话恢
 M7 图片解题只接受当前 owner 已确认且与当前媒体 revision 一致的题面。外部单题识别除文字、公式和选项外，还返回可由教师对照原图核查的 `visual_observations`（点/线/面标签、连线、虚实线、坐标轴、曲线或表格关系）；它只记录可见结构，不是证明或 MathVerifier 证据。公开 Solve workflow 把 canonical 题面、解题模式/要求、owner、asset/media/OCR revision 和本次视觉同意封装为短时一次性 capability；内部 Tool 在读取图片前消费许可并从服务端恢复完整意图。Agent 只转发 capability，不能提交 owner/resource selector、读取路径或获得图片字节，模型改写普通 Tool 参数也不能改变授权内容。视觉解答仍为 `teacher_review_required`，其 provider/model/revision 证据不属于 MathVerifier。
 
 DeepSeek JSON 输出先做确定性的代码块、控制字符和 LaTeX 转义容错；若长解答仍因截断或格式不完整无法读取，adapter 只执行一次格式恢复重试，并把输出预算提高到配置上限。重试仍失败时返回明确的响应格式错误，不把未完成任务伪装成成功，也不会无限重试。
+
+## Personal Question Library（M8 进行中）
+
+M8 第一条切片使用独立 `data/private-runtime/personal-question-library.sqlite3`，不复用公共 `QuestionBank` 表。`/api/v1/personal-question-library` 当前只提供个人题库集合与分类的创建、列表、查看和局部更新；owner 由 current-teacher seam 注入，浏览器提交 `owner_id` 会被拒绝，跨 owner 访问统一返回不存在。
+
+接口返回固定披露 `owner_only`，且公共检索、共享、商业使用与模型训练均为 false。当前没有 publish/share/admin/delete 接口，也尚未实现结构化命题或题目正文保存。
 
 ## 测试
 
