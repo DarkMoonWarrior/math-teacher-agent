@@ -17,6 +17,7 @@ from app.modules.question_authoring.schemas import (
     ProviderQuestionDraft,
     QuestionDesignBrief,
     QuestionDraftCurriculum,
+    QuestionDraftEditableContent,
     QuestionDraftTrustCheck,
     QuestionDraftVerification,
     QuestionType,
@@ -36,7 +37,7 @@ class QuestionAuthoringUnavailableError(QuestionAuthoringError):
 
 
 class QuestionAuthoring:
-    """Deep module for one unsaved, owner-only assisted-authored draft."""
+    """Deep module for creating and rechecking owner-only authoring drafts."""
 
     def __init__(
         self,
@@ -109,6 +110,63 @@ class QuestionAuthoring:
             prompt_revision=PROMPT_REVISION,
             warnings=warnings,
             created_at=datetime.now(timezone.utc).isoformat(),
+        )
+
+    def revise_draft(
+        self,
+        current: GeneratedQuestionDraft,
+        content: QuestionDraftEditableContent,
+    ) -> GeneratedQuestionDraft:
+        """Create a teacher-edited snapshot with fresh server-owned trust evidence."""
+
+        revised = ProviderQuestionDraft(
+            question_type=content.question_type,
+            stem_plain=content.stem_plain,
+            stem_latex=content.stem_latex,
+            options=content.options,
+            answer_value=content.answer_value,
+            solution_method=content.solution_method,
+            solution_steps=content.solution_steps,
+            final_answer=content.final_answer,
+            authoring_intent=content.authoring_intent,
+            estimated_difficulty=current.estimated_difficulty,
+        )
+        self._validate_structure(revised, expected_type=content.question_type)
+        brief = QuestionDesignBrief(
+            request_text=current.request_text,
+            curriculum_node_id=current.curriculum.node_id,
+            question_type=content.question_type,
+            target_difficulty=current.target_difficulty,
+        )
+        verification = self._evaluate_trust(
+            revised,
+            brief=brief,
+            draft_id=current.draft_id,
+        )
+        warnings = [
+            "本 revision 已由教师编辑；系统已重跑结构与可信检查，但仍需教师复核数学正确性。",
+            "当前内容仍在个人命题工作区；不会进入公共题库或公共搜索。",
+            "预计难度沿用原始模型判断，不是统计校准或程序验证结果。",
+        ]
+        if verification.math_verifier_status == "unsupported":
+            warnings.append("当前 MathVerifier 不支持对此任意生成题做独立数学验证。")
+        if verification.status == "checks_failed":
+            warnings.append("确定性可信检查发现阻断项；修正前不得作为正式题目使用。")
+        return current.model_copy(
+            update={
+                "question_type": revised.question_type,
+                "stem_plain": revised.stem_plain.strip(),
+                "stem_latex": revised.stem_latex.strip() if revised.stem_latex else None,
+                "options": revised.options,
+                "answer_value": revised.answer_value.strip(),
+                "solution_method": revised.solution_method.strip(),
+                "solution_steps": [step.strip() for step in revised.solution_steps],
+                "final_answer": revised.final_answer.strip(),
+                "authoring_intent": revised.authoring_intent.strip(),
+                "verification": verification,
+                "warnings": warnings,
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            }
         )
 
     def _resolve_curriculum(self, brief: QuestionDesignBrief) -> QuestionDraftCurriculum:
@@ -199,6 +257,18 @@ class QuestionAuthoring:
         *,
         expected_type: QuestionType,
     ) -> None:
+        required_text = {
+            "题干": content.stem_plain,
+            "答案": content.answer_value,
+            "解法": content.solution_method,
+            "最终答案": content.final_answer,
+            "命题意图": content.authoring_intent,
+        }
+        blank_fields = [label for label, value in required_text.items() if not value.strip()]
+        if blank_fields or any(not step.strip() for step in content.solution_steps):
+            raise QuestionAuthoringError(
+                "题目结构包含空白字段：" + "、".join(blank_fields or ["解析步骤"])
+            )
         if content.question_type != expected_type:
             raise QuestionAuthoringError("模型返回的题型与教师要求不一致")
         keys = [option.key.strip() for option in content.options]

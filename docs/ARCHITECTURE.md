@@ -81,7 +81,8 @@ apps/web (legacy/reference Next.js UI, :3000)
 - Management: Agent 生成或提出修改草稿，教师在受认证 UI 中明确保存；编辑、分类、回收站、恢复和永久删除由 owner 直接调用 FastAPI 业务接口，Agent 与后台管理员无永久删除工具。
 - Reuse: Curriculum、MathVerifier、RightsGate 和已验证且允许 adaptation 的参考母题可被调用，但不得把辅助命制题复制到公共题库。
 - First slice: `PersonalQuestionLibrary` 已以单独 `data/private-runtime` SQLite namespace 实现个人题库集合与分类；它把名称规范化、owner 隔离、重复约束和固定 owner-only policy 隐藏在小接口后。公开 FastAPI 路由只从 current-teacher seam 注入 owner，payload 中额外的 `owner_id` 被拒绝；跨 owner 的集合/分类详情与更新统一返回不存在。
-- Second slice: `QuestionAuthoring.create_draft` 以严格 `QuestionDesignBrief` 为界面，完成题型补全、受控 Curriculum 映射、可替换 provider、结构验证和诚实错误语义。DeepSeek Harness 只能调用一次 `create_question_draft`；Tool 请求没有 owner/save/publish/share/delete 字段，并且该调用不写入 `PersonalQuestionLibrary` 或任何公共存储。
+- Second/third slices: `QuestionAuthoring.create_draft` 以严格 `QuestionDesignBrief` 为界面，完成题型补全、受控 Curriculum 映射、可替换 provider、结构验证、六项分级可信检查和诚实错误语义。DeepSeek Harness 只能调用一次 `create_question_draft`；Tool 请求没有 owner/save/publish/share/delete 字段。
+- Fourth slice: 公开 FastAPI 在成功生成后把结果登记为当前 owner 的未保存 authoring workspace revision；Agent 本身仍不写存储。浏览器只能提交可编辑题面和 `expected_revision`，`QuestionAuthoring.revise_draft` 在服务端重建可信证据，`PersonalQuestionLibrary` 以 append-only revision 和乐观版本冲突保护修改。显式保存还必须验证 collection/category 属于 current owner，且只写独立的 `personal_questions`，公共 `QuestionBank` 不参与。
 - Third slice: 同一深模块在返回前生成六项固定可信证据，并由 `QuestionDraftVerification` 强制检查项唯一、总状态与阻断项一致、MathVerifier 能力与是否真正运行一致。答案数量、明显答案冲突、选项重复和难度偏差可确定性检查；一般数学可解性、干扰项语义及无受控 rule spec 的任意生成题保持 `inconclusive/unsupported`，模型自述不能升级为 MathVerifier 证据。
 
 ### Teacher Agent Runtime module
@@ -108,7 +109,9 @@ FastAPI runtime adapter → Agent Service
 Agent Service → internal Tool gateway
 internal Tool gateway → business modules
 business modules → their owned storage adapters
-QuestionAuthoring → PersonalQuestionLibrary only after owner save confirmation
+QuestionAuthoring → owner-only authoring workspace（unsaved revision）
+Teacher-confirmed edit → QuestionAuthoring recheck → append-only revision
+Teacher-confirmed save → PersonalQuestionLibrary private question
 PersonalQuestionLibrary → owner-isolated private storage adapter
 ```
 

@@ -24,7 +24,7 @@
 | M5 Solve Agent | 已完成 | 为题库题和新题提供分层可信解答，不把模型输出冒充 verified。 | 优先复用 verified solution；新解答明确 `teacher_review_required`；MathVerifier 分级、固定 synthetic eval、320—1920px 响应式和 Gate E 通过。 |
 | M6 Private Library Agent | 已完成 | 让教师的 PDF/DOCX/图片在 private workspace 内完成导入、OCR、拆题、映射和检索。 | 原文件与 revision 可追踪；private-by-default；owner 隔离与越权测试、固定评测和 Gate E 于 2026-08-22 通过；无自动 public 路径。 |
 | **M7 多模态题目采集与图片解题** | **已完成；阶段转换已确认** | 让文字、截图和单题图片经过可核对的文字/公式识别，并把必要原图视觉信息安全接入 Solve。 | owner/private、逐次外部同意、原图与 revision 可追踪；题面/步骤/答案公式可读；带图题不丢失视觉条件；MathVerifier 与视觉判断分层；15 场景固定评测 9 类违规为 0，Gate E 于 2026-08-24 通过。 |
-| **M8 私有辅助命题 Agent** | **进行中；切片 1–3 已完成** | 将教师命题要求转换为结构化题目草稿，并保存到 owner 独占、可命名分类和自主管理的私题库。 | 已建立独立 `PersonalQuestionLibrary`、结构化命题深模块及六项分级可信检查；草稿固定 `owner_only + saved=false`，MathVerifier 不支持任意生成题时明确披露。题目保存、个人管理和三入口尚未实现。 |
+| **M8 私有辅助命题 Agent** | **进行中；切片 1–4 已完成** | 将教师命题要求转换为结构化题目草稿，并保存到 owner 独占、可命名分类和自主管理的私题库。 | 已建立独立 `PersonalQuestionLibrary`、结构化命题深模块、六项分级可信检查、owner 私有草稿/revision 和明确保存闭环；Agent 无保存写权限。完整个人管理和三入口尚未实现。 |
 | M9 Paper Agent | 待开始 | 将自然语言转换为 PaperBlueprint，并生成可编辑试卷草稿和双向细目表。 | 权利/验证/重复/相似度/覆盖/难度门禁通过；不为凑题自动生成题；引用私题不改变 owner/visibility；导出闭环可用。 |
 | M10 Lesson Agent | 待开始 | 基于教材、真实题目和教师资料生成可逐段编辑的教案草稿。 | 目标、活动、例题、练习、作业与来源状态可追踪；AI 内容明确标记；教师保存前可编辑。 |
 | M11 Teacher Memory | 待开始 | 在真实教师反馈基础上保存可解释、可控制的偏好。 | 偏好可查看、修改、删除和关闭自动学习；推断有来源与 confidence；不保存不必要的敏感正文。 |

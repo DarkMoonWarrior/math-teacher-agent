@@ -125,6 +125,22 @@ class QuestionDraftVerification(BaseModel):
         return self
 
 
+class QuestionDraftEditableContent(BaseModel):
+    """Teacher-editable fields; provenance and trust evidence stay server-owned."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    question_type: QuestionType
+    stem_plain: str = Field(min_length=5, max_length=20000)
+    stem_latex: str | None = Field(default=None, max_length=20000)
+    options: list[QuestionDraftOption] = Field(default_factory=list, max_length=20)
+    answer_value: str = Field(min_length=1, max_length=4000)
+    solution_method: str = Field(min_length=1, max_length=500)
+    solution_steps: list[str] = Field(min_length=1, max_length=100)
+    final_answer: str = Field(min_length=1, max_length=4000)
+    authoring_intent: str = Field(min_length=1, max_length=2000)
+
+
 class GeneratedQuestionDraft(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

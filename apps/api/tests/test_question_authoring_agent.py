@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import AsyncIterator
+from pathlib import Path
 from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
@@ -28,7 +29,9 @@ from app.modules.question_authoring_agent import (
     QuestionAuthoringAgentResponse,
     QuestionAuthoringAgentWorkflow,
 )
+from app.modules.personal_question_library import PersonalQuestionLibrary
 from app.routes import question_authoring as question_authoring_routes
+from app.routes.personal_question_library import get_personal_question_library
 
 
 def draft_payload() -> dict:
@@ -371,8 +374,12 @@ def test_http_route_is_feature_gated(monkeypatch) -> None:
     assert response.status_code == 503
 
 
-def test_http_route_binds_current_teacher_and_rejects_owner_fields(monkeypatch) -> None:
+def test_http_route_binds_current_teacher_and_stages_only_for_that_owner(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
     workflow = FakeQuestionAuthoringWorkflow()
+    library = PersonalQuestionLibrary(tmp_path / "personal-question-library.sqlite3")
     monkeypatch.setattr(
         question_authoring_routes,
         "get_settings",
@@ -387,6 +394,7 @@ def test_http_route_binds_current_teacher_and_rejects_owner_fields(monkeypatch) 
         teacher_id="teacher_http_a",
         source="authenticated_session",
     )
+    app.dependency_overrides[get_personal_question_library] = lambda: library
     try:
         payload = {"brief": brief().model_dump(mode="json", exclude_none=True)}
         with TestClient(app) as client:
@@ -405,10 +413,14 @@ def test_http_route_binds_current_teacher_and_rejects_owner_fields(monkeypatch) 
             )
     finally:
         app.dependency_overrides.pop(get_current_teacher, None)
+        app.dependency_overrides.pop(get_personal_question_library, None)
 
     assert response.status_code == 200
     assert response.json()["draft"]["visibility"] == "owner_only"
     assert response.json()["draft"]["saved"] is False
+    staged = library.get_authoring_draft("qad_synthetic_1", owner_id="teacher_http_a")
+    assert staged.current_revision == 1
+    assert staged.saved is False
     assert workflow.calls[0][1:] == ("teacher_http_a", "req_http_authoring")
     assert forged_top.status_code == 422
     assert forged_brief.status_code == 422

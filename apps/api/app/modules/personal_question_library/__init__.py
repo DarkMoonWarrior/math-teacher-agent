@@ -5,6 +5,10 @@ from .library import (
 )
 from .schemas import (
     OwnerOnlyContentPolicy,
+    PersonalAuthoringDraftView,
+    PersonalAuthoringRevisionCreate,
+    PersonalAuthoringRevisionList,
+    PersonalAuthoringRevisionView,
     PersonalCategoryCreate,
     PersonalCategoryList,
     PersonalCategoryUpdate,
@@ -13,10 +17,17 @@ from .schemas import (
     PersonalCollectionList,
     PersonalCollectionUpdate,
     PersonalCollectionView,
+    PersonalQuestionSave,
+    PersonalQuestionView,
+    SavedPersonalQuestionDraft,
 )
 
 __all__ = [
     "OwnerOnlyContentPolicy",
+    "PersonalAuthoringDraftView",
+    "PersonalAuthoringRevisionCreate",
+    "PersonalAuthoringRevisionList",
+    "PersonalAuthoringRevisionView",
     "PersonalCategoryCreate",
     "PersonalCategoryList",
     "PersonalCategoryUpdate",
@@ -25,7 +36,10 @@ __all__ = [
     "PersonalCollectionList",
     "PersonalCollectionUpdate",
     "PersonalCollectionView",
+    "PersonalQuestionSave",
+    "PersonalQuestionView",
     "PersonalQuestionLibrary",
     "PersonalQuestionLibraryConflict",
     "PersonalQuestionLibraryError",
+    "SavedPersonalQuestionDraft",
 ]

@@ -49,12 +49,12 @@
 
 M0-M7 已完成；项目所有者在查看 M7 Gate E 结果后于 2026-08-24 明确确认进入 M8。当前只能按 [`M8-PRIVATE-QUESTION-AUTHORING.md`](M8-PRIVATE-QUESTION-AUTHORING.md) 的纵向切片开发私有辅助命题，不得并行进入 Paper、Lesson、Memory 或其他后续阶段。
 
-M8 第一条切片已建立独立 `PersonalQuestionLibrary` 深模块、本地 owner-isolated SQLite namespace、身份绑定的个人题库/分类接口和跨 owner fail-closed 测试。浏览器不能提交 `owner_id`，响应不返回 owner 标识；模块不存在 publish/share/admin/delete 接口，也尚未存储任何辅助命制题正文。
+M8 切片 1–4 已建立独立 `PersonalQuestionLibrary` 深模块、本地 owner-isolated SQLite namespace、身份绑定的个人题库/分类、结构化生成、六项可信检查、私有命题工作区、append-only revision 与显式保存接口。浏览器不能提交 `owner_id`、隐私状态或可信证据；跨 owner 一律返回不存在，旧版本修改返回冲突。成功生成只登记为未保存工作区草稿，只有教师明确选择自己拥有的题库和分类后才形成私题；Agent 没有保存 Tool，模块不存在 publish/share/admin/delete 接口。
 
 本阶段允许：
 
 - 建立 `QuestionAuthoring.create_draft(QuestionDesignBrief) -> GeneratedQuestionDraft`，隐藏需求补全、Curriculum、provider、结构检查、MathVerifier 和错误语义；
-- 在独立 `PersonalQuestionLibrary` 中逐步加入题目、revision、教师明确保存、编辑、复制、导出、回收站、恢复和 owner 确认的永久删除；
+- 在独立 `PersonalQuestionLibrary` 中继续加入保存后题目的列表、搜索、重命名、分类、复制、导出、回收站、恢复和 owner 确认的永久删除；
 - 接入 Search 空/不合适结果和“新任务”两个现有入口，并为未来 Paper 保留只询问、不自动生成的入口契约；
 - 使用 synthetic provider 和项目自建题目验证结构、数学可信状态、取消/失败及隐私语义；
 - 只记录不含完整提示与题目正文的最小运行元数据。
@@ -72,7 +72,7 @@ M8 第一条切片已建立独立 `PersonalQuestionLibrary` 深模块、本地 o
 
 ## 5. M8 完成 Gate
 
-M8 必须同时满足 [`M8-PRIVATE-QUESTION-AUTHORING.md`](M8-PRIVATE-QUESTION-AUTHORING.md) 的功能 Gate、[`PRODUCT-GATES.md`](PRODUCT-GATES.md) 的 Gate E 与 Gate P，并完成固定 synthetic evaluation、跨 owner/IDOR/公共搜索泄漏/后台权限测试、完整工程回归和响应式/可访问性验收。当前仅切片 1 完成，尚未达到 M8 Gate。
+M8 必须同时满足 [`M8-PRIVATE-QUESTION-AUTHORING.md`](M8-PRIVATE-QUESTION-AUTHORING.md) 的功能 Gate、[`PRODUCT-GATES.md`](PRODUCT-GATES.md) 的 Gate E 与 Gate P，并完成固定 synthetic evaluation、跨 owner/IDOR/公共搜索泄漏/后台权限测试、完整工程回归和响应式/可访问性验收。当前切片 1–4 完成，尚未达到 M8 Gate。
 
 ## 6. 下一阶段启动条件
 

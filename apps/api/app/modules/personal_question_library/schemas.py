@@ -4,6 +4,11 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from app.modules.question_authoring import (
+    GeneratedQuestionDraft,
+    QuestionDraftEditableContent,
+)
+
 
 class PersonalCollectionCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -85,3 +90,62 @@ class PersonalCategoryList(BaseModel):
     collection_id: str
     items: list[PersonalCategoryView]
     total: int = Field(ge=0)
+
+
+class PersonalAuthoringRevisionCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    expected_revision: int = Field(ge=1)
+    content: QuestionDraftEditableContent
+    edit_summary: str = Field(default="教师编辑", min_length=1, max_length=500)
+
+
+class PersonalAuthoringRevisionView(BaseModel):
+    draft_id: str
+    revision_number: int = Field(ge=1)
+    revision_source: Literal["ai_generated", "teacher_edit"]
+    edit_summary: str
+    draft: GeneratedQuestionDraft
+    created_at: str
+
+
+class PersonalAuthoringRevisionList(BaseModel):
+    draft_id: str
+    current_revision: int = Field(ge=1)
+    items: list[PersonalAuthoringRevisionView]
+    total: int = Field(ge=1)
+
+
+class PersonalAuthoringDraftView(OwnerOnlyContentPolicy):
+    draft_id: str
+    current_revision: int = Field(ge=1)
+    saved: bool
+    saved_question_id: str | None = None
+    current: PersonalAuthoringRevisionView
+    created_at: str
+    updated_at: str
+
+
+class PersonalQuestionSave(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    expected_revision: int = Field(ge=1)
+    collection_id: str = Field(min_length=1, max_length=160)
+    category_id: str = Field(min_length=1, max_length=160)
+    name: str = Field(min_length=1, max_length=120)
+
+
+class SavedPersonalQuestionDraft(GeneratedQuestionDraft):
+    saved: Literal[True] = True
+
+
+class PersonalQuestionView(OwnerOnlyContentPolicy):
+    question_id: str
+    collection_id: str
+    category_id: str
+    name: str
+    source_draft_id: str
+    selected_revision: int = Field(ge=1)
+    question: SavedPersonalQuestionDraft
+    created_at: str
+    updated_at: str

@@ -17,8 +17,10 @@ from app.modules.question_authoring_agent import (
     QuestionAuthoringAgentResponse,
     QuestionAuthoringAgentWorkflow,
 )
+from app.modules.personal_question_library import PersonalQuestionLibrary
 from app.routes.curriculum import _catalog_for_path
 from app.routes.model_operations import get_model_operations_registry
+from app.routes.personal_question_library import get_personal_question_library
 
 
 router = APIRouter(prefix="/agent/question-authoring", tags=["question-authoring-agent"])
@@ -58,13 +60,17 @@ async def create_question_authoring_draft(
     command: QuestionAuthoringAgentCommand,
     request: Request,
     teacher: CurrentTeacher = Depends(get_current_teacher),
+    library: PersonalQuestionLibrary = Depends(get_personal_question_library),
 ) -> QuestionAuthoringAgentResponse:
     settings = get_settings()
     if not settings.question_authoring_agent_enabled:
         raise HTTPException(status_code=503, detail="辅助命题 Agent 当前未启用")
     request_id = request.headers.get("X-Request-Id", "").strip()[:160]
-    return await get_question_authoring_agent_workflow().run(
+    response = await get_question_authoring_agent_workflow().run(
         command,
         owner_id=teacher.teacher_id,
         request_id=request_id or f"req_{uuid.uuid4().hex}",
     )
+    if response.status == "ok" and response.draft is not None:
+        library.stage_generated_draft(response.draft, owner_id=teacher.teacher_id)
+    return response

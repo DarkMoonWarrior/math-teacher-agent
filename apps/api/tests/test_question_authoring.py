@@ -13,6 +13,7 @@ from app.modules.question_authoring import (
     QuestionAuthoringProviderError,
     QuestionAuthoringUnavailableError,
     QuestionDesignBrief,
+    QuestionDraftEditableContent,
     QuestionDraftOption,
 )
 
@@ -176,6 +177,44 @@ def test_create_draft_resolves_curriculum_and_forces_unsaved_owner_only_state() 
     assert draft.difficulty_source == "model_estimated"
     assert draft.provider == "synthetic_provider"
     assert "owner_id" not in draft.model_dump(mode="json")
+
+
+def test_teacher_revision_rechecks_structure_and_cannot_supply_trust_evidence() -> None:
+    authoring = QuestionAuthoring(
+        curriculum=curriculum(), provider=FakeProvider(), math_verifier=MathVerifier()
+    )
+    draft = authoring.create_draft(
+        QuestionDesignBrief(
+            request_text="命制一道函数单调性的单选题，用于课堂诊断。",
+            curriculum_node_id="kp_monotonicity",
+            question_type="single_choice",
+            target_difficulty=2,
+        )
+    )
+
+    revised = authoring.revise_draft(
+        draft,
+        QuestionDraftEditableContent(
+            question_type=draft.question_type,
+            stem_plain="教师修改后的题干：判断函数 f(x)=x² 的单调性。",
+            stem_latex=draft.stem_latex,
+            options=draft.options,
+            answer_value="B",
+            solution_method=draft.solution_method,
+            solution_steps=draft.solution_steps,
+            final_answer="答案为 A。",
+            authoring_intent=draft.authoring_intent,
+        ),
+    )
+
+    assert revised.draft_id == draft.draft_id
+    assert revised.saved is False
+    assert revised.visibility == "owner_only"
+    assert revised.verification.status == "checks_failed"
+    checks = {item.code: item for item in revised.verification.checks}
+    assert checks["answer_solution_consistency"].status == "failed"
+    assert revised.verification.math_verifier_status == "unsupported"
+    assert any("教师编辑" in warning for warning in revised.warnings)
 
 
 def test_natural_language_infers_question_type_and_reviewed_curriculum_mapping() -> None:
