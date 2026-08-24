@@ -43,9 +43,9 @@
 
 ## 2026-08-24 验证快照
 
-- FastAPI：351 项测试通过；另有 1 条来自 Starlette TestClient 的依赖弃用提示。
+- FastAPI：353 项测试通过；另有 1 条来自 Starlette TestClient 的依赖弃用提示。
 - Agent Runtime：类型检查、42 项测试和生产构建通过（含 Search/Solve seam、M6 私人聚合与一次性许可检索 Tool、M7 图片 Solve 单一 capability 透传、M8 单次结构化命题 Tool/可信证据契约、开发 mock 能力分流、验证冲突/模型不可用失败路径与 SSE 客户端断开取消）。
-- 新教师工作台：类型检查、40 项 TeacherWorkspace / Search/Solve / Private Library / Question Capture / 私有辅助命题 / 数学展示契约测试和生产构建通过；辅助命题请求不提交 owner、隐私状态或可信证据，生成与保存是两个独立动作，永久删除提交当前版本和固定确认短语。
+- 新教师工作台：类型检查、41 项 TeacherWorkspace / Search/Solve / Private Library / Question Capture / 私有辅助命题 / 数学展示契约测试和生产构建通过；辅助命题请求不提交 owner、隐私状态或可信证据，生成与保存是两个独立动作，永久删除提交当前版本和固定确认短语。
 - 新教师工作台浏览器验收：320px 无关键横向溢出；记录抽屉的初始焦点、Tab 约束、Escape 关闭、焦点返回和关闭态 `inert` 通过；检索完成与历史恢复会自动定位结果区，新任务会返回输入区并恢复焦点；延迟 SSE 下理解、搜索、可信核对、中途取消和同一 run 恢复状态均可见。
 - Search 故障体验验收：模型不可用、Tool 超时、网络失败、权限拒绝均展示明确原因、处置建议与请求编号，输入框恢复可编辑且允许重试；真实 QuestionBank 枚举 `single_choice`、`passed` 和 `commercial_granted` 分别显示为“单选题”“程序验证通过”和“已获商业使用授权”，未验证或冲突状态不会使用可信样式。
 - Search 恢复故障演练：主流中断后严格保持一次 Search `POST`，仅追加一次同一 `run_id` 的只读快照 `GET`；有终态时恢复结果，无终态时展示 `STREAM_RECOVERY_FAILED` 和请求编号。
@@ -79,7 +79,7 @@
 - M8 第六条切片：Teacher Web 新增独立辅助命题工作区及新任务、Search 空/不合适结果、Paper 缺题提示三个必需入口，随后增加顶部“命题”直达入口。自然语言 brief、编辑/重检、六项证据、明确选择或新建个人题库/分类、owner 私题管理、私有导出、回收/恢复与固定短语永久删除均通过产品自有 `TeacherWorkspace` contract 调用 FastAPI；浏览器不提交 owner、隐私或可信字段。临时成功/失败反馈与不可逆删除确认采用可访问弹窗，可信检查和数学风险证据继续留在正文。真实本地链路在显式启用 M8 feature flag 并重启 Agent Service 后成功返回 `AI GENERATED · UNSAVED · REV 1`，未执行测试保存。320/375/414/768/1280px 无横向溢出，关键按钮高度均不少于 44px，必需入口、顶部直达入口和上下文继承可见，控制台零告警；Teacher Web 40 项测试、类型检查和生产构建通过。
 - M8 第七条切片：移除生成前知识点/考查方法/易错点门禁和对应必填 UI。`QuestionAuthoring` 向 provider 提供受控 Curriculum allowlist，模型完成题目后返回可空节点 ID、细分知识点、考查方法和常见错误；业务层只接受 catalog 内的知识点，未知节点丢弃并保留 warning，无法映射不阻断 owner-only 草稿。Agent 映射保持待确认，教师可在结果页检索教材目录，通过普通 teacher revision 确认/修正映射并编辑教学元数据；隐私、保存、公共禁入和六项可信检查边界不变。真实 DeepSeek 链路已用“考试填空压轴圆锥曲线题”完成生成，返回受控“椭圆综合应用”映射与三类教学元数据，随后在浏览器由教师确认并形成 `REV 2`；未执行私题保存。FastAPI 349 项、Agent 42 项、Teacher Web 40 项测试及全部 typecheck/生产构建通过。
 - M8 命题书桌可读性收口：删除页面内重复 revision、生成状态和六项检查明细，以更大的表单标签、完整边框的 Agent 教学归纳区和单一“最终答案”字段替代；owner-only、尚未保存、模型生成、教师复核和阻断检查仍保持可见。非选择题在进入结构与可信检查前由业务层把 `answer_value` 归一到 `final_answer`，教师 revision 同样执行归一，避免同题出现两个冲突答案；选择题仍保留选项编号语义。FastAPI 350 项、Teacher Web 40 项测试、类型检查和生产构建通过。
-- M8 高难度解答题生成故障收口：两次真实失败记录确认 DeepSeek 已返回结构化内容，但把非选择题内部 `answer_value` 留空，导致 Provider 在业务层答案归一前即校验失败并最终表现为 HTTP 500。Provider 现先以非空 `final_answer` 归一填空题/解答题答案，再进入严格 Schema 与可信检查；输出 Schema 同时声明两个答案字段不得为空，选择题选项编号规则不变。真实 Teacher Web → Agent Service → FastAPI Tool → DeepSeek 链路已成功返回圆锥曲线解答题未保存草稿，浏览器控制台无告警；FastAPI 351 项、Agent 42 项及 Agent typecheck/build 通过。
+- M8 高难度解答题生成故障收口：第一类真实失败是 DeepSeek 把非选择题内部 `answer_value` 留空，Provider 现先以非空 `final_answer` 归一填空题/解答题答案，再进入严格 Schema 与可信检查。随后同一 5/5 圆锥曲线解答题暴露第二类失败：初次和恢复输出分别在约 6900/12800 字符处形成不完整 JSON，长请求又被 Teacher Web 通用转发层压成 HTTP 500。命题 Provider 现为题干、解析步骤和教学元数据声明明确上限，并在格式恢复时要求不超过 6000 字、最多 8 个解析步骤且不再扩大生成预算；Teacher Web 增加 180 秒专用辅助命题转发，完整保留 FastAPI 的结构化成功/失败语义。完全相同参数经 Teacher Web 全链路 1 次和受控 Tool 边界 2 次连续成功（23.13/12.35/11.79 秒），均返回 `open_response`、预计难度 5、`owner_only + saved=false`。FastAPI 353 项、Teacher Web 41 项测试及前端类型检查/生产构建通过；Agent 仍为 42 项及 typecheck/build 通过。
 - 2026-08-22 DeepSeek Vision 更正与实测：官方新增 `deepseek-v4-flash-vision-exp` 图片输入；已作为第二个真实外部 adapter 接入现有识别 seam，复用 DeepSeek Key、base URL、逐次同意与模型运行记录。仓库 synthetic 数学题真实调用准确返回题面、LaTeX、A–D 选项且无低置信度项；旧的“DeepSeek 仅文本”判断已移除。
 
 ## 已知未决项

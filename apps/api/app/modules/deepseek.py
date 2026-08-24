@@ -43,6 +43,7 @@ class DeepSeekJsonClient:
         output_schema: dict | None = None,
         max_tokens: int = 4096,
         image_data_url: str | None = None,
+        recovery_instruction: str = "",
     ) -> dict:
         schema_instruction = ""
         if output_schema:
@@ -102,10 +103,18 @@ class DeepSeekJsonClient:
                                 "上一份回答因长度截断或 JSON 格式不完整而无法读取。"
                                 "请重新从头输出完整、合法且符合既定 Schema 的 JSON；"
                                 "适当压缩表述，但不得省略必填字段。"
+                                f"{recovery_instruction.strip()}"
                             ),
                         },
                     ],
-                    "max_tokens": min(8192, max(4096, int(payload["max_tokens"]) * 2)),
+                    "max_tokens": min(
+                        8192,
+                        max(
+                            4096,
+                            int(payload["max_tokens"])
+                            * (1 if recovery_instruction.strip() else 2),
+                        ),
+                    ),
                 }
                 continue
             return {

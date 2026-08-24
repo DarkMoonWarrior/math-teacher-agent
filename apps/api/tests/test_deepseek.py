@@ -212,6 +212,54 @@ def test_deepseek_stops_after_one_json_recovery_retry(monkeypatch) -> None:
     assert len(requests) == 2
 
 
+def test_deepseek_json_recovery_requires_a_strict_compact_response(monkeypatch) -> None:
+    requests = []
+
+    class Response:
+        def __init__(self, content: str):
+            self.content = content
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self):
+            return json.dumps(
+                {"choices": [{"message": {"content": self.content}}]},
+                ensure_ascii=False,
+            ).encode()
+
+    responses = iter(
+        [
+            Response('{"answer":"被截断'),
+            Response('{"answer":"已恢复"}'),
+        ]
+    )
+
+    def fake_urlopen(request, timeout):
+        requests.append(json.loads(request.data.decode()))
+        return next(responses)
+
+    monkeypatch.setattr("app.modules.deepseek.urlopen", fake_urlopen)
+
+    DeepSeekJsonClient(api_key="test-secret").request(
+        instructions="test",
+        input_text='{"question":"圆锥曲线压轴题"}',
+        action="辅助命题",
+        max_tokens=5000,
+        recovery_instruction=(
+            "总输出不得超过 6000 个中文字符；"
+            "每个解析步骤不得超过 220 个中文字符。"
+        ),
+    )
+
+    recovery_instruction = requests[1]["messages"][-1]["content"]
+    assert "总输出不得超过 6000 个中文字符" in recovery_instruction
+    assert "每个解析步骤不得超过 220 个中文字符" in recovery_instruction
+
+
 def test_deepseek_solution_provider_uses_configured_vision_model_and_image_block(monkeypatch) -> None:
     captured = {}
 

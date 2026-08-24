@@ -237,6 +237,19 @@ def test_deepseek_provider_recovers_empty_non_choice_answer_value() -> None:
     assert content.final_answer == payload["final_answer"]
 
 
+def test_deepseek_provider_schema_bounds_verbose_authoring_fields() -> None:
+    schema = DeepSeekQuestionAuthoringProvider._output_schema()["schema"]
+    properties = schema["properties"]
+
+    assert properties["stem_plain"]["maxLength"] == 1600
+    assert properties["stem_latex"]["maxLength"] == 1800
+    assert properties["solution_steps"]["maxItems"] == 12
+    assert properties["solution_steps"]["items"]["maxLength"] == 220
+    assert properties["knowledge_points"]["maxItems"] == 6
+    assert properties["assessed_methods"]["maxItems"] == 6
+    assert properties["common_mistakes"]["maxItems"] == 6
+
+
 def test_create_draft_resolves_curriculum_and_forces_unsaved_owner_only_state() -> None:
     provider = FakeProvider()
     authoring = QuestionAuthoring(

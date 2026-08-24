@@ -94,6 +94,9 @@ class DeepSeekQuestionAuthoringProvider:
             "knowledge_points、assessed_methods 与 common_mistakes 应依据最终题目归纳，"
             "不要照抄空白输入，也不要把模型推断冒充教师确认。"
             "所有数学表达在普通文本中可读，stem_latex 使用 $...$ 或 $$...$$ 包裹公式。"
+            "保持精炼：题干普通文本不超过1600字，LaTeX题干不超过1800字；"
+            "解析最多12步、每步不超过220字；最终答案不超过600字；"
+            "知识点、考查方法、常见易错点各最多6项，每项不超过80字。"
             "只返回 Schema 要求的题目内容；visibility、来源、验证与保存状态由业务模块写入。"
         )
         try:
@@ -108,7 +111,13 @@ class DeepSeekQuestionAuthoringProvider:
                     input_text=json.dumps(provider_input, ensure_ascii=False),
                     action="辅助命题",
                     output_schema=self._output_schema(),
-                    max_tokens=5000,
+                    max_tokens=4200,
+                    recovery_instruction=(
+                        "总输出不得超过 6000 个中文字符；"
+                        "题干不得超过 1600 个中文字符；"
+                        "解析最多 8 步，每个解析步骤不得超过 220 个中文字符；"
+                        "只保留完成作答所需的推导，不得重复题干或解释 Schema。"
+                    ),
                 )
                 run.capture_response(raw)
             content = self._extract_output_text(raw)
@@ -163,19 +172,36 @@ class DeepSeekQuestionAuthoringProvider:
                     "open_response",
                 ],
             },
-            "stem_plain": {"type": "string"},
-            "stem_latex": {"type": ["string", "null"]},
-            "options": {"type": "array", "items": option},
-            "answer_value": {"type": "string", "minLength": 1},
-            "solution_method": {"type": "string"},
-            "solution_steps": {"type": "array", "items": {"type": "string"}},
-            "final_answer": {"type": "string", "minLength": 1},
-            "authoring_intent": {"type": "string"},
+            "stem_plain": {"type": "string", "minLength": 5, "maxLength": 1600},
+            "stem_latex": {"type": ["string", "null"], "maxLength": 1800},
+            "options": {"type": "array", "maxItems": 8, "items": option},
+            "answer_value": {"type": "string", "minLength": 1, "maxLength": 600},
+            "solution_method": {"type": "string", "minLength": 1, "maxLength": 300},
+            "solution_steps": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 12,
+                "items": {"type": "string", "minLength": 1, "maxLength": 220},
+            },
+            "final_answer": {"type": "string", "minLength": 1, "maxLength": 600},
+            "authoring_intent": {"type": "string", "minLength": 1, "maxLength": 300},
             "estimated_difficulty": {"type": "integer", "minimum": 1, "maximum": 5},
             "curriculum_node_id": {"type": ["string", "null"]},
-            "knowledge_points": {"type": "array", "items": {"type": "string"}},
-            "assessed_methods": {"type": "array", "items": {"type": "string"}},
-            "common_mistakes": {"type": "array", "items": {"type": "string"}},
+            "knowledge_points": {
+                "type": "array",
+                "maxItems": 6,
+                "items": {"type": "string", "maxLength": 80},
+            },
+            "assessed_methods": {
+                "type": "array",
+                "maxItems": 6,
+                "items": {"type": "string", "maxLength": 80},
+            },
+            "common_mistakes": {
+                "type": "array",
+                "maxItems": 6,
+                "items": {"type": "string", "maxLength": 80},
+            },
         }
         return {
             "type": "json_schema",
