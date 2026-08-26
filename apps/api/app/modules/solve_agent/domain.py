@@ -8,6 +8,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 from app.modules.solution_assistant import SolutionResult
+from app.modules.question_capture import QuestionSolveReference
 
 
 SolveAgentStatus = Literal["pending", "running", "ok", "error", "cancelled"]
@@ -18,6 +19,7 @@ class SolveAgentCommand(BaseModel):
     solution_mode: Literal["standard", "alternative"] = "standard"
     teacher_instruction: str = Field(default="", max_length=2000)
     session_id: str | None = Field(default=None, max_length=160)
+    question_capture: QuestionSolveReference | None = None
 
 
 class SolveAgentResponse(BaseModel):

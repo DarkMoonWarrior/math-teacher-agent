@@ -1,6 +1,6 @@
 /**
  * Prompt 2 强制安全门禁：
- *  1. model-visible tools 必须恰好等于 7 个受控只读 teacher tools（自动测试，不只靠文档）。
+ *  1. model-visible tools 必须恰好等于 9 个受控 teacher tools（自动测试，不只靠文档）。
  *  2. 组合（cordis.teacher.yml）不得包含 bash / filesystem / web / subagent / workflow 等能力。
  *  3. apps/agent 源码不得直接访问任何数据库（sqlite3 / SQL / postgres / ORM 等）。
  */
@@ -62,7 +62,7 @@ describe("Teacher Agent least-capability 安全门禁", () => {
     }
   });
 
-  it("model-visible tools 恰好等于 7 个受控只读 teacher tools", async () => {
+  it("model-visible tools 恰好等于 9 个受控 teacher tools", async () => {
     ctx = await bootContext();
     const names = ctx.tools.schemas().map((schema) => schema.name).sort();
     expect(names).toEqual([...TEACHER_TOOL_ALLOWLIST].sort());
@@ -152,7 +152,7 @@ describe("Teacher Agent least-capability 安全门禁", () => {
   });
 
   it("Tool allowlist 常量与注册顺序无关，是唯一可见工具来源", () => {
-    expect(new Set(TEACHER_TOOL_ALLOWLIST).size).toBe(8);
+    expect(new Set(TEACHER_TOOL_ALLOWLIST).size).toBe(9);
     for (const name of TEACHER_TOOL_ALLOWLIST) {
       expect(name).toMatch(/^[a-z_]+$/);
     }

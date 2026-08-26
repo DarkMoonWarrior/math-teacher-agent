@@ -25,6 +25,8 @@ class VerificationReport(BaseModel):
 class MathVerifier:
     """Pure in-process math verification behind one small interface."""
 
+    VERSION = "math-v0.3.0"
+
     def __init__(self) -> None:
         self._rules: dict[str, Callable[[dict[str, Any]], tuple[str, list[str], dict[str, Any]]]] = {
             "finite_complement_intersection": self._finite_complement_intersection,
@@ -104,6 +106,16 @@ class MathVerifier:
             details=details,
             evidence=evidence,
         )
+
+    def supports(self, candidate: dict[str, Any]) -> bool:
+        """Return whether a candidate carries a registered, controlled rule spec.
+
+        Generated prose alone is deliberately unsupported: a model-authored
+        restatement is not independent mathematical evidence.
+        """
+
+        spec = candidate.get("verification_spec")
+        return isinstance(spec, dict) and str(spec.get("rule") or "") in self._rules
 
     @staticmethod
     def _set_value(values: set[int]) -> str:

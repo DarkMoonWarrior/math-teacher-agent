@@ -6,6 +6,9 @@ import type {
   SolveTaskResult,
   LibraryItemDetail,
   LibraryItemSummary,
+  GeneratedQuestionDraft,
+  PersonalAuthoringDraft,
+  PersonalQuestion,
   QuestionInputBundle,
 } from "./contracts";
 import { HttpTeacherWorkspace } from "./http-adapter";
@@ -103,6 +106,7 @@ function solveResultFixture(): SolveTaskResult {
       match_score: null,
       alternative_available: true,
       warnings: ["请由教师复核"],
+      visual_context: null,
     },
     tool_request_id: "req_tool_solve",
     duration_ms: 24,
@@ -142,13 +146,20 @@ function questionInputBundleFixture(): QuestionInputBundle {
       updated_at: "2026-08-22T00:00:00Z",
     },
     recognition_status: "not_started",
+    recognition_revision: null,
+    recognition_source_revision: null,
+    recognition_mode: null,
+    recognition_provider: null,
+    recognition_model: null,
     stem_plain: "",
     stem_latex: "",
     options: [],
     requires_visual_reasoning: null,
+    visual_observations: [],
     low_confidence_regions: [],
     recognition_warnings: [],
     external_processing_consent: false,
+    teacher_review_note: "",
     visibility: "private",
   };
 }
@@ -191,6 +202,124 @@ function libraryItemDetailFixture(): LibraryItemDetail {
   };
 }
 
+function generatedQuestionDraftFixture(saved = false): GeneratedQuestionDraft {
+  return {
+    draft_id: "qad_1",
+    request_text: "命一道高二椭圆离心率单选题，中等难度。",
+    question_type: "single_choice",
+    stem_plain: "已知椭圆的长半轴长为 2，焦距为 2，求离心率。",
+    stem_latex: "已知椭圆的长半轴长为 $2$，焦距为 $2$，求离心率。",
+    options: [
+      { key: "A", text: "$\\frac{1}{2}$" },
+      { key: "B", text: "$1$" },
+      { key: "C", text: "$2$" },
+      { key: "D", text: "$4$" },
+    ],
+    answer_value: "A",
+    solution_method: "使用椭圆离心率定义",
+    solution_steps: ["由焦距 $2c=2$ 得 $c=1$。", "所以 $e=c/a=1/2$。"],
+    final_answer: "$\\frac{1}{2}$",
+    authoring_intent: "检查学生是否区分焦距与半焦距。",
+    knowledge_points: ["椭圆离心率"],
+    assessed_methods: ["使用离心率定义建立数量关系"],
+    common_mistakes: ["混淆焦距与半焦距"],
+    curriculum: {
+      node_id: "kp_ellipse_eccentricity",
+      name: "椭圆的离心率",
+      volume: "选择性必修第一册",
+      chapter: "圆锥曲线的方程",
+      section: "椭圆",
+      mapping_source: "brief_match",
+      mapping_status: "pending_teacher_confirmation",
+      match_confidence: 0.94,
+      curriculum_status: "reviewed",
+      reviewed_by: "system",
+    },
+    pedagogy_source: "model_generated",
+    target_difficulty: 3,
+    estimated_difficulty: 3,
+    difficulty_source: "model_estimated",
+    verification: {
+      status: "teacher_review_required",
+      math_verifier_status: "unsupported",
+      math_verifier_checked: false,
+      teacher_review_required: true,
+      verifier_version: "math-verifier-v1",
+      checks: [
+        { code: "solvability", status: "passed", capability: "supported", evidence_source: "deterministic_structure", summary: "题目字段完整。", details: [] },
+        { code: "answer_solution_consistency", status: "passed", capability: "supported", evidence_source: "deterministic_structure", summary: "答案与解析一致。", details: [] },
+        { code: "choice_answer_cardinality", status: "passed", capability: "supported", evidence_source: "deterministic_structure", summary: "单选题只有一个答案。", details: [] },
+        { code: "distractor_quality", status: "inconclusive", capability: "supported", evidence_source: "model_estimate", summary: "干扰项需教师复核。", details: [] },
+        { code: "math_verifier", status: "inconclusive", capability: "unsupported", evidence_source: "none", summary: "当前验证器不支持。", details: [] },
+        { code: "difficulty_disclosure", status: "passed", capability: "supported", evidence_source: "model_estimate", summary: "难度为模型估计。", details: [] },
+      ],
+      details: ["AI 生成草稿需要教师复核。"],
+    },
+    source_type: "ai_generated",
+    visibility: "owner_only",
+    public_search_allowed: false,
+    share_allowed: false,
+    commercial_use_allowed: false,
+    model_training_allowed: false,
+    saved,
+    provider: "deepseek",
+    model: "deepseek-v4-pro",
+    prompt_revision: "question-authoring-v1",
+    warnings: ["难度仅为模型估计。"],
+    created_at: "2026-08-24T10:00:00+08:00",
+  };
+}
+
+function personalAuthoringDraftFixture(): PersonalAuthoringDraft {
+  const draft = generatedQuestionDraftFixture();
+  return {
+    draft_id: draft.draft_id,
+    current_revision: 1,
+    saved: false,
+    saved_question_id: null,
+    current: {
+      draft_id: draft.draft_id,
+      revision_number: 1,
+      revision_source: "ai_generated",
+      edit_summary: "AI 初稿",
+      draft,
+      created_at: draft.created_at,
+    },
+    created_at: draft.created_at,
+    updated_at: draft.created_at,
+    visibility: "owner_only",
+    public_search_allowed: false,
+    share_allowed: false,
+    commercial_use_allowed: false,
+    model_training_allowed: false,
+  };
+}
+
+function personalQuestionFixture(): PersonalQuestion {
+  const draft = generatedQuestionDraftFixture(true);
+  return {
+    question_id: "pq_1",
+    collection_id: "pc_1",
+    category_id: "cat_1",
+    name: "椭圆离心率课堂题",
+    source_draft_id: draft.draft_id,
+    selected_revision: 1,
+    tags: ["椭圆"],
+    sort_order: 0,
+    lifecycle_state: "active",
+    trashed_at: null,
+    copied_from_question_id: null,
+    question: draft,
+    created_at: draft.created_at,
+    updated_at: "2026-08-24T10:05:00+08:00",
+    visibility: "owner_only",
+    public_search_allowed: false,
+    share_allowed: false,
+    commercial_use_allowed: false,
+    model_training_allowed: false,
+  };
+}
+
 afterEach(() => {
   vi.unstubAllGlobals();
 });
@@ -223,7 +352,7 @@ describe("HttpTeacherWorkspace", () => {
 
   it("transforms a controlled question asset by id without storage paths", async () => {
     const bundle = questionInputBundleFixture();
-    const fetchMock = vi.fn(async () => new Response(JSON.stringify(bundle), {
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify(bundle), {
       status: 200,
       headers: { "Content-Type": "application/json" },
     }));
@@ -245,6 +374,58 @@ describe("HttpTeacherWorkspace", () => {
         }),
       }),
     );
+  });
+
+  it("recognizes a private question with per-action external consent and no owner selector", async () => {
+    const bundle = { ...questionInputBundleFixture(), recognition_status: "draft" as const };
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify(bundle), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const workspace = new HttpTeacherWorkspace();
+    await workspace.recognizeQuestionMedia("qcap_1", {
+      mode: "external",
+      externalProcessingConsent: true,
+    });
+
+    const init = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/v1/question-capture/assets/qcap_1/recognize");
+    expect(JSON.parse(String(init.body))).toEqual({
+      mode: "external",
+      external_processing_consent: true,
+    });
+    expect(String(init.body)).not.toContain("owner");
+  });
+
+  it("saves a teacher recognition review as a controlled revision", async () => {
+    const bundle = { ...questionInputBundleFixture(), recognition_status: "confirmed" as const };
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify(bundle), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const workspace = new HttpTeacherWorkspace();
+    await workspace.reviewQuestionRecognition("qcap_1", {
+      stemPlain: "校对题面",
+      stemLatex: "$x^2$",
+      options: [{ key: "A", text: "1" }],
+      note: "已核对",
+      confirm: true,
+    });
+
+    const init = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/v1/question-capture/assets/qcap_1/recognition");
+    expect(init.method).toBe("PATCH");
+    expect(JSON.parse(String(init.body))).toEqual({
+      stem_plain: "校对题面",
+      stem_latex: "$x^2$",
+      options: [{ key: "A", text: "1" }],
+      note: "已核对",
+      confirm: true,
+    });
   });
 
   it("requires an explicit one-action consent when searching private excerpts", async () => {
@@ -545,6 +726,155 @@ describe("HttpTeacherWorkspace", () => {
     expect(String((calls[4]?.[1] as RequestInit).body)).not.toContain("volume");
   });
 
+  it("creates only an unsaved owner-only authoring draft without browser-controlled policy fields", async () => {
+    const draft = generatedQuestionDraftFixture();
+    const result = {
+      request_id: "req_authoring_1",
+      session_id: "teacher_session_1",
+      run_id: "run_authoring_1",
+      status: "ok" as const,
+      draft,
+      tool_request_id: "req_tool_authoring_1",
+      tool_call_count: 1,
+      error: null,
+    };
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify(result), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const workspace = new HttpTeacherWorkspace();
+    await expect(workspace.createQuestionAuthoringDraft({
+      requestText: "命一道高二椭圆离心率单选题，中等难度。",
+      grade: "高二",
+      knowledgePointQuery: "椭圆离心率",
+      questionType: "single_choice",
+      targetDifficulty: 3,
+      teachingPurpose: "课堂练习",
+      expectedMinutes: 5,
+      assessedMethod: "离心率定义",
+      misconceptionRequirements: "区分焦距与半焦距",
+      additionalConstraints: "四个选项",
+      sessionId: "teacher_session_1",
+    })).resolves.toEqual(result);
+
+    const [url, init] = fetchMock.mock.calls[0] ?? [];
+    const body = JSON.parse(String((init as RequestInit).body));
+    expect(url).toBe("/api/v1/agent/question-authoring/draft");
+    expect(body).toEqual({
+      brief: {
+        request_text: "命一道高二椭圆离心率单选题，中等难度。",
+        grade: "高二",
+        knowledge_point_query: "椭圆离心率",
+        question_type: "single_choice",
+        target_difficulty: 3,
+        teaching_purpose: "课堂练习",
+        expected_minutes: 5,
+        assessed_method: "离心率定义",
+        misconception_requirements: "区分焦距与半焦距",
+        additional_constraints: "四个选项",
+      },
+      session_id: "teacher_session_1",
+    });
+    expect(JSON.stringify(body)).not.toMatch(/owner_id|visibility|public_search|share_allowed|verification|saved/);
+    expect(result.draft.saved).toBe(false);
+    expect(result.draft.visibility).toBe("owner_only");
+  });
+
+  it("keeps explicit save, versioned lifecycle actions and permanent deletion owner-bound", async () => {
+    const staged = personalAuthoringDraftFixture();
+    const question = personalQuestionFixture();
+    const trashed = {
+      ...question,
+      lifecycle_state: "trashed" as const,
+      trashed_at: "2026-08-24T10:10:00+08:00",
+      updated_at: "2026-08-24T10:10:00+08:00",
+    };
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const payload = url.endsWith(`/authoring-drafts/${staged.draft_id}`)
+        ? staged
+        : url.endsWith(`/authoring-drafts/${staged.draft_id}/save`)
+          ? question
+          : init?.method === "DELETE"
+            ? { question_id: question.question_id, active_storage_deleted: true, deleted_at: "2026-08-24T10:11:00+08:00" }
+            : trashed;
+      return new Response(JSON.stringify(payload), {
+        status: url.endsWith("/save") ? 201 : 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const workspace = new HttpTeacherWorkspace();
+    await workspace.getPersonalAuthoringDraft(staged.draft_id);
+    await workspace.savePersonalAuthoringDraft(staged.draft_id, {
+      expectedRevision: staged.current_revision,
+      collectionId: "pc_1",
+      categoryId: "cat_1",
+      name: "椭圆离心率课堂题",
+    });
+    const movedToTrash = await workspace.trashPersonalQuestion(question);
+    await workspace.permanentlyDeletePersonalQuestion(movedToTrash, "永久删除我的私题");
+
+    expect(fetchMock.mock.calls.map(([url]) => String(url))).toEqual([
+      "/api/v1/personal-question-library/authoring-drafts/qad_1",
+      "/api/v1/personal-question-library/authoring-drafts/qad_1/save",
+      "/api/v1/personal-question-library/questions/pq_1/trash",
+      "/api/v1/personal-question-library/questions/pq_1",
+    ]);
+    expect(JSON.parse(String((fetchMock.mock.calls[1]?.[1] as RequestInit).body))).toEqual({
+      expected_revision: 1,
+      collection_id: "pc_1",
+      category_id: "cat_1",
+      name: "椭圆离心率课堂题",
+    });
+    expect(JSON.parse(String((fetchMock.mock.calls[2]?.[1] as RequestInit).body))).toEqual({
+      expected_updated_at: question.updated_at,
+    });
+    expect(JSON.parse(String((fetchMock.mock.calls[3]?.[1] as RequestInit).body))).toEqual({
+      expected_updated_at: trashed.updated_at,
+      confirmation: "永久删除我的私题",
+    });
+    expect(fetchMock.mock.calls.map(([, init]) => String((init as RequestInit | undefined)?.body ?? "")).join(""))
+      .not.toContain("owner_id");
+  });
+
+  it("regenerates only the current authoring solution through the revision-bound endpoint", async () => {
+    const staged = personalAuthoringDraftFixture();
+    const regenerated = {
+      ...staged,
+      current_revision: 2,
+      current: {
+        ...staged.current,
+        revision_number: 2,
+        revision_source: "ai_generated" as const,
+        edit_summary: "AI 重新生成解析；题面、选项与最终答案保持不变",
+        draft: {
+          ...staged.current.draft,
+          solution_method: "重新规划的解法",
+          solution_steps: ["重新生成后的成稿解析。"],
+        },
+      },
+    };
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify(regenerated), {
+      status: 201,
+      headers: { "Content-Type": "application/json" },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const workspace = new HttpTeacherWorkspace();
+    await expect(workspace.regeneratePersonalAuthoringSolution(staged.draft_id, 1))
+      .resolves.toEqual(regenerated);
+
+    const [url, init] = fetchMock.mock.calls[0] ?? [];
+    expect(url).toBe("/api/v1/personal-question-library/authoring-drafts/qad_1/regenerate-solution");
+    expect((init as RequestInit).method).toBe("POST");
+    expect(JSON.parse(String((init as RequestInit).body))).toEqual({ expected_revision: 1 });
+    expect(String((init as RequestInit).body)).not.toMatch(/owner_id|stem|answer|solution/);
+  });
+
   it("returns the structured result from the terminal stream event", async () => {
     const result = resultFixture();
     vi.stubGlobal("fetch", vi.fn(async () => streamResponse([
@@ -811,9 +1141,43 @@ describe("HttpTeacherWorkspace", () => {
           session_id: "tch_solve_1",
           solution_mode: "standard",
           teacher_instruction: "",
+          question_capture: null,
         }),
       }),
     );
+  });
+
+  it("sends only opaque confirmed revisions and one-run visual consent to Solve", async () => {
+    const result = solveResultFixture();
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => streamResponse([{
+      type: "run_completed",
+      run_id: "run_visual",
+      request_id: "req_visual",
+      data: { solve_response: result },
+    }]));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await new HttpTeacherWorkspace().solveQuestion({
+      questionText: "如图，在三角形 ABC 中求角 A。",
+      sessionId: "tch_visual",
+      questionCapture: {
+        assetId: "qcap_private_1",
+        mediaRevision: 2,
+        recognitionRevision: 5,
+        visualProcessingConsent: true,
+      },
+    });
+
+    const init = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    const body = JSON.parse(String(init.body));
+    expect(body.question_capture).toEqual({
+      asset_id: "qcap_private_1",
+      media_revision: 2,
+      recognition_revision: 5,
+      visual_processing_consent: true,
+    });
+    expect(JSON.stringify(body)).not.toContain("content_endpoint");
+    expect(JSON.stringify(body)).not.toContain("image_bytes");
   });
 
   it("recovers the same Solve run snapshot without repeating execution", async () => {

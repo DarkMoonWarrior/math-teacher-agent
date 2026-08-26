@@ -1,7 +1,24 @@
 # M8 私有辅助命题 Agent
 
-更新日期：2026-08-22
-状态：待开始；M7 Gate E 通过且项目所有者确认前不得启动
+更新日期：2026-08-26
+状态：进行中；M7 Gate E 已通过且项目所有者已确认阶段转换
+
+## 实施进度
+
+- **切片 1 已完成**：独立 `PersonalQuestionLibrary` 使用 `data/private-runtime/personal-question-library.sqlite3`，不复用公共 `QuestionBank` 表或接口；个人题库集合与分类可由当前 owner 创建、查看和重命名。
+- **切片 2 已完成**：`QuestionAuthoring.create_draft` 将自然语言 brief 转换为结构化题干、选项、答案、分步解析、命题意图和预计难度；模型或结构不可用时诚实失败。
+- **切片 3 已完成**：每份草稿必须携带可解性、答案/最终答案一致性、选择题答案数量、干扰项结构、MathVerifier 能力和难度披露六项唯一证据；明确矛盾进入 `checks_failed`，其余仍为 `teacher_review_required`。
+- **切片 4 已完成**：成功生成的内容只暂存为当前 owner 的未保存命题工作区草稿；教师提交完整编辑快照会追加不可覆盖的 revision 并重跑结构/可信检查。只有认证教师明确指定自己拥有的个人题库、分类、名称和当前版本后才创建私题，旧版本提交返回冲突。
+- **切片 5 已完成**：active 私题可按 owner 列表/搜索、重命名、移动分类、标签排序、保存后继续追加 revision、独立复制及以 JSON/Markdown 私有导出；回收站与恢复使用乐观版本。永久删除只接受已进回收站的当前版本和固定 owner 确认短语，并在同一事务中清除该题独占的活动快照、命题草稿与全部 revision；独立副本不受影响。
+- **切片 6 已完成**：Teacher Web 已从“新任务”、Search 空结果/不合适结果和 Paper 题量不足提示三个必需位置接入独立辅助命题工作区，并在顶部能力导航增加“命题”直达入口。教师可填写结构化 brief、查看并编辑未保存草稿、记录 revision、重新执行六项检查、明确选择或新建个人题库/分类后保存；保存后可在同一 owner 工作区管理、导出、回收、恢复或确认永久删除。生成题始终以 `AI GENERATED · UNSAVED` 与真实检索题分开，Paper 入口不自动生成、不自动保存，也不自动加入试卷。临时成功、失败和不可逆删除确认使用可关闭弹窗；可信检查与数学风险披露仍保留在正文。
+- **切片 7 已完成**：知识点、考查方法和易错点不再作为生成前门禁。教师只需自然语言意图，年级、题型、难度和其他限制均为可选约束；provider 在题目完成后归纳细分知识点、考查方法、常见错误并建议受控 Curriculum 节点。未知节点被业务层丢弃，无法映射也不阻断 owner-only 草稿；Agent 推断固定为待确认，教师可在结果页检索目录并通过 revision 确认或修正，同时校订全部教学元数据。
+- **切片 7 长题能力收口已完成**：撤销“缩短题干/限制解析总字数”方案，DeepSeek adapter 在单一 `create_draft` seam 内依次锁定完整题面与最终答案、规划解析段、并行展开各段、按序组装并执行原有可信检查。单段格式失败只重试该段；持续截断时仅把该段再拆成原子子段，不重新生成题面或其他成功段。Teacher Web 使用与 Solve 相同的数学展示契约和 KaTeX 组件呈现题面、长解析步骤与唯一最终答案，原始 LaTeX 只放在可展开校订区。真实三小问 5/5 解答题已通过 Web 全链路生成 62 步、约 17470 字符解析，并保持 `owner_only + saved=false + teacher_review_required`。
+- **M8 解析质量补强已完成**：解析段契约只允许可直接展示的成稿推导，禁止第一人称试算、自我怀疑、回退、提示词或内部字段讨论。服务端检测到“让我们重新审视”“可能算错”等元推理时，只重写受污染的解析段；清理后仍污染或确认题面/锁定答案冲突时诚实失败，不把思考草稿展示给教师。结果页新增“重新生成解析”，它锁定当前 revision 的题面、选项、答案和最终答案，只替换解法与解析步骤、重跑可信检查并追加 `ai_generated` revision；未记录的本地编辑会先提示保存，避免静默覆盖。
+- DeepSeek 只实现可替换 provider adapter；Agent 必须且只能调用一次 `create_question_draft`，模型不能增加 owner、保存、发布、共享或删除参数。Agent Tool 仍只返回 `owner_only + saved=false`；暂存和保存由公开 FastAPI 在认证业务层分别执行，Agent 没有相应写 Tool。
+- 当前 MathVerifier 只接受带受控 `verification_spec` 的已知规则；任意模型生成题没有这种独立证据，因此固定诚实披露 `math_verifier_status=unsupported`，不得用模型自述冒充程序验证。结构检查通过也不等于数学正确。
+- FastAPI 只从 `get_current_teacher` 注入 owner；请求模型 `extra=forbid`，浏览器伪造 `owner_id` 返回 422，跨 owner 读取或修改返回 404。
+- 所有返回固定为 `owner_only`，并明确 `public_search_allowed=false`、`share_allowed=false`、`commercial_use_allowed=false`、`model_training_allowed=false`；没有 publish/share/admin 接口。唯一 DELETE 路由只属于认证 owner 的私题，且受回收站、版本与固定确认三重门禁保护。
+- **仍未完成**：固定 synthetic evaluation、完整隐私/可信/工程审计与 Gate E/Gate P。M8 尚未完成，不得进入 M9。
 
 ## 1. 已确认的产品规则
 
@@ -26,9 +43,13 @@ M8 不建设公共投稿、公共发布、共享协作、商业内容审核、�
 
 ### QuestionAuthoring
 
-`QuestionAuthoring.create_draft(QuestionDesignBrief) -> GeneratedQuestionDraft` 是命题业务深模块接口。需求补全、教材映射、provider 选择、结构化生成、答案/解析一致性检查、选择题唯一性检查、MathVerifier、可信状态和错误语义留在实现内部。
+`QuestionAuthoring.create_draft(QuestionDesignBrief) -> GeneratedQuestionDraft` 与 `QuestionAuthoring.regenerate_solution(GeneratedQuestionDraft) -> GeneratedQuestionDraft` 是命题业务深模块接口。前者拥有可选需求约束、结构化生成和生成后教学元数据归纳；后者只允许 provider 替换解析字段。两者共同把受控教材映射、答案/解析一致性检查、选择题唯一性检查、MathVerifier、可信状态和错误语义留在实现内部。
 
-`QuestionDesignBrief` 包含年级、教材/知识点、题型、目标难度、教学用途、预计用时、考查方法、易错点/干扰项要求、可选参考题和教师补充限制。`GeneratedQuestionDraft` 包含题干、LaTeX、选项、答案、分步解析、命题意图、知识点映射、目标难度、预计难度、验证证据、warnings、provider/model/prompt revision 和 `source_type=ai_generated`。
+初次长题生成不会增加 Agent Tool。DeepSeek provider 在内部执行 `question core → solution plan → solution sections → assembly`：题面与最终答案先锁定，解析段只读该锁定内容；多个段可并行生成，某一段失败时只在 provider 内局部重试。教师明确点击“重新生成解析”时，认证 FastAPI 业务接口从 owner 当前 revision 恢复锁定题面，不经浏览器或 Agent 选择 owner，也不开放整题重生成、保存或发布权限。内容 Schema 与业务模型允许长题干和长解析，基础设施仍保留有限超时以防失控请求，但不得把超时保护变成删题、压缩步骤或降低难度的内容规则。
+
+`QuestionDesignBrief` 只强制要求自然语言命题意图；年级、教师明确选择的教材节点、题型、目标难度、教学用途、预计用时、显式方法/干扰项约束、可选参考题和补充限制都是可选信息。不得因教师没有先填写知识点、考查方法或易错点而拒绝生成。`GeneratedQuestionDraft` 包含题干、LaTeX、选项、答案、分步解析、命题意图、可空的教材映射、细分知识点、考查方法、常见易错点、目标/预计难度、验证证据、warnings、provider/model/prompt revision 和 `source_type=ai_generated`。
+
+模型只能从业务层提供的 Curriculum allowlist 中返回节点 ID，不能创建教材节点或自行升级审核状态。教师明确选择的节点优先于模型建议；Agent 推断的节点标记为 `pending_teacher_confirmation`，只有 owner 在结果页明确确认或修正后才成为 `teacher_confirmed`。无法可靠映射时保留空映射和诚实 warning，不阻断私人草稿，也不把“未映射”冒充教材证据。
 
 参考母题模式可以复用现有题目变式能力，但只有在母题已验证且 RightsGate 明确允许 adaptation 时可用。完全自主命题不得虚构题源、年份、学校、试卷或教材页码。
 
@@ -40,8 +61,9 @@ current owner 只能由认证上下文在服务端确定，任何浏览器或模
 
 ```text
 Teacher Web → QuestionAuthoring → MathVerifier/Curriculum/RightsGate
-                         ↓ 生成草稿（尚未保存）
-教师明确保存 → PersonalQuestionLibrary → owner-isolated storage
+                         ↓ owner 工作区草稿（尚未成为私题）
+教师编辑 → append-only revision → 服务端重跑可信检查
+教师明确保存 → owned collection/category → owner-isolated private question
 
 Public Search / Public QuestionBank / Admin content tools ──X──> PersonalQuestionLibrary
 ```
@@ -54,7 +76,9 @@ Agent 只生成或提出修改草稿；保存、覆盖、删除和永久删除�
 2. “新任务”菜单提供独立“辅助命题”入口。
 3. 未来 Paper Agent 发现题目不足时，只能询问教师是否进入辅助命题；不得为凑题量自动生成或自动加入试卷。
 
-生成结果页提供：修改命题要求、局部重写、重新验算、编辑题面/答案/解析、命名、选择或新建分类、保存为我的私题。保存前后始终显示“仅自己可见”和可信状态。
+Teacher Web 顶部能力导航另提供“命题”直达入口，方便教师不依赖某次 Search/Paper 上下文直接进入；它不改变上述三个业务触发条件，也不会自动生成或保存。
+
+生成结果页提供：重新生成解析、编辑题面/答案/解析、记录校订并重检、命名、选择或新建分类、保存为我的私题。重新生成解析只创建新的解析 revision，不改变题面、选项或最终答案；保存前后始终显示“仅自己可见”和可信状态。
 
 ## 5. 数据与管理规则
 
@@ -69,12 +93,13 @@ Agent 只生成或提出修改草稿；保存、覆盖、删除和永久删除�
 ## 6. 纵向切片顺序
 
 1. **PersonalQuestionLibrary 基线**：独立存储命名空间、current-owner seam、个人题库命名/分类和跨 owner fail-closed。
-2. **结构化命题草稿**：自然语言 brief、必要追问、题干/答案/解析/命题意图和知识点映射。
+2. **结构化命题草稿**：自然语言 brief、完整题干/答案、分阶段长解析和命题意图；不把知识点表单作为生成门禁，也不以缩短内容规避模型输出问题。
 3. **可信检查**：可解性、答案与解析一致性、选择题唯一性、干扰项、MathVerifier 和预计难度披露。
 4. **教师编辑与保存**：局部修改、revision、明确保存到个人分类，不自动写入任何公共业务模块。
 5. **个人管理**：列表、搜索、重命名、分类、复制、导出、回收站、恢复和 owner 确认的永久删除。
-6. **三个入口接入**：Search 空/不合适结果、新任务、Paper 明确询问；生成内容和真实检索内容始终视觉分离。
-7. **固定评测与 Gate E**：覆盖主要高中模块和题型、模型不可用、验证失败、权利拒绝、重复、越权、公共搜索泄漏、后台权限、删除与恢复。
+6. **入口接入**：Search 空/不合适结果、新任务、Paper 明确询问三个必需入口，加顶部“命题”直达入口；生成内容和真实检索内容始终视觉分离。
+7. **生成后归纳与教师确认**：Agent 根据最终题目归纳教材节点、细分知识点、考查方法和易错点；业务层校验节点，教师可在 revision 中确认或修正。
+8. **固定评测与 Gate E**：覆盖主要高中模块和题型、模型不可用、验证失败、权利拒绝、重复、越权、公共搜索泄漏、后台权限、删除与恢复。
 
 ## 7. M8 完成 Gate
 

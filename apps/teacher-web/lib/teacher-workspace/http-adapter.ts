@@ -16,9 +16,23 @@ import {
   type PrivateLibraryReview,
   type PrivateLibrarySearchResult,
   type PrivateLibraryUpload,
+  type PersonalAuthoringDraft,
+  type PersonalAuthoringRevisionList,
+  type PersonalQuestion,
+  type PersonalQuestionCategory,
+  type PersonalQuestionCategoryList,
+  type PersonalQuestionCollection,
+  type PersonalQuestionCollectionList,
+  type PersonalQuestionExport,
+  type PersonalQuestionList,
+  type QuestionAuthoringAgentResult,
+  type QuestionAuthoringBrief,
+  type QuestionDraftEditableContent,
   type QuestionInputBundle,
   type QuestionMediaTransform,
   type QuestionMediaUpload,
+  type QuestionRecognitionRequest,
+  type QuestionRecognitionReview,
   type SearchTaskOptions,
   type SearchTaskProgressStage,
   type SearchTaskRequest,
@@ -417,6 +431,63 @@ export class HttpTeacherWorkspace implements TeacherWorkspace {
     }
   }
 
+  async recognizeQuestionMedia(
+    assetId: string,
+    request: QuestionRecognitionRequest,
+    signal?: AbortSignal,
+  ): Promise<QuestionInputBundle> {
+    try {
+      const response = await fetch(
+        apiUrl(`/api/v1/question-capture/assets/${encodeURIComponent(assetId)}/recognize`),
+        {
+          method: "POST",
+          headers: { Accept: "application/json", "Content-Type": "application/json" },
+          body: JSON.stringify({
+            mode: request.mode,
+            external_processing_consent: request.externalProcessingConsent,
+          }),
+          signal,
+        },
+      );
+      if (!response.ok) throw await responseError(response);
+      return await response.json() as QuestionInputBundle;
+    } catch (cause) {
+      if (cause instanceof TeacherWorkspaceError) throw cause;
+      if (cause instanceof DOMException && cause.name === "AbortError") throw cause;
+      throw new TeacherWorkspaceError("NETWORK_ERROR", "无法识别题目图片。请确认 FastAPI 已启动。");
+    }
+  }
+
+  async reviewQuestionRecognition(
+    assetId: string,
+    request: QuestionRecognitionReview,
+    signal?: AbortSignal,
+  ): Promise<QuestionInputBundle> {
+    try {
+      const response = await fetch(
+        apiUrl(`/api/v1/question-capture/assets/${encodeURIComponent(assetId)}/recognition`),
+        {
+          method: "PATCH",
+          headers: { Accept: "application/json", "Content-Type": "application/json" },
+          body: JSON.stringify({
+            stem_plain: request.stemPlain,
+            stem_latex: request.stemLatex,
+            options: request.options,
+            note: request.note,
+            confirm: request.confirm,
+          }),
+          signal,
+        },
+      );
+      if (!response.ok) throw await responseError(response);
+      return await response.json() as QuestionInputBundle;
+    } catch (cause) {
+      if (cause instanceof TeacherWorkspaceError) throw cause;
+      if (cause instanceof DOMException && cause.name === "AbortError") throw cause;
+      throw new TeacherWorkspaceError("NETWORK_ERROR", "无法保存题面校对。请确认 FastAPI 已启动。");
+    }
+  }
+
   async searchPrivateLibrary(
     query: string,
     privateContentConsent: true,
@@ -720,6 +791,331 @@ export class HttpTeacherWorkspace implements TeacherWorkspace {
     );
   }
 
+  async createQuestionAuthoringDraft(
+    request: QuestionAuthoringBrief,
+    signal?: AbortSignal,
+  ): Promise<QuestionAuthoringAgentResult> {
+    const brief = {
+      request_text: request.requestText,
+      grade: request.grade,
+      curriculum_node_id: request.curriculumNodeId,
+      knowledge_point_query: request.knowledgePointQuery,
+      question_type: request.questionType,
+      target_difficulty: request.targetDifficulty,
+      teaching_purpose: request.teachingPurpose,
+      expected_minutes: request.expectedMinutes,
+      assessed_method: request.assessedMethod ?? "",
+      misconception_requirements: request.misconceptionRequirements ?? "",
+      additional_constraints: request.additionalConstraints ?? "",
+      reference_question_id: request.referenceQuestionId,
+    };
+    const payload = await libraryJsonRequest<QuestionAuthoringAgentResult>(
+      "/api/v1/agent/question-authoring/draft",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ brief, session_id: request.sessionId }),
+        signal,
+      },
+      "无法连接辅助命题 Agent。请确认 Agent Service 与 FastAPI 已启动。",
+    );
+    if (payload.status !== "ok" || !payload.draft) {
+      throw new TeacherWorkspaceError(
+        payload.error?.code ?? "QUESTION_AUTHORING_FAILED",
+        payload.error?.message ?? "辅助命题没有返回可编辑草稿。",
+        payload.error?.request_id ?? payload.request_id,
+      );
+    }
+    return payload;
+  }
+
+  getPersonalAuthoringDraft(
+    draftId: string,
+    signal?: AbortSignal,
+  ): Promise<PersonalAuthoringDraft> {
+    return libraryJsonRequest(
+      `/api/v1/personal-question-library/authoring-drafts/${encodeURIComponent(draftId)}`,
+      { method: "GET", signal },
+      "无法读取当前命题草稿。",
+    );
+  }
+
+  listPersonalAuthoringRevisions(
+    draftId: string,
+    signal?: AbortSignal,
+  ): Promise<PersonalAuthoringRevisionList> {
+    return libraryJsonRequest(
+      `/api/v1/personal-question-library/authoring-drafts/${encodeURIComponent(draftId)}/revisions`,
+      { method: "GET", signal },
+      "无法读取命题修订记录。",
+    );
+  }
+
+  revisePersonalAuthoringDraft(
+    draftId: string,
+    expectedRevision: number,
+    content: QuestionDraftEditableContent,
+    editSummary: string,
+    signal?: AbortSignal,
+  ): Promise<PersonalAuthoringDraft> {
+    return libraryJsonRequest(
+      `/api/v1/personal-question-library/authoring-drafts/${encodeURIComponent(draftId)}/revisions`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ expected_revision: expectedRevision, content, edit_summary: editSummary }),
+        signal,
+      },
+      "无法保存这次命题校订。",
+    );
+  }
+
+  regeneratePersonalAuthoringSolution(
+    draftId: string,
+    expectedRevision: number,
+    signal?: AbortSignal,
+  ): Promise<PersonalAuthoringDraft> {
+    return libraryJsonRequest(
+      `/api/v1/personal-question-library/authoring-drafts/${encodeURIComponent(draftId)}/regenerate-solution`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ expected_revision: expectedRevision }),
+        signal,
+      },
+      "无法重新生成这道题的解析。",
+    );
+  }
+
+  savePersonalAuthoringDraft(
+    draftId: string,
+    request: { expectedRevision: number; collectionId: string; categoryId: string; name: string },
+    signal?: AbortSignal,
+  ): Promise<PersonalQuestion> {
+    return libraryJsonRequest(
+      `/api/v1/personal-question-library/authoring-drafts/${encodeURIComponent(draftId)}/save`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          expected_revision: request.expectedRevision,
+          collection_id: request.collectionId,
+          category_id: request.categoryId,
+          name: request.name,
+        }),
+        signal,
+      },
+      "无法把草稿保存到你的私题库。",
+    );
+  }
+
+  listPersonalQuestionCollections(signal?: AbortSignal): Promise<PersonalQuestionCollectionList> {
+    return libraryJsonRequest(
+      "/api/v1/personal-question-library/collections",
+      { method: "GET", signal },
+      "无法读取你的个人题库。",
+    );
+  }
+
+  createPersonalQuestionCollection(
+    name: string,
+    description = "",
+    signal?: AbortSignal,
+  ): Promise<PersonalQuestionCollection> {
+    return libraryJsonRequest(
+      "/api/v1/personal-question-library/collections",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, description }),
+        signal,
+      },
+      "无法新建个人题库。",
+    );
+  }
+
+  listPersonalQuestionCategories(
+    collectionId: string,
+    signal?: AbortSignal,
+  ): Promise<PersonalQuestionCategoryList> {
+    return libraryJsonRequest(
+      `/api/v1/personal-question-library/collections/${encodeURIComponent(collectionId)}/categories`,
+      { method: "GET", signal },
+      "无法读取个人分类。",
+    );
+  }
+
+  createPersonalQuestionCategory(
+    collectionId: string,
+    name: string,
+    description = "",
+    signal?: AbortSignal,
+  ): Promise<PersonalQuestionCategory> {
+    return libraryJsonRequest(
+      `/api/v1/personal-question-library/collections/${encodeURIComponent(collectionId)}/categories`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, description, sort_order: 0 }),
+        signal,
+      },
+      "无法新建个人分类。",
+    );
+  }
+
+  listPersonalQuestions(
+    request: { query?: string; lifecycleState?: "active" | "trashed"; collectionId?: string; categoryId?: string },
+    signal?: AbortSignal,
+  ): Promise<PersonalQuestionList> {
+    const params = new URLSearchParams({
+      query: request.query ?? "",
+      lifecycle_state: request.lifecycleState ?? "active",
+      limit: "200",
+      offset: "0",
+    });
+    if (request.collectionId) params.set("collection_id", request.collectionId);
+    if (request.categoryId) params.set("category_id", request.categoryId);
+    return libraryJsonRequest(
+      `/api/v1/personal-question-library/questions?${params.toString()}`,
+      { method: "GET", signal },
+      "无法读取你的私题。",
+    );
+  }
+
+  revisePersonalQuestion(
+    question: PersonalQuestion,
+    content: QuestionDraftEditableContent,
+    editSummary: string,
+    signal?: AbortSignal,
+  ): Promise<PersonalQuestion> {
+    return libraryJsonRequest(
+      `/api/v1/personal-question-library/questions/${encodeURIComponent(question.question_id)}/revisions`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          expected_revision: question.selected_revision,
+          expected_updated_at: question.updated_at,
+          content,
+          edit_summary: editSummary,
+        }),
+        signal,
+      },
+      "无法保存这次私题校订。",
+    );
+  }
+
+  updatePersonalQuestion(
+    question: PersonalQuestion,
+    request: { name?: string; collectionId?: string; categoryId?: string; tags?: string[]; sortOrder?: number },
+    signal?: AbortSignal,
+  ): Promise<PersonalQuestion> {
+    return libraryJsonRequest(
+      `/api/v1/personal-question-library/questions/${encodeURIComponent(question.question_id)}`,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          expected_updated_at: question.updated_at,
+          name: request.name,
+          collection_id: request.collectionId,
+          category_id: request.categoryId,
+          tags: request.tags,
+          sort_order: request.sortOrder,
+        }),
+        signal,
+      },
+      "无法更新这道私题。",
+    );
+  }
+
+  copyPersonalQuestion(
+    questionId: string,
+    request: { collectionId: string; categoryId: string; name?: string },
+    signal?: AbortSignal,
+  ): Promise<PersonalQuestion> {
+    return libraryJsonRequest(
+      `/api/v1/personal-question-library/questions/${encodeURIComponent(questionId)}/copy`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          collection_id: request.collectionId,
+          category_id: request.categoryId,
+          name: request.name,
+        }),
+        signal,
+      },
+      "无法复制这道私题。",
+    );
+  }
+
+  async exportPersonalQuestion(
+    questionId: string,
+    format: "json" | "markdown",
+    signal?: AbortSignal,
+  ): Promise<PersonalQuestionExport> {
+    try {
+      const response = await fetch(apiUrl(
+        `/api/v1/personal-question-library/questions/${encodeURIComponent(questionId)}/export?format=${format}`,
+      ), { headers: { Accept: format === "json" ? "application/json" : "text/markdown" }, signal });
+      if (!response.ok) throw await responseError(response);
+      const disposition = response.headers.get("Content-Disposition") ?? "";
+      const encodedName = disposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
+      return {
+        blob: await response.blob(),
+        filename: encodedName ? decodeURIComponent(encodedName) : `private-question.${format === "json" ? "json" : "md"}`,
+      };
+    } catch (cause) {
+      if (cause instanceof TeacherWorkspaceError) throw cause;
+      if (cause instanceof DOMException && cause.name === "AbortError") throw cause;
+      throw new TeacherWorkspaceError("NETWORK_ERROR", "无法导出这道私题。");
+    }
+  }
+
+  trashPersonalQuestion(question: PersonalQuestion, signal?: AbortSignal): Promise<PersonalQuestion> {
+    return libraryJsonRequest(
+      `/api/v1/personal-question-library/questions/${encodeURIComponent(question.question_id)}/trash`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ expected_updated_at: question.updated_at }),
+        signal,
+      },
+      "无法把这道题移入回收站。",
+    );
+  }
+
+  restorePersonalQuestion(question: PersonalQuestion, signal?: AbortSignal): Promise<PersonalQuestion> {
+    return libraryJsonRequest(
+      `/api/v1/personal-question-library/questions/${encodeURIComponent(question.question_id)}/restore`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ expected_updated_at: question.updated_at }),
+        signal,
+      },
+      "无法恢复这道私题。",
+    );
+  }
+
+  permanentlyDeletePersonalQuestion(
+    question: PersonalQuestion,
+    confirmation: "永久删除我的私题",
+    signal?: AbortSignal,
+  ): Promise<{ question_id: string; active_storage_deleted: true; deleted_at: string }> {
+    return libraryJsonRequest(
+      `/api/v1/personal-question-library/questions/${encodeURIComponent(question.question_id)}`,
+      {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ expected_updated_at: question.updated_at, confirmation }),
+        signal,
+      },
+      "无法永久删除这道私题。",
+    );
+  }
+
   async searchQuestions(
     request: SearchTaskRequest,
     options: SearchTaskOptions = {},
@@ -827,6 +1223,12 @@ export class HttpTeacherWorkspace implements TeacherWorkspace {
           session_id: request.sessionId,
           solution_mode: request.solutionMode ?? "standard",
           teacher_instruction: request.teacherInstruction ?? "",
+          question_capture: request.questionCapture ? {
+            asset_id: request.questionCapture.assetId,
+            media_revision: request.questionCapture.mediaRevision,
+            recognition_revision: request.questionCapture.recognitionRevision,
+            visual_processing_consent: request.questionCapture.visualProcessingConsent,
+          } : null,
         }),
         signal,
       });

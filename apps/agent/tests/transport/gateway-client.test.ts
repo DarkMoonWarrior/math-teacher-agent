@@ -7,6 +7,7 @@ const GET_QUESTION_ROUTE = "/internal/agent-tools/v1/get-question";
 const SOLVE_QUESTION_ROUTE = "/internal/agent-tools/v1/solve-question";
 const INSPECT_PRIVATE_LIBRARY_ROUTE = "/internal/agent-tools/v1/inspect-private-library";
 const SEARCH_PRIVATE_LIBRARY_ROUTE = "/internal/agent-tools/v1/search-private-library";
+const CREATE_QUESTION_DRAFT_ROUTE = "/internal/agent-tools/v1/create-question-draft";
 
 describe("ToolGatewayClient", () => {
   let stub: GatewayStub;
@@ -162,6 +163,38 @@ describe("ToolGatewayClient", () => {
     const call = stub.requests.find((request) => request.route === SEARCH_PRIVATE_LIBRARY_ROUTE);
     expect(call?.body).toEqual({ query: "函数", consent_token: "opaque-one-use", limit: 5 });
     expect(call?.body).not.toHaveProperty("owner_id");
+  });
+
+  it("辅助命题只向固定 route 发送教师确认的 brief，不发送 owner 或保存动作", async () => {
+    stub.handlers[CREATE_QUESTION_DRAFT_ROUTE] = ({ body }) => gatewayJson(200, {
+      draft: {
+        request_text: body.request_text,
+        visibility: "owner_only",
+        saved: false,
+        source_type: "ai_generated",
+      },
+      request_id: "req_question_draft",
+    });
+    const result = await client.createQuestionDraft(
+      {
+        request_text: "围绕函数单调性命制一道单选题。",
+        curriculum_node_id: "kp_monotonicity",
+        question_type: "single_choice",
+        target_difficulty: 2,
+      },
+      { requestId: "req_question_draft" },
+    );
+    expect(result.ok).toBe(true);
+    const call = stub.requests.find((request) => request.route === CREATE_QUESTION_DRAFT_ROUTE);
+    expect(call?.body).toMatchObject({
+      request_text: "围绕函数单调性命制一道单选题。",
+      curriculum_node_id: "kp_monotonicity",
+      question_type: "single_choice",
+      target_difficulty: 2,
+    });
+    expect(call?.body).not.toHaveProperty("owner_id");
+    expect(call?.body).not.toHaveProperty("save");
+    expect(call?.body).not.toHaveProperty("publish");
   });
 
   it("把 404 映射为 TOOL_NOT_FOUND", async () => {

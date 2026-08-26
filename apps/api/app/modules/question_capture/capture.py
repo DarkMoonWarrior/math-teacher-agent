@@ -16,6 +16,15 @@ from .schemas import (
     QuestionMediaAsset,
     QuestionMediaRevision,
     QuestionMediaTransformCommand,
+    QuestionRecognitionCommand,
+    QuestionRecognitionReviewCommand,
+    QuestionSolveReference,
+    PreparedQuestionInput,
+)
+from .recognition import (
+    LocalQuestionRecognitionProvider,
+    QuestionRecognitionError,
+    QuestionRecognitionProvider,
 )
 
 
@@ -36,11 +45,20 @@ class QuestionCapture:
         "WEBP": ("image/webp", ".webp"),
     }
 
-    def __init__(self, database_path: Path, file_root: Path) -> None:
+    def __init__(
+        self,
+        database_path: Path,
+        file_root: Path,
+        *,
+        recognition_providers: dict[str, QuestionRecognitionProvider] | None = None,
+    ) -> None:
         self.database_path = database_path.resolve()
         self.file_root = file_root.resolve()
         self.database_path.parent.mkdir(parents=True, exist_ok=True)
         self.file_root.mkdir(parents=True, exist_ok=True)
+        self.recognition_providers = recognition_providers or {
+            "local": LocalQuestionRecognitionProvider(),
+        }
         self._initialize()
 
     def prepare(
@@ -222,6 +240,13 @@ class QuestionCapture:
                 "SELECT * FROM question_capture_revisions WHERE asset_id = ? ORDER BY revision",
                 (asset_id,),
             ).fetchall()
+            recognition = connection.execute(
+                """
+                SELECT * FROM question_capture_recognitions
+                WHERE asset_id = ? ORDER BY recognition_revision DESC LIMIT 1
+                """,
+                (asset_id,),
+            ).fetchone()
         revisions = [
             QuestionMediaRevision(
                 revision=row["revision"],
@@ -236,6 +261,38 @@ class QuestionCapture:
             for row in rows
         ]
         warnings = json.loads(asset["warnings_json"])
+        recognition_payload = {"recognition_warnings": warnings}
+        if recognition is not None:
+            status = recognition["status"]
+            recognition_warnings = json.loads(recognition["warnings_json"])
+            if recognition["source_media_revision"] != asset["current_revision"]:
+                status = "stale"
+                recognition_warnings = [
+                    "图片已在本次识别后调整，请重新识别并校对最新版本。",
+                    *recognition_warnings,
+                ]
+            recognition_payload = {
+                "recognition_status": status,
+                "recognition_revision": recognition["recognition_revision"],
+                "recognition_source_revision": recognition["source_media_revision"],
+                "recognition_mode": recognition["mode"],
+                "recognition_provider": recognition["provider"],
+                "recognition_model": recognition["model"],
+                "stem_plain": recognition["stem_plain"],
+                "stem_latex": recognition["stem_latex"],
+                "options": json.loads(recognition["options_json"]),
+                "requires_visual_reasoning": (
+                    None if recognition["requires_visual_reasoning"] is None
+                    else bool(recognition["requires_visual_reasoning"])
+                ),
+                "visual_observations": json.loads(
+                    recognition["visual_observations_json"]
+                ),
+                "low_confidence_regions": json.loads(recognition["low_confidence_json"]),
+                "recognition_warnings": recognition_warnings,
+                "external_processing_consent": bool(recognition["external_consent"]),
+                "teacher_review_note": recognition["teacher_review_note"],
+            }
         return QuestionInputBundle(
             asset=QuestionMediaAsset(
                 asset_id=asset["asset_id"],
@@ -253,8 +310,149 @@ class QuestionCapture:
                 created_at=asset["created_at"],
                 updated_at=asset["updated_at"],
             ),
-            recognition_warnings=warnings,
+            **recognition_payload,
         )
+
+    def recognize(
+        self,
+        asset_id: str,
+        command: QuestionRecognitionCommand,
+        *,
+        owner_id: str,
+    ) -> QuestionInputBundle:
+        if command.mode == "external" and not command.external_processing_consent:
+            raise QuestionCaptureError("使用外部 OCR 前必须逐次确认本次图片处理")
+        if command.mode == "local" and command.external_processing_consent:
+            raise QuestionCaptureError("本地 OCR 不接受外部处理同意标记")
+        provider = self.recognition_providers.get(command.mode)
+        if provider is None:
+            if command.mode == "external":
+                raise QuestionCaptureError("外部 OCR 尚未配置 DeepSeek Vision 或 OpenAI 图像模型与 API Key")
+            raise QuestionCaptureError("本地数学 OCR 尚未配置")
+
+        with self._connect() as connection:
+            asset = connection.execute(
+                "SELECT * FROM question_capture_assets WHERE asset_id = ? AND owner_id = ?",
+                (asset_id, owner_id),
+            ).fetchone()
+            if asset is None:
+                raise KeyError(asset_id)
+            media = connection.execute(
+                "SELECT * FROM question_capture_revisions WHERE asset_id = ? AND revision = ?",
+                (asset_id, asset["current_revision"]),
+            ).fetchone()
+            previous = connection.execute(
+                "SELECT MAX(recognition_revision) AS value FROM question_capture_recognitions WHERE asset_id = ?",
+                (asset_id,),
+            ).fetchone()
+        if media is None:
+            raise QuestionCaptureError("题目图片当前版本不存在")
+        try:
+            result = provider.recognize(
+                path=self._confined_path(media["stored_name"]),
+                mime_type=media["mime_type"],
+                teacher_id=owner_id,
+            )
+        except QuestionRecognitionError as exc:
+            raise QuestionCaptureError(str(exc)) from exc
+        if not result.stem_plain.strip():
+            raise QuestionCaptureError("OCR 没有返回可校对的题面")
+
+        next_revision = int(previous["value"] or 0) + 1
+        now = self._now()
+        with self._connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO question_capture_recognitions (
+                    asset_id, recognition_revision, source_media_revision, status,
+                    mode, provider, model, external_consent, stem_plain, stem_latex,
+                    options_json, requires_visual_reasoning, visual_observations_json, low_confidence_json,
+                    warnings_json, teacher_review_note, created_at
+                ) VALUES (?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '', ?)
+                """,
+                (
+                    asset_id,
+                    next_revision,
+                    asset["current_revision"],
+                    command.mode,
+                    provider.name,
+                    provider.model,
+                    int(command.external_processing_consent),
+                    result.stem_plain.strip(),
+                    result.stem_latex.strip(),
+                    json.dumps([item.model_dump(mode="json") for item in result.options], ensure_ascii=False),
+                    None if result.requires_visual_reasoning is None else int(result.requires_visual_reasoning),
+                    json.dumps(result.visual_observations, ensure_ascii=False),
+                    json.dumps(
+                        [item.model_dump(mode="json") for item in result.low_confidence_regions],
+                        ensure_ascii=False,
+                    ),
+                    json.dumps(result.warnings, ensure_ascii=False),
+                    now,
+                ),
+            )
+        return self.get(asset_id, owner_id=owner_id)
+
+    def review_recognition(
+        self,
+        asset_id: str,
+        command: QuestionRecognitionReviewCommand,
+        *,
+        owner_id: str,
+    ) -> QuestionInputBundle:
+        with self._connect() as connection:
+            asset = connection.execute(
+                "SELECT * FROM question_capture_assets WHERE asset_id = ? AND owner_id = ?",
+                (asset_id, owner_id),
+            ).fetchone()
+            if asset is None:
+                raise KeyError(asset_id)
+            previous = connection.execute(
+                """
+                SELECT * FROM question_capture_recognitions
+                WHERE asset_id = ? ORDER BY recognition_revision DESC LIMIT 1
+                """,
+                (asset_id,),
+            ).fetchone()
+        if previous is None:
+            raise QuestionCaptureError("请先识别题面，再保存校对结果")
+        if previous["source_media_revision"] != asset["current_revision"]:
+            raise QuestionCaptureError("图片已调整，请先重新识别最新版本")
+        next_revision = int(previous["recognition_revision"]) + 1
+        warnings = json.loads(previous["warnings_json"])
+        if command.confirm:
+            warnings = [item for item in warnings if "需对照原图校对" not in item]
+        with self._connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO question_capture_recognitions (
+                    asset_id, recognition_revision, source_media_revision, status,
+                    mode, provider, model, external_consent, stem_plain, stem_latex,
+                    options_json, requires_visual_reasoning, visual_observations_json, low_confidence_json,
+                    warnings_json, teacher_review_note, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    asset_id,
+                    next_revision,
+                    asset["current_revision"],
+                    "confirmed" if command.confirm else "draft",
+                    previous["mode"],
+                    previous["provider"],
+                    previous["model"],
+                    previous["external_consent"],
+                    command.stem_plain.strip(),
+                    command.stem_latex.strip(),
+                    json.dumps([item.model_dump(mode="json") for item in command.options], ensure_ascii=False),
+                    previous["requires_visual_reasoning"],
+                    previous["visual_observations_json"],
+                    previous["low_confidence_json"],
+                    json.dumps(warnings, ensure_ascii=False),
+                    command.note.strip(),
+                    self._now(),
+                ),
+            )
+        return self.get(asset_id, owner_id=owner_id)
 
     def content(
         self,
@@ -281,6 +479,108 @@ class QuestionCapture:
         if not path.is_file():
             raise QuestionCaptureError("题目图片文件不存在")
         return path, row["mime_type"]
+
+    def prepare_for_solve(
+        self,
+        reference: QuestionSolveReference,
+        *,
+        owner_id: str,
+        request_id: str,
+    ) -> PreparedQuestionInput:
+        """Resolve one confirmed private bundle without exposing storage authority."""
+        with self._connect() as connection:
+            asset = connection.execute(
+                "SELECT * FROM question_capture_assets WHERE asset_id = ? AND owner_id = ?",
+                (reference.asset_id, owner_id),
+            ).fetchone()
+            if asset is None:
+                raise KeyError(reference.asset_id)
+            media = connection.execute(
+                """
+                SELECT * FROM question_capture_revisions
+                WHERE asset_id = ? AND revision = ?
+                """,
+                (reference.asset_id, reference.media_revision),
+            ).fetchone()
+            recognition = connection.execute(
+                """
+                SELECT * FROM question_capture_recognitions
+                WHERE asset_id = ? AND recognition_revision = ?
+                """,
+                (reference.asset_id, reference.recognition_revision),
+            ).fetchone()
+        if int(asset["current_revision"]) != reference.media_revision:
+            raise QuestionCaptureError("题目图片版本已变化，请重新识别并确认后再解题")
+        if media is None:
+            raise QuestionCaptureError("指定的题目图片版本不存在")
+        if recognition is None:
+            raise QuestionCaptureError("指定的题面识别版本不存在")
+        if recognition["status"] != "confirmed":
+            raise QuestionCaptureError("题面尚未由教师确认，不能交给 Solve")
+        if int(recognition["source_media_revision"]) != reference.media_revision:
+            raise QuestionCaptureError("题面识别与图片版本不一致，请重新识别并确认")
+
+        options = json.loads(recognition["options_json"])
+        option_lines = [
+            f"{str(item.get('key', '')).strip()}. {str(item.get('text', '')).strip()}"
+            for item in options
+            if str(item.get("key", "")).strip() and str(item.get("text", "")).strip()
+        ]
+        question_text = recognition["stem_plain"].strip()
+        if option_lines:
+            question_text = f"{question_text}\n" + "\n".join(option_lines)
+        if not question_text:
+            raise QuestionCaptureError("教师确认题面为空，不能交给 Solve")
+
+        # Unknown is treated as visual-dependent: losing a diagram is worse than
+        # requiring a fresh, explicit consent.
+        requires_visual = recognition["requires_visual_reasoning"] != 0
+        if requires_visual and not reference.visual_processing_consent:
+            raise QuestionCaptureError("本题依赖原图；发送给视觉解题模型前必须逐次确认本次处理")
+
+        image_content: bytes | None = None
+        image_mime_type: str | None = None
+        if requires_visual:
+            path = self._confined_path(media["stored_name"])
+            if not path.is_file():
+                raise QuestionCaptureError("题目图片文件不存在")
+            image_content = path.read_bytes()
+            image_mime_type = media["mime_type"]
+
+        try:
+            with self._connect() as connection:
+                connection.execute(
+                    """
+                    INSERT INTO question_capture_solve_uses (
+                        request_id, owner_id, asset_id, media_revision,
+                        recognition_revision, requires_visual_reasoning,
+                        visual_processing_consent, image_prepared, created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        request_id,
+                        owner_id,
+                        reference.asset_id,
+                        reference.media_revision,
+                        reference.recognition_revision,
+                        int(requires_visual),
+                        int(reference.visual_processing_consent),
+                        int(image_content is not None),
+                        self._now(),
+                    ),
+                )
+        except sqlite3.IntegrityError as exc:
+            raise QuestionCaptureError("本次题面/视觉处理许可已使用，请重新发起解题") from exc
+        return PreparedQuestionInput(
+            question_text=question_text,
+            asset_id=reference.asset_id,
+            media_revision=reference.media_revision,
+            recognition_revision=reference.recognition_revision,
+            requires_visual_reasoning=requires_visual,
+            visual_processing_consent=reference.visual_processing_consent,
+            image_bytes=image_content,
+            image_mime_type=image_mime_type,
+        )
 
     def _open_image(self, content: bytes) -> tuple[Image.Image, str]:
         try:
@@ -363,8 +663,56 @@ class QuestionCapture:
                     PRIMARY KEY (asset_id, revision),
                     FOREIGN KEY (asset_id) REFERENCES question_capture_assets(asset_id)
                 );
+                CREATE TABLE IF NOT EXISTS question_capture_recognitions (
+                    asset_id TEXT NOT NULL,
+                    recognition_revision INTEGER NOT NULL,
+                    source_media_revision INTEGER NOT NULL,
+                    status TEXT NOT NULL,
+                    mode TEXT NOT NULL,
+                    provider TEXT NOT NULL,
+                    model TEXT NOT NULL,
+                    external_consent INTEGER NOT NULL,
+                    stem_plain TEXT NOT NULL,
+                    stem_latex TEXT NOT NULL,
+                    options_json TEXT NOT NULL,
+                    requires_visual_reasoning INTEGER,
+                    visual_observations_json TEXT NOT NULL DEFAULT '[]',
+                    low_confidence_json TEXT NOT NULL,
+                    warnings_json TEXT NOT NULL,
+                    teacher_review_note TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    PRIMARY KEY (asset_id, recognition_revision),
+                    FOREIGN KEY (asset_id) REFERENCES question_capture_assets(asset_id)
+                );
+                CREATE INDEX IF NOT EXISTS idx_question_capture_recognitions_asset
+                    ON question_capture_recognitions(asset_id, recognition_revision DESC);
+                CREATE TABLE IF NOT EXISTS question_capture_solve_uses (
+                    request_id TEXT PRIMARY KEY,
+                    owner_id TEXT NOT NULL,
+                    asset_id TEXT NOT NULL,
+                    media_revision INTEGER NOT NULL,
+                    recognition_revision INTEGER NOT NULL,
+                    requires_visual_reasoning INTEGER NOT NULL,
+                    visual_processing_consent INTEGER NOT NULL,
+                    image_prepared INTEGER NOT NULL,
+                    created_at TEXT NOT NULL,
+                    FOREIGN KEY (asset_id) REFERENCES question_capture_assets(asset_id)
+                );
+                CREATE INDEX IF NOT EXISTS idx_question_capture_solve_uses_owner
+                    ON question_capture_solve_uses(owner_id, created_at DESC);
                 """
             )
+            columns = {
+                row["name"]
+                for row in connection.execute(
+                    "PRAGMA table_info(question_capture_recognitions)"
+                ).fetchall()
+            }
+            if "visual_observations_json" not in columns:
+                connection.execute(
+                    "ALTER TABLE question_capture_recognitions "
+                    "ADD COLUMN visual_observations_json TEXT NOT NULL DEFAULT '[]'"
+                )
 
     @staticmethod
     def _now() -> str:

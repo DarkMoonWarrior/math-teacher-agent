@@ -65,6 +65,7 @@ export interface SolveQuestionInput {
   question_text: string;
   solution_mode?: SolutionMode;
   teacher_instruction?: string;
+  capture_grant?: string;
 }
 
 export interface SolveQuestionResponse {
@@ -99,6 +100,16 @@ export interface SolveQuestionResponse {
   match_score: number | null;
   alternative_available: boolean;
   warnings: string[];
+  visual_context: {
+    asset_id: string;
+    media_revision: number;
+    recognition_revision: number;
+    requires_visual_reasoning: boolean;
+    visual_processing_consent: boolean;
+    image_used: boolean;
+    provider: string;
+    model: string;
+  } | null;
   request_id: string;
 }
 
@@ -175,6 +186,26 @@ export interface SearchPrivateLibraryResponse {
   truncated: boolean;
   content_scope: "matching_excerpts";
   visibility: "private";
+  request_id: string;
+}
+
+export interface CreateQuestionDraftInput {
+  request_text: string;
+  grade?: "高一" | "高二" | "高三";
+  curriculum_node_id?: string;
+  knowledge_point_query?: string;
+  question_type?: "single_choice" | "multiple_choice" | "fill_blank" | "open_response";
+  target_difficulty?: number;
+  teaching_purpose?: string;
+  expected_minutes?: number;
+  assessed_method?: string;
+  misconception_requirements?: string;
+  additional_constraints?: string;
+  reference_question_id?: string;
+}
+
+export interface CreateQuestionDraftResponse {
+  draft: Record<string, unknown>;
   request_id: string;
 }
 
@@ -344,5 +375,9 @@ export class ToolGatewayClient {
 
   searchPrivateLibrary(input: SearchPrivateLibraryInput, options: GatewayRequestOptions): Promise<GatewayResult<SearchPrivateLibraryResponse>> {
     return this.post("/internal/agent-tools/v1/search-private-library", input, options);
+  }
+
+  createQuestionDraft(input: CreateQuestionDraftInput, options: GatewayRequestOptions): Promise<GatewayResult<CreateQuestionDraftResponse>> {
+    return this.post("/internal/agent-tools/v1/create-question-draft", input, options);
   }
 }

@@ -61,23 +61,34 @@ apps/web (legacy/reference Next.js UI, :3000)
 - Current retrieval seam: 浏览器逐次明确同意后，FastAPI 为当前教师、查询和数量签发短时单次许可；Harness 只能调用固定 `search_private_library` Tool，`PrivateLibrary` 只从 active + confirmed 资源返回有界匹配片段和来源版本/权利状态。owner、原文件、路径与整份正文不越过 seam。
 - Completion: 12 个项目自建 synthetic 场景的 8 类违规均为 0，完整工程、静态边界与 320—1920px 浏览器 Gate E 已通过；项目所有者已确认进入 M7。
 
-### Question Capture module（M7 进行中）
+### Question Capture module（M7 已完成）
 
 - Seam: `QuestionCapture.prepare(QuestionCaptureCommand) -> QuestionInputBundle`。
 - Interface: 接收文字或 owner-scoped 单题媒体引用，返回可编辑题面、LaTeX、选项、原图/裁剪引用、视觉推理标志、低置信度区域、revision、consent 与 provider 证据。
 - Implementation: 图片验证、旋转裁剪、清晰度、OCR、公式识别、图形存在性判断、owner 隔离和外部处理同意隐藏在模块内部。
 - Adapters: 本地 OCR/图像处理 adapter、外部视觉 adapter 和 deterministic test adapter；Solve Agent 不直接调用供应商或读取文件。
 - Trust: 带图题的原图/裁剪是 `QuestionInputBundle` 的一部分，不能在 OCR 后丢弃；视觉理解与 MathVerifier 证据范围分开。
-- First slice: `QuestionCapture.prepare/transform/get/content` 隐藏真实格式探测、体积/像素/清晰度、EXIF 方向、owner-scoped SQLite/文件 adapter 和 revision。公开路由只接收图片、来源、私有存储确认与受控 asset ID；浏览器不能提交 owner，也看不到存储路径。新 Solve composer 已接入上传、粘贴、拍照、预览、旋转和裁剪，但不会在识别切片前把图片传给 Solve 或外部模型。
+- First slice: `QuestionCapture.prepare/transform/get/content` 隐藏真实格式探测、体积/像素/清晰度、EXIF 方向、owner-scoped SQLite/文件 adapter 和 revision。公开路由只接收图片、来源、私有存储确认与受控 asset ID；浏览器不能提交 owner，也看不到存储路径。新 Solve composer 已接入上传、粘贴、拍照、预览、旋转和裁剪。
+- Second slice: `QuestionCapture.recognize/review_recognition` 隐藏本地/外部 OCR adapter、逐次外部同意、结构化题面与 append-only 识别 revision。生产 adapter 包括本地 pix2text、DeepSeek `deepseek-v4-flash-vision-exp` 与 OpenAI 图像模型，DeepSeek 优先级只属于路由装配，不进入业务 interface。识别与具体 media revision 绑定；媒体变化后结果显式 `stale`。教师端能校对普通题面、LaTeX、选项和低置信度区域；只有教师确认的 current revision 才能进入第三切片。
+- Third slice: `QuestionCapture.prepare_for_solve` 是 owner-scoped、revision-pinned 的深模块 seam；只把教师确认的 canonical 题面和必要视觉字节交给 `SolutionAssistant`。FastAPI 在 Agent 运行前签发一次性 `QuestionSolveGrant`，绑定 owner、canonical 题面、解题模式/要求、asset/media/OCR revision 与本次视觉同意；模型只转发 capability，Tool 在读取图片前消费并从中恢复完整 server-owned 意图，因此模型改写参数不能替换私人资源或改变授权。Agent/Web 不接触文件路径或字节。视觉结果携带实际 provider/model/revision，始终与 MathVerifier 证据分层。
 
-### Private Question Authoring modules（M8 待开始）
+### Private Question Authoring modules（M8 进行中）
 
-- Seam: `QuestionAuthoring.create_draft(QuestionDesignBrief) -> GeneratedQuestionDraft`，隐藏教材映射、结构化生成、答案/解析一致性、选择题唯一性、MathVerifier、provider 和错误语义。
+- Seam: `QuestionAuthoring.create_draft(QuestionDesignBrief) -> GeneratedQuestionDraft` 负责整题生成；`QuestionAuthoring.regenerate_solution(GeneratedQuestionDraft) -> GeneratedQuestionDraft` 锁定题面、选项和最终答案，只替换解析并重建可信证据。两者隐藏 provider、受控教材映射、结构检查、MathVerifier 和错误语义。
 - Storage seam: `PersonalQuestionLibrary` 独立拥有 owner 私题的个人题库命名、分类、CRUD、revision、导出和删除语义。
 - Isolation: `PersonalQuestionLibrary` 不只是公共 `QuestionBank` 的一个 visibility 过滤器；它使用独立业务接口和 owner-isolated storage namespace，没有 publish/share/public/commercial-approved 接口。
 - Ownership: current owner 只来自服务端认证上下文；Public Search、Public QuestionBank、后台内容工具、其他 owner、教研组和学校管理员均没有读取接口。
 - Management: Agent 生成或提出修改草稿，教师在受认证 UI 中明确保存；编辑、分类、回收站、恢复和永久删除由 owner 直接调用 FastAPI 业务接口，Agent 与后台管理员无永久删除工具。
 - Reuse: Curriculum、MathVerifier、RightsGate 和已验证且允许 adaptation 的参考母题可被调用，但不得把辅助命制题复制到公共题库。
+- First slice: `PersonalQuestionLibrary` 已以单独 `data/private-runtime` SQLite namespace 实现个人题库集合与分类；它把名称规范化、owner 隔离、重复约束和固定 owner-only policy 隐藏在小接口后。公开 FastAPI 路由只从 current-teacher seam 注入 owner，payload 中额外的 `owner_id` 被拒绝；跨 owner 的集合/分类详情与更新统一返回不存在。
+- Second/third slices: `QuestionAuthoring.create_draft` 以严格 `QuestionDesignBrief` 为界面，完成题型补全、可替换 provider、结构验证、六项分级可信检查和诚实错误语义。DeepSeek Harness 只能调用一次 `create_question_draft`；Tool 请求没有 owner/save/publish/share/delete 字段。
+- Fourth slice: 公开 FastAPI 在成功生成后把结果登记为当前 owner 的未保存 authoring workspace revision；Agent 本身仍不写存储。浏览器只能提交可编辑题面和 `expected_revision`，`QuestionAuthoring.revise_draft` 在服务端重建可信证据，`PersonalQuestionLibrary` 以 append-only revision 和乐观版本冲突保护修改。显式保存还必须验证 collection/category 属于 current owner，且只写独立的 `personal_questions`，公共 `QuestionBank` 不参与。
+- Fifth slice: `PersonalQuestionLibrary` 的同一 interface 隐藏 owner 私题列表/搜索、保存后内容 revision、元数据与分类、标签排序、独立复制、JSON/Markdown 导出及 lifecycle。复制创建独立 draft/revision 链；永久删除只对已 trashed 的当前版本生效，并在事务中删除个人题目快照及其独占 revision 链。公开路由只做认证绑定和下载响应适配，Agent/Internal Tool Gateway 没有这些管理能力。
+- Sixth slice: `apps/teacher-web` 只依赖产品自有 `TeacherWorkspace` contract，把新任务、Search 空/不合适结果和 Paper 缺题提示转入独立 authoring workspace。生成、教师 revision、明确保存和 owner 管理是可观察的不同动作；生成题保持 `AI GENERATED · UNSAVED`，不进入 Search result，Paper 也不会自动生成、保存或加题。浏览器 payload 不暴露 owner、policy 或可信证据控制面。
+- Seventh slice: 教师不再需要在生成前填写教材知识点、考查方法或易错点。provider 在完成题目后返回细分知识点、方法、常见错误和一个可空的 Curriculum node ID；业务层只接受 catalog allowlist 内的知识点，并把 Agent 映射标记为待确认。教师可在结果页检索目录并用普通 teacher revision 确认/修正，未知或无法映射的节点不会阻断 owner-only 草稿，也不会获得可信状态。
+- Long-form hardening: `QuestionAuthoring` 对外仍只有一次 `create_draft`，Agent 仍只能调用一次 `create_question_draft`。DeepSeek adapter 内部把生成拆成不可变题面/最终答案、解析提纲和若干解析段，解析段并行展开、按序组装，只有失败段可局部重试。该实现不截短题目，不新增模型权限，也不改变 owner-only 未保存状态。命题和 Solve 共用数学内容输出规范与 Teacher Web `MathText`/`MathSolutionView` 渲染路径。
+- Solution presentation guard: provider 解析段只允许成稿推导；确定性元推理检测会触发单段清理，持续污染或确认数学冲突时 fail closed。教师触发的解析重生成由认证 FastAPI 直接调用业务 seam，并通过 `PersonalQuestionLibrary.append_ai_revision` 追加版本；Agent Tool、owner/policy 字段和公共题库接口均不扩张。
+- Third slice: 同一深模块在返回前生成六项固定可信证据，并由 `QuestionDraftVerification` 强制检查项唯一、总状态与阻断项一致、MathVerifier 能力与是否真正运行一致。答案数量、明显答案冲突、选项重复和难度偏差可确定性检查；一般数学可解性、干扰项语义及无受控 rule spec 的任意生成题保持 `inconclusive/unsupported`，模型自述不能升级为 MathVerifier 证据。
 
 ### Teacher Agent Runtime module
 
@@ -103,7 +114,11 @@ FastAPI runtime adapter → Agent Service
 Agent Service → internal Tool gateway
 internal Tool gateway → business modules
 business modules → their owned storage adapters
-QuestionAuthoring → PersonalQuestionLibrary only after owner save confirmation
+QuestionAuthoring → owner-only authoring workspace（unsaved revision）
+Teacher-confirmed edit → QuestionAuthoring recheck → append-only revision
+Teacher-confirmed save → PersonalQuestionLibrary private question
+Owner management → append-only revision / metadata / copy / private export / trash
+Owner-confirmed permanent delete → active snapshot + owned revision chain removed
 PersonalQuestionLibrary → owner-isolated private storage adapter
 ```
 
@@ -141,10 +156,10 @@ The primary UI should normally call `/api/v1` on its own origin. Next.js rewrite
 - Search tests target `SearchAgentPipeline` and the HTTP route, not private ranking internals alone.
 - Solve tests target 唯一 Tool 证据、可信字段校验、结构化错误、真实 SSE、取消、恢复和 feature gate。
 - Private Library tests target owner-scoped 结果、private-by-default、revision、逐次外部处理同意、无正文概览 Tool 与越权失败路径。
-- M7 tests target `QuestionCapture` 的图片/公式/图形保真、revision、逐次外部同意、Solve 可观察结果和跨 owner 失败，不测试供应商内部实现。
-- M8 tests target `QuestionAuthoring` 与 `PersonalQuestionLibrary` 的可观察接口，强制公共 Search/QuestionBank/后台访问缺失、跨 owner fail closed、owner 管理和永久删除语义。
+- M7 tests target `QuestionCapture` 的图片/公式/图形保真、revision、逐次外部同意、Solve 可观察结果和跨 owner 失败，不测试供应商内部实现。15 场景固定 synthetic evaluation 与 Gate E 已于 2026-08-24 通过。
+- M8 tests target `QuestionAuthoring`、`PersonalQuestionLibrary` 与 Teacher Web adapter 的可观察接口，强制公共 Search/QuestionBank/后台访问缺失、跨 owner fail closed、浏览器无 owner/policy/trust 控制面、生成与明确保存分离、owner 管理和永久删除语义。
 - Runtime conformance tests exercise both runtime adapters through the product-owned interface.
-- Security tests enforce the exact read-only Tool allowlist and absence of database access in `apps/agent`.
+- Security tests enforce the exact Tool allowlist and absence of database access in `apps/agent`；当前 8 个 Tool 只读，第 9 个 `create_question_draft` 只生成未保存草稿且不执行业务写入。
 - Business tests use synthetic/local adapters and assert published behaviour, rights, verification and privacy invariants.
 
 ## 7. Future evolution

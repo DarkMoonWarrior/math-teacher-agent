@@ -13,6 +13,7 @@ from app.modules.solution_assistant import (
     SolutionAssistantUnavailableError,
     SolutionAssistantVerificationError,
     SolutionProviderError,
+    SolutionProviderResponseError,
     SolutionRequest,
     SolutionResult,
 )
@@ -37,6 +38,7 @@ def get_solution_assistant() -> SolutionAssistant:
     provider = DeepSeekSolutionProvider(
         api_key=settings.deepseek_api_key,
         model=settings.deepseek_model,
+        vision_model=settings.deepseek_vision_model,
         base_url=settings.deepseek_base_url,
         timeout_seconds=settings.deepseek_timeout_seconds,
         recorder=get_model_operations_registry(),
@@ -44,6 +46,7 @@ def get_solution_assistant() -> SolutionAssistant:
         OpenAISolutionProvider(
             api_key=settings.openai_api_key,
             model=settings.openai_model,
+            vision_model=settings.openai_model,
             reasoning_effort=settings.openai_reasoning_effort,
             timeout_seconds=settings.openai_timeout_seconds,
             recorder=get_model_operations_registry(),
@@ -64,5 +67,7 @@ def solve_question(command: SolutionRequest) -> SolutionResult:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except SolutionAssistantError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except SolutionProviderResponseError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
     except SolutionProviderError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc

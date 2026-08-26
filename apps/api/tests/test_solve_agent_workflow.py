@@ -21,6 +21,7 @@ from app.agent_runtime import (
     TeacherAgentToolCall,
 )
 from app.modules.solve_agent import SolveAgentCommand, SolveAgentWorkflow
+from app.modules.question_capture import QuestionSolveReference
 
 
 def _solution_output(*, ok: bool = True) -> dict:
@@ -213,6 +214,59 @@ def test_run_accepts_only_the_structured_solve_tool_result() -> None:
     assert response.tool_request_id == "req_tool_solve"
     assert "程序验证通过" not in response.model_dump_json()
     assert "必须且只能调用一次 solve_question" in runtime.requests[0].user_message
+
+
+def test_visual_solve_pins_tool_input_and_output_to_confirmed_revisions() -> None:
+    reference = QuestionSolveReference(
+        asset_id="qcap_visual_1",
+        media_revision=4,
+        recognition_revision=7,
+        visual_processing_consent=True,
+    )
+    output = _solution_output()
+    output["model"] = "fake-vision-v1"
+    output["visual_context"] = {
+        "asset_id": "qcap_visual_1",
+        "media_revision": 4,
+        "recognition_revision": 7,
+        "requires_visual_reasoning": True,
+        "visual_processing_consent": True,
+        "image_used": True,
+        "provider": "fake_model",
+        "model": "fake-vision-v1",
+    }
+    call = _solve_call(output)
+    call.input.update({
+        "capture_grant": "grant_fixed_visual_1234567890",
+    })
+    runtime = FakeSolveRuntime(_result(tool_calls=[call]))
+    class FixedGrants:
+        def issue(self, **_kwargs) -> str:
+            return "grant_fixed_visual_1234567890"
+
+    workflow = SolveAgentWorkflow(runtime=runtime, grants=FixedGrants())  # type: ignore[arg-type]
+    command = SolveAgentCommand(
+        question_text="解方程 2x-4=0。",
+        question_capture=reference,
+    )
+
+    response = _run(workflow.run(command))
+
+    assert response.status == "ok"
+    assert response.solution is not None
+    assert response.solution.visual_context is not None
+    assert response.solution.visual_context.image_used is True
+    assert "capture_media_revision" not in runtime.requests[0].user_message
+    assert "visual_processing_consent" not in runtime.requests[0].user_message
+    assert "qcap_visual_1" not in runtime.requests[0].user_message
+    assert "capture_grant：grant_fixed_visual_1234567890" in runtime.requests[0].user_message
+
+    call.input["capture_media_revision"] = 5
+    rejected = _run(
+        SolveAgentWorkflow(runtime=FakeSolveRuntime(_result(tool_calls=[call]))).run(command)
+    )
+    assert rejected.status == "error"
+    assert rejected.error["code"] == "TOOL_EXECUTION_ERROR"
 
 
 def test_run_rejects_missing_duplicate_or_forged_solve_evidence() -> None:

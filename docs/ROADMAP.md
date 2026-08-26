@@ -1,6 +1,6 @@
 # 产品与工程路线图
 
-更新日期：2026-08-22
+更新日期：2026-08-24
 
 本路线以当前仓库真实进度为起点，并继承《高中数学教师可信 Agent：商业开发路线与 Codex 提示词手册 v1.0》的核心原则。旧 PDF 的阶段编号和 Prompt 顺序属于历史执行方案；本文件是当前阶段顺序的 source of truth。
 
@@ -23,8 +23,8 @@
 | M4 Search 集成稳定化 | 已完成 | 让新工作台中的 Search 成为稳定、可理解、可恢复的完整入口。 | 同源请求、加载、取消、错误、空结果、可信标签、关键响应式和全量测试全部通过；Gate E 于 2026-08-21 通过。 |
 | M5 Solve Agent | 已完成 | 为题库题和新题提供分层可信解答，不把模型输出冒充 verified。 | 优先复用 verified solution；新解答明确 `teacher_review_required`；MathVerifier 分级、固定 synthetic eval、320—1920px 响应式和 Gate E 通过。 |
 | M6 Private Library Agent | 已完成 | 让教师的 PDF/DOCX/图片在 private workspace 内完成导入、OCR、拆题、映射和检索。 | 原文件与 revision 可追踪；private-by-default；owner 隔离与越权测试、固定评测和 Gate E 于 2026-08-22 通过；无自动 public 路径。 |
-| **M7 多模态题目采集与图片解题** | **进行中** | 让文字、截图和单题图片经过可核对的文字/公式识别，并把必要原图视觉信息安全接入 Solve。 | owner/private、逐次外部同意、原图与 revision 可追踪；带图题不丢失视觉条件；MathVerifier 与视觉判断分层；固定评测和 Gate E 通过。第一条私有媒体切片已完成。 |
-| M8 私有辅助命题 Agent | 待开始 | 将教师命题要求转换为结构化题目草稿，并保存到 owner 独占、可命名分类和自主管理的私题库。 | 辅助命制题永不进入公共/共享/商业题库；只有 owner 可见和管理；公共 Search、后台内容管理与跨 owner 访问全部 fail closed。 |
+| **M7 多模态题目采集与图片解题** | **已完成；阶段转换已确认** | 让文字、截图和单题图片经过可核对的文字/公式识别，并把必要原图视觉信息安全接入 Solve。 | owner/private、逐次外部同意、原图与 revision 可追踪；题面/步骤/答案公式可读；带图题不丢失视觉条件；MathVerifier 与视觉判断分层；15 场景固定评测 9 类违规为 0，Gate E 于 2026-08-24 通过。 |
+| **M8 私有辅助命题 Agent** | **进行中；切片 1–7 已完成** | 将教师命题要求转换为结构化题目草稿，并保存到 owner 独占、可命名分类和自主管理的私题库。 | 已建立独立 `PersonalQuestionLibrary`、结构化命题、六项可信检查、私有草稿/revision、明确保存、完整 owner 管理闭环、Teacher Web 入口及生成后教材/教学元数据归纳；Agent 无管理写权限。固定评测和 Gate E/Gate P 尚未执行。 |
 | M9 Paper Agent | 待开始 | 将自然语言转换为 PaperBlueprint，并生成可编辑试卷草稿和双向细目表。 | 权利/验证/重复/相似度/覆盖/难度门禁通过；不为凑题自动生成题；引用私题不改变 owner/visibility；导出闭环可用。 |
 | M10 Lesson Agent | 待开始 | 基于教材、真实题目和教师资料生成可逐段编辑的教案草稿。 | 目标、活动、例题、练习、作业与来源状态可追踪；AI 内容明确标记；教师保存前可编辑。 |
 | M11 Teacher Memory | 待开始 | 在真实教师反馈基础上保存可解释、可控制的偏好。 | 偏好可查看、修改、删除和关闭自动学习；推断有来源与 confidence；不保存不必要的敏感正文。 |
@@ -37,8 +37,8 @@
 
 ## 当前启动顺序
 
-`M4 Search 稳定化（已完成） → M5 Solve（已完成） → M6 Private Library（已完成） → M7 多模态图片解题（进行中） → M8 私有辅助命题 → M9 Paper → M10 Lesson → M11 Memory → M12 Beta 准备 → M13 Beta 验证 → M14 商业基础 → M15 Teacher Pro → M16 教研组 → M17 学校`
+`M4 Search 稳定化（已完成） → M5 Solve（已完成） → M6 Private Library（已完成） → M7 多模态图片解题（已完成） → M8 私有辅助命题（进行中） → M9 Paper → M10 Lesson → M11 Memory → M12 Beta 准备 → M13 Beta 验证 → M14 商业基础 → M15 Teacher Pro → M16 教研组 → M17 学校`
 
-M6 的固定范围、评测与完成 Gate 见 [`M6-PRIVATE-LIBRARY-AGENT.md`](M6-PRIVATE-LIBRARY-AGENT.md)、[`M6-PRIVATE-LIBRARY-EVALUATION.md`](M6-PRIVATE-LIBRARY-EVALUATION.md) 和 [`M6-GATE-REVIEW.md`](M6-GATE-REVIEW.md)。当前 M7 与未来 M8 的固定边界分别见 [`M7-MULTIMODAL-QUESTION-SOLVE.md`](M7-MULTIMODAL-QUESTION-SOLVE.md) 与 [`M8-PRIVATE-QUESTION-AUTHORING.md`](M8-PRIVATE-QUESTION-AUTHORING.md)。M7 Gate E 通过并由项目所有者确认前不得启动 M8。
+M6 的固定范围、评测与完成 Gate 见 [`M6-PRIVATE-LIBRARY-AGENT.md`](M6-PRIVATE-LIBRARY-AGENT.md)、[`M6-PRIVATE-LIBRARY-EVALUATION.md`](M6-PRIVATE-LIBRARY-EVALUATION.md) 和 [`M6-GATE-REVIEW.md`](M6-GATE-REVIEW.md)。M7 的范围、固定评测与完成 Gate 见 [`M7-MULTIMODAL-QUESTION-SOLVE.md`](M7-MULTIMODAL-QUESTION-SOLVE.md)、[`M7-MULTIMODAL-SOLVE-EVALUATION.md`](M7-MULTIMODAL-SOLVE-EVALUATION.md) 和 [`M7-GATE-REVIEW.md`](M7-GATE-REVIEW.md)。当前 M8 的固定边界与切片进度见 [`M8-PRIVATE-QUESTION-AUTHORING.md`](M8-PRIVATE-QUESTION-AUTHORING.md)；M8 Gate E 通过和项目所有者再次确认前不得启动 M9。
 
 任何阶段不得因为后端已有旧模块、界面已经出现入口或模型能够生成文本，就提前宣称完成。详细产品和商业门禁见 [`PRODUCT-GATES.md`](PRODUCT-GATES.md)。

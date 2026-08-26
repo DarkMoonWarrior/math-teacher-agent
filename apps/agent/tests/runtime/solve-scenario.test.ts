@@ -75,6 +75,66 @@ describe("Solve Agent deterministic harness scenario", () => {
     expect(repeated.tool_calls[0]?.input.question_text).toBe("解方程 3x-6=0。");
   });
 
+  it("passes only the opaque one-use capture capability to FastAPI", async () => {
+    harness = await createRuntimeHarness({
+      handlers: {
+        [SOLVE_QUESTION_ROUTE]: ({ body }) => ({
+          status: 200,
+          body: {
+            question_text: body.question_text,
+            solution_mode: body.solution_mode,
+            explanation: { method: "图形分析", steps: ["结合原图条件。"], final_answer: "待教师核对" },
+            knowledge_points: [], common_mistakes: [], teaching_notes: [],
+            confidence_status: "teacher_review_required",
+            math_verification: {
+              status: "inconclusive", capability: "unsupported", scope: "generated_solution",
+              evidence_source: "none", method: null, computed_answer: null, source_answer: null,
+              details: ["视觉理解不是 MathVerifier 证据。"], verifier_version: null,
+            },
+            verification_evidence: ["视觉理解不是 MathVerifier 证据。"],
+            provider: "deepseek", model: "deepseek-v4-flash-vision-exp", mode: "live_ai",
+            matched_question_id: null, matched_question_revision_count: null,
+            match_score: null, alternative_available: true,
+            warnings: ["请教师复核。"],
+            visual_context: {
+              asset_id: "qcap_private_1",
+              media_revision: 2,
+              recognition_revision: 5,
+              requires_visual_reasoning: true,
+              visual_processing_consent: true,
+              image_used: true,
+              provider: "deepseek",
+              model: "deepseek-v4-flash-vision-exp",
+            },
+            request_id: "req_visual_tool",
+          },
+        }),
+      },
+    });
+
+    const result = await harness.runtime.run({
+      user_message: [
+        "必须且只能调用一次 solve_question。",
+        "solution_mode：standard",
+        "capture_grant：grant_synthetic_visual_1234567890",
+        "题目：如图，在三角形 ABC 中求角 A。",
+      ].join("\n"),
+      request_id: "req_visual_route",
+    });
+
+    expect(result.tool_calls[0]?.input).toMatchObject({
+      capture_grant: "grant_synthetic_visual_1234567890",
+    });
+    const call = harness.stub.requests.find((request) => request.route === SOLVE_QUESTION_ROUTE);
+    expect(call?.body).toMatchObject({
+      capture_grant: "grant_synthetic_visual_1234567890",
+    });
+    expect(JSON.stringify(call?.body)).not.toContain("qcap_private_1");
+    expect(JSON.stringify(call?.body)).not.toContain("media_revision");
+    expect(JSON.stringify(call?.body)).not.toContain("stored_name");
+    expect(JSON.stringify(call?.body)).not.toContain("image_bytes");
+  });
+
   it("runs through the allowlisted solve tool and preserves teacher-review status", async () => {
     harness = await createRuntimeHarness({
       handlers: {

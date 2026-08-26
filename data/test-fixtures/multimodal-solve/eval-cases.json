@@ -1,0 +1,87 @@
+{
+  "evaluation_id": "multimodal-solve-synthetic-v1",
+  "source": "project-authored-synthetic",
+  "synthetic": true,
+  "cases": [
+    {
+      "id": "algebra_formula_text_only",
+      "group": "happy_path",
+      "requires_visual_reasoning": false,
+      "expected": "solve_without_image"
+    },
+    {
+      "id": "function_graph_visual",
+      "group": "happy_path",
+      "requires_visual_reasoning": true,
+      "expected": "solve_with_pinned_image"
+    },
+    {
+      "id": "analytic_geometry_visual",
+      "group": "happy_path",
+      "requires_visual_reasoning": true,
+      "expected": "solve_with_pinned_image"
+    },
+    {
+      "id": "solid_geometry_visual",
+      "group": "happy_path",
+      "requires_visual_reasoning": true,
+      "expected": "solve_with_pinned_image"
+    },
+    {
+      "id": "statistics_chart_visual",
+      "group": "happy_path",
+      "requires_visual_reasoning": true,
+      "expected": "solve_with_pinned_image"
+    },
+    {
+      "id": "low_contrast_review_warning",
+      "group": "input_quality",
+      "expected": "review_needed"
+    },
+    {
+      "id": "truncated_question_review_required",
+      "group": "recognition_quality",
+      "expected": "blocked_before_confirmation"
+    },
+    {
+      "id": "multiple_questions_review_required",
+      "group": "recognition_quality",
+      "expected": "blocked_before_confirmation"
+    },
+    {
+      "id": "external_ocr_consent_required",
+      "group": "consent",
+      "expected": "fail_closed"
+    },
+    {
+      "id": "ocr_service_failure",
+      "group": "provider_failure",
+      "expected": "no_false_revision"
+    },
+    {
+      "id": "vision_service_unavailable",
+      "group": "provider_failure",
+      "expected": "no_false_solution"
+    },
+    {
+      "id": "solve_cancelled",
+      "group": "lifecycle",
+      "expected": "cancelled"
+    },
+    {
+      "id": "solve_permission_replay",
+      "group": "consent",
+      "expected": "fail_closed"
+    },
+    {
+      "id": "cross_owner_isolation",
+      "group": "privacy",
+      "expected": "not_found"
+    },
+    {
+      "id": "visual_math_verifier_separation",
+      "group": "trust",
+      "expected": "teacher_review_required"
+    }
+  ]
+}

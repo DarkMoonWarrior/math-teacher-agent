@@ -58,6 +58,12 @@ class Settings(BaseSettings):
     question_capture_dir: Path = Field(
         default=PROJECT_ROOT / "data" / "runtime" / "question-capture-files"
     )
+    personal_question_library_db: Path = Field(
+        default=PROJECT_ROOT
+        / "data"
+        / "private-runtime"
+        / "personal-question-library.sqlite3"
+    )
     pdf_import_db: Path = Field(
         default=PROJECT_ROOT / "data" / "runtime" / "pdf-imports.sqlite3"
     )
@@ -88,6 +94,7 @@ class Settings(BaseSettings):
     cjk_font_bold: Path | None = None
     lesson_plan_provider: str = "auto"
     question_variant_provider: str = "auto"
+    question_authoring_provider: str = "auto"
     solution_provider: str = "auto"
     openai_api_key: str = ""
     openai_model: str = "gpt-5.6-terra"
@@ -98,6 +105,7 @@ class Settings(BaseSettings):
     openai_output_usd_per_million: float | None = None
     deepseek_api_key: str = ""
     deepseek_model: str = "deepseek-v4-flash"
+    deepseek_vision_model: str = "deepseek-v4-flash-vision-exp"
     deepseek_base_url: str = "https://api.deepseek.com"
     deepseek_timeout_seconds: int = 90
     pilot_batch_json: Path = Field(
@@ -126,16 +134,18 @@ class Settings(BaseSettings):
     agent_allow_legacy_fallback: bool = False
     agent_service_url: str = "http://127.0.0.1:4100"
     agent_service_token: str = ""
-    agent_request_timeout_seconds: int = 120
+    agent_request_timeout_seconds: int = 360
     # Agent -> FastAPI internal tool gateway 的机器身份。
     tool_gateway_token: str = ""
     tool_gateway_timeout_seconds: float = 30.0
     solve_tool_timeout_seconds: float = 120.0
+    question_authoring_tool_timeout_seconds: float = 360.0
 
     # -- Agent workflow feature gates ---------------------------------------
     # 默认关闭：现有传统页面行为不变。仅在相应 Runtime/Tool/UI Gate 就绪后开启。
     search_agent_enabled: bool = False
     solve_agent_enabled: bool = False
+    question_authoring_agent_enabled: bool = False
     search_agent_max_query_length: int = 2000
 
     @property

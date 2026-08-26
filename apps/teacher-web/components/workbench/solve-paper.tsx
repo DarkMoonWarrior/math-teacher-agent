@@ -1,4 +1,3 @@
-import { MathText } from "@/components/math-text";
 import type { SolveTaskResult } from "@/lib/teacher-workspace/contracts";
 import {
   evidenceSourceLabel,
@@ -8,6 +7,7 @@ import {
   verificationScopeLabel,
 } from "@/lib/teacher-workspace/labels";
 import { CheckIcon, ClockIcon } from "./icons";
+import { MathSolutionView } from "./math-solution-view";
 
 type SolvePaperProps = {
   page: number;
@@ -100,6 +100,20 @@ export function SolvePaper({ page, result }: SolvePaperProps) {
             </ol>
           )}
         </div>
+        {solution.visual_context && (
+          <section className={`visual-evidence${solution.visual_context.image_used ? " is-used" : ""}`}>
+            <header>
+              <span>图形输入证据</span>
+              <strong>{solution.visual_context.image_used ? "原图参与本次推理" : "本次仅使用确认题面"}</strong>
+            </header>
+            <dl>
+              <div><dt>图片版本</dt><dd>REV {solution.visual_context.media_revision}</dd></div>
+              <div><dt>题面版本</dt><dd>OCR REV {solution.visual_context.recognition_revision}</dd></div>
+              <div><dt>视觉模型</dt><dd>{solution.visual_context.image_used ? `${solution.visual_context.provider} · ${solution.visual_context.model}` : "未调用"}</dd></div>
+            </dl>
+            <p>图形理解属于模型生成过程，不是 MathVerifier 的独立数学验证证据。</p>
+          </section>
+        )}
       </article>
     );
   }
@@ -114,19 +128,13 @@ export function SolvePaper({ page, result }: SolvePaperProps) {
         <span className="paper-count">01 / 03</span>
       </header>
 
-      <div className="solve-question"><MathText text={result.question_text} /></div>
-      <ol className="solution-steps">
-        {solution.explanation.steps.map((step, index) => (
-          <li key={`${index}-${step}`}>
-            <span>{String(index + 1).padStart(2, "0")}</span>
-            <MathText text={step} />
-          </li>
-        ))}
-      </ol>
-      <section className="final-answer">
-        <span>最终答案</span>
-        <div className="final-answer__math"><MathText text={solution.explanation.final_answer} /></div>
-      </section>
+      <MathSolutionView
+        finalAnswer={solution.explanation.final_answer}
+        method={solution.explanation.method}
+        question={result.question_text}
+        showHeading={false}
+        steps={solution.explanation.steps}
+      />
       <footer className="solve-paper__foot"><TrustMark result={result} /></footer>
     </article>
   );
@@ -146,6 +154,9 @@ export function SolveResultBrief({ result }: { result: SolveTaskResult }) {
         <p>{result.duration_ms} ms · {result.tool_call_count} 次受控工具调用</p>
       </div>
       <p>{verificationScopeLabel(solution.math_verification.scope)} · {evidenceSourceLabel(solution.math_verification.evidence_source)}</p>
+      {solution.visual_context && (
+        <p>{solution.visual_context.image_used ? "原图已参与本次视觉推理" : "已绑定教师确认题面"} · 图片 REV {solution.visual_context.media_revision} / OCR REV {solution.visual_context.recognition_revision}</p>
+      )}
       {solution.matched_question_id && (
         <p>
           匹配题库记录 · {solution.matched_question_id}

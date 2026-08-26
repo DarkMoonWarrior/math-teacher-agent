@@ -7,11 +7,13 @@ search limit 硬上限、错误响应不泄漏 traceback/路径/secret。
 from __future__ import annotations
 
 import time
+from io import BytesIO
 from pathlib import Path
 
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from PIL import Image, ImageDraw
 
 from app.core.config import Settings
 from app.main import _GatewayHttpError, gateway_error_handler
@@ -24,13 +26,31 @@ from app.modules.private_library import (
     PrivateRetrievalGrantRegistry,
 )
 from app.modules.question_bank import QuestionBank
+from app.modules.question_capture import (
+    QuestionCapture,
+    QuestionCaptureCommand,
+    QuestionOption,
+    QuestionRecognitionCommand,
+    QuestionRecognitionResult,
+    QuestionRecognitionReviewCommand,
+    QuestionSolveGrantRegistry,
+    QuestionSolveReference,
+)
 from app.modules.question_quality import QuestionQualityWorkflow
 from app.modules.question_similarity import QuestionSimilarityRegistry
+from app.modules.question_authoring import (
+    ProviderQuestionDraft,
+    QuestionAuthoring,
+    QuestionAuthoringContext,
+    QuestionDraftOption,
+)
 from app.modules.solution_assistant import (
     GeneratedSolution,
     SolutionAssistant,
     SolutionExplanation,
     SolutionRequest,
+    SolutionProviderResponseError,
+    SolutionVisualInput,
 )
 from app.routes import internal_agent_tools as gateway
 from app.routes.internal_agent_tools import router as gateway_router
@@ -128,6 +148,48 @@ def gateway_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClien
     monkeypatch.setattr(gateway, "get_solution_assistant", lambda: solution_assistant)
     monkeypatch.setattr(gateway, "_catalog_for_path", lambda _path: catalog)
 
+    class FakeQuestionAuthoringProvider:
+        name = "synthetic_provider"
+        model = "synthetic-author-v1"
+
+        def generate(self, context: QuestionAuthoringContext) -> ProviderQuestionDraft:
+            return ProviderQuestionDraft(
+                question_type=context.question_type,
+                stem_plain="设集合 A={1,2}，B={2,3}，求 A∩B。",
+                stem_latex=r"设集合 $A=\{1,2\}$，$B=\{2,3\}$，求 $A\cap B$。",
+                options=(
+                    [
+                        QuestionDraftOption(key="A", text="{1}"),
+                        QuestionDraftOption(key="B", text="{2}"),
+                        QuestionDraftOption(key="C", text="{3}"),
+                        QuestionDraftOption(key="D", text="{1,2,3}"),
+                    ]
+                    if context.question_type == "single_choice"
+                    else []
+                ),
+                answer_value="B" if context.question_type == "single_choice" else "{2}",
+                solution_method="集合运算",
+                solution_steps=["找出同时属于 A 和 B 的元素。"],
+                final_answer="{2}",
+                authoring_intent="考查交集的基本定义。",
+                estimated_difficulty=1,
+                curriculum_node_id=(
+                    context.curriculum.node_id
+                    if context.curriculum is not None
+                    else context.curriculum_options[-1].node_id
+                ),
+                knowledge_points=["集合的交集"],
+                assessed_methods=["根据定义筛选公共元素"],
+                common_mistakes=["把交集误写成并集"],
+            )
+
+    authoring = QuestionAuthoring(
+        curriculum=catalog,
+        provider=FakeQuestionAuthoringProvider(),
+        math_verifier=MathVerifier(),
+    )
+    monkeypatch.setattr(gateway, "get_question_authoring", lambda: authoring)
+
     class FakePrivateLibrary:
         def stats(self, *, owner_id: str) -> LibraryStats:
             assert owner_id == "owner_teacher"
@@ -212,6 +274,59 @@ def test_private_search_rejects_model_owner_selector(gateway_client: TestClient)
         headers=_auth(),
     )
     assert response.status_code == 422
+
+
+def test_create_question_draft_returns_unsaved_owner_only_content(
+    gateway_client: TestClient,
+) -> None:
+    body = {
+        "request_text": "围绕集合的基本运算命制一道单选题。",
+        "curriculum_node_id": "kp_test_01",
+        "question_type": "single_choice",
+        "target_difficulty": 1,
+    }
+    response = gateway_client.post(
+        "/internal/agent-tools/v1/create-question-draft",
+        json=body,
+        headers=_auth(),
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    draft = payload["draft"]
+    assert draft["request_text"] == body["request_text"]
+    assert draft["visibility"] == "owner_only"
+    assert draft["source_type"] == "ai_generated"
+    assert draft["saved"] is False
+    assert draft["verification"]["status"] == "teacher_review_required"
+    assert draft["verification"]["math_verifier_status"] == "unsupported"
+    assert draft["verification"]["math_verifier_checked"] is False
+    assert len(draft["verification"]["checks"]) == 6
+    assert draft["public_search_allowed"] is False
+    assert draft["share_allowed"] is False
+    assert "owner_id" not in draft
+
+    inference = gateway_client.post(
+        "/internal/agent-tools/v1/create-question-draft",
+        json={
+            "request_text": "命制一道用于考试的填空压轴题。",
+            "question_type": "fill_blank",
+            "target_difficulty": 5,
+        },
+        headers=_auth(),
+    )
+    assert inference.status_code == 200
+    inferred = inference.json()["draft"]
+    assert inferred["curriculum"]["mapping_source"] == "agent_inferred"
+    assert inferred["curriculum"]["mapping_status"] == "pending_teacher_confirmation"
+    assert inferred["knowledge_points"] == ["集合的交集"]
+
+    forged = gateway_client.post(
+        "/internal/agent-tools/v1/create-question-draft",
+        json={**body, "owner_id": "other_teacher", "publish": True},
+        headers=_auth(),
+    )
+    assert forged.status_code == 422
 
 
 def test_gateway_disabled_when_token_unconfigured(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -362,6 +477,158 @@ def test_solve_question_generated_result_is_never_marked_verified(
     assert "不支持" in " ".join(payload["verification_evidence"])
 
 
+def test_solve_question_visual_bundle_is_owner_scoped_revision_pinned_and_consented(
+    gateway_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    class VisualRecognitionProvider:
+        name = "synthetic_vision_ocr"
+        model = "synthetic-ocr-v1"
+
+        def recognize(self, **_kwargs) -> QuestionRecognitionResult:
+            return QuestionRecognitionResult(
+                stem_plain="如图，在三角形 ABC 中求角 A。",
+                stem_latex="",
+                options=[QuestionOption(key="A", text="30°")],
+                requires_visual_reasoning=True,
+            )
+
+    image = Image.new("RGB", (1000, 700), "white")
+    draw = ImageDraw.Draw(image)
+    draw.polygon(((150, 600), (500, 100), (850, 600)), outline="black", width=5)
+    encoded = BytesIO()
+    image.save(encoded, format="PNG")
+    capture = QuestionCapture(
+        tmp_path / "visual-capture.sqlite3",
+        tmp_path / "visual-media",
+        recognition_providers={"local": VisualRecognitionProvider()},
+    )
+    created = capture.prepare(
+        QuestionCaptureCommand(
+            owner_id="owner_teacher",
+            source="upload",
+            private_storage_acknowledged=True,
+        ),
+        filename="triangle.png",
+        content=encoded.getvalue(),
+    )
+    capture.recognize(
+        created.asset.asset_id,
+        QuestionRecognitionCommand(mode="local"),
+        owner_id="owner_teacher",
+    )
+    confirmed = capture.review_recognition(
+        created.asset.asset_id,
+        QuestionRecognitionReviewCommand(
+            stem_plain="如图，在三角形 ABC 中求角 A。",
+            options=[QuestionOption(key="A", text="30°")],
+            confirm=True,
+        ),
+        owner_id="owner_teacher",
+    )
+
+    class VisualSolutionProvider:
+        name = "fake_model"
+        model = "fake-text-v1"
+        vision_model = "fake-vision-v1"
+
+        def __init__(self) -> None:
+            self.visual_input: SolutionVisualInput | None = None
+
+        def solve(
+            self,
+            _request: SolutionRequest,
+            visual_input: SolutionVisualInput | None = None,
+        ) -> GeneratedSolution:
+            self.visual_input = visual_input
+            return GeneratedSolution(
+                explanation=SolutionExplanation(
+                    method="图形分析",
+                    steps=["结合原图条件分析。"],
+                    final_answer="待教师核对",
+                )
+            )
+
+    provider = VisualSolutionProvider()
+    monkeypatch.setattr(gateway, "get_question_capture", lambda: capture)
+    monkeypatch.setattr(
+        gateway,
+        "get_solution_assistant",
+        lambda: SolutionAssistant(
+            question_bank=QuestionBank(tmp_path / "visual-empty-bank.sqlite3"),
+            provider=provider,
+        ),
+    )
+    body = {
+        "question_text": "如图，在三角形 ABC 中求角 A。\nA. 30°",
+    }
+    reference = QuestionSolveReference(
+        asset_id=created.asset.asset_id,
+        media_revision=1,
+        recognition_revision=confirmed.recognition_revision,
+        visual_processing_consent=True,
+    )
+    grants = QuestionSolveGrantRegistry()
+    monkeypatch.setattr(gateway, "get_question_solve_grants", lambda: grants)
+    no_consent_reference = reference.model_copy(
+        update={"visual_processing_consent": False}
+    )
+    no_consent_grant = grants.issue(
+        owner_id="owner_teacher",
+        question_text=body["question_text"],
+        solution_mode="standard",
+        teacher_instruction="",
+        reference=no_consent_reference,
+    )
+    no_consent = gateway_client.post(
+        "/internal/agent-tools/v1/solve-question",
+        json={**body, "capture_grant": no_consent_grant},
+        headers=_auth(),
+    )
+    assert no_consent.status_code == 422
+    assert "逐次确认" in no_consent.json()["error"]["message"]
+
+    grant = grants.issue(
+        owner_id="owner_teacher",
+        question_text=body["question_text"],
+        solution_mode="standard",
+        teacher_instruction="按课堂板书格式",
+        reference=reference,
+    )
+    response = gateway_client.post(
+        "/internal/agent-tools/v1/solve-question",
+        json={
+            **body,
+            "question_text": "模型改写了题面，但该值不是授权来源",
+            "solution_mode": "alternative",
+            "teacher_instruction": "模型改写了要求",
+            "capture_grant": grant,
+        },
+        headers=_auth(),
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["visual_context"]["image_used"] is True
+    assert payload["visual_context"]["media_revision"] == 1
+    assert payload["model"] == "fake-vision-v1"
+    assert payload["question_text"] == body["question_text"]
+    assert payload["solution_mode"] == "standard"
+    assert provider.visual_input is not None
+    assert provider.visual_input.image_bytes == encoded.getvalue()
+
+    replayed = gateway_client.post(
+        "/internal/agent-tools/v1/solve-question",
+        json={
+            **body,
+            "capture_grant": grant,
+        },
+        headers={**_auth(), "X-Request-Id": "req_replay"},
+    )
+    assert replayed.status_code == 403
+    assert "已使用" in replayed.json()["error"]["message"]
+
+
 def test_solve_question_rejects_known_failed_bank_record(
     gateway_client: TestClient,
 ) -> None:
@@ -406,6 +673,30 @@ def test_solve_question_without_verified_match_or_model_is_explicit(
     )
     assert response.status_code == 503
     assert response.json()["error"]["code"] == "MODEL_UNAVAILABLE"
+
+
+def test_solve_question_reports_invalid_model_json_as_execution_error(
+    gateway_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class InvalidResponseAssistant:
+        def solve(self, *_args, **_kwargs):
+            raise SolutionProviderResponseError("DeepSeek 返回的 JSON 无法解析")
+
+    monkeypatch.setattr(
+        gateway,
+        "get_solution_assistant",
+        lambda: InvalidResponseAssistant(),
+    )
+    response = gateway_client.post(
+        "/internal/agent-tools/v1/solve-question",
+        json={"question_text": "如图，在三棱柱中证明两条直线垂直。"},
+        headers=_auth(),
+    )
+
+    assert response.status_code == 502
+    assert response.json()["error"]["code"] == "TOOL_EXECUTION_ERROR"
+    assert "已返回内容" in response.json()["error"]["message"]
 
 
 def test_find_similar_questions_contract(gateway_client: TestClient) -> None:

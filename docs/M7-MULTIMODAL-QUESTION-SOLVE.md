@@ -1,7 +1,7 @@
 # M7 多模态题目采集与图片解题
 
-更新日期：2026-08-22
-状态：进行中；项目所有者于 2026-08-22 在 M6 Gate 后确认进入 M7
+更新日期：2026-08-24
+状态：已完成；Gate E 于 2026-08-24 通过，项目所有者已确认进入 M8
 
 ## 1. 本阶段唯一目标
 
@@ -21,7 +21,7 @@
 
 ## 3. 深模块与 seam
 
-`QuestionCapture.prepare(QuestionCaptureCommand) -> QuestionInputBundle` 是本阶段的业务深模块接口。图片验证、方向与清晰度检查、裁剪、OCR、公式识别、图形存在性判断、revision、owner 隔离、逐次外部处理同意和错误语义留在实现内部。
+`QuestionCapture.prepare(QuestionCaptureCommand) -> QuestionInputBundle` 与 `QuestionCapture.prepare_for_solve(QuestionSolveReference) -> PreparedQuestionInput` 是本阶段的业务深模块接口。前者拥有图片采集、OCR 与校对，后者只接受当前 owner 已确认且 revision 精确匹配的 bundle，并在 FastAPI 内部解析受控图片字节；图片验证、方向与清晰度检查、裁剪、OCR、公式识别、图形存在性判断、revision、owner 隔离、逐次外部处理同意和错误语义留在实现内部。
 
 `QuestionInputBundle` 至少包含：
 
@@ -56,12 +56,23 @@ Solve 输入区增加：上传图片、粘贴截图、拍照入口、图片预�
 ## 5. 纵向切片顺序
 
 1. **私有单题媒体入口**：上传、粘贴、格式/体积/清晰度检查、旋转裁剪、owner-scoped asset；已完成。
-2. **文字与公式识别**：复用 M6 OCR 能力，输出可编辑题面、LaTeX、选项、revision 和低置信度提示；未开始。
-3. **图形保真输入**：保留原图/裁剪，检测需要视觉推理的题型，让 Solve 同时消费文字与受控视觉信息；未开始。
-4. **可信解题接入**：复用 M5 `SolutionAssistant`、MathVerifier 和可信状态，不复制第二套解题实现；未开始。
-5. **固定评测与 Gate E**：覆盖代数公式、函数图像、解析几何、立体几何、统计图表、模糊/截断/多题图片、OCR/视觉服务失败、取消和跨 owner 越权；未开始。
+2. **文字与公式识别**：复用 M6 OCR 能力，输出可编辑题面、LaTeX、选项、revision 和低置信度提示；已完成。
+2A. **数学结果可读展示前置修复**：统一行内/独立公式约定和 KaTeX 渲染，兼容旧式未分隔 LaTeX，失败保留可见原文；已完成。该修复只处理显示，不增加课程层级判断或改变数学结论。
+3. **图形保真输入**：保留原图/裁剪，检测需要视觉推理的题型，让 Solve 同时消费文字与受控视觉信息；已完成。
+4. **可信解题接入**：复用 M5 `SolutionAssistant`、MathVerifier 和可信状态，不复制第二套解题实现；已完成，失败、取消、格式恢复和真实视觉场景已收口。
+5. **固定评测与 Gate E**：覆盖代数公式、函数图像、解析几何、立体几何、统计图表、模糊/截断/多题图片、OCR/视觉服务失败、取消和跨 owner 越权；已完成，15 场景固定评测 9 类违规为 0，Gate E 于 2026-08-24 通过。
 
-第一条切片实现证据：`QuestionCapture.prepare` 对实际 PNG/JPEG/WebP 内容进行探测，限制 15 MB 与 2500 万像素，拒绝损坏、过小和近乎空白图片，并对低分辨率/低对比度返回可见警告。原图、旋转和裁剪使用同一 owner-scoped `asset_id` 与递增 revision；原始 revision 不覆盖。公开路由从服务端 current-teacher seam 绑定 owner，返回值只有受控相对内容端点，不含 owner、存储名或文件路径。新 Solve composer 提供上传、剪贴板与系统相机入口、预览、旋转、裁剪和本次任务移除；当前明确说明 OCR 与图片参与解题尚未开始。
+第一条切片实现证据：`QuestionCapture.prepare` 对实际 PNG/JPEG/WebP 内容进行探测，限制 15 MB 与 2500 万像素，拒绝损坏、过小和近乎空白图片，并对低分辨率/低对比度返回可见警告。原图、旋转和裁剪使用同一 owner-scoped `asset_id` 与递增 revision；原始 revision 不覆盖。公开路由从服务端 current-teacher seam 绑定 owner，返回值只有受控相对内容端点，不含 owner、存储名或文件路径。新 Solve composer 提供上传、剪贴板与系统相机入口、预览、旋转、裁剪和本次任务移除。
+
+第二条切片实现证据：`QuestionCapture.recognize/review_recognition` 将本地与外部识别隐藏在同一 adapter seam 后，结构化保存普通题面、LaTeX、选项、低置信度区域、provider/model、处理模式、外部同意证据和教师校对备注。外部视觉识别同时产生 `visual_observations`，逐条记录原图直接可见的点/线/面标签、连线、虚实线、坐标轴、曲线或表格关系；它不允许推导或补条件，并在教师端以“图形识别草稿”单独展示。识别记录使用独立 append-only revision，并绑定当时的 media revision；图片继续旋转或裁剪后旧识别自动变成 `stale`，不能确认。外部 OCR 只有在当前动作明确同意时才调用；已接入 DeepSeek 官方实验视觉模型 `deepseek-v4-flash-vision-exp`，未配置 DeepSeek 时仍可使用 OpenAI 图像 adapter，本地可选依赖未安装则显式失败。旧 OCR revision 不会被静默补写图形观察，需教师再次逐次同意并重新识别。
+
+第三条切片实现证据：教师确认题面后，Web 使用 canonical 题面并锁定 media/OCR revision；依赖或可能依赖图形时必须另行勾选“仅本次视觉解题”，该同意在发起动作后自动清空，不能复用 OCR 同意。`SolveAgentWorkflow` 为当前教师、canonical 题面、解题模式/要求、精确 asset/media/OCR revision 与视觉同意签发短时一次性 capability；Agent 只原样转发该 capability，不获得 owner/resource selector、路径、内容端点或图片字节。内部 Tool 在读取图片前消费 capability 并恢复完整 server-owned Solve 意图，模型即使改写普通 Tool 参数也不能替换题面、资源或授权。`QuestionCapture.prepare_for_solve` 再次校验 owner、confirmed、current/stale 状态；只有视觉依赖题才读取受控原图。DeepSeek/OpenAI solution adapter 接收多模态输入，结果返回实际使用的 provider/model/revision 证据，并固定保持 `teacher_review_required`；视觉理解明确不是 MathVerifier 证据。真实浏览器链路已用 DeepSeek `deepseek-v4-flash-vision-exp` 验收原图参与、REV/OCR REV 证据、逐次授权清空、无横向溢出和零控制台告警。
+
+2026-08-22 空间几何故障修复：真实运行记录证明两次视觉模型已经响应，但解答 JSON 中未转义的 `\perp`、`\underbrace` 等 LaTeX 反斜杠导致严格解析失败，界面曾错误归类为 `MODEL_UNAVAILABLE`。DeepSeek JSON adapter 现按 JSON 字符串边界修复未转义数学命令并保留已有合法转义；格式仍不可恢复时返回 `TOOL_EXECUTION_ERROR`，不再冒充模型未上线。视觉解题 prompt 同时要求核对原图标签、连线与虚实线，不得仅凭 OCR 文本猜测空间关系。
+
+2026-08-24 长解答截断修复：真实运行记录显示复杂轨迹题的模型回答在 JSON 字符串中途结束，并以 `Unterminated string` 进入 `TOOL_EXECUTION_ERROR`。DeepSeek JSON adapter 现仅在本地容错仍无法读取时执行一次受控格式恢复重试，沿用同一教师动作与既定 Schema、提高但封顶输出预算，并要求压缩表述而不遗漏必填字段；第二次仍异常即明确失败，不循环调用。Teacher Web 同时移除纯文字题确认后的被动视觉说明，只为确实依赖或可能依赖图形的题目保留逐次原图授权。
+
+2026-08-22 能力更正：DeepSeek 官方文档新增 `deepseek-v4-flash-vision-exp` 图片输入能力；仓库先前“DeepSeek 仅支持文本”的判断已废止。项目使用 OpenAI-compatible Chat Completions 图片块、JSON 输出和 `detail=original`，真实 synthetic 数学题验证已准确返回题面、LaTeX、四个选项与视觉依赖标记。该模型仍按 true external adapter 治理，实验状态不会降低逐次同意、教师校对或 private 约束。
 
 ## 6. M7 完成 Gate
 
@@ -71,6 +82,9 @@ Solve 输入区增加：上传图片、粘贴截图、拍照入口、图片预�
 - 外部处理逐次同意，取消、超时、失败和模型不可用有明确体验且不继续隐形计费。
 - Agent 不获得文件、路径、数据库、对象存储凭据或任意 URL 能力。
 - MathVerifier 证据范围与视觉理解范围清楚分开，模型判断不能升级为 `program_verified`。
+- 题面、解题步骤与最终答案中的数学表达均以人类可读公式显示；公式失败可见降级，且不造成页面级横向溢出。
 - 固定 synthetic evaluation、跨 owner 安全测试、主要响应式/可访问性、完整工程回归和 Gate E 全部通过。
 
 M7 Gate E 通过并由项目所有者确认前，不进入 M8 私有辅助命题 Agent。
+
+完整固定评测与 Gate 审计见 [`M7-MULTIMODAL-SOLVE-EVALUATION.md`](M7-MULTIMODAL-SOLVE-EVALUATION.md) 和 [`M7-GATE-REVIEW.md`](M7-GATE-REVIEW.md)。当前 Gate 已通过，但尚未获得进入 M8 的阶段确认。
