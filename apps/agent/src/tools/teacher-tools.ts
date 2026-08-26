@@ -589,7 +589,7 @@ export function defineTeacherTools(options: TeacherToolOptions): ToolDefinition[
       },
       render: (_args, value) => JSON_OUTPUT(JSON.stringify(value)),
     },
-    timeoutMs: 360_000,
+    timeoutMs: 900_000,
     async execute(args, exec) {
       const requestId = callOptions(exec).requestId;
       const input: CreateQuestionDraftInput = {
@@ -599,7 +599,7 @@ export function defineTeacherTools(options: TeacherToolOptions): ToolDefinition[
       };
       const result = await gateway.createQuestionDraft(
         input,
-        { ...callOptions(exec), timeoutMs: 360_000 },
+        { ...callOptions(exec), timeoutMs: 900_000 },
       );
       if (result.ok) {
         return {

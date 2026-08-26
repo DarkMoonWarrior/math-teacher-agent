@@ -134,12 +134,12 @@ class Settings(BaseSettings):
     agent_allow_legacy_fallback: bool = False
     agent_service_url: str = "http://127.0.0.1:4100"
     agent_service_token: str = ""
-    agent_request_timeout_seconds: int = 360
+    agent_request_timeout_seconds: int = 900
     # Agent -> FastAPI internal tool gateway 的机器身份。
     tool_gateway_token: str = ""
     tool_gateway_timeout_seconds: float = 30.0
     solve_tool_timeout_seconds: float = 120.0
-    question_authoring_tool_timeout_seconds: float = 360.0
+    question_authoring_tool_timeout_seconds: float = 900.0
 
     # -- Agent workflow feature gates ---------------------------------------
     # 默认关闭：现有传统页面行为不变。仅在相应 Runtime/Tool/UI Gate 就绪后开启。

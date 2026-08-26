@@ -406,6 +406,128 @@ def test_deepseek_provider_rewrites_deliberative_solution_before_returning() -> 
     assert calls["private_question_authoring_solution_cleanup"] == 1
 
 
+def test_deepseek_provider_preserves_complete_question_when_solution_conflicts() -> None:
+    class FakeDeepSeekClient:
+        def request(self, **kwargs: object) -> dict:
+            schema_name = kwargs["output_schema"]["name"]  # type: ignore[index]
+            if schema_name == "private_question_authoring_core":
+                payload = {
+                    "question_type": "single_choice",
+                    "stem_plain": "某校组织投币闯关活动，结合数列递推关系判断第 n 轮获胜概率。",
+                    "stem_latex": "某校组织投币闯关活动，结合数列递推关系判断第 $n$ 轮获胜概率。",
+                    "options": [
+                        {"key": "A", "text": "$\\frac{1}{3}$"},
+                        {"key": "B", "text": "$\\frac{2}{3}$"},
+                        {"key": "C", "text": "$\\frac{3}{4}$"},
+                        {"key": "D", "text": "$1$"},
+                    ],
+                    "answer_value": "B",
+                    "final_answer": "答案为 B，即 $\\frac{2}{3}$。",
+                    "estimated_difficulty": 5,
+                }
+            elif schema_name == "private_question_authoring_solution_plan":
+                payload = {
+                    "solution_method": "建立数列递推并求事件概率。",
+                    "sections": [{"order": 1, "title": "列递推", "goal": "求出第 n 轮获胜概率"}],
+                    "authoring_intent": "综合考查数列递推与概率模型。",
+                    "curriculum_node_id": None,
+                    "knowledge_points": ["数列递推", "概率模型"],
+                    "assessed_methods": ["建立递推关系"],
+                    "common_mistakes": ["忽略概率和为 1"],
+                }
+            elif schema_name == "private_question_authoring_solution_cleanup":
+                payload = {
+                    "order": 1,
+                    "steps": ["当前解析与锁定答案不一致，请教师独立核验。"],
+                    "consistent_with_locked_answer": False,
+                    "issue_summary": "递推方程推出选项 A，但锁定答案为 B。",
+                }
+            else:
+                payload = {
+                    "order": 1,
+                    "steps": [
+                        "重新核对初始条件后发现与题设不符，说明题面有误，无法选出正确答案。"
+                    ],
+                }
+            text = json.dumps(payload, ensure_ascii=False)
+            return {"output": [{"type": "message", "content": [{"type": "output_text", "text": text}]}]}
+
+    provider = DeepSeekQuestionAuthoringProvider(
+        api_key="test-key",
+        model="deepseek-v4-flash",
+        base_url="https://api.deepseek.com",
+    )
+    provider.client = FakeDeepSeekClient()  # type: ignore[assignment]
+
+    content = provider.generate(
+        QuestionAuthoringContext(
+            brief=QuestionDesignBrief(
+                request_text="命制一道数列与概率结合的复杂选择题",
+                question_type="single_choice",
+                target_difficulty=5,
+            ),
+            question_type="single_choice",
+            curriculum=None,
+            curriculum_options=(),
+        )
+    )
+
+    assert content.stem_plain.startswith("某校组织投币闯关活动")
+    assert [option.key for option in content.options] == ["A", "B", "C", "D"]
+    assert content.answer_value == "B"
+    assert content.final_answer == "答案为 B，即 $\\frac{2}{3}$。"
+    assert content.solution_status == "needs_teacher_verification"
+    assert content.solution_issue == "递推方程推出选项 A，但锁定答案为 B。"
+    assert content.solution_steps == ["解析未通过一致性检查，请教师根据完整题面自行核验，或重新生成解析。"]
+
+
+def test_deepseek_provider_preserves_complete_question_when_solution_stage_fails() -> None:
+    class FakeDeepSeekClient:
+        def request(self, **kwargs: object) -> dict:
+            schema_name = kwargs["output_schema"]["name"]  # type: ignore[index]
+            payload = (
+                {
+                    "question_type": "open_response",
+                    "stem_plain": "已知数列满足递推关系，求其通项并证明所得结论。",
+                    "stem_latex": "已知数列满足递推关系，求其通项并证明所得结论。",
+                    "options": [],
+                    "answer_value": "通项见最终答案。",
+                    "final_answer": "完整结论已锁定。",
+                    "estimated_difficulty": 5,
+                }
+                if schema_name == "private_question_authoring_core"
+                else {}
+            )
+            text = json.dumps(payload, ensure_ascii=False)
+            return {"output": [{"type": "message", "content": [{"type": "output_text", "text": text}]}]}
+
+    provider = DeepSeekQuestionAuthoringProvider(
+        api_key="test-key",
+        model="deepseek-v4-flash",
+        base_url="https://api.deepseek.com",
+    )
+    provider.client = FakeDeepSeekClient()  # type: ignore[assignment]
+
+    content = provider.generate(
+        QuestionAuthoringContext(
+            brief=QuestionDesignBrief(
+                request_text="命制一道复杂数列解答题",
+                question_type="open_response",
+                target_difficulty=5,
+            ),
+            question_type="open_response",
+            curriculum=None,
+            curriculum_options=(),
+        )
+    )
+
+    assert content.stem_plain.startswith("已知数列")
+    assert content.final_answer == "完整结论已锁定。"
+    assert content.solution_status == "needs_teacher_verification"
+    assert content.solution_issue == "解析生成未完成；题面、选项与最终答案已完整保留。"
+    assert content.solution_steps == ["解析生成未完成，请教师根据完整题面自行核验，或重新生成解析。"]
+
+
 def test_deepseek_provider_retries_only_the_failed_solution_section() -> None:
     attempts: Counter[int] = Counter()
     lock = Lock()
@@ -590,6 +712,109 @@ def test_create_draft_resolves_curriculum_and_forces_unsaved_owner_only_state() 
     assert "owner_id" not in draft.model_dump(mode="json")
 
 
+def test_create_draft_returns_complete_question_when_solution_needs_teacher_verification() -> None:
+    class ConflictProvider(FakeProvider):
+        def generate(self, context: QuestionAuthoringContext) -> ProviderQuestionDraft:
+            return super().generate(context).model_copy(
+                update={
+                    "solution_method": "解析待教师核验",
+                    "solution_steps": [
+                        "解析未通过一致性检查，请教师根据完整题面自行核验，或重新生成解析。"
+                    ],
+                    "solution_status": "needs_teacher_verification",
+                    "solution_issue": "解析推导与锁定答案存在冲突。",
+                }
+            )
+
+    draft = QuestionAuthoring(
+        curriculum=curriculum(),
+        provider=ConflictProvider(),
+        math_verifier=MathVerifier(),
+    ).create_draft(
+        QuestionDesignBrief(
+            request_text="命制一道完整但解析可能需要复核的函数题。",
+            question_type="single_choice",
+        )
+    )
+
+    assert draft.stem_plain == "已知函数 f(x)=x²，判断其在实数范围内的单调性。"
+    assert len(draft.options) == 4
+    assert draft.answer_value == "B"
+    assert draft.final_answer
+    assert draft.solution_status == "needs_teacher_verification"
+    assert draft.solution_issue == "解析推导与锁定答案存在冲突。"
+    assert draft.verification.status == "checks_failed"
+    consistency = next(
+        check
+        for check in draft.verification.checks
+        if check.code == "answer_solution_consistency"
+    )
+    assert consistency.status == "failed"
+    assert any("题面、选项和最终答案已完整保留" in warning for warning in draft.warnings)
+    assert draft.saved is False
+    assert draft.visibility == "owner_only"
+
+
+def test_create_draft_keeps_choice_options_out_of_both_readable_stems() -> None:
+    class EmbeddedOptionsProvider(FakeProvider):
+        def generate(self, context: QuestionAuthoringContext) -> ProviderQuestionDraft:
+            content = super().generate(context)
+            return content.model_copy(
+                update={
+                    "stem_plain": (
+                        "已知函数 f(x)=x²，判断其在实数范围内的单调性。"
+                        "\\nA. 在定义域上恒增\\nB. 先减后增"
+                        "\\nC. 在定义域上恒减\\nD. 不是函数"
+                    ),
+                    "stem_latex": (
+                        r"已知函数 $f(x)=x^2$，判断其在实数范围内的单调性。"
+                        r"\nA. 在定义域上恒增\nB. 先减后增"
+                        r"\nC. 在定义域上恒减\nD. 不是函数"
+                    ),
+                }
+            )
+
+    draft = QuestionAuthoring(
+        curriculum=curriculum(),
+        provider=EmbeddedOptionsProvider(),
+        math_verifier=MathVerifier(),
+    ).create_draft(
+        QuestionDesignBrief(
+            request_text="命制一道函数单调性的完整单项选择题。",
+            question_type="single_choice",
+        )
+    )
+
+    assert draft.stem_plain == "已知函数 f(x)=x²，判断其在实数范围内的单调性。"
+    assert draft.stem_latex == r"已知函数 $f(x)=x^2$，判断其在实数范围内的单调性。"
+    assert [option.key for option in draft.options] == ["A", "B", "C", "D"]
+
+
+def test_create_draft_rejects_generated_university_only_content() -> None:
+    class UniversityScopeProvider(FakeProvider):
+        def generate(self, context: QuestionAuthoringContext) -> ProviderQuestionDraft:
+            return super().generate(context).model_copy(
+                update={
+                    "stem_plain": "设随机过程构成马尔可夫链，求其平稳分布。",
+                    "stem_latex": "设随机过程构成马尔可夫链，求其平稳分布。",
+                }
+            )
+
+    authoring = QuestionAuthoring(
+        curriculum=curriculum(),
+        provider=UniversityScopeProvider(),
+        math_verifier=MathVerifier(),
+    )
+
+    with pytest.raises(QuestionAuthoringError, match="超出高中数学范围"):
+        authoring.create_draft(
+            QuestionDesignBrief(
+                request_text="命制一道有背景的概率综合题。",
+                question_type="single_choice",
+            )
+        )
+
+
 def test_teacher_revision_rechecks_structure_and_cannot_supply_trust_evidence() -> None:
     authoring = QuestionAuthoring(
         curriculum=curriculum(), provider=FakeProvider(), math_verifier=MathVerifier()
@@ -658,6 +883,43 @@ def test_regenerate_solution_keeps_question_and_answer_immutable() -> None:
     assert regenerated.saved is False
     assert regenerated.verification.teacher_review_required is True
     assert any("重新生成" in warning for warning in regenerated.warnings)
+
+
+def test_regenerate_solution_returns_flagged_revision_instead_of_hiding_question() -> None:
+    class ConflictRegenerationProvider(FakeProvider):
+        def regenerate_solution(
+            self, current: ProviderQuestionDraft
+        ) -> ProviderQuestionSolution:
+            return ProviderQuestionSolution(
+                solution_method="解析待教师核验",
+                solution_steps=[
+                    "解析未通过一致性检查，请教师根据完整题面自行核验，或再次重新生成解析。"
+                ],
+                solution_status="needs_teacher_verification",
+                solution_issue="新解析仍与锁定答案存在冲突。",
+            )
+
+    provider = ConflictRegenerationProvider()
+    authoring = QuestionAuthoring(
+        curriculum=curriculum(), provider=provider, math_verifier=MathVerifier()
+    )
+    draft = authoring.create_draft(
+        QuestionDesignBrief(
+            request_text="命制一道函数单调性的单选题。",
+            question_type="single_choice",
+        )
+    )
+
+    regenerated = authoring.regenerate_solution(draft)
+
+    assert regenerated.stem_plain == draft.stem_plain
+    assert regenerated.options == draft.options
+    assert regenerated.answer_value == draft.answer_value
+    assert regenerated.final_answer == draft.final_answer
+    assert regenerated.solution_status == "needs_teacher_verification"
+    assert regenerated.solution_issue == "新解析仍与锁定答案存在冲突。"
+    assert regenerated.verification.status == "checks_failed"
+    assert any("自行核验" in warning for warning in regenerated.warnings)
 
 
 def test_non_choice_draft_has_one_canonical_final_answer() -> None:

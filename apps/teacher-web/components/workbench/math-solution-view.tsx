@@ -1,9 +1,11 @@
 import { MathText } from "@/components/math-text";
+import type { QuestionDraftOption } from "@/lib/teacher-workspace/contracts";
 
 type MathSolutionViewProps = {
   className?: string;
   finalAnswer: string;
   method: string;
+  options?: QuestionDraftOption[];
   question?: string;
   showHeading?: boolean;
   steps: string[];
@@ -13,6 +15,7 @@ export function MathSolutionView({
   className = "",
   finalAnswer,
   method,
+  options = [],
   question,
   showHeading = true,
   steps,
@@ -26,6 +29,16 @@ export function MathSolutionView({
         </header>
       )}
       {question && <div className="solve-question"><MathText text={question} /></div>}
+      {options.length > 0 && (
+        <ol className="question-options" aria-label="题目选项">
+          {options.map((option) => (
+            <li className="question-options__item" key={option.key}>
+              <span className="question-option-key">{option.key}</span>
+              <MathText text={option.text} />
+            </li>
+          ))}
+        </ol>
+      )}
       <ol className="solution-steps">
         {steps.map((step, index) => (
           <li key={`${index}-${step}`}>

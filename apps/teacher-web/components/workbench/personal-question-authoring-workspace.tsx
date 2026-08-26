@@ -27,6 +27,7 @@ import {
 } from "./icons";
 import { WorkbenchNoticeDialog } from "./workbench-notice-dialog";
 import { MathSolutionView } from "./math-solution-view";
+import { AuthoringGenerationStatus, type AuthoringGenerationStage } from "./authoring-generation-status";
 
 type WorkspaceSection = "compose" | "mine" | "trash";
 type BusyAction = "loading" | "generating" | "revising" | "regenerating-solution" | "saving" | "managing" | null;
@@ -211,7 +212,10 @@ export function PersonalQuestionAuthoringWorkspace({
   const [busy, setBusy] = useState<BusyAction>("loading");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [generationStage, setGenerationStage] = useState<AuthoringGenerationStage>("brief");
+  const [generationElapsed, setGenerationElapsed] = useState(0);
   const feedbackReturnFocusRef = useRef<HTMLElement | null>(null);
+  const generationStartedAtRef = useRef(0);
   const sessionRef = useRef(`authoring_${Date.now().toString(36)}`);
   const requestRef = useRef(0);
 
@@ -291,6 +295,16 @@ export function PersonalQuestionAuthoringWorkspace({
     setRequestText(initialBrief);
   }, [initialBrief]);
 
+  useEffect(() => {
+    if (busy !== "generating") return;
+    const updateElapsed = () => {
+      setGenerationElapsed(Math.floor((Date.now() - generationStartedAtRef.current) / 1000));
+    };
+    updateElapsed();
+    const timer = window.setInterval(updateElapsed, 1000);
+    return () => window.clearInterval(timer);
+  }, [busy]);
+
   const selectedTrust = useMemo(() => selectedQuestion?.question.verification, [selectedQuestion]);
 
   function clearFeedback() {
@@ -312,8 +326,13 @@ export function PersonalQuestionAuthoringWorkspace({
     if (!canGenerate) return;
     const sequence = ++requestRef.current;
     clearFeedback();
+    generationStartedAtRef.current = Date.now();
+    setGenerationElapsed(0);
+    setGenerationStage("brief");
     setBusy("generating");
     try {
+      await Promise.resolve();
+      setGenerationStage("agent");
       const response = await teacherWorkspace.createQuestionAuthoringDraft({
         requestText: requestText.trim(),
         grade: grade || undefined,
@@ -325,6 +344,7 @@ export function PersonalQuestionAuthoringWorkspace({
         sessionId: sessionRef.current,
       });
       if (sequence !== requestRef.current || !response.draft) return;
+      setGenerationStage("staging");
       const staged = await teacherWorkspace.getPersonalAuthoringDraft(response.draft.draft_id);
       if (sequence !== requestRef.current) return;
       setDraftView(staged);
@@ -332,7 +352,11 @@ export function PersonalQuestionAuthoringWorkspace({
       setSaveName(`${staged.current.draft.curriculum?.name ?? "待确认知识点"} · 自主命题`);
       setCurriculumQuery(staged.current.draft.curriculum?.name ?? "");
       setCurriculumMatches([]);
-      setNotice("草稿已生成，但尚未保存。请先核对题面、最终答案与解析。");
+      setNotice(
+        staged.current.draft.solution_status === "needs_teacher_verification"
+          ? "完整题目已生成。解析未通过一致性检查，请自行核验或点击“重新生成解析”。"
+          : "草稿已生成，但尚未保存。请先核对题面、最终答案与解析。",
+      );
       window.requestAnimationFrame(() => document.querySelector<HTMLElement>("#authoring-draft")?.scrollIntoView({ behavior: "smooth", block: "start" }));
     } catch (cause) {
       setError(errorMessage(cause));
@@ -416,7 +440,11 @@ export function PersonalQuestionAuthoringWorkspace({
       );
       setDraftView(regenerated);
       setDraftEditor(editableContent(regenerated.current.draft));
-      setNotice(`解析已重新生成并记录为 REV ${regenerated.current_revision}；题面、选项和最终答案均未改变。`);
+      setNotice(
+        regenerated.current.draft.solution_status === "needs_teacher_verification"
+          ? `题面、选项和最终答案保持不变；REV ${regenerated.current_revision} 的解析仍需你自行核验。`
+          : `解析已重新生成并记录为 REV ${regenerated.current_revision}；题面、选项和最终答案均未改变。`,
+      );
       window.requestAnimationFrame(() => document.querySelector<HTMLElement>(".authoring-draft__solution")?.scrollIntoView({ behavior: "smooth", block: "start" }));
     } catch (cause) {
       setError(errorMessage(cause));
@@ -747,7 +775,7 @@ export function PersonalQuestionAuthoringWorkspace({
               <div className="authoring-submit">
                 <button disabled={!canGenerate} type="submit"><span>{busy === "generating" ? "正在分阶段生成…" : "生成私有草稿"}</span><ArrowRightIcon /></button>
               </div>
-              {busy === "generating" && <p className="authoring-stage-note" aria-live="polite">正在先锁定完整题面，再分段展开长解析；生成结果仍需教师复核。</p>}
+              {busy === "generating" && <AuthoringGenerationStatus elapsedSeconds={generationElapsed} stage={generationStage} />}
             </form>
           </section>
 
@@ -780,9 +808,17 @@ export function PersonalQuestionAuthoringWorkspace({
                 className="authoring-draft__solution"
                 finalAnswer={draftEditor.final_answer}
                 method={draftEditor.solution_method}
+                options={draftEditor.options}
                 question={draftEditor.stem_latex || draftEditor.stem_plain}
                 steps={draftEditor.solution_steps}
               />
+              {draft.solution_status === "needs_teacher_verification" && (
+                <section className="authoring-solution-warning" role="status">
+                  <strong>题目已完整生成，解析需要你核验</strong>
+                  <p>{draft.solution_issue || "解析未通过一致性检查。"}</p>
+                  <p>题面、选项和最终答案均已保留；你可以自行校订解析，或点击下方“重新生成解析”。</p>
+                </section>
+              )}
               <details className="personal-question-edit authoring-draft__editor">
                 <summary>编辑题面、答案与解析</summary>
                 <QuestionEditor content={draftEditor} idPrefix="draft" onChange={setDraftEditor} />
@@ -854,6 +890,7 @@ export function PersonalQuestionAuthoringWorkspace({
                     className="personal-question-detail__solution"
                     finalAnswer={savedEditor.final_answer}
                     method={savedEditor.solution_method}
+                    options={savedEditor.options}
                     question={savedEditor.stem_latex || savedEditor.stem_plain}
                     steps={savedEditor.solution_steps}
                   />

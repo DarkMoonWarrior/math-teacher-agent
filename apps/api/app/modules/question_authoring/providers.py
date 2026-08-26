@@ -19,17 +19,21 @@ from app.modules.question_authoring.schemas import (
     QuestionDraftOption,
     QuestionType,
 )
+from app.modules.question_authoring.scope import university_only_terms
 
 
-PROMPT_REVISION = "question-authoring-v5-polished-solution"
+PROMPT_REVISION = "question-authoring-v7-high-school-choice-contract"
 
 
 _DELIBERATION_PATTERNS = (
     r"让我们(?:重新|再|先|仔细)",
     r"我们(?:可能|需要重新|重新审视|重新检查|忘记|算错|犯了|理解错|错误地)",
     r"我(?:可能|需要重新|重新审视|重新检查|算错|犯了|理解错)",
+    r"(?:重新|再次)(?:核对|检查|审题|推导|计算)",
     r"(?:前面|之前).{0,30}(?:算错|不对|错误|有误)",
-    r"题目.{0,30}(?:有问题|有误|矛盾)",
+    r"题(?:面|目|干).{0,40}(?:有问题|有误|错误|缺失|矛盾)",
+    r"(?:与题设|与初始条件|初始条件).{0,30}(?:不符|不一致|矛盾)",
+    r"无法(?:验证|选出|得到).{0,20}(?:答案|结论)",
     r"作为(?:解题|模型|AI)",
     r"final[_ ]?answer",
     r"(?:let us|let's)\s+(?:reconsider|recalculate|check again|start over)",
@@ -50,7 +54,12 @@ class QuestionAuthoringProviderError(RuntimeError):
 
 
 class _QuestionAuthoringSolutionConflict(QuestionAuthoringProviderError):
-    pass
+    def __init__(self, *, order: int, issue: str) -> None:
+        self.order = order
+        self.issue = issue
+        super().__init__(
+            f"第 {order} 段解析发现数学冲突，已停止展示试算过程：{issue}"
+        )
 
 
 @dataclass(frozen=True)
@@ -166,9 +175,13 @@ class DeepSeekQuestionAuthoringProvider:
                     "不得为了缩短输出删题、合并小问或降低难度。题目必须可独立作答且题干、答案自洽。"
                     "选择题必须给出明确且互不重复的选项；单选 answer_value 只能有一个编号，"
                     "多选用逗号分隔。填空题和解答题的 answer_value 与 final_answer 必须相同。"
+                    "题目只能使用中国普通高中数学课程范围内的概念、方法与符号；"
+                    "不得引入马尔可夫链、随机过程、傅里叶分析、微积分、线性代数等大学内容。"
                     "不得虚构学校、考试、年份、教材页码、题库来源或版权信息。"
                     f"{MATH_DISPLAY_INSTRUCTIONS}"
                     "stem_plain 应是无需 LaTeX 渲染也能校对的题面；stem_latex 是供页面展示的可读版本。"
+                    "选择题的 stem_plain 与 stem_latex 只能写公共题干，严禁包含 A/B/C/D 等选项；"
+                    "全部选项必须且只能逐项写入 options 数组，option.text 不得重复写选项编号。"
                     "本阶段只返回题面、选项、最终答案与难度，不展开解析。"
                 ),
                 input_value={
@@ -184,35 +197,58 @@ class DeepSeekQuestionAuthoringProvider:
             )
             self._normalize_non_choice_answer(core_payload)
             core = _QuestionCore.model_validate(core_payload)
+            core = self._repair_university_scope(core, provider_input)
 
-            plan = _SolutionPlan.model_validate(
-                self._request_stage(
-                    stage="solution-plan",
-                    instructions=(
-                        "根据已经锁定的题面与最终答案，规划一份适合教师审核和讲解的完整解析。"
-                        "先把长解析拆成有明确目标的若干段，本阶段不要展开详细计算。"
-                        "多小问题必须逐问覆盖；复杂推导应继续拆段，不能因篇幅省略关键论证。"
-                        "教师可以只描述想要的题，不得因缺少知识点、考查方法或易错点而拒绝。"
-                        "生成题目后，再从 allowed_curriculum_nodes 中选择最贴切的 curriculum_node_id；"
-                        "只能返回列表内 ID，无法可靠映射时返回 null。"
-                        "knowledge_points、assessed_methods 与 common_mistakes 必须依据最终题目归纳，"
-                        "不要把模型推断冒充教师确认。"
-                    ),
-                    input_value={
-                        "design_brief": provider_input["design_brief"],
-                        "question_core": core.model_dump(mode="json"),
-                        "allowed_curriculum_nodes": provider_input[
-                            "allowed_curriculum_nodes"
-                        ],
-                    },
-                    output_schema=self._solution_plan_schema(),
-                    max_tokens=3500,
-                    recovery_instruction="只修复 JSON 结构；保留覆盖全部小问所需的解析分段。",
+            plan: _SolutionPlan | None = None
+            try:
+                plan = _SolutionPlan.model_validate(
+                    self._request_stage(
+                        stage="solution-plan",
+                        instructions=(
+                            "根据已经锁定的题面与最终答案，规划一份适合教师审核和讲解的完整解析。"
+                            "先把长解析拆成有明确目标的若干段，本阶段不要展开详细计算。"
+                            "多小问题必须逐问覆盖；复杂推导应继续拆段，不能因篇幅省略关键论证。"
+                            "教师可以只描述想要的题，不得因缺少知识点、考查方法或易错点而拒绝。"
+                            "生成题目后，再从 allowed_curriculum_nodes 中选择最贴切的 curriculum_node_id；"
+                            "只能返回列表内 ID，无法可靠映射时返回 null。"
+                            "knowledge_points、assessed_methods 与 common_mistakes 必须依据最终题目归纳，"
+                            "不要把模型推断冒充教师确认。"
+                        ),
+                        input_value={
+                            "design_brief": provider_input["design_brief"],
+                            "question_core": core.model_dump(mode="json"),
+                            "allowed_curriculum_nodes": provider_input[
+                                "allowed_curriculum_nodes"
+                            ],
+                        },
+                        output_schema=self._solution_plan_schema(),
+                        max_tokens=3500,
+                        recovery_instruction="只修复 JSON 结构；保留覆盖全部小问所需的解析分段。",
+                    )
                 )
-            )
-            self._validate_plan_orders(plan)
-            sections = self._expand_sections(core, plan)
-            steps = [step for section in sections for step in section.steps]
+                self._validate_plan_orders(plan)
+                sections = self._expand_sections(core, plan)
+                steps = [step for section in sections for step in section.steps]
+                solution_status = "ready"
+                solution_issue = None
+            except _QuestionAuthoringSolutionConflict as exc:
+                steps = [
+                    "解析未通过一致性检查，请教师根据完整题面自行核验，或重新生成解析。"
+                ]
+                solution_status = "needs_teacher_verification"
+                solution_issue = exc.issue
+            except (
+                QuestionAuthoringProviderError,
+                DeepSeekClientError,
+                KeyError,
+                TypeError,
+                ValueError,
+            ):
+                steps = [
+                    "解析生成未完成，请教师根据完整题面自行核验，或重新生成解析。"
+                ]
+                solution_status = "needs_teacher_verification"
+                solution_issue = "解析生成未完成；题面、选项与最终答案已完整保留。"
 
             return ProviderQuestionDraft(
                 question_type=core.question_type,
@@ -220,15 +256,21 @@ class DeepSeekQuestionAuthoringProvider:
                 stem_latex=core.stem_latex,
                 options=core.options,
                 answer_value=core.answer_value,
-                solution_method=plan.solution_method,
+                solution_method=(plan.solution_method if plan else "解析待教师核验"),
                 solution_steps=steps,
+                solution_status=solution_status,
+                solution_issue=solution_issue,
                 final_answer=core.final_answer,
-                authoring_intent=plan.authoring_intent,
+                authoring_intent=(plan.authoring_intent if plan else context.brief.request_text),
                 estimated_difficulty=core.estimated_difficulty,
-                curriculum_node_id=plan.curriculum_node_id,
-                knowledge_points=plan.knowledge_points,
-                assessed_methods=plan.assessed_methods,
-                common_mistakes=plan.common_mistakes,
+                curriculum_node_id=(
+                    plan.curriculum_node_id
+                    if plan
+                    else (context.curriculum.node_id if context.curriculum else None)
+                ),
+                knowledge_points=(plan.knowledge_points if plan else []),
+                assessed_methods=(plan.assessed_methods if plan else []),
+                common_mistakes=(plan.common_mistakes if plan else []),
             )
         except QuestionAuthoringProviderError:
             raise
@@ -271,11 +313,21 @@ class DeepSeekQuestionAuthoringProvider:
                 )
             )
             self._validate_plan_orders(plan)
-            sections = self._expand_sections(core, plan)
-            return ProviderQuestionSolution(
-                solution_method=plan.solution_method,
-                solution_steps=[step for section in sections for step in section.steps],
-            )
+            try:
+                sections = self._expand_sections(core, plan)
+                return ProviderQuestionSolution(
+                    solution_method=plan.solution_method,
+                    solution_steps=[step for section in sections for step in section.steps],
+                )
+            except _QuestionAuthoringSolutionConflict as exc:
+                return ProviderQuestionSolution(
+                    solution_method=plan.solution_method,
+                    solution_steps=[
+                        "解析未通过一致性检查，请教师根据完整题面自行核验，或再次重新生成解析。"
+                    ],
+                    solution_status="needs_teacher_verification",
+                    solution_issue=exc.issue,
+                )
         except QuestionAuthoringProviderError:
             raise
         except DeepSeekClientError as exc:
@@ -413,9 +465,9 @@ class DeepSeekQuestionAuthoringProvider:
             )
         if not cleaned.consistent_with_locked_answer:
             issue = (cleaned.issue_summary or "题面与锁定答案可能不一致").strip()
-            raise _QuestionAuthoringSolutionConflict(
-                f"第 {section.order} 段解析发现数学冲突，已停止展示试算过程：{issue}"
-            )
+            if self._contains_deliberation([issue]):
+                issue = "解析与锁定题面或最终答案存在数学冲突。"
+            raise _QuestionAuthoringSolutionConflict(order=section.order, issue=issue)
         if self._contains_deliberation(cleaned.steps):
             raise ValueError("清理后的解析仍包含模型思考或自我纠错叙述")
         return _SolutionSection(order=cleaned.order, steps=cleaned.steps)
@@ -522,6 +574,50 @@ class DeepSeekQuestionAuthoringProvider:
         if not isinstance(payload, dict):
             raise ValueError("顶层结果必须是 JSON 对象")
         return payload
+
+    def _repair_university_scope(
+        self,
+        core: _QuestionCore,
+        provider_input: dict,
+    ) -> _QuestionCore:
+        violations = university_only_terms(
+            core.stem_plain,
+            core.stem_latex or "",
+            *(option.text for option in core.options),
+        )
+        if not violations:
+            return core
+        repaired_payload = self._request_stage(
+            stage="core-high-school-repair",
+            instructions=(
+                "上一版题目误用了大学数学内容。请在不降低教师指定难度、题型和综合性的前提下，"
+                "把题目完整重写为中国普通高中数学课程范围内可作答的题目。"
+                "可以使用高中数列、概率、函数、几何等方法，但不得只改名或隐藏大学概念。"
+                "选择题的题干不得包含选项；所有选项只写入 options 数组，且必须完整给出。"
+                f"{MATH_DISPLAY_INSTRUCTIONS}"
+            ),
+            input_value={
+                "design_brief": provider_input["design_brief"],
+                "resolved_question_type": provider_input["resolved_question_type"],
+                "rejected_university_terms": violations,
+                "rejected_question_core": core.model_dump(mode="json"),
+            },
+            output_schema=self._core_schema(),
+            max_tokens=8192,
+            recovery_instruction="只修复 JSON，并完整返回高中范围内的题面、全部选项和答案。",
+        )
+        self._normalize_non_choice_answer(repaired_payload)
+        repaired = _QuestionCore.model_validate(repaired_payload)
+        remaining = university_only_terms(
+            repaired.stem_plain,
+            repaired.stem_latex or "",
+            *(option.text for option in repaired.options),
+        )
+        if remaining:
+            raise QuestionAuthoringProviderError(
+                "模型两次返回了超出高中数学范围的内容：" + "、".join(remaining)
+            )
+        return repaired
 
     @staticmethod
     def _provider_input(context: QuestionAuthoringContext) -> dict:

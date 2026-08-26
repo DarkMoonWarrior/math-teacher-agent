@@ -18,10 +18,12 @@ from app.modules.question_authoring.schemas import (
     QuestionDesignBrief,
     QuestionDraftCurriculum,
     QuestionDraftEditableContent,
+    QuestionDraftOption,
     QuestionDraftTrustCheck,
     QuestionDraftVerification,
     QuestionType,
 )
+from app.modules.question_authoring.scope import university_only_terms
 
 
 class QuestionAuthoringError(ValueError):
@@ -73,8 +75,9 @@ class QuestionAuthoring:
             )
         except QuestionAuthoringProviderError as exc:
             raise QuestionAuthoringUnavailableError(str(exc)) from exc
-        content = self._canonicalize_answer(content)
+        content = self._canonicalize_generated_content(content)
         self._validate_structure(content, expected_type=question_type)
+        self._validate_high_school_scope(content)
         curriculum, curriculum_warning = self._ground_generated_curriculum(
             content,
             guidance=curriculum_guidance,
@@ -94,6 +97,10 @@ class QuestionAuthoring:
             warnings.append("当前 MathVerifier 不支持对此任意生成题做独立数学验证。")
         if verification.status == "checks_failed":
             warnings.append("确定性可信检查发现阻断项；修正前不得作为正式题目使用。")
+        if content.solution_status == "needs_teacher_verification":
+            warnings.append(
+                "题面、选项和最终答案已完整保留，但解析未通过一致性检查；请教师自行核验或重新生成解析。"
+            )
         if brief.question_type is None:
             warnings.append(f"未明确题型，已从要求推断为 {question_type}。")
         if curriculum_warning:
@@ -108,6 +115,8 @@ class QuestionAuthoring:
             answer_value=content.answer_value.strip(),
             solution_method=content.solution_method.strip(),
             solution_steps=[step.strip() for step in content.solution_steps],
+            solution_status=content.solution_status,
+            solution_issue=content.solution_issue,
             final_answer=content.final_answer.strip(),
             authoring_intent=content.authoring_intent.strip(),
             curriculum=curriculum,
@@ -131,7 +140,12 @@ class QuestionAuthoring:
     ) -> GeneratedQuestionDraft:
         """Create a teacher-edited snapshot with fresh server-owned trust evidence."""
 
-        revised = self._canonicalize_answer(
+        solution_changed = (
+            content.solution_method.strip() != current.solution_method.strip()
+            or [step.strip() for step in content.solution_steps]
+            != [step.strip() for step in current.solution_steps]
+        )
+        revised = self._canonicalize_generated_content(
             ProviderQuestionDraft(
                 question_type=content.question_type,
                 stem_plain=content.stem_plain,
@@ -140,6 +154,8 @@ class QuestionAuthoring:
                 answer_value=content.answer_value,
                 solution_method=content.solution_method,
                 solution_steps=content.solution_steps,
+                solution_status=("ready" if solution_changed else current.solution_status),
+                solution_issue=(None if solution_changed else current.solution_issue),
                 final_answer=content.final_answer,
                 authoring_intent=content.authoring_intent,
                 estimated_difficulty=current.estimated_difficulty,
@@ -189,6 +205,8 @@ class QuestionAuthoring:
                 "answer_value": revised.answer_value.strip(),
                 "solution_method": revised.solution_method.strip(),
                 "solution_steps": [step.strip() for step in revised.solution_steps],
+                "solution_status": revised.solution_status,
+                "solution_issue": revised.solution_issue,
                 "final_answer": revised.final_answer.strip(),
                 "authoring_intent": revised.authoring_intent.strip(),
                 "curriculum": confirmed_curriculum,
@@ -220,6 +238,8 @@ class QuestionAuthoring:
             answer_value=current.answer_value,
             solution_method=current.solution_method,
             solution_steps=current.solution_steps,
+            solution_status=current.solution_status,
+            solution_issue=current.solution_issue,
             final_answer=current.final_answer,
             authoring_intent=current.authoring_intent,
             estimated_difficulty=current.estimated_difficulty,
@@ -237,6 +257,8 @@ class QuestionAuthoring:
             update={
                 "solution_method": replacement.solution_method.strip(),
                 "solution_steps": [step.strip() for step in replacement.solution_steps],
+                "solution_status": replacement.solution_status,
+                "solution_issue": replacement.solution_issue,
             }
         )
         self._validate_structure(revised, expected_type=current.question_type)
@@ -260,10 +282,16 @@ class QuestionAuthoring:
             warnings.append("当前 MathVerifier 不支持对此任意生成题做独立数学验证。")
         if verification.status == "checks_failed":
             warnings.append("确定性可信检查发现阻断项；修正前不得作为正式题目使用。")
+        if revised.solution_status == "needs_teacher_verification":
+            warnings.append(
+                "重新生成的解析仍未通过一致性检查；题面、选项和最终答案未改变，请教师自行核验。"
+            )
         return current.model_copy(
             update={
                 "solution_method": revised.solution_method,
                 "solution_steps": revised.solution_steps,
+                "solution_status": revised.solution_status,
+                "solution_issue": revised.solution_issue,
                 "verification": verification,
                 "provider": self.provider.name,
                 "model": self.provider.model,
@@ -438,6 +466,77 @@ class QuestionAuthoring:
             update={"answer_value": content.final_answer.strip()}
         )
 
+    @classmethod
+    def _canonicalize_generated_content(
+        cls,
+        content: ProviderQuestionDraft,
+    ) -> ProviderQuestionDraft:
+        content = cls._canonicalize_answer(content)
+        if content.question_type not in {"single_choice", "multiple_choice"}:
+            return content
+        options = [
+            option.model_copy(
+                update={
+                    "key": option.key.strip().upper(),
+                    "text": cls._strip_option_prefix(option.text, option.key),
+                }
+            )
+            for option in content.options
+        ]
+        return content.model_copy(
+            update={
+                "options": options,
+                "stem_plain": cls._strip_embedded_options(content.stem_plain, options),
+                "stem_latex": (
+                    cls._strip_embedded_options(content.stem_latex, options)
+                    if content.stem_latex
+                    else None
+                ),
+            }
+        )
+
+    @staticmethod
+    def _strip_option_prefix(value: str, key: str) -> str:
+        prefix = re.compile(
+            rf"^\s*{re.escape(key.strip())}\s*[.、．:：)）]\s*",
+            flags=re.IGNORECASE,
+        )
+        return prefix.sub("", value, count=1).strip()
+
+    @staticmethod
+    def _strip_embedded_options(
+        stem: str,
+        options: list[QuestionDraftOption],
+    ) -> str:
+        markers: list[int] = []
+        for option in options:
+            marker = re.search(
+                rf"(?:\\n|[\r\n])\s*{re.escape(option.key)}\s*[.、．:：)）]\s*",
+                stem,
+                flags=re.IGNORECASE,
+            )
+            if marker:
+                markers.append(marker.start())
+        if len(markers) < 2:
+            return stem.strip()
+        return stem[: min(markers)].rstrip()
+
+    @staticmethod
+    def _validate_high_school_scope(content: ProviderQuestionDraft) -> None:
+        violations = university_only_terms(
+            content.stem_plain,
+            content.stem_latex or "",
+            *(option.text for option in content.options),
+            content.solution_method,
+            *content.solution_steps,
+            *content.knowledge_points,
+            *content.assessed_methods,
+        )
+        if violations:
+            raise QuestionAuthoringError(
+                "生成内容超出高中数学范围：" + "、".join(violations)
+            )
+
     @staticmethod
     def _validate_structure(
         content: ProviderQuestionDraft,
@@ -544,6 +643,15 @@ class QuestionAuthoring:
         cls,
         content: ProviderQuestionDraft,
     ) -> QuestionDraftTrustCheck:
+        if content.solution_status == "needs_teacher_verification":
+            return QuestionDraftTrustCheck(
+                code="answer_solution_consistency",
+                status="failed",
+                capability="supported",
+                evidence_source="deterministic_structure",
+                summary="解析与锁定答案存在已知冲突或解析未完成",
+                details=[content.solution_issue or "解析需要教师独立核验。"],
+            )
         if content.question_type in {"single_choice", "multiple_choice"}:
             answer_keys = cls._answer_keys(content.answer_value)
             explicit_keys = cls._explicit_answer_keys(content.final_answer)
