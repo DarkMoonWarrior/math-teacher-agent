@@ -287,7 +287,7 @@ def test_create_question_draft_returns_unsaved_owner_only_content(
     }
     response = gateway_client.post(
         "/internal/agent-tools/v1/create-question-draft",
-        json=body,
+        json={"brief": body},
         headers=_auth(),
     )
 
@@ -309,9 +309,11 @@ def test_create_question_draft_returns_unsaved_owner_only_content(
     inference = gateway_client.post(
         "/internal/agent-tools/v1/create-question-draft",
         json={
-            "request_text": "命制一道用于考试的填空压轴题。",
-            "question_type": "fill_blank",
-            "target_difficulty": 5,
+            "brief": {
+                "request_text": "命制一道用于考试的填空压轴题。",
+                "question_type": "fill_blank",
+                "target_difficulty": 5,
+            }
         },
         headers=_auth(),
     )
@@ -323,7 +325,7 @@ def test_create_question_draft_returns_unsaved_owner_only_content(
 
     forged = gateway_client.post(
         "/internal/agent-tools/v1/create-question-draft",
-        json={**body, "owner_id": "other_teacher", "publish": True},
+        json={"brief": body, "owner_id": "other_teacher", "publish": True},
         headers=_auth(),
     )
     assert forged.status_code == 422

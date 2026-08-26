@@ -778,6 +778,7 @@ describe("HttpTeacherWorkspace", () => {
         additional_constraints: "四个选项",
       },
       session_id: "teacher_session_1",
+      progress_id: expect.stringMatching(/^qap_[A-Za-z0-9_-]{20,}$/),
     });
     expect(JSON.stringify(body)).not.toMatch(/owner_id|visibility|public_search|share_allowed|verification|saved/);
     expect(result.draft.saved).toBe(false);

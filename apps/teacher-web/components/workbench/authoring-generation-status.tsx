@@ -1,14 +1,20 @@
-export type AuthoringGenerationStage = "brief" | "agent" | "staging";
+import type { QuestionAuthoringProgressStage } from "../../lib/teacher-workspace/contracts";
+
+export type AuthoringGenerationStage = QuestionAuthoringProgressStage;
 
 const STAGES: Array<{ key: AuthoringGenerationStage; label: string }> = [
   { key: "brief", label: "整理命题要求" },
-  { key: "agent", label: "命制题面与解析" },
+  { key: "composing", label: "命制题面" },
+  { key: "reviewing", label: "审核题面" },
+  { key: "solving", label: "生成解析" },
   { key: "staging", label: "建立私有草稿" },
 ];
 
 const CURRENT_STAGE_COPY: Record<AuthoringGenerationStage, string> = {
   brief: "正在整理命题要求",
-  agent: "Agent 正在命制完整题面与解析",
+  composing: "Agent 正在命制完整题面",
+  reviewing: "Agent 正在审核题面是否合理",
+  solving: "题面已通过自审核，正在生成解析",
   staging: "题面已生成，正在建立私有草稿",
 };
 
@@ -43,7 +49,6 @@ export function AuthoringGenerationStatus({
           </li>
         ))}
       </ol>
-      <p>长题会先锁定完整题面与选项，再生成解析；不会因等待时间较长而截短题目。</p>
     </section>
   );
 }

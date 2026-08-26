@@ -43,6 +43,7 @@ from app.modules.question_authoring import (
     QuestionAuthoringUnavailableError,
     QuestionDesignBrief,
 )
+from app.modules.question_authoring_agent import get_question_authoring_progress_registry
 from app.modules.solution_assistant import (
     SolutionAssistantError,
     SolutionAssistantUnavailableError,
@@ -287,6 +288,18 @@ class SearchPrivateLibraryResponse(BaseModel):
 class CreateQuestionDraftResponse(BaseModel):
     draft: GeneratedQuestionDraft
     request_id: str
+
+
+class CreateQuestionDraftRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    brief: QuestionDesignBrief
+    progress_id: str | None = Field(
+        default=None,
+        min_length=20,
+        max_length=160,
+        pattern=r"^qap_[A-Za-z0-9_-]+$",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -702,7 +715,7 @@ async def search_private_library(
 
 @router.post("/create-question-draft", response_model=CreateQuestionDraftResponse)
 async def create_question_draft(
-    body: QuestionDesignBrief,
+    body: CreateQuestionDraftRequest,
     request: Request,
     _token: None = Depends(_require_tool_gateway_token),
 ) -> CreateQuestionDraftResponse:
@@ -711,8 +724,12 @@ async def create_question_draft(
         draft = await _run_with_timeout(
             request,
             get_question_authoring().create_draft,
-            body,
+            body.brief,
             timeout_seconds=get_settings().question_authoring_tool_timeout_seconds,
+            on_progress=lambda stage: get_question_authoring_progress_registry().update(
+                body.progress_id,
+                stage,
+            ),
         )
     except QuestionAuthoringClarificationRequired as exc:
         raise _GatewayHttpError(

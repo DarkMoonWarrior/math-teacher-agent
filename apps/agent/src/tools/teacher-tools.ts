@@ -563,6 +563,7 @@ export function defineTeacherTools(options: TeacherToolOptions): ToolDefinition[
     description:
       "根据教师原始命题要求生成一份未保存、仅自己可见并附分级可信检查的结构化题目草稿。MathVerifier 不支持时必须明确披露；该工具不能保存、发布、共享或删除题目。",
     parameters: {
+      progress_id: { type: "string", description: "本次命题的只读进度标识，必须原样传递", required: true },
       request_text: { type: "string", description: "教师原始命题要求，必须原样传递", required: true },
       grade: { type: "string", description: "高一、高二或高三（可选）" },
       curriculum_node_id: { type: "string", description: "教师明确选择的知识点节点 ID（可选）" },

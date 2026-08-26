@@ -190,6 +190,7 @@ export interface SearchPrivateLibraryResponse {
 }
 
 export interface CreateQuestionDraftInput {
+  progress_id?: string;
   request_text: string;
   grade?: "高一" | "高二" | "高三";
   curriculum_node_id?: string;
@@ -378,6 +379,11 @@ export class ToolGatewayClient {
   }
 
   createQuestionDraft(input: CreateQuestionDraftInput, options: GatewayRequestOptions): Promise<GatewayResult<CreateQuestionDraftResponse>> {
-    return this.post("/internal/agent-tools/v1/create-question-draft", input, options);
+    const { progress_id, ...brief } = input;
+    return this.post(
+      "/internal/agent-tools/v1/create-question-draft",
+      { brief, ...(progress_id ? { progress_id } : {}) },
+      options,
+    );
   }
 }

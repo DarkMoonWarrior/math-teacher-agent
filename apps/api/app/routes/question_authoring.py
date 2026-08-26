@@ -16,6 +16,8 @@ from app.modules.question_authoring_agent import (
     QuestionAuthoringAgentCommand,
     QuestionAuthoringAgentResponse,
     QuestionAuthoringAgentWorkflow,
+    QuestionAuthoringProgressSnapshot,
+    get_question_authoring_progress_registry,
 )
 from app.modules.personal_question_library import PersonalQuestionLibrary
 from app.routes.curriculum import _catalog_for_path
@@ -65,6 +67,15 @@ async def create_question_authoring_draft(
     settings = get_settings()
     if not settings.question_authoring_agent_enabled:
         raise HTTPException(status_code=503, detail="辅助命题 Agent 当前未启用")
+    if not command.progress_id:
+        command = command.model_copy(update={"progress_id": f"qap_{uuid.uuid4().hex}"})
+    try:
+        get_question_authoring_progress_registry().register(
+            command.progress_id,
+            owner_id=teacher.teacher_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     request_id = request.headers.get("X-Request-Id", "").strip()[:160]
     response = await get_question_authoring_agent_workflow().run(
         command,
@@ -72,5 +83,23 @@ async def create_question_authoring_draft(
         request_id=request_id or f"req_{uuid.uuid4().hex}",
     )
     if response.status == "ok" and response.draft is not None:
+        get_question_authoring_progress_registry().update(
+            command.progress_id,
+            "staging",
+        )
         library.stage_generated_draft(response.draft, owner_id=teacher.teacher_id)
     return response
+
+
+@router.get("/progress/{progress_id}", response_model=QuestionAuthoringProgressSnapshot)
+async def get_question_authoring_progress(
+    progress_id: str,
+    teacher: CurrentTeacher = Depends(get_current_teacher),
+) -> QuestionAuthoringProgressSnapshot:
+    try:
+        return get_question_authoring_progress_registry().snapshot(
+            progress_id,
+            owner_id=teacher.teacher_id,
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="命题进度不存在或已过期") from exc

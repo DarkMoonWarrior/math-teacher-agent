@@ -27,6 +27,8 @@ import {
   type PersonalQuestionList,
   type QuestionAuthoringAgentResult,
   type QuestionAuthoringBrief,
+  type QuestionAuthoringGenerationOptions,
+  type QuestionAuthoringProgressStage,
   type QuestionDraftEditableContent,
   type QuestionInputBundle,
   type QuestionMediaTransform,
@@ -67,6 +69,21 @@ function apiUrl(path: string): string {
   // server-side FastAPI rewrite, so local development does not depend on CORS.
   return path;
 }
+
+function questionAuthoringProgressId(): string {
+  const value = typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+    ? crypto.randomUUID().replaceAll("-", "")
+    : `${Date.now().toString(36)}${Math.random().toString(36).slice(2)}0000000000`;
+  return `qap_${value}`;
+}
+
+const QUESTION_AUTHORING_PROGRESS_STAGES = new Set<QuestionAuthoringProgressStage>([
+  "brief",
+  "composing",
+  "reviewing",
+  "solving",
+  "staging",
+]);
 
 type ErrorEnvelope = {
   error?: { code?: string; message?: string; request_id?: string };
@@ -793,8 +810,30 @@ export class HttpTeacherWorkspace implements TeacherWorkspace {
 
   async createQuestionAuthoringDraft(
     request: QuestionAuthoringBrief,
-    signal?: AbortSignal,
+    options?: QuestionAuthoringGenerationOptions,
   ): Promise<QuestionAuthoringAgentResult> {
+    const progressId = questionAuthoringProgressId();
+    let polling = true;
+    options?.onProgress?.("brief");
+    void (async () => {
+      while (polling && !options?.signal?.aborted) {
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        if (!polling || options?.signal?.aborted) break;
+        try {
+          const response = await fetch(
+            apiUrl(`/api/v1/agent/question-authoring/progress/${encodeURIComponent(progressId)}`),
+            { method: "GET", cache: "no-store", signal: options?.signal },
+          );
+          if (!response.ok) continue;
+          const payload = await response.json() as { stage?: unknown };
+          if (typeof payload.stage === "string" && QUESTION_AUTHORING_PROGRESS_STAGES.has(payload.stage as QuestionAuthoringProgressStage)) {
+            options?.onProgress?.(payload.stage as QuestionAuthoringProgressStage);
+          }
+        } catch {
+          // The POST remains authoritative. A transient progress read must not fail generation.
+        }
+      }
+    })();
     const brief = {
       request_text: request.requestText,
       grade: request.grade,
@@ -809,16 +848,21 @@ export class HttpTeacherWorkspace implements TeacherWorkspace {
       additional_constraints: request.additionalConstraints ?? "",
       reference_question_id: request.referenceQuestionId,
     };
-    const payload = await libraryJsonRequest<QuestionAuthoringAgentResult>(
-      "/api/v1/agent/question-authoring/draft",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ brief, session_id: request.sessionId }),
-        signal,
-      },
-      "无法连接辅助命题 Agent。请确认 Agent Service 与 FastAPI 已启动。",
-    );
+    let payload: QuestionAuthoringAgentResult;
+    try {
+      payload = await libraryJsonRequest<QuestionAuthoringAgentResult>(
+        "/api/v1/agent/question-authoring/draft",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ brief, session_id: request.sessionId, progress_id: progressId }),
+          signal: options?.signal,
+        },
+        "无法连接辅助命题 Agent。请确认 Agent Service 与 FastAPI 已启动。",
+      );
+    } finally {
+      polling = false;
+    }
     if (payload.status !== "ok" || !payload.draft) {
       throw new TeacherWorkspaceError(
         payload.error?.code ?? "QUESTION_AUTHORING_FAILED",
@@ -826,6 +870,7 @@ export class HttpTeacherWorkspace implements TeacherWorkspace {
         payload.error?.request_id ?? payload.request_id,
       );
     }
+    options?.onProgress?.("staging");
     return payload;
   }
 

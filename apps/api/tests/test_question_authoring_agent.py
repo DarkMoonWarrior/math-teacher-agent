@@ -5,6 +5,7 @@ from collections.abc import AsyncIterator
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app.agent_runtime import (
@@ -28,6 +29,8 @@ from app.modules.question_authoring_agent import (
     QuestionAuthoringAgentCommand,
     QuestionAuthoringAgentResponse,
     QuestionAuthoringAgentWorkflow,
+    QuestionAuthoringProgressRegistry,
+    get_question_authoring_progress_registry,
 )
 from app.modules.personal_question_library import PersonalQuestionLibrary
 from app.routes import question_authoring as question_authoring_routes
@@ -243,6 +246,17 @@ def run(coro):
     return asyncio.run(coro)
 
 
+def test_progress_registry_exposes_stage_only_to_the_bound_owner() -> None:
+    registry = QuestionAuthoringProgressRegistry()
+    progress_id = "qap_1234567890abcdefghij"
+    registry.register(progress_id, owner_id="teacher_a")
+
+    assert registry.update(progress_id, "reviewing") is True
+    assert registry.snapshot(progress_id, owner_id="teacher_a").stage == "reviewing"
+    with pytest.raises(KeyError):
+        registry.snapshot(progress_id, owner_id="teacher_b")
+
+
 def test_workflow_accepts_only_exact_structured_tool_result() -> None:
     runtime = FakeRuntime()
     workflow = QuestionAuthoringAgentWorkflow(runtime=runtime)
@@ -267,6 +281,35 @@ def test_workflow_accepts_only_exact_structured_tool_result() -> None:
     assert "必须且只能调用一次 create_question_draft" in request.user_message
     assert "owner_id" not in request.user_message.split("命题请求JSON：", 1)[1]
     assert "已经发布" not in response.model_dump_json()
+
+
+def test_workflow_requires_agent_to_preserve_the_progress_identifier() -> None:
+    progress_id = "qap_1234567890abcdefghij"
+    exact_input = brief().model_dump(mode="json", exclude_none=True)
+    exact_input["progress_id"] = progress_id
+    runtime = FakeRuntime(tool_calls=[tool_call(input_=exact_input)])
+
+    response = run(
+        QuestionAuthoringAgentWorkflow(runtime=runtime).run(
+            QuestionAuthoringAgentCommand(brief=brief(), progress_id=progress_id),
+            owner_id="teacher_a",
+        )
+    )
+
+    assert response.status == "ok"
+    assert progress_id in runtime.requests[0].user_message
+
+    changed_input = {**exact_input, "progress_id": "qap_abcdefghij1234567890"}
+    changed = run(
+        QuestionAuthoringAgentWorkflow(
+            runtime=FakeRuntime(tool_calls=[tool_call(input_=changed_input)])
+        ).run(
+            QuestionAuthoringAgentCommand(brief=brief(), progress_id=progress_id),
+            owner_id="teacher_a",
+        )
+    )
+    assert changed.status == "error"
+    assert changed.error["code"] == "TOOL_EXECUTION_ERROR"
 
 
 def test_workflow_rejects_model_changed_input_extra_calls_and_invalid_private_state() -> None:
@@ -395,8 +438,14 @@ def test_http_route_binds_current_teacher_and_stages_only_for_that_owner(
         source="authenticated_session",
     )
     app.dependency_overrides[get_personal_question_library] = lambda: library
+    progress_registry = get_question_authoring_progress_registry()
+    progress_registry.clear()
     try:
-        payload = {"brief": brief().model_dump(mode="json", exclude_none=True)}
+        progress_id = "qap_http_authoring_1234567890"
+        payload = {
+            "brief": brief().model_dump(mode="json", exclude_none=True),
+            "progress_id": progress_id,
+        }
         with TestClient(app) as client:
             response = client.post(
                 "/api/v1/agent/question-authoring/draft",
@@ -411,13 +460,19 @@ def test_http_route_binds_current_teacher_and_stages_only_for_that_owner(
                 "/api/v1/agent/question-authoring/draft",
                 json={"brief": {**payload["brief"], "owner_id": "teacher_b"}},
             )
+            progress = client.get(
+                f"/api/v1/agent/question-authoring/progress/{progress_id}"
+            )
     finally:
         app.dependency_overrides.pop(get_current_teacher, None)
         app.dependency_overrides.pop(get_personal_question_library, None)
+        progress_registry.clear()
 
     assert response.status_code == 200
     assert response.json()["draft"]["visibility"] == "owner_only"
     assert response.json()["draft"]["saved"] is False
+    assert progress.status_code == 200
+    assert progress.json()["stage"] == "staging"
     staged = library.get_authoring_draft("qad_synthetic_1", owner_id="teacher_http_a")
     assert staged.current_revision == 1
     assert staged.saved is False

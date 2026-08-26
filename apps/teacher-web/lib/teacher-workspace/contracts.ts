@@ -468,6 +468,18 @@ export type QuestionAuthoringBrief = {
   sessionId?: string;
 };
 
+export type QuestionAuthoringProgressStage =
+  | "brief"
+  | "composing"
+  | "reviewing"
+  | "solving"
+  | "staging";
+
+export type QuestionAuthoringGenerationOptions = {
+  signal?: AbortSignal;
+  onProgress?: (stage: QuestionAuthoringProgressStage) => void;
+};
+
 export type QuestionDraftOption = {
   key: string;
   text: string;
@@ -753,7 +765,7 @@ export interface TeacherWorkspace {
 
   createQuestionAuthoringDraft(
     request: QuestionAuthoringBrief,
-    signal?: AbortSignal,
+    options?: QuestionAuthoringGenerationOptions,
   ): Promise<QuestionAuthoringAgentResult>;
 
   getPersonalAuthoringDraft(draftId: string, signal?: AbortSignal): Promise<PersonalAuthoringDraft>;

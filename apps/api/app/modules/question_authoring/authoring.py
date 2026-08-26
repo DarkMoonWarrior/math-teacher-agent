@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 from datetime import datetime, timezone
+from typing import Callable
 from uuid import uuid4
 
 from app.modules.curriculum import InMemoryCurriculumCatalog
@@ -9,6 +10,7 @@ from app.modules.math_verifier import MathVerifier
 from app.modules.question_authoring.providers import (
     PROMPT_REVISION,
     QuestionAuthoringContext,
+    QuestionAuthoringProgressStage,
     QuestionAuthoringProvider,
     QuestionAuthoringProviderError,
 )
@@ -52,7 +54,12 @@ class QuestionAuthoring:
         self.provider = provider
         self.math_verifier = math_verifier
 
-    def create_draft(self, brief: QuestionDesignBrief) -> GeneratedQuestionDraft:
+    def create_draft(
+        self,
+        brief: QuestionDesignBrief,
+        *,
+        on_progress: Callable[[QuestionAuthoringProgressStage], None] | None = None,
+    ) -> GeneratedQuestionDraft:
         if brief.reference_question_id:
             raise QuestionAuthoringError(
                 "参考母题模式尚未开放；只有母题数学状态与改编权利都可独立验证后才能使用"
@@ -71,6 +78,7 @@ class QuestionAuthoring:
                     question_type=question_type,
                     curriculum=curriculum_guidance,
                     curriculum_options=curriculum_options,
+                    on_progress=on_progress,
                 )
             )
         except QuestionAuthoringProviderError as exc:

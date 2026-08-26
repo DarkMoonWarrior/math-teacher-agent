@@ -21,8 +21,8 @@ describe("Private Question Authoring deterministic harness scenario", () => {
           body: {
             draft: {
               draft_id: "qad_synthetic_1",
-              request_text: body.request_text,
-              question_type: body.question_type,
+              request_text: (body.brief as Record<string, unknown>).request_text,
+              question_type: (body.brief as Record<string, unknown>).question_type,
               stem_plain: "已知函数 f(x)=x²，判断其单调性。",
               stem_latex: "已知函数 $f(x)=x^2$，判断其单调性。",
               options: [
@@ -94,17 +94,19 @@ describe("Private Question Authoring deterministic harness scenario", () => {
       misconception_requirements: "",
       additional_constraints: "",
     };
+    const progressId = "qap_authoring_scenario_1234567890";
+    const toolInput = { ...brief, progress_id: progressId };
     const result = await harness.runtime.run({
       user_message: [
         "必须且只能调用一次 create_question_draft。",
-        `命题请求JSON：${JSON.stringify(brief)}`,
+        `命题请求JSON：${JSON.stringify(toolInput)}`,
       ].join("\n"),
       request_id: "req_authoring_scenario",
     });
 
     expect(result.status).toBe("completed");
     expect(result.tool_calls.map((call) => call.tool_name)).toEqual(["create_question_draft"]);
-    expect(result.tool_calls[0]?.input).toEqual(brief);
+    expect(result.tool_calls[0]?.input).toEqual(toolInput);
     const output = result.tool_calls[0]?.output as {
       draft: { visibility: string; saved: boolean; verification: { status: string } };
     };
@@ -116,7 +118,7 @@ describe("Private Question Authoring deterministic harness scenario", () => {
     const call = harness.stub.requests.find(
       (request) => request.route === CREATE_QUESTION_DRAFT_ROUTE,
     );
-    expect(call?.body).toEqual(brief);
+    expect(call?.body).toEqual({ brief, progress_id: progressId });
     expect(call?.body).not.toHaveProperty("owner_id");
     expect(call?.body).not.toHaveProperty("publish");
     expect(call?.body).not.toHaveProperty("save");

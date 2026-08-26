@@ -6,13 +6,17 @@ import { AuthoringGenerationStatus, formatAuthoringElapsed } from "./authoring-g
 describe("AuthoringGenerationStatus", () => {
   it("shows the actual stage, an activity indicator and elapsed time", () => {
     const html = renderToStaticMarkup(
-      <AuthoringGenerationStatus elapsedSeconds={68} stage="agent" />,
+      <AuthoringGenerationStatus elapsedSeconds={68} stage="reviewing" />,
     );
 
-    expect(html).toContain("Agent 正在命制完整题面与解析");
+    expect(html).toContain("Agent 正在审核题面是否合理");
     expect(html).toContain("已处理 01:08");
     expect(html).toContain('class="authoring-progress__spinner"');
     expect(html).toContain('aria-live="polite"');
+    expect(html).toContain("命制题面");
+    expect(html).toContain("审核题面");
+    expect(html).toContain("生成解析");
+    expect(html).not.toContain("长题会先锁定完整题面与选项");
   });
 
   it("formats long waits without resetting the minute count", () => {
