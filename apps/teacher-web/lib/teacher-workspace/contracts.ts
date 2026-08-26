@@ -514,6 +514,8 @@ export type GeneratedQuestionDraft = QuestionDraftEditableContent & {
     reviewed_by: string;
   } | null;
   pedagogy_source: "model_generated" | "teacher_edited";
+  solution_status: "ready" | "needs_teacher_verification";
+  solution_issue: string | null;
   target_difficulty: number;
   estimated_difficulty: number;
   difficulty_source: "model_estimated";

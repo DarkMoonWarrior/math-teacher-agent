@@ -1834,6 +1834,9 @@ svg { flex: 0 0 auto; }
 .personal-question-detail > footer button.is-danger,
 .personal-question-delete button.is-danger { border-color: var(--color-error); color: var(--color-error); }
 .personal-question-warning { background: var(--color-error-soft); color: var(--color-error); padding: var(--space-sm); }
+.authoring-solution-warning { background: var(--color-error-soft); border: 0.0625rem solid color-mix(in srgb, var(--color-error) 35%, transparent); display: grid; gap: var(--space-xs); padding: var(--space-md); }
+.authoring-solution-warning strong { color: var(--color-error); font-family: var(--font-display); font-size: var(--text-lg); font-weight: 500; }
+.authoring-solution-warning p { color: var(--color-muted); line-height: 1.65; }
 .personal-question-delete { align-content: start; display: grid; gap: var(--space-lg); }
 .personal-question-delete > div { display: flex; flex-wrap: wrap; gap: var(--space-xs); }
 .personal-question-delete p { color: var(--color-muted); }

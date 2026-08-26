@@ -13,7 +13,7 @@
 - **切片 6 已完成**：Teacher Web 已从“新任务”、Search 空结果/不合适结果和 Paper 题量不足提示三个必需位置接入独立辅助命题工作区，并在顶部能力导航增加“命题”直达入口。教师可填写结构化 brief、查看并编辑未保存草稿、记录 revision、重新执行六项检查、明确选择或新建个人题库/分类后保存；保存后可在同一 owner 工作区管理、导出、回收、恢复或确认永久删除。生成题始终以 `AI GENERATED · UNSAVED` 与真实检索题分开，Paper 入口不自动生成、不自动保存，也不自动加入试卷。临时成功、失败和不可逆删除确认使用可关闭弹窗；可信检查与数学风险披露仍保留在正文。
 - **切片 7 已完成**：知识点、考查方法和易错点不再作为生成前门禁。教师只需自然语言意图，年级、题型、难度和其他限制均为可选约束；provider 在题目完成后归纳细分知识点、考查方法、常见错误并建议受控 Curriculum 节点。未知节点被业务层丢弃，无法映射也不阻断 owner-only 草稿；Agent 推断固定为待确认，教师可在结果页检索目录并通过 revision 确认或修正，同时校订全部教学元数据。
 - **切片 7 长题能力收口已完成**：撤销“缩短题干/限制解析总字数”方案，DeepSeek adapter 在单一 `create_draft` seam 内依次锁定完整题面与最终答案、规划解析段、并行展开各段、按序组装并执行原有可信检查。单段格式失败只重试该段；持续截断时仅把该段再拆成原子子段，不重新生成题面或其他成功段。Teacher Web 使用与 Solve 相同的数学展示契约和 KaTeX 组件呈现题面、长解析步骤与唯一最终答案，原始 LaTeX 只放在可展开校订区。真实三小问 5/5 解答题已通过 Web 全链路生成 62 步、约 17470 字符解析，并保持 `owner_only + saved=false + teacher_review_required`。
-- **M8 解析质量补强已完成**：解析段契约只允许可直接展示的成稿推导，禁止第一人称试算、自我怀疑、回退、提示词或内部字段讨论。服务端检测到“让我们重新审视”“可能算错”等元推理时，只重写受污染的解析段；清理后仍污染或确认题面/锁定答案冲突时诚实失败，不把思考草稿展示给教师。结果页新增“重新生成解析”，它锁定当前 revision 的题面、选项、答案和最终答案，只替换解法与解析步骤、重跑可信检查并追加 `ai_generated` revision；未记录的本地编辑会先提示保存，避免静默覆盖。
+- **M8 解析质量补强已完成**：解析段契约只允许可直接展示的成稿推导，禁止第一人称试算、自我怀疑、回退、提示词或内部字段讨论。服务端检测到“让我们重新审视”“重新核对初始条件”“题面有误”“与题设不符”“无法选出正确答案”等元推理或自我推翻时，只重写受污染的解析段。完整题面、选项和最终答案一旦由 core 阶段锁定，清理后仍污染、解析生成异常或确认数学冲突都不得让整道题失败；系统返回完整题目，把解析标记为 `needs_teacher_verification`、可信状态降为 `checks_failed`，并明确提示教师自行核验或单独重新生成解析。只有题面 core 本身未完成时才诚实失败。结果页“重新生成解析”锁定当前 revision 的题面、选项、答案和最终答案，只替换解法与解析步骤、重跑可信检查并追加 `ai_generated` revision；未记录的本地编辑会先提示保存，避免静默覆盖。
 - DeepSeek 只实现可替换 provider adapter；Agent 必须且只能调用一次 `create_question_draft`，模型不能增加 owner、保存、发布、共享或删除参数。Agent Tool 仍只返回 `owner_only + saved=false`；暂存和保存由公开 FastAPI 在认证业务层分别执行，Agent 没有相应写 Tool。
 - 当前 MathVerifier 只接受带受控 `verification_spec` 的已知规则；任意模型生成题没有这种独立证据，因此固定诚实披露 `math_verifier_status=unsupported`，不得用模型自述冒充程序验证。结构检查通过也不等于数学正确。
 - FastAPI 只从 `get_current_teacher` 注入 owner；请求模型 `extra=forbid`，浏览器伪造 `owner_id` 返回 422，跨 owner 读取或修改返回 404。
@@ -43,7 +43,7 @@ M8 不建设公共投稿、公共发布、共享协作、商业内容审核、�
 
 ### QuestionAuthoring
 
-`QuestionAuthoring.create_draft(QuestionDesignBrief) -> GeneratedQuestionDraft` 与 `QuestionAuthoring.regenerate_solution(GeneratedQuestionDraft) -> GeneratedQuestionDraft` 是命题业务深模块接口。前者拥有可选需求约束、结构化生成和生成后教学元数据归纳；后者只允许 provider 替换解析字段。两者共同把受控教材映射、答案/解析一致性检查、选择题唯一性检查、MathVerifier、可信状态和错误语义留在实现内部。
+`QuestionAuthoring.create_draft(QuestionDesignBrief) -> GeneratedQuestionDraft` 与 `QuestionAuthoring.regenerate_solution(GeneratedQuestionDraft) -> GeneratedQuestionDraft` 是命题业务深模块接口。前者拥有可选需求约束、结构化生成和生成后教学元数据归纳；后者只允许 provider 替换解析字段。两者共同把受控教材映射、答案/解析一致性检查、选择题唯一性检查、MathVerifier、可信状态和错误语义留在实现内部。`GeneratedQuestionDraft.solution_status` 区分可直接复核的 `ready` 与解析异常但题面可用的 `needs_teacher_verification`；后者必须携带简洁 `solution_issue`，不得包含模型内部试算过程。
 
 初次长题生成不会增加 Agent Tool。DeepSeek provider 在内部执行 `question core → solution plan → solution sections → assembly`：题面与最终答案先锁定，解析段只读该锁定内容；多个段可并行生成，某一段失败时只在 provider 内局部重试。教师明确点击“重新生成解析”时，认证 FastAPI 业务接口从 owner 当前 revision 恢复锁定题面，不经浏览器或 Agent 选择 owner，也不开放整题重生成、保存或发布权限。内容 Schema 与业务模型允许长题干和长解析，基础设施仍保留有限超时以防失控请求，但不得把超时保护变成删题、压缩步骤或降低难度的内容规则。
 

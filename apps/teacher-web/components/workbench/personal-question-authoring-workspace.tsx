@@ -332,7 +332,11 @@ export function PersonalQuestionAuthoringWorkspace({
       setSaveName(`${staged.current.draft.curriculum?.name ?? "待确认知识点"} · 自主命题`);
       setCurriculumQuery(staged.current.draft.curriculum?.name ?? "");
       setCurriculumMatches([]);
-      setNotice("草稿已生成，但尚未保存。请先核对题面、最终答案与解析。");
+      setNotice(
+        staged.current.draft.solution_status === "needs_teacher_verification"
+          ? "完整题目已生成。解析未通过一致性检查，请自行核验或点击“重新生成解析”。"
+          : "草稿已生成，但尚未保存。请先核对题面、最终答案与解析。",
+      );
       window.requestAnimationFrame(() => document.querySelector<HTMLElement>("#authoring-draft")?.scrollIntoView({ behavior: "smooth", block: "start" }));
     } catch (cause) {
       setError(errorMessage(cause));
@@ -416,7 +420,11 @@ export function PersonalQuestionAuthoringWorkspace({
       );
       setDraftView(regenerated);
       setDraftEditor(editableContent(regenerated.current.draft));
-      setNotice(`解析已重新生成并记录为 REV ${regenerated.current_revision}；题面、选项和最终答案均未改变。`);
+      setNotice(
+        regenerated.current.draft.solution_status === "needs_teacher_verification"
+          ? `题面、选项和最终答案保持不变；REV ${regenerated.current_revision} 的解析仍需你自行核验。`
+          : `解析已重新生成并记录为 REV ${regenerated.current_revision}；题面、选项和最终答案均未改变。`,
+      );
       window.requestAnimationFrame(() => document.querySelector<HTMLElement>(".authoring-draft__solution")?.scrollIntoView({ behavior: "smooth", block: "start" }));
     } catch (cause) {
       setError(errorMessage(cause));
@@ -783,6 +791,13 @@ export function PersonalQuestionAuthoringWorkspace({
                 question={draftEditor.stem_latex || draftEditor.stem_plain}
                 steps={draftEditor.solution_steps}
               />
+              {draft.solution_status === "needs_teacher_verification" && (
+                <section className="authoring-solution-warning" role="status">
+                  <strong>题目已完整生成，解析需要你核验</strong>
+                  <p>{draft.solution_issue || "解析未通过一致性检查。"}</p>
+                  <p>题面、选项和最终答案均已保留；你可以自行校订解析，或点击下方“重新生成解析”。</p>
+                </section>
+              )}
               <details className="personal-question-edit authoring-draft__editor">
                 <summary>编辑题面、答案与解析</summary>
                 <QuestionEditor content={draftEditor} idPrefix="draft" onChange={setDraftEditor} />

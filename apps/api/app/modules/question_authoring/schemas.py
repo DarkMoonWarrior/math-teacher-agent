@@ -32,6 +32,7 @@ QuestionDraftTrustEvidenceSource = Literal[
     "model_estimate",
     "none",
 ]
+QuestionSolutionStatus = Literal["ready", "needs_teacher_verification"]
 
 
 class QuestionDesignBrief(BaseModel):
@@ -161,6 +162,8 @@ class GeneratedQuestionDraft(BaseModel):
     answer_value: str = Field(min_length=1, max_length=4000)
     solution_method: str = Field(min_length=1, max_length=500)
     solution_steps: list[str] = Field(min_length=1, max_length=100)
+    solution_status: QuestionSolutionStatus = "ready"
+    solution_issue: str | None = Field(default=None, max_length=500)
     final_answer: str = Field(min_length=1, max_length=4000)
     authoring_intent: str = Field(min_length=1, max_length=2000)
     curriculum: QuestionDraftCurriculum | None = None
@@ -198,6 +201,8 @@ class ProviderQuestionDraft(BaseModel):
     answer_value: str = Field(min_length=1, max_length=4000)
     solution_method: str = Field(min_length=1, max_length=500)
     solution_steps: list[str] = Field(min_length=1, max_length=100)
+    solution_status: QuestionSolutionStatus = "ready"
+    solution_issue: str | None = Field(default=None, max_length=500)
     final_answer: str = Field(min_length=1, max_length=4000)
     authoring_intent: str = Field(min_length=1, max_length=2000)
     estimated_difficulty: int = Field(ge=1, le=5)
@@ -214,3 +219,5 @@ class ProviderQuestionSolution(BaseModel):
 
     solution_method: str = Field(min_length=1, max_length=500)
     solution_steps: list[str] = Field(min_length=1, max_length=100)
+    solution_status: QuestionSolutionStatus = "ready"
+    solution_issue: str | None = Field(default=None, max_length=500)

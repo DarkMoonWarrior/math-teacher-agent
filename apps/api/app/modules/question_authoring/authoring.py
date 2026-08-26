@@ -94,6 +94,10 @@ class QuestionAuthoring:
             warnings.append("当前 MathVerifier 不支持对此任意生成题做独立数学验证。")
         if verification.status == "checks_failed":
             warnings.append("确定性可信检查发现阻断项；修正前不得作为正式题目使用。")
+        if content.solution_status == "needs_teacher_verification":
+            warnings.append(
+                "题面、选项和最终答案已完整保留，但解析未通过一致性检查；请教师自行核验或重新生成解析。"
+            )
         if brief.question_type is None:
             warnings.append(f"未明确题型，已从要求推断为 {question_type}。")
         if curriculum_warning:
@@ -108,6 +112,8 @@ class QuestionAuthoring:
             answer_value=content.answer_value.strip(),
             solution_method=content.solution_method.strip(),
             solution_steps=[step.strip() for step in content.solution_steps],
+            solution_status=content.solution_status,
+            solution_issue=content.solution_issue,
             final_answer=content.final_answer.strip(),
             authoring_intent=content.authoring_intent.strip(),
             curriculum=curriculum,
@@ -131,6 +137,11 @@ class QuestionAuthoring:
     ) -> GeneratedQuestionDraft:
         """Create a teacher-edited snapshot with fresh server-owned trust evidence."""
 
+        solution_changed = (
+            content.solution_method.strip() != current.solution_method.strip()
+            or [step.strip() for step in content.solution_steps]
+            != [step.strip() for step in current.solution_steps]
+        )
         revised = self._canonicalize_answer(
             ProviderQuestionDraft(
                 question_type=content.question_type,
@@ -140,6 +151,8 @@ class QuestionAuthoring:
                 answer_value=content.answer_value,
                 solution_method=content.solution_method,
                 solution_steps=content.solution_steps,
+                solution_status=("ready" if solution_changed else current.solution_status),
+                solution_issue=(None if solution_changed else current.solution_issue),
                 final_answer=content.final_answer,
                 authoring_intent=content.authoring_intent,
                 estimated_difficulty=current.estimated_difficulty,
@@ -189,6 +202,8 @@ class QuestionAuthoring:
                 "answer_value": revised.answer_value.strip(),
                 "solution_method": revised.solution_method.strip(),
                 "solution_steps": [step.strip() for step in revised.solution_steps],
+                "solution_status": revised.solution_status,
+                "solution_issue": revised.solution_issue,
                 "final_answer": revised.final_answer.strip(),
                 "authoring_intent": revised.authoring_intent.strip(),
                 "curriculum": confirmed_curriculum,
@@ -220,6 +235,8 @@ class QuestionAuthoring:
             answer_value=current.answer_value,
             solution_method=current.solution_method,
             solution_steps=current.solution_steps,
+            solution_status=current.solution_status,
+            solution_issue=current.solution_issue,
             final_answer=current.final_answer,
             authoring_intent=current.authoring_intent,
             estimated_difficulty=current.estimated_difficulty,
@@ -237,6 +254,8 @@ class QuestionAuthoring:
             update={
                 "solution_method": replacement.solution_method.strip(),
                 "solution_steps": [step.strip() for step in replacement.solution_steps],
+                "solution_status": replacement.solution_status,
+                "solution_issue": replacement.solution_issue,
             }
         )
         self._validate_structure(revised, expected_type=current.question_type)
@@ -260,10 +279,16 @@ class QuestionAuthoring:
             warnings.append("当前 MathVerifier 不支持对此任意生成题做独立数学验证。")
         if verification.status == "checks_failed":
             warnings.append("确定性可信检查发现阻断项；修正前不得作为正式题目使用。")
+        if revised.solution_status == "needs_teacher_verification":
+            warnings.append(
+                "重新生成的解析仍未通过一致性检查；题面、选项和最终答案未改变，请教师自行核验。"
+            )
         return current.model_copy(
             update={
                 "solution_method": revised.solution_method,
                 "solution_steps": revised.solution_steps,
+                "solution_status": revised.solution_status,
+                "solution_issue": revised.solution_issue,
                 "verification": verification,
                 "provider": self.provider.name,
                 "model": self.provider.model,
@@ -544,6 +569,15 @@ class QuestionAuthoring:
         cls,
         content: ProviderQuestionDraft,
     ) -> QuestionDraftTrustCheck:
+        if content.solution_status == "needs_teacher_verification":
+            return QuestionDraftTrustCheck(
+                code="answer_solution_consistency",
+                status="failed",
+                capability="supported",
+                evidence_source="deterministic_structure",
+                summary="解析与锁定答案存在已知冲突或解析未完成",
+                details=[content.solution_issue or "解析需要教师独立核验。"],
+            )
         if content.question_type in {"single_choice", "multiple_choice"}:
             answer_keys = cls._answer_keys(content.answer_value)
             explicit_keys = cls._explicit_answer_keys(content.final_answer)

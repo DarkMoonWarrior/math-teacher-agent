@@ -49,7 +49,7 @@
 
 M0-M7 已完成；项目所有者在查看 M7 Gate E 结果后于 2026-08-24 明确确认进入 M8。当前只能按 [`M8-PRIVATE-QUESTION-AUTHORING.md`](M8-PRIVATE-QUESTION-AUTHORING.md) 的纵向切片开发私有辅助命题，不得并行进入 Paper、Lesson、Memory 或其他后续阶段。
 
-M8 切片 1–7 已建立独立 `PersonalQuestionLibrary` 深模块、本地 owner-isolated SQLite namespace、身份绑定的个人题库/分类、结构化生成、六项可信检查、私有命题工作区、append-only revision、显式保存、完整 owner 管理接口及 Teacher Web 入口。教师只需描述命题意图；年级、题型、难度是可选便捷约束，教材知识点、细分知识点、考查方法和易错点由 Agent 在生成后归纳。长题在 provider 内分为题面/答案锁定、解析提纲、解析段和组装，失败段局部重试；不得通过删题、压缩步骤或降低难度规避输出问题。解析面向教师时只允许展示正式成稿，不展示模型试算、自我推翻、提示词或字段讨论；教师可单独重新生成解析，但业务层必须锁定题面、选项和最终答案，新解析追加为 AI revision 并重新经过可信检查。模型只能选择受控 Curriculum 中的节点，未知节点会被丢弃；推断映射保持待确认，教师可通过 revision 明确修正或确认。浏览器不能提交 `owner_id`、隐私状态或可信证据；跨 owner 一律返回不存在，旧版本修改返回冲突。Agent 没有管理或删除 Tool，模块不存在 publish/share/admin 接口。Search 与 Paper 只显式转入独立命题工作区，不会自动生成、保存或把私题加入真实检索结果/试卷。
+M8 切片 1–7 已建立独立 `PersonalQuestionLibrary` 深模块、本地 owner-isolated SQLite namespace、身份绑定的个人题库/分类、结构化生成、六项可信检查、私有命题工作区、append-only revision、显式保存、完整 owner 管理接口及 Teacher Web 入口。教师只需描述命题意图；年级、题型、难度是可选便捷约束，教材知识点、细分知识点、考查方法和易错点由 Agent 在生成后归纳。长题在 provider 内分为题面/答案锁定、解析提纲、解析段和组装，失败段局部重试；不得通过删题、压缩步骤或降低难度规避输出问题。解析面向教师时只允许展示正式成稿，不展示模型试算、自我推翻、提示词或字段讨论。完整题面、选项和最终答案一旦锁定，解析冲突、清理失败或解析阶段 provider 异常只能使解析进入 `needs_teacher_verification` 与 `checks_failed`，不得把完整题目改报为整项失败；教师可以自行校订或单独重新生成解析。题面 core 本身未完成时仍必须诚实失败，不得捏造题目。教师单独重新生成解析时，业务层必须锁定题面、选项和最终答案，新解析追加为 AI revision 并重新经过可信检查。模型只能选择受控 Curriculum 中的节点，未知节点会被丢弃；推断映射保持待确认，教师可通过 revision 明确修正或确认。浏览器不能提交 `owner_id`、隐私状态或可信证据；跨 owner 一律返回不存在，旧版本修改返回冲突。Agent 没有管理或删除 Tool，模块不存在 publish/share/admin 接口。Search 与 Paper 只显式转入独立命题工作区，不会自动生成、保存或把私题加入真实检索结果/试卷。
 
 本阶段允许：
 

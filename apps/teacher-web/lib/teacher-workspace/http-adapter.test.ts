@@ -218,6 +218,8 @@ function generatedQuestionDraftFixture(saved = false): GeneratedQuestionDraft {
     answer_value: "A",
     solution_method: "使用椭圆离心率定义",
     solution_steps: ["由焦距 $2c=2$ 得 $c=1$。", "所以 $e=c/a=1/2$。"],
+    solution_status: "ready",
+    solution_issue: null,
     final_answer: "$\\frac{1}{2}$",
     authoring_intent: "检查学生是否区分焦距与半焦距。",
     knowledge_points: ["椭圆离心率"],
