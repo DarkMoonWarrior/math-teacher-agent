@@ -12,6 +12,7 @@ from app.modules.personal_question_library import (
     PersonalAuthoringDraftView,
     PersonalAuthoringRevisionCreate,
     PersonalAuthoringRevisionList,
+    PersonalAuthoringSolutionRegenerate,
     PersonalCategoryCreate,
     PersonalCategoryList,
     PersonalCategoryUpdate,
@@ -237,6 +238,39 @@ def revise_personal_authoring_draft(
             owner_id=teacher.teacher_id,
             expected_revision=command.expected_revision,
             edit_summary=command.edit_summary,
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="命题草稿不存在") from exc
+    except QuestionAuthoringError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except PersonalQuestionLibraryError as exc:
+        _raise_library_error(exc)
+
+
+@router.post(
+    "/authoring-drafts/{draft_id}/regenerate-solution",
+    response_model=PersonalAuthoringDraftView,
+    status_code=201,
+)
+def regenerate_personal_authoring_solution(
+    draft_id: str,
+    command: PersonalAuthoringSolutionRegenerate,
+    teacher: CurrentTeacher = Depends(get_current_teacher),
+    library: PersonalQuestionLibrary = Depends(get_personal_question_library),
+    authoring: QuestionAuthoring = Depends(get_question_authoring_editor),
+) -> PersonalAuthoringDraftView:
+    try:
+        current = library.get_authoring_draft(draft_id, owner_id=teacher.teacher_id)
+        if current.current_revision != command.expected_revision:
+            raise PersonalQuestionLibraryConflict(
+                f"草稿版本已更新，当前版本为 {current.current_revision}"
+            )
+        regenerated = authoring.regenerate_solution(current.current.draft)
+        return library.append_ai_revision(
+            regenerated,
+            owner_id=teacher.teacher_id,
+            expected_revision=command.expected_revision,
+            edit_summary="AI 重新生成解析；题面、选项与最终答案保持不变",
         )
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="命题草稿不存在") from exc

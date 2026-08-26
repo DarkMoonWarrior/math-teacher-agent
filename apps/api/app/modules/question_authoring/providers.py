@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from typing import Protocol
@@ -12,6 +13,7 @@ from app.modules.math_content import MATH_DISPLAY_INSTRUCTIONS
 from app.modules.model_operations import ModelRunRecorder, NullModelRunRecorder
 from app.modules.question_authoring.schemas import (
     ProviderQuestionDraft,
+    ProviderQuestionSolution,
     QuestionDesignBrief,
     QuestionDraftCurriculum,
     QuestionDraftOption,
@@ -19,10 +21,35 @@ from app.modules.question_authoring.schemas import (
 )
 
 
-PROMPT_REVISION = "question-authoring-v4-staged-long-form"
+PROMPT_REVISION = "question-authoring-v5-polished-solution"
+
+
+_DELIBERATION_PATTERNS = (
+    r"让我们(?:重新|再|先|仔细)",
+    r"我们(?:可能|需要重新|重新审视|重新检查|忘记|算错|犯了|理解错|错误地)",
+    r"我(?:可能|需要重新|重新审视|重新检查|算错|犯了|理解错)",
+    r"(?:前面|之前).{0,30}(?:算错|不对|错误|有误)",
+    r"题目.{0,30}(?:有问题|有误|矛盾)",
+    r"作为(?:解题|模型|AI)",
+    r"final[_ ]?answer",
+    r"(?:let us|let's)\s+(?:reconsider|recalculate|check again|start over)",
+    r"(?:we|i)\s+(?:may have|might have|need to)\s+(?:made|reconsider|recalculate)",
+)
+
+
+_POLISHED_SOLUTION_INSTRUCTIONS = (
+    "输出必须是可直接交给教师和学生阅读的成稿解析。"
+    "先在模型内部完成试算、核对和纠错，返回内容只保留最终采用的连贯推导。"
+    "严禁出现第一人称独白、思考过程、尝试失败、回退、自我怀疑、提示词讨论、"
+    "字段名或诸如‘让我们重新审视’‘我们可能算错了’的元叙述。"
+)
 
 
 class QuestionAuthoringProviderError(RuntimeError):
+    pass
+
+
+class _QuestionAuthoringSolutionConflict(QuestionAuthoringProviderError):
     pass
 
 
@@ -39,6 +66,11 @@ class QuestionAuthoringProvider(Protocol):
     model: str
 
     def generate(self, context: QuestionAuthoringContext) -> ProviderQuestionDraft: ...
+
+    def regenerate_solution(
+        self,
+        current: ProviderQuestionDraft,
+    ) -> ProviderQuestionSolution: ...
 
 
 class _QuestionCore(BaseModel):
@@ -75,11 +107,23 @@ class _SolutionPlan(BaseModel):
     common_mistakes: list[str] = Field(default_factory=list, max_length=20)
 
 
+class _SolutionRegenerationPlan(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    solution_method: str = Field(min_length=1, max_length=500)
+    sections: list[_SolutionPlanSection] = Field(min_length=1, max_length=12)
+
+
 class _SolutionSection(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     order: int = Field(ge=1, le=12)
     steps: list[str] = Field(min_length=1, max_length=100)
+
+
+class _SolutionCleanup(_SolutionSection):
+    consistent_with_locked_answer: bool
+    issue_summary: str | None = Field(default=None, max_length=500)
 
 
 class _SolutionSubplan(BaseModel):
@@ -195,10 +239,56 @@ class DeepSeekQuestionAuthoringProvider:
                 f"DeepSeek 返回内容不符合命题草稿结构：{exc}"
             ) from exc
 
+    def regenerate_solution(
+        self,
+        current: ProviderQuestionDraft,
+    ) -> ProviderQuestionSolution:
+        """Regenerate only the explanation behind an immutable question contract."""
+
+        core = _QuestionCore(
+            question_type=current.question_type,
+            stem_plain=current.stem_plain,
+            stem_latex=current.stem_latex,
+            options=current.options,
+            answer_value=current.answer_value,
+            final_answer=current.final_answer,
+            estimated_difficulty=current.estimated_difficulty,
+        )
+        try:
+            plan = _SolutionRegenerationPlan.model_validate(
+                self._request_stage(
+                    stage="solution-regeneration-plan",
+                    instructions=(
+                        "为已经锁定的题面、选项和最终答案重新规划一份全新的解析。"
+                        "不得修改或补写题面条件，不得改变答案；多小问必须逐问覆盖。"
+                        "本阶段只返回新的解法概述和分段提纲，不展开计算。"
+                        f"{_POLISHED_SOLUTION_INSTRUCTIONS}"
+                    ),
+                    input_value={"locked_question_core": core.model_dump(mode="json")},
+                    output_schema=self._solution_regeneration_plan_schema(),
+                    max_tokens=2500,
+                    recovery_instruction="只修复 JSON 结构；保留覆盖全部小问所需的解析分段。",
+                )
+            )
+            self._validate_plan_orders(plan)
+            sections = self._expand_sections(core, plan)
+            return ProviderQuestionSolution(
+                solution_method=plan.solution_method,
+                solution_steps=[step for section in sections for step in section.steps],
+            )
+        except QuestionAuthoringProviderError:
+            raise
+        except DeepSeekClientError as exc:
+            raise QuestionAuthoringProviderError(str(exc)) from exc
+        except (KeyError, TypeError, ValueError) as exc:
+            raise QuestionAuthoringProviderError(
+                f"DeepSeek 返回的重生成解析不符合结构：{exc}"
+            ) from exc
+
     def _expand_sections(
         self,
         core: _QuestionCore,
-        plan: _SolutionPlan,
+        plan: _SolutionPlan | _SolutionRegenerationPlan,
     ) -> list[_SolutionSection]:
         workers = min(3, len(plan.sections))
         with ThreadPoolExecutor(max_workers=workers) as executor:
@@ -217,7 +307,7 @@ class DeepSeekQuestionAuthoringProvider:
     def _expand_solution_section(
         self,
         core: _QuestionCore,
-        plan: _SolutionPlan,
+        plan: _SolutionPlan | _SolutionRegenerationPlan,
         section: _SolutionPlanSection,
     ) -> _SolutionSection:
         input_value = {
@@ -231,6 +321,7 @@ class DeepSeekQuestionAuthoringProvider:
             "必须以锁定题面和锁定最终答案为准，不得改题、添加未给条件或改变最终结论。"
             "每一步都写清数学依据；涉及多个小问时保留当前小问的层次。"
             "不要重复整道题，也不要重复其他解析段。"
+            f"{_POLISHED_SOLUTION_INSTRUCTIONS}"
             f"{MATH_DISPLAY_INSTRUCTIONS}"
             "不要为了减少字数省略关键等价变形、分类讨论、取值范围或结论核对。"
         )
@@ -241,6 +332,8 @@ class DeepSeekQuestionAuthoringProvider:
                 input_value=input_value,
                 instructions=instructions,
             )
+        except _QuestionAuthoringSolutionConflict:
+            raise
         except QuestionAuthoringProviderError as original_error:
             return self._subdivide_and_expand(
                 core=core,
@@ -273,6 +366,12 @@ class DeepSeekQuestionAuthoringProvider:
                     raise ValueError(
                         f"解析段序号应为 {section.order}，实际为 {parsed.order}"
                     )
+                if self._contains_deliberation(parsed.steps):
+                    parsed = self._cleanup_solution_section(
+                        section=section,
+                        input_value=input_value,
+                        contaminated=parsed,
+                    )
                 return parsed
             except (DeepSeekClientError, ValueError) as exc:
                 last_error = exc
@@ -282,11 +381,58 @@ class DeepSeekQuestionAuthoringProvider:
             f"第 {section.order} 段解析生成失败：{last_error}"
         )
 
+    def _cleanup_solution_section(
+        self,
+        *,
+        section: _SolutionPlanSection,
+        input_value: dict,
+        contaminated: _SolutionSection,
+    ) -> _SolutionSection:
+        payload = self._request_stage(
+            stage=f"solution-section-{section.order}-cleanup",
+            instructions=(
+                "把当前解析草稿改写为可直接展示的正式解析。删除所有试算、回退、自我纠错、"
+                "第一人称独白、提示词或字段讨论，只保留最终采用的严谨推导；不要缩短必要步骤。"
+                "题面与最终答案已锁定，不得修改。若你确认二者在数学上无法同时成立，"
+                "将 consistent_with_locked_answer 设为 false，并用 issue_summary 简洁说明矛盾；"
+                "此时 steps 仍返回一条简短的教师复核提示，不得伪造证明。"
+                f"{MATH_DISPLAY_INSTRUCTIONS}"
+            ),
+            input_value={
+                **input_value,
+                "contaminated_solution_steps": contaminated.steps,
+            },
+            output_schema=self._solution_cleanup_schema(),
+            max_tokens=8192,
+            recovery_instruction="只修复清理后解析的 JSON，不得恢复思考过程。",
+        )
+        cleaned = _SolutionCleanup.model_validate(payload)
+        if cleaned.order != section.order:
+            raise ValueError(
+                f"清理后解析段序号应为 {section.order}，实际为 {cleaned.order}"
+            )
+        if not cleaned.consistent_with_locked_answer:
+            issue = (cleaned.issue_summary or "题面与锁定答案可能不一致").strip()
+            raise _QuestionAuthoringSolutionConflict(
+                f"第 {section.order} 段解析发现数学冲突，已停止展示试算过程：{issue}"
+            )
+        if self._contains_deliberation(cleaned.steps):
+            raise ValueError("清理后的解析仍包含模型思考或自我纠错叙述")
+        return _SolutionSection(order=cleaned.order, steps=cleaned.steps)
+
+    @staticmethod
+    def _contains_deliberation(steps: list[str]) -> bool:
+        combined = "\n".join(steps)
+        return any(
+            re.search(pattern, combined, flags=re.IGNORECASE | re.DOTALL)
+            for pattern in _DELIBERATION_PATTERNS
+        )
+
     def _subdivide_and_expand(
         self,
         *,
         core: _QuestionCore,
-        plan: _SolutionPlan,
+        plan: _SolutionPlan | _SolutionRegenerationPlan,
         section: _SolutionPlanSection,
         original_error: QuestionAuthoringProviderError,
     ) -> _SolutionSection:
@@ -329,6 +475,7 @@ class DeepSeekQuestionAuthoringProvider:
                     instructions=(
                         "只展开当前原子子段，完整写出教师可读的数学推导；不得重复父段或其他子段。"
                         "必须使用锁定题面和最终答案，不得改题或省略当前目标所需的依据。"
+                        f"{_POLISHED_SOLUTION_INSTRUCTIONS}"
                         f"{MATH_DISPLAY_INSTRUCTIONS}"
                     ),
                 )
@@ -403,7 +550,9 @@ class DeepSeekQuestionAuthoringProvider:
         }
 
     @staticmethod
-    def _validate_plan_orders(plan: _SolutionPlan) -> None:
+    def _validate_plan_orders(
+        plan: _SolutionPlan | _SolutionRegenerationPlan,
+    ) -> None:
         orders = [item.order for item in plan.sections]
         if orders != list(range(1, len(orders) + 1)):
             raise ValueError("解析提纲序号必须从 1 连续递增且不可重复")
@@ -500,6 +649,32 @@ class DeepSeekQuestionAuthoringProvider:
         return cls._schema("private_question_authoring_solution_plan", properties)
 
     @classmethod
+    def _solution_regeneration_plan_schema(cls) -> dict:
+        section = {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {
+                "order": {"type": "integer", "minimum": 1, "maximum": 12},
+                "title": {"type": "string", "minLength": 1, "maxLength": 120},
+                "goal": {"type": "string", "minLength": 1, "maxLength": 500},
+            },
+            "required": ["order", "title", "goal"],
+        }
+        properties = {
+            "solution_method": {"type": "string", "minLength": 1, "maxLength": 500},
+            "sections": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 12,
+                "items": section,
+            },
+        }
+        return cls._schema(
+            "private_question_authoring_solution_regeneration_plan",
+            properties,
+        )
+
+    @classmethod
     def _solution_section_schema(cls) -> dict:
         properties = {
             "order": {"type": "integer", "minimum": 1, "maximum": 12},
@@ -511,6 +686,21 @@ class DeepSeekQuestionAuthoringProvider:
             },
         }
         return cls._schema("private_question_authoring_solution_section", properties)
+
+    @classmethod
+    def _solution_cleanup_schema(cls) -> dict:
+        properties = {
+            "order": {"type": "integer", "minimum": 1, "maximum": 12},
+            "steps": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 100,
+                "items": {"type": "string", "minLength": 1, "maxLength": 6000},
+            },
+            "consistent_with_locked_answer": {"type": "boolean"},
+            "issue_summary": {"type": ["string", "null"], "maxLength": 500},
+        }
+        return cls._schema("private_question_authoring_solution_cleanup", properties)
 
     @classmethod
     def _solution_subplan_schema(cls) -> dict:

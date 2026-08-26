@@ -870,6 +870,23 @@ export class HttpTeacherWorkspace implements TeacherWorkspace {
     );
   }
 
+  regeneratePersonalAuthoringSolution(
+    draftId: string,
+    expectedRevision: number,
+    signal?: AbortSignal,
+  ): Promise<PersonalAuthoringDraft> {
+    return libraryJsonRequest(
+      `/api/v1/personal-question-library/authoring-drafts/${encodeURIComponent(draftId)}/regenerate-solution`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ expected_revision: expectedRevision }),
+        signal,
+      },
+      "无法重新生成这道题的解析。",
+    );
+  }
+
   savePersonalAuthoringDraft(
     draftId: string,
     request: { expectedRevision: number; collectionId: string; categoryId: string; name: string },

@@ -841,6 +841,40 @@ describe("HttpTeacherWorkspace", () => {
       .not.toContain("owner_id");
   });
 
+  it("regenerates only the current authoring solution through the revision-bound endpoint", async () => {
+    const staged = personalAuthoringDraftFixture();
+    const regenerated = {
+      ...staged,
+      current_revision: 2,
+      current: {
+        ...staged.current,
+        revision_number: 2,
+        revision_source: "ai_generated" as const,
+        edit_summary: "AI 重新生成解析；题面、选项与最终答案保持不变",
+        draft: {
+          ...staged.current.draft,
+          solution_method: "重新规划的解法",
+          solution_steps: ["重新生成后的成稿解析。"],
+        },
+      },
+    };
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify(regenerated), {
+      status: 201,
+      headers: { "Content-Type": "application/json" },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const workspace = new HttpTeacherWorkspace();
+    await expect(workspace.regeneratePersonalAuthoringSolution(staged.draft_id, 1))
+      .resolves.toEqual(regenerated);
+
+    const [url, init] = fetchMock.mock.calls[0] ?? [];
+    expect(url).toBe("/api/v1/personal-question-library/authoring-drafts/qad_1/regenerate-solution");
+    expect((init as RequestInit).method).toBe("POST");
+    expect(JSON.parse(String((init as RequestInit).body))).toEqual({ expected_revision: 1 });
+    expect(String((init as RequestInit).body)).not.toMatch(/owner_id|stem|answer|solution/);
+  });
+
   it("returns the structured result from the terminal stream event", async () => {
     const result = resultFixture();
     vi.stubGlobal("fetch", vi.fn(async () => streamResponse([

@@ -205,3 +205,12 @@ class ProviderQuestionDraft(BaseModel):
     knowledge_points: list[str] = Field(default_factory=list, max_length=20)
     assessed_methods: list[str] = Field(default_factory=list, max_length=20)
     common_mistakes: list[str] = Field(default_factory=list, max_length=20)
+
+
+class ProviderQuestionSolution(BaseModel):
+    """Provider-owned replacement for solution fields only."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    solution_method: str = Field(min_length=1, max_length=500)
+    solution_steps: list[str] = Field(min_length=1, max_length=100)

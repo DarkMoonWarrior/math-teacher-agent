@@ -27,6 +27,8 @@ from app.modules.curriculum import InMemoryCurriculumCatalog
 from app.modules.math_verifier import MathVerifier
 from app.modules.question_authoring import (
     GeneratedQuestionDraft,
+    ProviderQuestionDraft,
+    ProviderQuestionSolution,
     QuestionAuthoring,
     QuestionDraftCurriculum,
     QuestionDraftEditableContent,
@@ -760,6 +762,70 @@ def test_http_authoring_revision_and_explicit_save_are_teacher_bound(
             assert client.get(
                 f"/api/v1/personal-question-library/questions/{question_id}"
             ).status_code == 404
+    finally:
+        app.dependency_overrides.pop(get_current_teacher, None)
+        app.dependency_overrides.pop(get_question_authoring_editor, None)
+        app.dependency_overrides.pop(get_personal_question_library, None)
+
+
+def test_http_regenerate_solution_appends_ai_revision_without_changing_question(
+    tmp_path: Path,
+) -> None:
+    class RegenerationProvider:
+        name = "synthetic_provider"
+        model = "synthetic-regenerator-v1"
+
+        def generate(self, _context: object) -> ProviderQuestionDraft:  # pragma: no cover
+            raise AssertionError("regeneration must not regenerate the whole question")
+
+        def regenerate_solution(self, current: ProviderQuestionDraft) -> ProviderQuestionSolution:
+            assert current.stem_plain == draft.stem_plain
+            assert current.answer_value == draft.answer_value
+            assert current.final_answer == draft.final_answer
+            return ProviderQuestionSolution(
+                solution_method="重新生成的定义法",
+                solution_steps=["固定题面和答案后，给出新的成稿推导。"],
+            )
+
+    library = make_library(tmp_path)
+    draft = generated_draft("qad_regenerate_solution")
+    library.stage_generated_draft(draft, owner_id="teacher_a")
+    editor = QuestionAuthoring(
+        curriculum=InMemoryCurriculumCatalog([]),
+        provider=RegenerationProvider(),  # type: ignore[arg-type]
+        math_verifier=MathVerifier(),
+    )
+    app.dependency_overrides[get_personal_question_library] = lambda: library
+    app.dependency_overrides[get_question_authoring_editor] = lambda: editor
+    app.dependency_overrides[get_current_teacher] = teacher("teacher_a")
+    try:
+        with TestClient(app) as client:
+            response = client.post(
+                f"/api/v1/personal-question-library/authoring-drafts/{draft.draft_id}/regenerate-solution",
+                json={"expected_revision": 1},
+            )
+
+            assert response.status_code == 201
+            payload = response.json()
+            assert payload["current_revision"] == 2
+            assert payload["current"]["revision_source"] == "ai_generated"
+            regenerated = payload["current"]["draft"]
+            assert regenerated["stem_plain"] == draft.stem_plain
+            assert regenerated["stem_latex"] == draft.stem_latex
+            assert regenerated["options"] == [item.model_dump(mode="json") for item in draft.options]
+            assert regenerated["answer_value"] == draft.answer_value
+            assert regenerated["final_answer"] == draft.final_answer
+            assert regenerated["solution_method"] == "重新生成的定义法"
+            assert regenerated["solution_steps"] == ["固定题面和答案后，给出新的成稿推导。"]
+            assert regenerated["visibility"] == "owner_only"
+            assert regenerated["saved"] is False
+
+            app.dependency_overrides[get_current_teacher] = teacher("teacher_b")
+            cross_owner = client.post(
+                f"/api/v1/personal-question-library/authoring-drafts/{draft.draft_id}/regenerate-solution",
+                json={"expected_revision": 2},
+            )
+            assert cross_owner.status_code == 404
     finally:
         app.dependency_overrides.pop(get_current_teacher, None)
         app.dependency_overrides.pop(get_question_authoring_editor, None)

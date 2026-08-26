@@ -413,6 +413,39 @@ class PersonalQuestionLibrary:
         expected_revision: int,
         edit_summary: str,
     ) -> PersonalAuthoringDraftView:
+        return self._append_authoring_revision(
+            revised,
+            owner_id=owner_id,
+            expected_revision=expected_revision,
+            edit_summary=edit_summary,
+            revision_source="teacher_edit",
+        )
+
+    def append_ai_revision(
+        self,
+        revised: GeneratedQuestionDraft,
+        *,
+        owner_id: str,
+        expected_revision: int,
+        edit_summary: str,
+    ) -> PersonalAuthoringDraftView:
+        return self._append_authoring_revision(
+            revised,
+            owner_id=owner_id,
+            expected_revision=expected_revision,
+            edit_summary=edit_summary,
+            revision_source="ai_generated",
+        )
+
+    def _append_authoring_revision(
+        self,
+        revised: GeneratedQuestionDraft,
+        *,
+        owner_id: str,
+        expected_revision: int,
+        edit_summary: str,
+        revision_source: str,
+    ) -> PersonalAuthoringDraftView:
         next_revision = expected_revision + 1
         now = self._now()
         summary = re.sub(r"\s+", " ", edit_summary).strip()
@@ -457,12 +490,13 @@ class PersonalQuestionLibrary:
                 INSERT INTO personal_authoring_revisions (
                     draft_id, owner_id, revision_number, revision_source,
                     edit_summary, draft_json, created_at
-                ) VALUES (?, ?, ?, 'teacher_edit', ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     revised.draft_id,
                     owner_id,
                     next_revision,
+                    revision_source,
                     summary,
                     revised.model_dump_json(),
                     now,

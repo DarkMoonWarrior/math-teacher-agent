@@ -103,6 +103,12 @@ class PersonalAuthoringRevisionCreate(BaseModel):
     edit_summary: str = Field(default="教师编辑", min_length=1, max_length=500)
 
 
+class PersonalAuthoringSolutionRegenerate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    expected_revision: int = Field(ge=1)
+
+
 class PersonalQuestionRevisionCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

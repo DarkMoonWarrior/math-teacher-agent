@@ -202,6 +202,77 @@ class QuestionAuthoring:
             }
         )
 
+    def regenerate_solution(
+        self,
+        current: GeneratedQuestionDraft,
+    ) -> GeneratedQuestionDraft:
+        """Replace only solution fields, then recompute server-owned trust evidence."""
+
+        if self.provider is None:
+            raise QuestionAuthoringUnavailableError(
+                "当前没有可用的辅助命题模型；无法重新生成解析"
+            )
+        locked = ProviderQuestionDraft(
+            question_type=current.question_type,
+            stem_plain=current.stem_plain,
+            stem_latex=current.stem_latex,
+            options=current.options,
+            answer_value=current.answer_value,
+            solution_method=current.solution_method,
+            solution_steps=current.solution_steps,
+            final_answer=current.final_answer,
+            authoring_intent=current.authoring_intent,
+            estimated_difficulty=current.estimated_difficulty,
+            curriculum_node_id=(current.curriculum.node_id if current.curriculum else None),
+            knowledge_points=current.knowledge_points,
+            assessed_methods=current.assessed_methods,
+            common_mistakes=current.common_mistakes,
+        )
+        try:
+            replacement = self.provider.regenerate_solution(locked)
+        except QuestionAuthoringProviderError as exc:
+            raise QuestionAuthoringUnavailableError(str(exc)) from exc
+
+        revised = locked.model_copy(
+            update={
+                "solution_method": replacement.solution_method.strip(),
+                "solution_steps": [step.strip() for step in replacement.solution_steps],
+            }
+        )
+        self._validate_structure(revised, expected_type=current.question_type)
+        brief = QuestionDesignBrief(
+            request_text=current.request_text,
+            curriculum_node_id=(current.curriculum.node_id if current.curriculum else None),
+            question_type=current.question_type,
+            target_difficulty=current.target_difficulty,
+        )
+        verification = self._evaluate_trust(
+            revised,
+            brief=brief,
+            draft_id=current.draft_id,
+        )
+        warnings = [
+            "解析已由 AI 重新生成；题面、选项和最终答案保持不变。",
+            "重新生成后的解析仍必须由教师复核，不构成 MathVerifier 独立证据。",
+            "当前内容仍在个人命题工作区；不会进入公共题库或公共搜索。",
+        ]
+        if verification.math_verifier_status == "unsupported":
+            warnings.append("当前 MathVerifier 不支持对此任意生成题做独立数学验证。")
+        if verification.status == "checks_failed":
+            warnings.append("确定性可信检查发现阻断项；修正前不得作为正式题目使用。")
+        return current.model_copy(
+            update={
+                "solution_method": revised.solution_method,
+                "solution_steps": revised.solution_steps,
+                "verification": verification,
+                "provider": self.provider.name,
+                "model": self.provider.model,
+                "prompt_revision": PROMPT_REVISION,
+                "warnings": warnings,
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            }
+        )
+
     def _resolve_curriculum_guidance(
         self,
         brief: QuestionDesignBrief,

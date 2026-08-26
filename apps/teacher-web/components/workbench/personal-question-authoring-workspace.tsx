@@ -29,7 +29,7 @@ import { WorkbenchNoticeDialog } from "./workbench-notice-dialog";
 import { MathSolutionView } from "./math-solution-view";
 
 type WorkspaceSection = "compose" | "mine" | "trash";
-type BusyAction = "loading" | "generating" | "revising" | "saving" | "managing" | null;
+type BusyAction = "loading" | "generating" | "revising" | "regenerating-solution" | "saving" | "managing" | null;
 
 const ENTRY_COPY: Record<QuestionAuthoringEntrySource, string> = {
   new_task: "从新任务进入",
@@ -393,6 +393,31 @@ export function PersonalQuestionAuthoringWorkspace({
       setDraftView(revised);
       setDraftEditor(editableContent(revised.current.draft));
       setNotice(`已记录 REV ${revised.current_revision}，六项可信检查已重新执行。`);
+    } catch (cause) {
+      setError(errorMessage(cause));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function regenerateSolution() {
+    if (!draftView || !draft || !draftEditor || busy) return;
+    if (JSON.stringify(draftEditor) !== JSON.stringify(editableContent(draft))) {
+      clearFeedback();
+      setError("当前还有未记录的题面或解析修改。请先点击“记录校订并重检”，再重新生成解析，避免覆盖你的编辑。");
+      return;
+    }
+    clearFeedback();
+    setBusy("regenerating-solution");
+    try {
+      const regenerated = await teacherWorkspace.regeneratePersonalAuthoringSolution(
+        draftView.draft_id,
+        draftView.current_revision,
+      );
+      setDraftView(regenerated);
+      setDraftEditor(editableContent(regenerated.current.draft));
+      setNotice(`解析已重新生成并记录为 REV ${regenerated.current_revision}；题面、选项和最终答案均未改变。`);
+      window.requestAnimationFrame(() => document.querySelector<HTMLElement>(".authoring-draft__solution")?.scrollIntoView({ behavior: "smooth", block: "start" }));
     } catch (cause) {
       setError(errorMessage(cause));
     } finally {
@@ -765,7 +790,7 @@ export function PersonalQuestionAuthoringWorkspace({
               <div className="authoring-revision-actions">
                 <label htmlFor="authoring-edit-summary"><span>本次修改说明</span><input id="authoring-edit-summary" value={editSummary} onChange={(event) => setEditSummary(event.target.value)} /></label>
                 <button disabled={busy !== null} type="button" onClick={() => void reviseDraft()}>{busy === "revising" ? "正在重检…" : "记录校订并重检"}</button>
-                <button className="is-secondary" disabled={busy !== null} type="button" onClick={() => void reviseDraft("教师要求重新验算当前草稿")}>重新验算</button>
+                <button className="is-secondary" disabled={busy !== null} type="button" onClick={() => void regenerateSolution()}>{busy === "regenerating-solution" ? "正在重新生成…" : "重新生成解析"}</button>
               </div>
               {draft.verification.status === "checks_failed" && <p className="personal-question-warning">这道题存在阻断检查，不能把它理解为数学正确或可直接用于正式试卷。</p>}
               <section className="authoring-save">

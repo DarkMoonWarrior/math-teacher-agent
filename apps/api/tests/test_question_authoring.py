@@ -10,6 +10,7 @@ from app.modules.curriculum import CurriculumNode, InMemoryCurriculumCatalog
 from app.modules.math_verifier import MathVerifier, VerificationReport
 from app.modules.question_authoring import (
     DeepSeekQuestionAuthoringProvider,
+    ProviderQuestionSolution,
     ProviderQuestionDraft,
     QuestionAuthoring,
     QuestionAuthoringClarificationRequired,
@@ -180,6 +181,12 @@ class FakeProvider:
             )
         return ProviderQuestionDraft(**payload)
 
+    def regenerate_solution(self, current: ProviderQuestionDraft) -> ProviderQuestionSolution:
+        return ProviderQuestionSolution(
+            solution_method="重新组织的定义法",
+            solution_steps=["先固定题面与答案。", "再给出不含试错过程的成稿推导。"],
+        )
+
 
 def test_deepseek_provider_recovers_empty_non_choice_answer_value() -> None:
     core_payload = {
@@ -325,6 +332,78 @@ def test_deepseek_provider_assembles_a_long_solution_from_bounded_sections() -> 
     assert calls.count("private_question_authoring_core") == 1
     assert calls.count("private_question_authoring_solution_plan") == 1
     assert calls.count("private_question_authoring_solution_section") == 4
+
+
+def test_deepseek_provider_rewrites_deliberative_solution_before_returning() -> None:
+    calls: Counter[str] = Counter()
+
+    class FakeDeepSeekClient:
+        def request(self, **kwargs: object) -> dict:
+            schema_name = kwargs["output_schema"]["name"]  # type: ignore[index]
+            calls[schema_name] += 1
+            if schema_name == "private_question_authoring_core":
+                payload = {
+                    "question_type": "open_response",
+                    "stem_plain": "已知双曲线条件，完成证明并求参数范围。",
+                    "stem_latex": "已知双曲线条件，完成证明并求参数范围。",
+                    "options": [],
+                    "answer_value": "参数范围为 $(-\\infty,-1)\\cup(1,+\\infty)$。",
+                    "final_answer": "参数范围为 $(-\\infty,-1)\\cup(1,+\\infty)$。",
+                    "estimated_difficulty": 5,
+                }
+            elif schema_name == "private_question_authoring_solution_plan":
+                payload = {
+                    "solution_method": "解析几何法",
+                    "sections": [{"order": 1, "title": "求范围", "goal": "完成参数范围推导"}],
+                    "authoring_intent": "考查双曲线综合推理。",
+                    "curriculum_node_id": None,
+                    "knowledge_points": [],
+                    "assessed_methods": [],
+                    "common_mistakes": [],
+                }
+            elif schema_name == "private_question_authoring_solution_cleanup":
+                payload = {
+                    "order": 1,
+                    "steps": ["由判别式大于零，解得参数范围为 $(-\\infty,-1)\\cup(1,+\\infty)$。"],
+                    "consistent_with_locked_answer": True,
+                    "issue_summary": None,
+                }
+            else:
+                payload = {
+                    "order": 1,
+                    "steps": [
+                        "让我们重新审视前面的计算。我们可能算错了，先回退并重新推导。",
+                        "最终得到参数范围。",
+                    ],
+                }
+            text = json.dumps(payload, ensure_ascii=False)
+            return {"output": [{"type": "message", "content": [{"type": "output_text", "text": text}]}]}
+
+    provider = DeepSeekQuestionAuthoringProvider(
+        api_key="test-key",
+        model="deepseek-v4-flash",
+        base_url="https://api.deepseek.com",
+    )
+    provider.client = FakeDeepSeekClient()  # type: ignore[assignment]
+
+    content = provider.generate(
+        QuestionAuthoringContext(
+            brief=QuestionDesignBrief(
+                request_text="生成一道双曲线综合题",
+                question_type="open_response",
+                target_difficulty=5,
+            ),
+            question_type="open_response",
+            curriculum=None,
+            curriculum_options=(),
+        )
+    )
+
+    assert content.solution_steps == [
+        "由判别式大于零，解得参数范围为 $(-\\infty,-1)\\cup(1,+\\infty)$。"
+    ]
+    assert calls["private_question_authoring_solution_section"] == 1
+    assert calls["private_question_authoring_solution_cleanup"] == 1
 
 
 def test_deepseek_provider_retries_only_the_failed_solution_section() -> None:
@@ -547,6 +626,38 @@ def test_teacher_revision_rechecks_structure_and_cannot_supply_trust_evidence() 
     assert checks["answer_solution_consistency"].status == "failed"
     assert revised.verification.math_verifier_status == "unsupported"
     assert any("教师编辑" in warning for warning in revised.warnings)
+
+
+def test_regenerate_solution_keeps_question_and_answer_immutable() -> None:
+    provider = FakeProvider()
+    authoring = QuestionAuthoring(
+        curriculum=curriculum(), provider=provider, math_verifier=MathVerifier()
+    )
+    draft = authoring.create_draft(
+        QuestionDesignBrief(
+            request_text="命制一道函数单调性的单选题。",
+            curriculum_node_id="kp_monotonicity",
+            question_type="single_choice",
+            target_difficulty=2,
+        )
+    )
+
+    regenerated = authoring.regenerate_solution(draft)
+
+    assert regenerated.draft_id == draft.draft_id
+    assert regenerated.stem_plain == draft.stem_plain
+    assert regenerated.stem_latex == draft.stem_latex
+    assert regenerated.options == draft.options
+    assert regenerated.answer_value == draft.answer_value
+    assert regenerated.final_answer == draft.final_answer
+    assert regenerated.authoring_intent == draft.authoring_intent
+    assert regenerated.curriculum == draft.curriculum
+    assert regenerated.solution_method == "重新组织的定义法"
+    assert regenerated.solution_steps == ["先固定题面与答案。", "再给出不含试错过程的成稿推导。"]
+    assert regenerated.visibility == "owner_only"
+    assert regenerated.saved is False
+    assert regenerated.verification.teacher_review_required is True
+    assert any("重新生成" in warning for warning in regenerated.warnings)
 
 
 def test_non_choice_draft_has_one_canonical_final_answer() -> None:

@@ -766,6 +766,12 @@ export interface TeacherWorkspace {
     signal?: AbortSignal,
   ): Promise<PersonalAuthoringDraft>;
 
+  regeneratePersonalAuthoringSolution(
+    draftId: string,
+    expectedRevision: number,
+    signal?: AbortSignal,
+  ): Promise<PersonalAuthoringDraft>;
+
   savePersonalAuthoringDraft(
     draftId: string,
     request: { expectedRevision: number; collectionId: string; categoryId: string; name: string },
