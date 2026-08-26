@@ -413,8 +413,8 @@ def test_deepseek_provider_preserves_complete_question_when_solution_conflicts()
             if schema_name == "private_question_authoring_core":
                 payload = {
                     "question_type": "single_choice",
-                    "stem_plain": "某校组织马尔可夫链闯关活动，结合数列递推关系判断稳态概率。",
-                    "stem_latex": "某校组织马尔可夫链闯关活动，结合数列递推关系判断稳态概率。",
+                    "stem_plain": "某校组织投币闯关活动，结合数列递推关系判断第 n 轮获胜概率。",
+                    "stem_latex": "某校组织投币闯关活动，结合数列递推关系判断第 $n$ 轮获胜概率。",
                     "options": [
                         {"key": "A", "text": "$\\frac{1}{3}$"},
                         {"key": "B", "text": "$\\frac{2}{3}$"},
@@ -427,8 +427,8 @@ def test_deepseek_provider_preserves_complete_question_when_solution_conflicts()
                 }
             elif schema_name == "private_question_authoring_solution_plan":
                 payload = {
-                    "solution_method": "建立状态递推并求稳态概率。",
-                    "sections": [{"order": 1, "title": "求稳态", "goal": "求出稳态概率"}],
+                    "solution_method": "建立数列递推并求事件概率。",
+                    "sections": [{"order": 1, "title": "列递推", "goal": "求出第 n 轮获胜概率"}],
                     "authoring_intent": "综合考查数列递推与概率模型。",
                     "curriculum_node_id": None,
                     "knowledge_points": ["数列递推", "概率模型"],
@@ -472,7 +472,7 @@ def test_deepseek_provider_preserves_complete_question_when_solution_conflicts()
         )
     )
 
-    assert content.stem_plain.startswith("某校组织马尔可夫链")
+    assert content.stem_plain.startswith("某校组织投币闯关活动")
     assert [option.key for option in content.options] == ["A", "B", "C", "D"]
     assert content.answer_value == "B"
     assert content.final_answer == "答案为 B，即 $\\frac{2}{3}$。"
@@ -753,6 +753,66 @@ def test_create_draft_returns_complete_question_when_solution_needs_teacher_veri
     assert any("题面、选项和最终答案已完整保留" in warning for warning in draft.warnings)
     assert draft.saved is False
     assert draft.visibility == "owner_only"
+
+
+def test_create_draft_keeps_choice_options_out_of_both_readable_stems() -> None:
+    class EmbeddedOptionsProvider(FakeProvider):
+        def generate(self, context: QuestionAuthoringContext) -> ProviderQuestionDraft:
+            content = super().generate(context)
+            return content.model_copy(
+                update={
+                    "stem_plain": (
+                        "已知函数 f(x)=x²，判断其在实数范围内的单调性。"
+                        "\\nA. 在定义域上恒增\\nB. 先减后增"
+                        "\\nC. 在定义域上恒减\\nD. 不是函数"
+                    ),
+                    "stem_latex": (
+                        r"已知函数 $f(x)=x^2$，判断其在实数范围内的单调性。"
+                        r"\nA. 在定义域上恒增\nB. 先减后增"
+                        r"\nC. 在定义域上恒减\nD. 不是函数"
+                    ),
+                }
+            )
+
+    draft = QuestionAuthoring(
+        curriculum=curriculum(),
+        provider=EmbeddedOptionsProvider(),
+        math_verifier=MathVerifier(),
+    ).create_draft(
+        QuestionDesignBrief(
+            request_text="命制一道函数单调性的完整单项选择题。",
+            question_type="single_choice",
+        )
+    )
+
+    assert draft.stem_plain == "已知函数 f(x)=x²，判断其在实数范围内的单调性。"
+    assert draft.stem_latex == r"已知函数 $f(x)=x^2$，判断其在实数范围内的单调性。"
+    assert [option.key for option in draft.options] == ["A", "B", "C", "D"]
+
+
+def test_create_draft_rejects_generated_university_only_content() -> None:
+    class UniversityScopeProvider(FakeProvider):
+        def generate(self, context: QuestionAuthoringContext) -> ProviderQuestionDraft:
+            return super().generate(context).model_copy(
+                update={
+                    "stem_plain": "设随机过程构成马尔可夫链，求其平稳分布。",
+                    "stem_latex": "设随机过程构成马尔可夫链，求其平稳分布。",
+                }
+            )
+
+    authoring = QuestionAuthoring(
+        curriculum=curriculum(),
+        provider=UniversityScopeProvider(),
+        math_verifier=MathVerifier(),
+    )
+
+    with pytest.raises(QuestionAuthoringError, match="超出高中数学范围"):
+        authoring.create_draft(
+            QuestionDesignBrief(
+                request_text="命制一道有背景的概率综合题。",
+                question_type="single_choice",
+            )
+        )
 
 
 def test_teacher_revision_rechecks_structure_and_cannot_supply_trust_evidence() -> None:

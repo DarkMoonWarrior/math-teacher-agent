@@ -25,4 +25,27 @@ describe("MathSolutionView", () => {
     expect(html.match(/class=\"katex/g)?.length).toBeGreaterThanOrEqual(4);
     expect(html).not.toContain("math-fallback");
   });
+
+  it("renders choice options as a complete ordered block outside the stem", () => {
+    const html = renderToStaticMarkup(
+      <MathSolutionView
+        finalAnswer="C"
+        method="递推法"
+        options={[
+          { key: "A", text: String.raw`$c_n=\frac{1}{2}$` },
+          { key: "B", text: String.raw`$c_n=\frac{2}{3}$` },
+          { key: "C", text: "不是等比数列" },
+          { key: "D", text: "恒为 1" },
+        ]}
+        question="某游戏满足下列规则，判断数列的性质。"
+        steps={["建立递推关系并核验各选项。"]}
+      />,
+    );
+
+    expect(html).toContain('class="question-options"');
+    expect(html).toContain('class="question-option-key">A</span>');
+    expect(html).toContain('class="question-option-key">D</span>');
+    expect(html.indexOf("某游戏满足下列规则")).toBeLessThan(html.indexOf("question-options"));
+    expect(html.match(/class="question-options__item"/g)).toHaveLength(4);
+  });
 });

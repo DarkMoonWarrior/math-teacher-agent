@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-export const maxDuration = 360;
+export const maxDuration = 900;
 
 const DEFAULT_API_INTERNAL_URL = "http://127.0.0.1:8000";
 

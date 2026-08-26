@@ -27,6 +27,7 @@ import {
 } from "./icons";
 import { WorkbenchNoticeDialog } from "./workbench-notice-dialog";
 import { MathSolutionView } from "./math-solution-view";
+import { AuthoringGenerationStatus, type AuthoringGenerationStage } from "./authoring-generation-status";
 
 type WorkspaceSection = "compose" | "mine" | "trash";
 type BusyAction = "loading" | "generating" | "revising" | "regenerating-solution" | "saving" | "managing" | null;
@@ -211,7 +212,10 @@ export function PersonalQuestionAuthoringWorkspace({
   const [busy, setBusy] = useState<BusyAction>("loading");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [generationStage, setGenerationStage] = useState<AuthoringGenerationStage>("brief");
+  const [generationElapsed, setGenerationElapsed] = useState(0);
   const feedbackReturnFocusRef = useRef<HTMLElement | null>(null);
+  const generationStartedAtRef = useRef(0);
   const sessionRef = useRef(`authoring_${Date.now().toString(36)}`);
   const requestRef = useRef(0);
 
@@ -291,6 +295,16 @@ export function PersonalQuestionAuthoringWorkspace({
     setRequestText(initialBrief);
   }, [initialBrief]);
 
+  useEffect(() => {
+    if (busy !== "generating") return;
+    const updateElapsed = () => {
+      setGenerationElapsed(Math.floor((Date.now() - generationStartedAtRef.current) / 1000));
+    };
+    updateElapsed();
+    const timer = window.setInterval(updateElapsed, 1000);
+    return () => window.clearInterval(timer);
+  }, [busy]);
+
   const selectedTrust = useMemo(() => selectedQuestion?.question.verification, [selectedQuestion]);
 
   function clearFeedback() {
@@ -312,8 +326,13 @@ export function PersonalQuestionAuthoringWorkspace({
     if (!canGenerate) return;
     const sequence = ++requestRef.current;
     clearFeedback();
+    generationStartedAtRef.current = Date.now();
+    setGenerationElapsed(0);
+    setGenerationStage("brief");
     setBusy("generating");
     try {
+      await Promise.resolve();
+      setGenerationStage("agent");
       const response = await teacherWorkspace.createQuestionAuthoringDraft({
         requestText: requestText.trim(),
         grade: grade || undefined,
@@ -325,6 +344,7 @@ export function PersonalQuestionAuthoringWorkspace({
         sessionId: sessionRef.current,
       });
       if (sequence !== requestRef.current || !response.draft) return;
+      setGenerationStage("staging");
       const staged = await teacherWorkspace.getPersonalAuthoringDraft(response.draft.draft_id);
       if (sequence !== requestRef.current) return;
       setDraftView(staged);
@@ -755,7 +775,7 @@ export function PersonalQuestionAuthoringWorkspace({
               <div className="authoring-submit">
                 <button disabled={!canGenerate} type="submit"><span>{busy === "generating" ? "正在分阶段生成…" : "生成私有草稿"}</span><ArrowRightIcon /></button>
               </div>
-              {busy === "generating" && <p className="authoring-stage-note" aria-live="polite">正在先锁定完整题面，再分段展开长解析；生成结果仍需教师复核。</p>}
+              {busy === "generating" && <AuthoringGenerationStatus elapsedSeconds={generationElapsed} stage={generationStage} />}
             </form>
           </section>
 
@@ -788,6 +808,7 @@ export function PersonalQuestionAuthoringWorkspace({
                 className="authoring-draft__solution"
                 finalAnswer={draftEditor.final_answer}
                 method={draftEditor.solution_method}
+                options={draftEditor.options}
                 question={draftEditor.stem_latex || draftEditor.stem_plain}
                 steps={draftEditor.solution_steps}
               />
@@ -869,6 +890,7 @@ export function PersonalQuestionAuthoringWorkspace({
                     className="personal-question-detail__solution"
                     finalAnswer={savedEditor.final_answer}
                     method={savedEditor.solution_method}
+                    options={savedEditor.options}
                     question={savedEditor.stem_latex || savedEditor.stem_plain}
                     steps={savedEditor.solution_steps}
                   />

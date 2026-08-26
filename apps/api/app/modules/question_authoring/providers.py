@@ -19,9 +19,10 @@ from app.modules.question_authoring.schemas import (
     QuestionDraftOption,
     QuestionType,
 )
+from app.modules.question_authoring.scope import university_only_terms
 
 
-PROMPT_REVISION = "question-authoring-v6-resilient-draft"
+PROMPT_REVISION = "question-authoring-v7-high-school-choice-contract"
 
 
 _DELIBERATION_PATTERNS = (
@@ -174,9 +175,13 @@ class DeepSeekQuestionAuthoringProvider:
                     "不得为了缩短输出删题、合并小问或降低难度。题目必须可独立作答且题干、答案自洽。"
                     "选择题必须给出明确且互不重复的选项；单选 answer_value 只能有一个编号，"
                     "多选用逗号分隔。填空题和解答题的 answer_value 与 final_answer 必须相同。"
+                    "题目只能使用中国普通高中数学课程范围内的概念、方法与符号；"
+                    "不得引入马尔可夫链、随机过程、傅里叶分析、微积分、线性代数等大学内容。"
                     "不得虚构学校、考试、年份、教材页码、题库来源或版权信息。"
                     f"{MATH_DISPLAY_INSTRUCTIONS}"
                     "stem_plain 应是无需 LaTeX 渲染也能校对的题面；stem_latex 是供页面展示的可读版本。"
+                    "选择题的 stem_plain 与 stem_latex 只能写公共题干，严禁包含 A/B/C/D 等选项；"
+                    "全部选项必须且只能逐项写入 options 数组，option.text 不得重复写选项编号。"
                     "本阶段只返回题面、选项、最终答案与难度，不展开解析。"
                 ),
                 input_value={
@@ -192,6 +197,7 @@ class DeepSeekQuestionAuthoringProvider:
             )
             self._normalize_non_choice_answer(core_payload)
             core = _QuestionCore.model_validate(core_payload)
+            core = self._repair_university_scope(core, provider_input)
 
             plan: _SolutionPlan | None = None
             try:
@@ -568,6 +574,50 @@ class DeepSeekQuestionAuthoringProvider:
         if not isinstance(payload, dict):
             raise ValueError("顶层结果必须是 JSON 对象")
         return payload
+
+    def _repair_university_scope(
+        self,
+        core: _QuestionCore,
+        provider_input: dict,
+    ) -> _QuestionCore:
+        violations = university_only_terms(
+            core.stem_plain,
+            core.stem_latex or "",
+            *(option.text for option in core.options),
+        )
+        if not violations:
+            return core
+        repaired_payload = self._request_stage(
+            stage="core-high-school-repair",
+            instructions=(
+                "上一版题目误用了大学数学内容。请在不降低教师指定难度、题型和综合性的前提下，"
+                "把题目完整重写为中国普通高中数学课程范围内可作答的题目。"
+                "可以使用高中数列、概率、函数、几何等方法，但不得只改名或隐藏大学概念。"
+                "选择题的题干不得包含选项；所有选项只写入 options 数组，且必须完整给出。"
+                f"{MATH_DISPLAY_INSTRUCTIONS}"
+            ),
+            input_value={
+                "design_brief": provider_input["design_brief"],
+                "resolved_question_type": provider_input["resolved_question_type"],
+                "rejected_university_terms": violations,
+                "rejected_question_core": core.model_dump(mode="json"),
+            },
+            output_schema=self._core_schema(),
+            max_tokens=8192,
+            recovery_instruction="只修复 JSON，并完整返回高中范围内的题面、全部选项和答案。",
+        )
+        self._normalize_non_choice_answer(repaired_payload)
+        repaired = _QuestionCore.model_validate(repaired_payload)
+        remaining = university_only_terms(
+            repaired.stem_plain,
+            repaired.stem_latex or "",
+            *(option.text for option in repaired.options),
+        )
+        if remaining:
+            raise QuestionAuthoringProviderError(
+                "模型两次返回了超出高中数学范围的内容：" + "、".join(remaining)
+            )
+        return repaired
 
     @staticmethod
     def _provider_input(context: QuestionAuthoringContext) -> dict:

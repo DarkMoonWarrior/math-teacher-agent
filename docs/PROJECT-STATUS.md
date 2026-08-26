@@ -17,7 +17,7 @@
 - M5 Solve Agent：Gate E 已严格通过并完成阶段确认。
 - M6 Private Library Agent：已完成；六条纵向切片、12 场景固定评测与完整 Gate E 于 2026-08-22 严格通过。
 - **M7 多模态题目采集与图片解题：已完成；15 场景固定评测 9 类违规为 0，Gate E 于 2026-08-24 通过。**
-- **M8 私有辅助命题：进行中；项目所有者已确认阶段转换，前七条切片及长题、成稿解析、解析单独重生成等质量收口已完成。**
+- **M8 私有辅助命题：进行中；项目所有者已确认阶段转换，前八条切片及长题、成稿解析、解析单独重生成、完整选择题、高中范围终检与生成进度可视化等质量收口已完成。**
 - M9-M11：Paper、Lesson、Memory 均未开始。
 - M12-M13：Closed Beta 准备与数据验证，均未开始。
 - M14-M17：商业基础、Teacher Pro、教研组和学校，均未开始。
@@ -82,6 +82,7 @@
 - M8 长题生成与可读解析收口：此前为规避单次 JSON 截断而设置的题干、解析步骤和 6000 字恢复上限已撤销。`QuestionAuthoring.create_draft` 与 Agent 的一次 `create_question_draft` Tool 契约保持不变，DeepSeek adapter 内部改为先锁定完整题面/唯一最终答案，再生成解析提纲，并行展开各解析段，最后按序组装和执行既有六项检查；某段失败先局部重试，持续截断时只把该段再拆为原子子段，不重新生成题面或其他成功段。命题与 Solve 现共用 `$...$`/`$$...$$` 数学输出规范，Teacher Web 通过共享 `MathSolutionView`/`MathText` 显示可读题面、编号解析和唯一最终答案，原始 LaTeX 收进校订面板。专用命题 Tool、Agent run 和 Web 转发预算扩展到 360 秒，这是失控请求保护而不是内容长度上限。真实 Teacher Web 全链路用三小问 5/5 圆锥曲线解答题完成 62 步、约 17470 字符解析，耗时 264.95 秒，返回 `open_response + owner_only + saved=false + teacher_review_required` 且公式分隔有效。FastAPI 355 项、Agent 42 项、Teacher Web 42 项测试及全部 typecheck/生产构建通过；M8 固定评测与 Gate 仍未执行。
 - M8 解析成稿与单独重生成收口：DeepSeek 命题 provider 对解析段新增明确的“只返回正式解析”契约，并在段落返回后检测第一人称试算、自我推翻、失败尝试、提示词或字段讨论；发现污染时只执行一次受控成稿清理，若清理暴露题面与锁定答案冲突则转入待教师核验状态。`QuestionAuthoring.regenerate_solution` 只允许模型重写解析方法和步骤，题面、LaTeX 题面、选项、答案与最终答案全部由业务层锁定；教师触发后追加 `ai_generated` revision、重跑六项可信检查并继续保持 `owner_only + saved=false + teacher_review_required`。浏览器真实验收生成 REV 1 后点击“重新生成解析”得到 REV 2，题面和最终答案未变，未检出试算/自我反思文本；FastAPI 358 项、Agent 42 项、Teacher Web 43 项测试及全部 typecheck/生产构建通过。M8 固定评测与 Gate 仍未执行。
 - M8 完整题目优先交付收口：修正“解析阶段数学冲突导致整道题失败”的错误语义。DeepSeek provider 先锁定完整题面、选项和最终答案；后续解析清理确认冲突、仍含自我推翻内容或解析阶段 provider 异常时，返回 `needs_teacher_verification` 草稿并保留全部核心题目字段，解析一致性检查明确为 `checks_failed`，教师可依据完整题面自行核验或单独重新生成解析。检测词覆盖真实返回中的“重新核对初始条件”“题面有误”“与题设不符”“无法选出正确答案”等措辞；只有 core 阶段未完成时才按整项失败处理。隐私、明确保存和 MathVerifier 边界不变。FastAPI 362 项、Agent 42 项、Teacher Web 43 项测试及全部 typecheck/生产构建通过。
+- M8 完整选择题、高中范围与生成可见性收口：`question-authoring-v7-high-school-choice-contract` 要求选择题 core 把题干和 A–D 选项分开返回；`QuestionAuthoring` 在进入可信检查前统一选项编号、剥离选项正文中的重复前缀，并清除题干/LaTeX 题干里重复嵌入的选项块，Teacher Web 的 `MathSolutionView` 在题干后以独立边框逐项渲染完整选项。命题 core 被明确限定为中国普通高中数学；发现马尔可夫链、随机过程、傅里叶分析等大学专属概念时先执行一次受控高中范围重写，最终业务层仍会终检并诚实拒绝越界结果。生成按钮进入真实请求后显示持续旋转状态、当前外层阶段和 `MM:SS` 已用时间，不虚构完成百分比、不展示内部推理；整体 Next/FastAPI/Agent/Tool 请求预算从 360 秒扩展为有界 900 秒，内容长度不设硬上限。真实浏览器请求已验证进度面板和计时器；该次请求也暴露了旧 360 秒连接上限，扩展预算后未重复消耗一次完整模型调用。桌面与 375px 移动端检查无横向溢出。FastAPI 364 项、Agent 42 项、Teacher Web 46 项测试及全部 typecheck/生产构建通过；M8 固定评测与 Gate 仍未执行。
 - 2026-08-22 DeepSeek Vision 更正与实测：官方新增 `deepseek-v4-flash-vision-exp` 图片输入；已作为第二个真实外部 adapter 接入现有识别 seam，复用 DeepSeek Key、base URL、逐次同意与模型运行记录。仓库 synthetic 数学题真实调用准确返回题面、LaTeX、A–D 选项且无低置信度项；旧的“DeepSeek 仅文本”判断已移除。
 
 ## 已知未决项
@@ -93,7 +94,7 @@
 - Closed Beta 指标事件、Week-4 留存、任务采用率、严重数学错误率和单位成本尚未进入真实教师统计阶段。
 - 当前身份 adapter 仍是本地固定教师，不代表生产认证、商业多租户或云端隔离已经完成。
 - M7 已完成；只有结果中的 `visual_context.image_used=true` 才能描述为“原图参与本次推理”。固定评测和 Gate E 证据见 `M7-MULTIMODAL-SOLVE-EVALUATION.md` 与 `M7-GATE-REVIEW.md`。
-- M8 当前完成独立存储/个人分类基线、结构化命题草稿、分级可信检查、教师 revision/明确保存、完整个人管理后端闭环、Teacher Web 入口及生成后教学元数据/教材映射确认；固定评测、完整 Gate E/Gate P 仍未执行。M9 及后续阶段不得开始。
+- M8 当前完成独立存储/个人分类基线、结构化命题草稿、分级可信检查、教师 revision/明确保存、完整个人管理后端闭环、Teacher Web 入口、生成后教学元数据/教材映射确认、完整选择题契约、高中范围终检与真实生成进度；固定评测、完整 Gate E/Gate P 仍未执行。M9 及后续阶段不得开始。
 
 ## 历史能力与新产品的关系
 

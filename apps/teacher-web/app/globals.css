@@ -1,7 +1,8 @@
 /* Hallmark · pre-emit critique: P5 H5 E5 S5 R5 V5
  * Hallmark · genre: atmospheric · tone: quiet scholarly Agent studio · palette anchor: vermilion
  * Hallmark · macrostructure: Authoring Ledger · theme: studied-DNA (source: user screenshot + Gemini/OpenAI/Anthropic references)
- * Hallmark · capability: owner-only Question Authoring · brief + revision ledger + private shelf
+ * Hallmark · capability: owner-only Question Authoring · complete choices + live generation ledger + private shelf
+ * Hallmark · variation knob: static authoring ledger → staged elapsed-time ledger with independent option rows
  * Hallmark · nav: N1b capability navigation · footer: Ft2 inline
  * enrichment: existing mathematical paper atlas · motion: restrained workspace and menu reveal
  * audience: Chinese high-school math teachers · primary use: generate, review and explicitly save owner-only private questions
@@ -961,6 +962,40 @@ svg { flex: 0 0 auto; }
   padding: var(--space-xl) 0;
 }
 
+.question-options {
+  border-bottom: 0.0625rem solid var(--color-rule);
+  display: grid;
+  gap: var(--space-sm);
+  list-style: none;
+  margin: 0;
+  padding: var(--space-lg) 0;
+}
+
+.question-options__item {
+  align-items: start;
+  background: color-mix(in oklch, var(--color-paper) 82%, transparent);
+  border: 0.0625rem solid var(--color-rule);
+  border-radius: var(--radius-sm);
+  display: grid;
+  gap: var(--space-sm);
+  grid-template-columns: 2rem minmax(0, 1fr);
+  line-height: 1.75;
+  padding: var(--space-sm) var(--space-md);
+}
+
+.question-option-key {
+  align-items: center;
+  border: 0.0625rem solid var(--color-rule-strong);
+  border-radius: var(--radius-pill);
+  color: var(--color-teal);
+  display: inline-flex;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  height: 2rem;
+  justify-content: center;
+  width: 2rem;
+}
+
 .math-solution-view {
   display: grid;
   min-width: 0;
@@ -1722,7 +1757,37 @@ svg { flex: 0 0 auto; }
 .authoring-advanced > div { display: grid; gap: var(--space-md); padding-top: var(--space-sm); }
 
 .authoring-submit { align-items: center; display: flex; gap: var(--space-lg); grid-column: 1 / -1; justify-content: flex-end; }
-.authoring-stage-note { color: var(--color-muted); grid-column: 1 / -1; justify-self: end; line-height: 1.6; }
+.authoring-progress {
+  background: color-mix(in oklch, var(--color-teal) 4%, var(--color-paper));
+  border: 0.0625rem solid color-mix(in oklch, var(--color-teal) 34%, var(--color-rule));
+  border-radius: var(--radius-sm);
+  display: grid;
+  gap: var(--space-md);
+  grid-column: 1 / -1;
+  padding: var(--space-md);
+}
+.authoring-progress__current { align-items: center; display: flex; gap: var(--space-sm); }
+.authoring-progress__current > div { display: grid; gap: var(--space-2xs); }
+.authoring-progress__current strong { font-size: var(--text-base); }
+.authoring-progress__current span { color: var(--color-muted); font-size: var(--text-sm); font-variant-numeric: tabular-nums; }
+.authoring-progress__spinner {
+  animation: authoring-progress-spin 0.85s linear infinite;
+  border: 0.1875rem solid color-mix(in oklch, var(--color-teal) 20%, transparent);
+  border-radius: 50%;
+  border-top-color: var(--color-teal);
+  flex: 0 0 auto;
+  height: 1.75rem;
+  width: 1.75rem;
+}
+.authoring-progress > ol { display: grid; gap: var(--space-xs); grid-template-columns: repeat(3, minmax(0, 1fr)); list-style: none; margin: 0; padding: 0; }
+.authoring-progress > ol li { align-items: center; color: var(--color-muted); display: flex; font-size: var(--text-sm); gap: var(--space-xs); min-width: 0; }
+.authoring-progress > ol li > span { align-items: center; border: 0.0625rem solid var(--color-rule-strong); border-radius: 50%; display: inline-flex; flex: 0 0 auto; height: 1.5rem; justify-content: center; width: 1.5rem; }
+.authoring-progress > ol li[data-state="current"] { color: var(--color-ink); font-weight: 700; }
+.authoring-progress > ol li[data-state="current"] > span { background: var(--color-teal); border-color: var(--color-teal); color: var(--color-paper); }
+.authoring-progress > ol li[data-state="complete"] { color: var(--color-teal); }
+.authoring-progress > p { color: var(--color-muted); font-size: var(--text-sm); line-height: 1.65; margin: 0; }
+
+@keyframes authoring-progress-spin { to { transform: rotate(360deg); } }
 .authoring-submit button,
 .authoring-save__button { align-items: center; background: var(--color-ink); color: var(--color-paper); display: flex; gap: var(--space-xs); justify-content: center; min-height: 3rem; padding: var(--space-sm) var(--space-lg); }
 .authoring-submit button svg,
@@ -1898,11 +1963,16 @@ svg { flex: 0 0 auto; }
   .personal-question-meta > button,
   .personal-question-edit > button { width: 100%; }
   .authoring-submit { align-items: stretch; flex-direction: column; }
+  .authoring-progress > ol { grid-template-columns: 1fr; }
   .authoring-draft__policy { align-items: start; justify-items: start; text-align: left; }
   .authoring-save { padding: var(--space-md); }
   .personal-question-shelf > header > form { width: 100%; }
   .personal-question-detail > footer { display: grid; }
   .personal-question-detail > footer button { width: 100%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .authoring-progress__spinner { animation-duration: 1.8s; }
 }
 
 /* M6 · Private Library capability · existing Marquee Hero system */
