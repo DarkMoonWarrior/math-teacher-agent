@@ -471,6 +471,7 @@ export type QuestionAuthoringBrief = {
 export type QuestionAuthoringProgressStage =
   | "brief"
   | "composing"
+  | "reauthoring"
   | "reviewing"
   | "refining"
   | "solving"
@@ -568,6 +569,20 @@ export type QuestionAuthoringAgentResult = {
   error: { code?: string; message?: string; request_id?: string } | null;
 };
 
+export type QuestionAuthoringJob = {
+  job_id: string;
+  kind: "question_authoring";
+  subject_id: string;
+  status: "queued" | "running" | "succeeded" | "failed";
+  current: number;
+  total: number;
+  message: string;
+  error: string;
+  result: { draft_id?: string; request_id?: string };
+  created_at: string;
+  updated_at: string;
+};
+
 export type OwnerOnlyPolicy = {
   visibility: "owner_only";
   public_search_allowed: false;
@@ -622,6 +637,19 @@ export type PersonalAuthoringDraft = OwnerOnlyPolicy & {
   current: PersonalAuthoringRevision;
   created_at: string;
   updated_at: string;
+};
+
+export type PersonalAuthoringDraftList = {
+  items: PersonalAuthoringDraft[];
+  total: number;
+  limit: number;
+  offset: number;
+};
+
+export type PersonalAuthoringHistoryDeletionReceipt = {
+  draft_id: string;
+  deleted: true;
+  saved_question_preserved: boolean;
 };
 
 export type PersonalAuthoringRevisionList = {
@@ -771,7 +799,14 @@ export interface TeacherWorkspace {
     options?: QuestionAuthoringGenerationOptions,
   ): Promise<QuestionAuthoringAgentResult>;
 
+  startQuestionAuthoringJob(request: QuestionAuthoringBrief, signal?: AbortSignal): Promise<QuestionAuthoringJob>;
+  getQuestionAuthoringJob(jobId: string, signal?: AbortSignal): Promise<QuestionAuthoringJob>;
+  getLatestQuestionAuthoringJob(signal?: AbortSignal): Promise<QuestionAuthoringJob | null>;
+  getQuestionAuthoringProgress(progressId: string, signal?: AbortSignal): Promise<{ stage: QuestionAuthoringProgressStage }>;
+
   getPersonalAuthoringDraft(draftId: string, signal?: AbortSignal): Promise<PersonalAuthoringDraft>;
+  listPersonalAuthoringDrafts(signal?: AbortSignal): Promise<PersonalAuthoringDraftList>;
+  deletePersonalAuthoringHistory(draftId: string, signal?: AbortSignal): Promise<PersonalAuthoringHistoryDeletionReceipt>;
 
   listPersonalAuthoringRevisions(draftId: string, signal?: AbortSignal): Promise<PersonalAuthoringRevisionList>;
 

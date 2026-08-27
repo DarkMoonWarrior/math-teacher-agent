@@ -22,10 +22,11 @@ from app.modules.question_authoring.schemas import (
 from app.modules.question_authoring.scope import university_only_terms
 
 
-PROMPT_REVISION = "question-authoring-v12-tolerant-final-audit"
+PROMPT_REVISION = "question-authoring-v13-background-closed-loop"
 
 QuestionAuthoringProgressStage = Literal[
     "composing",
+    "reauthoring",
     "reviewing",
     "refining",
     "solving",
@@ -35,6 +36,7 @@ QuestionAuthoringProgressStage = Literal[
 QUESTION_REPAIR_ATTEMPTS = 3
 POST_SOLUTION_QUESTION_REPAIR_ATTEMPTS = 2
 SOLUTION_REGENERATION_ATTEMPTS = 3
+WHOLE_QUESTION_ATTEMPTS = 3
 
 
 _DELIBERATION_PATTERNS = (
@@ -81,6 +83,10 @@ class _SolutionInvalidAfterReview(QuestionAuthoringProviderError):
         self.summary = summary
         self.issues = issues
         super().__init__("解析与题面不一致，必须保留题面并重新生成解析。")
+
+
+class _ContentCandidateRejected(QuestionAuthoringProviderError):
+    """One complete candidate failed quality recovery and must be replaced."""
 
 
 @dataclass(frozen=True)
@@ -238,9 +244,29 @@ class DeepSeekQuestionAuthoringProvider:
         self.recorder = recorder or NullModelRunRecorder()
 
     def generate(self, context: QuestionAuthoringContext) -> ProviderQuestionDraft:
+        last_error: _ContentCandidateRejected | None = None
+        for candidate_attempt in range(1, WHOLE_QUESTION_ATTEMPTS + 1):
+            try:
+                return self._generate_candidate(
+                    context,
+                    reauthoring=candidate_attempt > 1,
+                )
+            except _ContentCandidateRejected as exc:
+                last_error = exc
+                continue
+        raise QuestionAuthoringProviderError(
+            "多份候选题均未通过闭环审核，需要继续重新命题。"
+        ) from last_error
+
+    def _generate_candidate(
+        self,
+        context: QuestionAuthoringContext,
+        *,
+        reauthoring: bool,
+    ) -> ProviderQuestionDraft:
         provider_input = self._provider_input(context)
         try:
-            context.report_progress("composing")
+            context.report_progress("reauthoring" if reauthoring else "composing")
             core_payload = self._request_stage(
                 stage="core",
                 instructions=(
@@ -293,7 +319,7 @@ class DeepSeekQuestionAuthoringProvider:
                     )
                 except _QuestionInvalidAfterSolution as exc:
                     if question_repair_count >= POST_SOLUTION_QUESTION_REPAIR_ATTEMPTS:
-                        raise QuestionAuthoringProviderError(
+                        raise _ContentCandidateRejected(
                             "题面经完整求解、完善和重新审核后仍无法成立，无法交付完整题目。"
                         ) from exc
                     question_repair_count += 1
@@ -313,7 +339,7 @@ class DeepSeekQuestionAuthoringProvider:
                     continue
                 except _SolutionInvalidAfterReview as exc:
                     if solution_regeneration_count >= SOLUTION_REGENERATION_ATTEMPTS:
-                        raise QuestionAuthoringProviderError(
+                        raise _ContentCandidateRejected(
                             "题面已确认成立，但解析经过多轮重新生成仍未通过一致性审核，无法交付半成品。"
                         ) from exc
                     solution_regeneration_count += 1
@@ -855,7 +881,7 @@ class DeepSeekQuestionAuthoringProvider:
                 return repaired, review
             rejected = repaired
 
-        raise QuestionAuthoringProviderError(
+        raise _ContentCandidateRejected(
             "题面经过多轮完善和重新审核后仍未通过，未建立命题草稿。请重新生成题目。"
         )
 

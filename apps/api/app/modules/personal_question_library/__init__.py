@@ -6,6 +6,8 @@ from .library import (
 from .schemas import (
     OwnerOnlyContentPolicy,
     PersonalAuthoringDraftView,
+    PersonalAuthoringDraftList,
+    PersonalAuthoringHistoryDeletionReceipt,
     PersonalAuthoringRevisionCreate,
     PersonalAuthoringRevisionList,
     PersonalAuthoringRevisionView,
@@ -34,6 +36,8 @@ from .schemas import (
 __all__ = [
     "OwnerOnlyContentPolicy",
     "PersonalAuthoringDraftView",
+    "PersonalAuthoringDraftList",
+    "PersonalAuthoringHistoryDeletionReceipt",
     "PersonalAuthoringRevisionCreate",
     "PersonalAuthoringRevisionList",
     "PersonalAuthoringRevisionView",

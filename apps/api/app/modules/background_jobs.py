@@ -64,6 +64,34 @@ class BackgroundJobRegistry:
             }
             return BackgroundJobView.model_validate(public_value)
 
+    def list(self, *, owner_id: str, kind: str | None = None) -> list[BackgroundJobView]:
+        """Return the owner's jobs newest-first without exposing registry internals."""
+        with self._lock:
+            values = [
+                deepcopy(value)
+                for value in self._jobs.values()
+                if value["owner_id"] == owner_id
+                and (kind is None or value["kind"] == kind)
+            ]
+        values.sort(key=lambda value: value["created_at"], reverse=True)
+        return [
+            BackgroundJobView.model_validate(
+                {key: item for key, item in value.items() if key != "owner_id"}
+            )
+            for value in values
+        ]
+
+    def latest(self, *, owner_id: str, kind: str) -> BackgroundJobView:
+        jobs = self.list(owner_id=owner_id, kind=kind)
+        if not jobs:
+            raise KeyError(kind)
+        return jobs[0]
+
+    def clear(self) -> None:
+        """Drop transient records; intended for process teardown and tests."""
+        with self._lock:
+            self._jobs.clear()
+
     def _update(self, job_id: str, **values) -> None:
         with self._lock:
             self._jobs[job_id].update(values)

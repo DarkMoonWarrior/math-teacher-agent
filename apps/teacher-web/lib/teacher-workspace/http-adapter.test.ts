@@ -785,6 +785,42 @@ describe("HttpTeacherWorkspace", () => {
     expect(result.draft.visibility).toBe("owner_only");
   });
 
+  it("starts resumable background authoring and exposes owner history controls", async () => {
+    const staged = personalAuthoringDraftFixture();
+    const job = {
+      job_id: "job_authoring_1", kind: "question_authoring", subject_id: "qap_1",
+      status: "running", current: 1, total: 0, message: "正在命制并闭环审核", error: "",
+      result: {}, created_at: "2026-08-27T10:00:00Z", updated_at: "2026-08-27T10:00:01Z",
+    };
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const payload = url.endsWith("/jobs") ? job
+        : url.includes("authoring-drafts?") ? { items: [staged], total: 1, limit: 100, offset: 0 }
+          : { draft_id: staged.draft_id, deleted: true, saved_question_preserved: false };
+      return new Response(JSON.stringify(payload), {
+        status: url.endsWith("/jobs") ? 202 : 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const workspace = new HttpTeacherWorkspace();
+    await workspace.startQuestionAuthoringJob({
+      requestText: "命一道高三导数填空题", questionType: "fill_blank",
+      targetDifficulty: 5, teachingPurpose: "考试压轴", sessionId: "session_1",
+    });
+    await workspace.listPersonalAuthoringDrafts();
+    await workspace.deletePersonalAuthoringHistory(staged.draft_id);
+
+    expect(fetchMock.mock.calls.map(([url]) => String(url))).toEqual([
+      "/api/v1/agent/question-authoring/jobs",
+      "/api/v1/personal-question-library/authoring-drafts?limit=100&offset=0",
+      "/api/v1/personal-question-library/authoring-drafts/qad_1/history",
+    ]);
+    expect((fetchMock.mock.calls[2]?.[1] as RequestInit).method).toBe("DELETE");
+    expect(String((fetchMock.mock.calls[0]?.[1] as RequestInit).body)).not.toContain("owner_id");
+  });
+
   it("keeps explicit save, versioned lifecycle actions and permanent deletion owner-bound", async () => {
     const staged = personalAuthoringDraftFixture();
     const question = personalQuestionFixture();

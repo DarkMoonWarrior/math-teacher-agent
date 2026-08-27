@@ -17,6 +17,8 @@ import {
   type PrivateLibrarySearchResult,
   type PrivateLibraryUpload,
   type PersonalAuthoringDraft,
+  type PersonalAuthoringDraftList,
+  type PersonalAuthoringHistoryDeletionReceipt,
   type PersonalAuthoringRevisionList,
   type PersonalQuestion,
   type PersonalQuestionCategory,
@@ -26,6 +28,7 @@ import {
   type PersonalQuestionExport,
   type PersonalQuestionList,
   type QuestionAuthoringAgentResult,
+  type QuestionAuthoringJob,
   type QuestionAuthoringBrief,
   type QuestionAuthoringGenerationOptions,
   type QuestionAuthoringProgressStage,
@@ -80,6 +83,7 @@ function questionAuthoringProgressId(): string {
 const QUESTION_AUTHORING_PROGRESS_STAGES = new Set<QuestionAuthoringProgressStage>([
   "brief",
   "composing",
+  "reauthoring",
   "reviewing",
   "refining",
   "solving",
@@ -877,6 +881,71 @@ export class HttpTeacherWorkspace implements TeacherWorkspace {
     return payload;
   }
 
+  startQuestionAuthoringJob(
+    request: QuestionAuthoringBrief,
+    signal?: AbortSignal,
+  ): Promise<QuestionAuthoringJob> {
+    const brief = {
+      request_text: request.requestText,
+      grade: request.grade,
+      curriculum_node_id: request.curriculumNodeId,
+      knowledge_point_query: request.knowledgePointQuery,
+      question_type: request.questionType,
+      target_difficulty: request.targetDifficulty,
+      teaching_purpose: request.teachingPurpose,
+      expected_minutes: request.expectedMinutes,
+      assessed_method: request.assessedMethod ?? "",
+      misconception_requirements: request.misconceptionRequirements ?? "",
+      additional_constraints: request.additionalConstraints ?? "",
+      reference_question_id: request.referenceQuestionId,
+    };
+    return libraryJsonRequest(
+      "/api/v1/agent/question-authoring/jobs",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ brief, session_id: request.sessionId, progress_id: questionAuthoringProgressId() }),
+        signal,
+      },
+      "无法启动后台命题任务。",
+    );
+  }
+
+  getQuestionAuthoringJob(jobId: string, signal?: AbortSignal): Promise<QuestionAuthoringJob> {
+    return libraryJsonRequest(
+      `/api/v1/agent/question-authoring/jobs/${encodeURIComponent(jobId)}`,
+      { method: "GET", signal },
+      "无法读取后台命题进度。",
+    );
+  }
+
+  getQuestionAuthoringProgress(
+    progressId: string,
+    signal?: AbortSignal,
+  ): Promise<{ stage: QuestionAuthoringProgressStage }> {
+    return libraryJsonRequest(
+      `/api/v1/agent/question-authoring/progress/${encodeURIComponent(progressId)}`,
+      { method: "GET", signal },
+      "无法读取命题阶段。",
+    );
+  }
+
+  async getLatestQuestionAuthoringJob(signal?: AbortSignal): Promise<QuestionAuthoringJob | null> {
+    const response = await fetch(apiUrl("/api/v1/agent/question-authoring/jobs/latest"), {
+      method: "GET", cache: "no-store", signal,
+    });
+    if (response.status === 404) return null;
+    if (!response.ok) {
+      const payload = await response.json().catch(() => ({})) as ErrorEnvelope;
+      throw new TeacherWorkspaceError(
+        payload.error?.code ?? `HTTP_${response.status}`,
+        detailMessage(payload.detail) ?? payload.error?.message ?? "无法读取上一次命题任务。",
+        payload.error?.request_id,
+      );
+    }
+    return response.json() as Promise<QuestionAuthoringJob>;
+  }
+
   getPersonalAuthoringDraft(
     draftId: string,
     signal?: AbortSignal,
@@ -885,6 +954,25 @@ export class HttpTeacherWorkspace implements TeacherWorkspace {
       `/api/v1/personal-question-library/authoring-drafts/${encodeURIComponent(draftId)}`,
       { method: "GET", signal },
       "无法读取当前命题草稿。",
+    );
+  }
+
+  listPersonalAuthoringDrafts(signal?: AbortSignal): Promise<PersonalAuthoringDraftList> {
+    return libraryJsonRequest(
+      "/api/v1/personal-question-library/authoring-drafts?limit=100&offset=0",
+      { method: "GET", signal },
+      "无法读取命题历史。",
+    );
+  }
+
+  deletePersonalAuthoringHistory(
+    draftId: string,
+    signal?: AbortSignal,
+  ): Promise<PersonalAuthoringHistoryDeletionReceipt> {
+    return libraryJsonRequest(
+      `/api/v1/personal-question-library/authoring-drafts/${encodeURIComponent(draftId)}/history`,
+      { method: "DELETE", signal },
+      "无法删除这条命题历史。",
     );
   }
 

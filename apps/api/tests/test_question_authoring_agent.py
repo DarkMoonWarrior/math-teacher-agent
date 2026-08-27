@@ -480,3 +480,122 @@ def test_http_route_binds_current_teacher_and_stages_only_for_that_owner(
     assert forged_top.status_code == 422
     assert forged_brief.status_code == 422
     assert len(workflow.calls) == 1
+
+
+def test_background_authoring_job_stages_complete_result_and_is_resumable(
+    monkeypatch, tmp_path: Path
+) -> None:
+    workflow = FakeQuestionAuthoringWorkflow()
+    library = PersonalQuestionLibrary(tmp_path / "background-authoring.sqlite3")
+    monkeypatch.setattr(
+        question_authoring_routes,
+        "get_settings",
+        lambda: SimpleNamespace(question_authoring_agent_enabled=True),
+    )
+    monkeypatch.setattr(
+        question_authoring_routes,
+        "get_question_authoring_agent_workflow",
+        lambda: workflow,
+    )
+    app.dependency_overrides[get_current_teacher] = lambda: CurrentTeacher(
+        teacher_id="teacher_background", source="authenticated_session"
+    )
+    app.dependency_overrides[get_personal_question_library] = lambda: library
+    jobs = question_authoring_routes.get_question_authoring_job_registry()
+    jobs.clear()
+    get_question_authoring_progress_registry().clear()
+    try:
+        with TestClient(app) as client:
+            started = client.post(
+                "/api/v1/agent/question-authoring/jobs",
+                json={"brief": brief().model_dump(mode="json", exclude_none=True)},
+            )
+            assert started.status_code == 202
+            job = started.json()
+            for _ in range(100):
+                current = client.get(
+                    f"/api/v1/agent/question-authoring/jobs/{job['job_id']}"
+                )
+                assert current.status_code == 200
+                job = current.json()
+                if job["status"] == "succeeded":
+                    break
+                import time
+                time.sleep(0.01)
+            latest = client.get("/api/v1/agent/question-authoring/jobs/latest")
+        assert job["status"] == "succeeded"
+        assert job["result"]["draft_id"] == "qad_synthetic_1"
+        assert latest.json()["job_id"] == job["job_id"]
+        assert library.get_authoring_draft(
+            "qad_synthetic_1", owner_id="teacher_background"
+        ).current_revision == 1
+    finally:
+        app.dependency_overrides.pop(get_current_teacher, None)
+        app.dependency_overrides.pop(get_personal_question_library, None)
+        jobs.clear()
+        get_question_authoring_progress_registry().clear()
+
+
+def test_background_authoring_retries_dict_shaped_agent_errors_without_exposing_them(
+    monkeypatch, tmp_path: Path
+) -> None:
+    class RetryWorkflow:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        async def run(self, command, *, owner_id: str, request_id: str):
+            self.calls += 1
+            if self.calls == 1:
+                return QuestionAuthoringAgentResponse(
+                    request_id=request_id,
+                    status="error",
+                    error={"code": "QUESTION_AUTHORING_FAILED", "message": "本轮解析未通过审核"},
+                )
+            return QuestionAuthoringAgentResponse(
+                request_id=request_id,
+                status="ok",
+                draft=draft_payload(),
+            )
+
+    workflow = RetryWorkflow()
+    library = PersonalQuestionLibrary(tmp_path / "background-authoring-retry.sqlite3")
+    monkeypatch.setattr(question_authoring_routes, "time", SimpleNamespace(sleep=lambda _: None))
+    monkeypatch.setattr(
+        question_authoring_routes,
+        "get_settings",
+        lambda: SimpleNamespace(question_authoring_agent_enabled=True),
+    )
+    monkeypatch.setattr(
+        question_authoring_routes,
+        "get_question_authoring_agent_workflow",
+        lambda: workflow,
+    )
+    app.dependency_overrides[get_current_teacher] = lambda: CurrentTeacher(
+        teacher_id="teacher_retry", source="authenticated_session"
+    )
+    app.dependency_overrides[get_personal_question_library] = lambda: library
+    jobs = question_authoring_routes.get_question_authoring_job_registry()
+    jobs.clear()
+    get_question_authoring_progress_registry().clear()
+    try:
+        with TestClient(app) as client:
+            started = client.post(
+                "/api/v1/agent/question-authoring/jobs",
+                json={"brief": brief().model_dump(mode="json", exclude_none=True)},
+            ).json()
+            for _ in range(100):
+                job = client.get(
+                    f"/api/v1/agent/question-authoring/jobs/{started['job_id']}"
+                ).json()
+                if job["status"] == "succeeded":
+                    break
+                import time as clock
+                clock.sleep(0.01)
+        assert job["status"] == "succeeded"
+        assert workflow.calls == 2
+        assert "dict" not in job["error"]
+    finally:
+        app.dependency_overrides.pop(get_current_teacher, None)
+        app.dependency_overrides.pop(get_personal_question_library, None)
+        jobs.clear()
+        get_question_authoring_progress_registry().clear()

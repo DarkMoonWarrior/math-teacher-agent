@@ -10,6 +10,8 @@ from app.core.config import get_settings
 from app.core.identity import CurrentTeacher, get_current_teacher
 from app.modules.personal_question_library import (
     PersonalAuthoringDraftView,
+    PersonalAuthoringDraftList,
+    PersonalAuthoringHistoryDeletionReceipt,
     PersonalAuthoringRevisionCreate,
     PersonalAuthoringRevisionList,
     PersonalAuthoringSolutionRegenerate,
@@ -182,6 +184,36 @@ def update_personal_category(
         raise HTTPException(status_code=404, detail="个人分类不存在") from exc
     except PersonalQuestionLibraryError as exc:
         _raise_library_error(exc)
+
+
+@router.get(
+    "/authoring-drafts",
+    response_model=PersonalAuthoringDraftList,
+)
+def list_personal_authoring_drafts(
+    limit: int = Query(default=50, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    teacher: CurrentTeacher = Depends(get_current_teacher),
+    library: PersonalQuestionLibrary = Depends(get_personal_question_library),
+) -> PersonalAuthoringDraftList:
+    return library.list_authoring_drafts(
+        owner_id=teacher.teacher_id, limit=limit, offset=offset
+    )
+
+
+@router.delete(
+    "/authoring-drafts/{draft_id}/history",
+    response_model=PersonalAuthoringHistoryDeletionReceipt,
+)
+def delete_personal_authoring_history(
+    draft_id: str,
+    teacher: CurrentTeacher = Depends(get_current_teacher),
+    library: PersonalQuestionLibrary = Depends(get_personal_question_library),
+) -> PersonalAuthoringHistoryDeletionReceipt:
+    try:
+        return library.delete_authoring_history(draft_id, owner_id=teacher.teacher_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="命题历史不存在") from exc
 
 
 @router.get(

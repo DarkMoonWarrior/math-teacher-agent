@@ -8,7 +8,9 @@ from pathlib import Path
 from uuid import uuid4
 
 from app.modules.personal_question_library.schemas import (
+    PersonalAuthoringDraftList,
     PersonalAuthoringDraftView,
+    PersonalAuthoringHistoryDeletionReceipt,
     PersonalAuthoringRevisionList,
     PersonalAuthoringRevisionView,
     PersonalCategoryCreate,
@@ -380,6 +382,67 @@ class PersonalQuestionLibrary:
         if row is None:
             raise KeyError(draft_id)
         return self._authoring_draft_view(row)
+
+    def list_authoring_drafts(
+        self, *, owner_id: str, limit: int = 50, offset: int = 0
+    ) -> PersonalAuthoringDraftList:
+        with self._connect() as connection:
+            total = connection.execute(
+                "SELECT COUNT(*) FROM personal_authoring_drafts WHERE owner_id = ? AND history_visible = 1",
+                (owner_id,),
+            ).fetchone()[0]
+            rows = connection.execute(
+                """
+                SELECT drafts.*, revisions.revision_source,
+                       revisions.edit_summary, revisions.draft_json,
+                       revisions.created_at AS revision_created_at
+                FROM personal_authoring_drafts AS drafts
+                JOIN personal_authoring_revisions AS revisions
+                  ON revisions.draft_id = drafts.draft_id
+                 AND revisions.owner_id = drafts.owner_id
+                 AND revisions.revision_number = drafts.current_revision
+                WHERE drafts.owner_id = ? AND drafts.history_visible = 1
+                ORDER BY drafts.updated_at DESC, drafts.draft_id DESC
+                LIMIT ? OFFSET ?
+                """,
+                (owner_id, limit, offset),
+            ).fetchall()
+        return PersonalAuthoringDraftList(
+            items=[self._authoring_draft_view(row) for row in rows],
+            total=total,
+            limit=limit,
+            offset=offset,
+        )
+
+    def delete_authoring_history(
+        self, draft_id: str, *, owner_id: str
+    ) -> PersonalAuthoringHistoryDeletionReceipt:
+        """Remove a history entry; an already-saved private question stays intact."""
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT saved_question_id FROM personal_authoring_drafts WHERE draft_id = ? AND owner_id = ? AND history_visible = 1",
+                (draft_id, owner_id),
+            ).fetchone()
+            if row is None:
+                raise KeyError(draft_id)
+            preserved = row["saved_question_id"] is not None
+            if preserved:
+                connection.execute(
+                    "UPDATE personal_authoring_drafts SET history_visible = 0, updated_at = ? WHERE draft_id = ? AND owner_id = ?",
+                    (self._now(), draft_id, owner_id),
+                )
+            else:
+                connection.execute(
+                    "DELETE FROM personal_authoring_revisions WHERE draft_id = ? AND owner_id = ?",
+                    (draft_id, owner_id),
+                )
+                connection.execute(
+                    "DELETE FROM personal_authoring_drafts WHERE draft_id = ? AND owner_id = ?",
+                    (draft_id, owner_id),
+                )
+        return PersonalAuthoringHistoryDeletionReceipt(
+            draft_id=draft_id, saved_question_preserved=preserved
+        )
 
     def list_authoring_revisions(
         self,
@@ -1139,6 +1202,7 @@ class PersonalQuestionLibrary:
                     owner_id TEXT NOT NULL,
                     current_revision INTEGER NOT NULL CHECK (current_revision >= 1),
                     saved_question_id TEXT,
+                    history_visible INTEGER NOT NULL DEFAULT 1,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL,
                     UNIQUE(draft_id, owner_id)
@@ -1201,6 +1265,12 @@ class PersonalQuestionLibrary:
                 CREATE INDEX IF NOT EXISTS idx_personal_questions_owner_category
                     ON personal_questions(owner_id, collection_id, category_id, updated_at DESC);
                 """
+            )
+            self._ensure_column(
+                connection,
+                "personal_authoring_drafts",
+                "history_visible",
+                "INTEGER NOT NULL DEFAULT 1",
             )
             self._ensure_column(
                 connection,

@@ -5,6 +5,7 @@ export type AuthoringGenerationStage = QuestionAuthoringProgressStage;
 const STAGES: Array<{ key: AuthoringGenerationStage; label: string }> = [
   { key: "brief", label: "整理命题要求" },
   { key: "composing", label: "命制题面" },
+  { key: "reauthoring", label: "重新命题（按需）" },
   { key: "reviewing", label: "审核题面" },
   { key: "refining", label: "完善题面（按需）" },
   { key: "solving", label: "生成解析" },
@@ -16,6 +17,7 @@ const STAGES: Array<{ key: AuthoringGenerationStage; label: string }> = [
 const CURRENT_STAGE_COPY: Record<AuthoringGenerationStage, string> = {
   brief: "正在整理命题要求",
   composing: "Agent 正在命制完整题面",
+  reauthoring: "候选题未通过闭环审核，Agent 正在重新命题",
   reviewing: "Agent 正在审核题面是否合理",
   refining: "审核发现问题，Agent 正在完善题面并重新审核",
   solving: "题面已通过审核，正在生成解析并据此确定标准答案",
@@ -45,7 +47,7 @@ export function AuthoringGenerationStatus({
         <span className="authoring-progress__spinner" aria-hidden="true" />
         <div>
           <strong>{CURRENT_STAGE_COPY[stage]}</strong>
-          <span>已处理 {formatAuthoringElapsed(elapsedSeconds)} · 请保持本页打开</span>
+          <span>已处理 {formatAuthoringElapsed(elapsedSeconds)} · 可切换到其他页面</span>
         </div>
       </div>
       <ol aria-label="生成步骤">

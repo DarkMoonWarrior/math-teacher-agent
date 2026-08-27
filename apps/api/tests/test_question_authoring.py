@@ -557,7 +557,7 @@ def test_deepseek_provider_stops_before_solution_when_repaired_question_still_fa
     )
     provider.client = FakeDeepSeekClient()  # type: ignore[assignment]
 
-    with pytest.raises(QuestionAuthoringProviderError, match="未建立命题草稿"):
+    with pytest.raises(QuestionAuthoringProviderError, match="多份候选题均未通过闭环审核"):
         provider.generate(
             QuestionAuthoringContext(
                 brief=QuestionDesignBrief(
@@ -571,7 +571,7 @@ def test_deepseek_provider_stops_before_solution_when_repaired_question_still_fa
             )
         )
 
-    assert calls == [
+    expected_candidate_calls = [
         "辅助命题（core）",
         "辅助命题（question-review）",
         "辅助命题（core-question-repair）",
@@ -581,6 +581,7 @@ def test_deepseek_provider_stops_before_solution_when_repaired_question_still_fa
         "辅助命题（core-question-repair-3）",
         "辅助命题（core-question-repair-review-check-3）",
     ]
+    assert calls == expected_candidate_calls * 3
 
 
 def test_deepseek_provider_repairs_and_reaudits_statement_when_full_solve_exposes_a_flaw() -> None:
@@ -1137,6 +1138,107 @@ def test_deepseek_provider_recovers_when_failed_final_audit_omits_independent_an
     assert content.solution_status == "ready"
     assert solution_attempt == 2
     assert completed_review_count == 2
+
+
+def test_deepseek_provider_reauthors_whole_question_after_solution_recovery_is_exhausted() -> None:
+    """Content-quality exhaustion must restart from a new statement, not fail the task."""
+
+    core_count = 0
+    solution_count = 0
+
+    class FakeDeepSeekClient:
+        def request(self, **kwargs: object) -> dict:
+            nonlocal core_count, solution_count
+            schema_name = kwargs["output_schema"]["name"]  # type: ignore[index]
+            if schema_name == "private_question_authoring_core":
+                core_count += 1
+                payload = {
+                    "question_type": "fill_blank",
+                    "stem_plain": (
+                        "第一份候选题：若 x=1，则 x+1=____。"
+                        if core_count == 1
+                        else "第二份候选题：若 x=2，则 x+1=____。"
+                    ),
+                    "stem_latex": (
+                        "第一份候选题：若 $x=1$，则 $x+1=\\underline{\\qquad}$。"
+                        if core_count == 1
+                        else "第二份候选题：若 $x=2$，则 $x+1=\\underline{\\qquad}$。"
+                    ),
+                    "options": [],
+                    "estimated_difficulty": 1,
+                }
+            elif schema_name == "private_question_authoring_question_review":
+                expected = "2" if core_count == 1 else "3"
+                payload = passing_question_review(expected, expected)
+            elif schema_name == "private_question_authoring_solution_plan":
+                solution_count += 1
+                payload = {
+                    "solution_method": "代入计算",
+                    "sections": [{"order": 1, "title": "计算", "goal": "代入求值"}],
+                    "authoring_intent": "验证整题自动重命制。",
+                    "curriculum_node_id": None,
+                    "knowledge_points": [],
+                    "assessed_methods": [],
+                    "common_mistakes": [],
+                }
+            elif schema_name == "private_question_authoring_solution_section":
+                payload = {
+                    "order": 1,
+                    "steps": [
+                        "无法形成正确解析。"
+                        if core_count == 1
+                        else "代入 $x=2$，得到 $x+1=3$。"
+                    ],
+                }
+            elif schema_name == "private_question_authoring_solution_conclusion":
+                answer = "错误" if core_count == 1 else "3"
+                payload = {"answer_value": answer, "final_answer": answer}
+            elif schema_name == "private_question_authoring_completed_solution_review":
+                payload = (
+                    {
+                        "passed": False,
+                        "question_valid": True,
+                        "solution_valid": False,
+                        "answer_consistent": False,
+                        "summary": "题面成立，但解析不合格。",
+                        "issues": ["解析没有正确完成计算。"],
+                        "independent_answer_value": "2",
+                        "independent_final_answer": "2",
+                    }
+                    if core_count == 1
+                    else passing_completed_solution_review("3", "3")
+                )
+            else:  # pragma: no cover - staged-contract guard
+                pytest.fail(f"unexpected stage: {schema_name}")
+            text = json.dumps(payload, ensure_ascii=False)
+            return {"output": [{"type": "message", "content": [{"type": "output_text", "text": text}]}]}
+
+    provider = DeepSeekQuestionAuthoringProvider(
+        api_key="test-key",
+        model="deepseek-v4-flash",
+        base_url="https://api.deepseek.com",
+    )
+    provider.client = FakeDeepSeekClient()  # type: ignore[assignment]
+
+    content = provider.generate(
+        QuestionAuthoringContext(
+            brief=QuestionDesignBrief(
+                request_text="来一道能作为填空压轴题的导数计算题",
+                question_type="fill_blank",
+                target_difficulty=5,
+            ),
+            question_type="fill_blank",
+            curriculum=None,
+            curriculum_options=(),
+        )
+    )
+
+    assert content.stem_plain.startswith("第二份候选题")
+    assert content.answer_value == "3"
+    assert content.final_answer == "3"
+    assert content.solution_status == "ready"
+    assert core_count == 2
+    assert solution_count == 5  # four failed solves for candidate one, then success
 
 
 def test_deepseek_provider_uses_final_audit_to_resolve_an_incorrect_initial_review() -> None:
