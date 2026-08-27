@@ -50,6 +50,7 @@ import { SolvePaper, SolveResultBrief } from "./solve-paper";
 import { PrivateLibraryWorkspace } from "./private-library-workspace";
 import { QuestionMediaComposer } from "./question-media-composer";
 import { PersonalQuestionAuthoringWorkspace } from "./personal-question-authoring-workspace";
+import { PaperBlueprintWorkspace } from "./paper-blueprint-workspace";
 
 type Phase = "idle" | "running" | "success" | "error" | "cancelled";
 type FlipDirection = "next" | "previous";
@@ -365,14 +366,14 @@ const CAPABILITIES: Record<CapabilityId, CapabilityDefinition> = {
   paper: {
     id: "paper",
     label: "组卷",
-    ready: false,
-    status: "Paper Agent · 运行时待接入",
+    ready: true,
+    status: "Paper Agent · 蓝图规划已接入",
     title: ["把教学目标，", "排成一份有依据的试卷。"],
     intro: "先确定范围、题量、题型、难度和考试时间，再形成试卷草案与双向细目表。题目来源和验证状态不会被隐藏。",
     inputLabel: "描述组卷需求",
     placeholder: "例如：组一份高二期中卷，120 分钟，覆盖函数、导数与圆锥曲线",
-    actionLabel: "运行时待接入",
-    stageLabel: "组卷工作流预览",
+    actionLabel: "整理组卷蓝图",
+    stageLabel: "组卷蓝图",
     stageTitle: "从命题边界，到试卷草案",
     examples: [
       {
@@ -579,6 +580,7 @@ export function TeacherWorkbench() {
   const searchVisible = capability === "search";
   const solveVisible = capability === "solve";
   const libraryVisible = capability === "library";
+  const paperVisible = capability === "paper";
   const authoringVisible = authoringEntry !== null;
   const runnable = searchVisible || solveVisible;
   const error = runnable ? errors[capability as "search" | "solve"] : null;
@@ -1038,6 +1040,12 @@ export function TeacherWorkbench() {
         />
       ) : libraryVisible ? (
         <PrivateLibraryWorkspace />
+      ) : paperVisible ? (
+        <PaperBlueprintWorkspace
+          initialBrief={drafts.paper}
+          onBriefChange={(brief) => setDrafts((current) => ({ ...current, paper: brief }))}
+          onOpenAuthoring={(brief) => openAuthoring("paper", brief)}
+        />
       ) : (
       <main className="marquee-workspace">
         <section className="task-pane">
@@ -1121,12 +1129,6 @@ export function TeacherWorkbench() {
               ))}
             </div>
           </section>
-          {capability === "paper" && (
-            <section className="paper-authoring-entry" aria-label="题目不足时辅助命题">
-              <div><SparkIcon /><p><strong>题目不足时，由你决定是否命题。</strong><span>这里不会自动生成、自动保存，也不会把私题加入试卷。</span></p></div>
-              <button type="button" onClick={() => openAuthoring("paper", query)}>进入辅助命题 <ArrowRightIcon /></button>
-            </section>
-          )}
         </section>
 
         <section className="visual-pane" aria-live="polite" ref={resultRegionRef}>

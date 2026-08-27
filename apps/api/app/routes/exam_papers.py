@@ -26,6 +26,10 @@ from app.modules.exam_papers import (
     ExamPaperTemplateList,
     ExamPaperUpdateCommand,
     ExamPaperView,
+    PaperBlueprintBrief,
+    PaperBlueprintDraft,
+    PaperBlueprintPlanning,
+    PaperBlueprintPlanningError,
 )
 from app.routes.questions import get_question_bank
 
@@ -49,6 +53,11 @@ def get_exam_paper_composer() -> ExamPaperComposer:
         question_bank=get_question_bank(),
         template_catalog=get_exam_paper_template_catalog(),
     )
+
+
+@lru_cache
+def get_paper_blueprint_planning() -> PaperBlueprintPlanning:
+    return PaperBlueprintPlanning()
 
 
 @lru_cache
@@ -93,6 +102,14 @@ def compose_exam_paper(command: ExamPaperComposeCommand) -> ExamPaperProposal:
     try:
         return get_exam_paper_composer().compose(command)
     except ExamPaperComposeError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.post("/blueprints/plan", response_model=PaperBlueprintDraft)
+def plan_paper_blueprint(command: PaperBlueprintBrief) -> PaperBlueprintDraft:
+    try:
+        return get_paper_blueprint_planning().plan(command)
+    except PaperBlueprintPlanningError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 

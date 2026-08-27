@@ -9,6 +9,7 @@ import type {
   GeneratedQuestionDraft,
   PersonalAuthoringDraft,
   PersonalQuestion,
+  PaperBlueprintDraft,
   QuestionInputBundle,
 } from "./contracts";
 import { HttpTeacherWorkspace } from "./http-adapter";
@@ -327,6 +328,47 @@ afterEach(() => {
 });
 
 describe("HttpTeacherWorkspace", () => {
+  it("plans a paper blueprint without submitting owner, trust facts, or persistence commands", async () => {
+    const blueprint: PaperBlueprintDraft = {
+      status: "draft",
+      editable: true,
+      confirmed: false,
+      saved: false,
+      source_brief: "组一份高二期中卷",
+      title: "高二函数期中检测",
+      grade_scope: "高二",
+      teaching_usage: "期中检测",
+      duration_minutes: 90,
+      target_score: 100,
+      difficulty_profile: "balanced",
+      knowledge_points: ["函数"],
+      sections: [{ section_id: "single", title: "单项选择题", question_type: "single_choice", question_count: 8, target_score: 100 }],
+      assumptions: [],
+      trust_policy: {
+        verification_policy: "passed_only",
+        review_policy: "approved_only",
+        private_question_policy: "explicit_owner_selection_only",
+        auto_authoring_allowed: false,
+        preserves_source_and_rights: true,
+      },
+      side_effects: [],
+    };
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify(blueprint), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(new HttpTeacherWorkspace().planPaperBlueprint("组一份高二期中卷")).resolves.toEqual(blueprint);
+
+    const url = fetchMock.mock.calls[0]?.[0];
+    const init = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    expect(url).toBe("/api/v1/exam-papers/blueprints/plan");
+    expect(init).toEqual(expect.objectContaining({ method: "POST" }));
+    expect(JSON.parse(String(init.body))).toEqual({ brief: "组一份高二期中卷" });
+    expect(String(init.body)).not.toMatch(/owner|verification|visibility|save/i);
+  });
+
   it("uploads a private question image without exposing owner or external consent", async () => {
     const bundle = questionInputBundleFixture();
     const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify(bundle), {

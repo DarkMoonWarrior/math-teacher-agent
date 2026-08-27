@@ -27,6 +27,7 @@ import {
   type PersonalQuestionCollectionList,
   type PersonalQuestionExport,
   type PersonalQuestionList,
+  type PaperBlueprintDraft,
   type QuestionAuthoringAgentResult,
   type QuestionAuthoringJob,
   type QuestionAuthoringBrief,
@@ -401,6 +402,19 @@ async function readSolveStream(
 }
 
 export class HttpTeacherWorkspace implements TeacherWorkspace {
+  planPaperBlueprint(brief: string, signal?: AbortSignal): Promise<PaperBlueprintDraft> {
+    return libraryJsonRequest(
+      "/api/v1/exam-papers/blueprints/plan",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ brief }),
+        signal,
+      },
+      "无法整理组卷蓝图。",
+    );
+  }
+
   async uploadQuestionMedia(
     request: QuestionMediaUpload,
     signal?: AbortSignal,

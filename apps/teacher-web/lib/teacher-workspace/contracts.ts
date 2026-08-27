@@ -690,7 +690,45 @@ export type PersonalQuestionExport = {
   filename: string;
 };
 
+export type PaperBlueprintDifficulty = "foundation" | "balanced" | "challenge";
+export type PaperBlueprintQuestionType = "single_choice" | "multiple_choice" | "fill_blank" | "open_response";
+
+export type PaperBlueprintSection = {
+  section_id: string;
+  title: string;
+  question_type: PaperBlueprintQuestionType;
+  question_count: number;
+  target_score: number;
+};
+
+export type PaperBlueprintDraft = {
+  status: "draft";
+  editable: true;
+  confirmed: false;
+  saved: false;
+  source_brief: string;
+  title: string;
+  grade_scope: string;
+  teaching_usage: string;
+  duration_minutes: number;
+  target_score: number;
+  difficulty_profile: PaperBlueprintDifficulty;
+  knowledge_points: string[];
+  sections: PaperBlueprintSection[];
+  assumptions: string[];
+  trust_policy: {
+    verification_policy: "passed_only";
+    review_policy: "approved_only" | "verified";
+    private_question_policy: "explicit_owner_selection_only";
+    auto_authoring_allowed: false;
+    preserves_source_and_rights: true;
+  };
+  side_effects: [];
+};
+
 export interface TeacherWorkspace {
+  planPaperBlueprint(brief: string, signal?: AbortSignal): Promise<PaperBlueprintDraft>;
+
   searchQuestions(
     request: SearchTaskRequest,
     options?: SearchTaskOptions,

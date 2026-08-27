@@ -1,4 +1,5 @@
 from app.modules.exam_papers.composer import ExamPaperComposer, ExamPaperComposeError
+from app.modules.exam_papers.planning import PaperBlueprintPlanning, PaperBlueprintPlanningError
 from app.modules.exam_papers.schemas import (
     ExamPaperComposeCommand,
     ExamPaperCreateCommand,
@@ -19,6 +20,11 @@ from app.modules.exam_papers.schemas import (
     ExamPaperTemplateSection,
     ExamPaperUpdateCommand,
     ExamPaperView,
+    PaperBlueprintBrief,
+    PaperBlueprintDraft,
+    PaperBlueprintQuestionType,
+    PaperBlueprintSection,
+    PaperBlueprintTrustPolicy,
 )
 from app.modules.exam_papers.studio import ExamPaperStudio, ExamPaperStudioError
 from app.modules.exam_papers.templates import ExamPaperTemplateCatalog, ExamPaperTemplateError
@@ -49,4 +55,11 @@ __all__ = [
     "ExamPaperTemplateSection",
     "ExamPaperUpdateCommand",
     "ExamPaperView",
+    "PaperBlueprintBrief",
+    "PaperBlueprintDraft",
+    "PaperBlueprintPlanning",
+    "PaperBlueprintPlanningError",
+    "PaperBlueprintQuestionType",
+    "PaperBlueprintSection",
+    "PaperBlueprintTrustPolicy",
 ]

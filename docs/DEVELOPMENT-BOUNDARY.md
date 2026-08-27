@@ -48,38 +48,37 @@
 
 辅助命制题使用独立 `PersonalQuestionLibrary` 模块和 owner-isolated storage namespace，不以公共 `QuestionBank` 的一个可变 visibility 字段作为唯一隔离手段。该模块没有 publish/share 接口；后台运营/内容管理员没有内容查看和管理接口。详细规则见 [`M8-PRIVATE-QUESTION-AUTHORING.md`](M8-PRIVATE-QUESTION-AUTHORING.md)。
 
-## 4. 当前阶段：M8 已完成，等待进入 M9 的确认
+## 4. 当前阶段：M9 Paper Agent 进行中
 
-M0-M8 已完成；M8 的固定评测、Gate E 与 Gate P 于 2026-08-28 通过。项目所有者查看 [`M8-GATE-REVIEW.md`](M8-GATE-REVIEW.md) 并明确确认阶段转换前，不得开始 Paper、Lesson、Memory 或其他后续阶段。
+M0-M8 已完成；M8 的固定评测、Gate E 与 Gate P 于 2026-08-28 通过。项目所有者于 2026-08-28 明确确认进入 M9。当前只开发 Paper Agent；M10 Lesson、M11 Memory 和后续阶段仍未获准启动。
 
 M8 已建立独立 `PersonalQuestionLibrary` 深模块、本地 owner-isolated SQLite namespace、身份绑定的个人题库/分类、结构化生成、六项可信检查、私有命题工作区、append-only revision、显式保存、完整 owner 管理接口及 Teacher Web 入口。教师只需描述命题意图；教材知识点、细分知识点、考查方法和易错点由 Agent 在生成后归纳。provider 先生成不含答案的题面与选项，再独立审核；题面错误进入完善、复审和重新解析，解析错误保留题面并重生成解析。标准答案只从完整解析推导并接受最终一致性审核。只有题面、选项、可读解析和答案闭环一致后才能建立草稿。命题限定普通高中数学，明确大学专属术语经受控重写后仍越界才终止。后台任务独立于页面生命周期并可恢复；owner 可显式取消，且取消在私人草稿写入前再次检查，保证不提交半成品。模型只能选择受控 Curriculum 节点；浏览器不能提交 owner、隐私状态或可信证据；Agent 没有保存、管理、发布、共享或删除权限。
 
+M9 的固定范围、切片顺序和验收见 [`M9-PAPER-AGENT.md`](M9-PAPER-AGENT.md)。当前第一切片只建立 `PaperBlueprintPlanning.plan(PaperBlueprintBrief) -> PaperBlueprintDraft`：将自然语言整理为可编辑、未确认、未保存的蓝图，不查询题目、不生成题目、不写入存储。
+
 本阶段允许：
 
-- 建立 `QuestionAuthoring.create_draft(QuestionDesignBrief) -> GeneratedQuestionDraft`，隐藏需求补全、Curriculum、provider、结构检查、MathVerifier 和错误语义；
-- 在 `apps/teacher-web` 接入 Search 空/不合适结果、“新任务”和未来 Paper 明确询问三个入口，并保持 AI 生成题与真实检索题视觉和数据分离；
-- 接入 Search 空/不合适结果和“新任务”两个现有入口，并为未来 Paper 保留只询问、不自动生成的入口契约；
-- 使用 synthetic provider 和项目自建题目验证结构、数学可信状态、取消/失败及隐私语义；
-- 只记录不含完整提示与题目正文的最小运行元数据。
+- 建立自然语言到可编辑 `PaperBlueprint` 的深模块与 FastAPI 产品接口；
+- 在 `apps/teacher-web` 接入蓝图规划、可见默认假设和本地编辑；
+- 后续切片在教师确认蓝图后复用既有组卷、版本快照和导出业务模块；
+- 使用项目自建 synthetic 需求和题目验证蓝图、选题、权利、验证、相似度、覆盖、难度和导出语义。
 
 本阶段禁止：
 
-- 把辅助命制题写入、复制到或映射为公共 `QuestionBank` 记录；
-- 提供 publish/share/public/team/school/commercial-approved 状态或接口；
-- 让 Agent、模型、浏览器或管理员选择 owner、自动保存、覆盖或永久删除；
-- 把 Search 结果和生成题混合展示，或在 Search 空结果时自动生成；
-- 为未来 Paper 凑题而自动命题、自动保存或自动加入试卷；
-- 允许后台运营、内容管理员、其他 owner 或模型训练流程读取私题内容；
-- 把模型生成或排版成功冒充 MathVerifier 验证；
-- 提前开发 M9 Paper、M10 Lesson、M11 Memory、账号、支付、多租户、教研组、学校后台或学生功能。
+- 在蓝图规划阶段查题、选题、生成题目、保存蓝图或建立试卷；
+- 为满足题量自动命题、自动保存私题或自动加入试卷；
+- 让 Agent、模型或浏览器选择 owner、rights、verification、visibility 或发布状态；
+- 复制私题、改变私题 owner/visibility，或让其他 owner、管理员、公共 Search 和训练流程读取私题；
+- 把模型判断、排版成功或教师确认蓝图冒充 MathVerifier 验证或正式试卷保存；
+- 提前开发 M10 Lesson、M11 Memory、账号、支付、多租户、教研组、学校后台或学生功能。
 
-## 5. M8 完成 Gate
+## 5. M9 当前 Gate
 
-M8 已同时满足 [`M8-PRIVATE-QUESTION-AUTHORING.md`](M8-PRIVATE-QUESTION-AUTHORING.md) 的功能 Gate、[`PRODUCT-GATES.md`](PRODUCT-GATES.md) 的 Gate E 与 Gate P。26 场景固定 synthetic evaluation、跨 owner/IDOR/公共搜索泄漏/后台权限测试、完整工程回归和响应式/可访问性验收均已完成，证据见 [`M8-GATE-REVIEW.md`](M8-GATE-REVIEW.md)。
+M9 尚未完成。第一切片只验收蓝图规划接口、总分守恒、显式默认假设、无副作用和 Teacher Web 可编辑性；完整 M9 仍需通过权利、验证、重复/相似、覆盖、难度、私题 owner/visibility、保存版本和导出 Gate。
 
 ## 6. 下一阶段启动条件
 
-只有 M8 Gate E 与 Gate P 完整通过、变更形成可回滚提交并由项目所有者再次确认后，才进入 M9 Paper Agent。
+只有 M9 全部功能、可信、隐私/权利和工程 Gate 通过、变更形成可回滚提交并由项目所有者再次确认后，才进入 M10 Lesson Agent。
 
 后续顺序以 [`ROADMAP.md`](ROADMAP.md) 为准：Solve → Private Library → 多模态图片解题 → 私有辅助命题 → Paper → Lesson → Memory → Beta 准备 → Beta 验证 → 商业基础 → Teacher Pro → 教研组 → 学校。
 
