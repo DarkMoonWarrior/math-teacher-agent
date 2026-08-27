@@ -22,7 +22,7 @@ from app.modules.question_authoring.schemas import (
 from app.modules.question_authoring.scope import university_only_terms
 
 
-PROMPT_REVISION = "question-authoring-v11-closed-loop-fault-recovery"
+PROMPT_REVISION = "question-authoring-v12-tolerant-final-audit"
 
 QuestionAuthoringProgressStage = Literal[
     "composing",
@@ -196,8 +196,16 @@ class _CompletedSolutionReview(BaseModel):
     answer_consistent: bool
     summary: str = Field(min_length=1, max_length=4000)
     issues: list[str] = Field(default_factory=list, max_length=10)
-    independent_answer_value: str = Field(min_length=1, max_length=4000)
-    independent_final_answer: str = Field(min_length=1, max_length=4000)
+    independent_answer_value: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=4000,
+    )
+    independent_final_answer: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=4000,
+    )
 
 
 class _SolutionSubplan(BaseModel):
@@ -341,7 +349,7 @@ class DeepSeekQuestionAuthoringProvider:
             raise QuestionAuthoringProviderError(str(exc)) from exc
         except (KeyError, TypeError, ValueError) as exc:
             raise QuestionAuthoringProviderError(
-                f"DeepSeek 返回内容不符合命题草稿结构：{exc}"
+                "命题模型返回了不完整的结构化内容，系统未建立半成品草稿，请重试"
             ) from exc
 
     def _solve_reviewed_statement(
@@ -943,6 +951,7 @@ class DeepSeekQuestionAuthoringProvider:
                 "解析推出的答案是否与标准答案一致、选择题是否恰有规定数量的正确选项。"
                 "只有这些项目全部成立时 passed 才能为 true；任一项目无法确认都必须失败。"
                 "同时返回你独立求得的 answer_value 与 final_answer 供服务端交叉核验。"
+                "若复核失败且确实无法得到独立答案，这两个字段返回 null，不得省略其他判责字段。"
                 "如果完整求解暴露出题面条件不可能、结论不唯一或问题无解，必须明确设置 question_valid=false，"
                 "使系统返回完善题面步骤，而不是把它伪装成解析问题。若题面本身成立，"
                 "但当前解析步骤、解析结论或标准答案错误，则必须保持 question_valid=true，"
@@ -959,6 +968,21 @@ class DeepSeekQuestionAuthoringProvider:
             recovery_instruction="只修复最终复核 JSON；不得修改题面、解析或标准答案。",
         )
         review = _CompletedSolutionReview.model_validate(payload)
+        has_independent_answers = bool(
+            review.independent_answer_value and review.independent_final_answer
+        )
+        if review.passed and not has_independent_answers:
+            review = review.model_copy(
+                update={
+                    "passed": False,
+                    "solution_valid": False,
+                    "answer_consistent": False,
+                    "issues": [
+                        *review.issues,
+                        "最终复核没有返回独立求解答案，当前解析必须重新生成并复核。",
+                    ],
+                }
+            )
         if review.passed and review.issues:
             review = review.model_copy(update={"passed": False})
         if not review.passed and not review.issues:
@@ -971,13 +995,20 @@ class DeepSeekQuestionAuthoringProvider:
                 issues=review.issues or ["完整求解无法确认题面成立。"],
             )
         solution_matches_final_review = True
-        if core.question_type in {"single_choice", "multiple_choice"}:
+        if not has_independent_answers:
+            solution_matches_final_review = False
+        elif core.question_type in {"single_choice", "multiple_choice"}:
             expected = self._choice_answer_keys(core, conclusion.answer_value)
-            post_review = self._choice_answer_keys(core, review.independent_answer_value)
+            post_review = self._choice_answer_keys(
+                core,
+                review.independent_answer_value or "",
+            )
             solution_matches_final_review = expected == post_review
         elif core.question_type == "fill_blank":
             expected = self._normalized_answer_text(conclusion.answer_value)
-            post_review = self._normalized_answer_text(review.independent_answer_value)
+            post_review = self._normalized_answer_text(
+                review.independent_answer_value or ""
+            )
             solution_matches_final_review = expected == post_review
 
         if not (
@@ -987,7 +1018,9 @@ class DeepSeekQuestionAuthoringProvider:
             and solution_matches_final_review
         ):
             issues = list(review.issues)
-            if not solution_matches_final_review:
+            if not has_independent_answers:
+                issues.append("最终复核未返回独立答案。")
+            elif not solution_matches_final_review:
                 issues.append("解析所得答案与最终独立复核答案不一致。")
             raise _SolutionInvalidAfterReview(
                 summary=review.summary,
@@ -1237,8 +1270,16 @@ class DeepSeekQuestionAuthoringProvider:
                 "maxItems": 10,
                 "items": {"type": "string", "minLength": 1, "maxLength": 2000},
             },
-            "independent_answer_value": {"type": "string", "minLength": 1, "maxLength": 4000},
-            "independent_final_answer": {"type": "string", "minLength": 1, "maxLength": 4000},
+            "independent_answer_value": {
+                "type": ["string", "null"],
+                "minLength": 1,
+                "maxLength": 4000,
+            },
+            "independent_final_answer": {
+                "type": ["string", "null"],
+                "minLength": 1,
+                "maxLength": 4000,
+            },
         }
         return cls._schema(
             "private_question_authoring_completed_solution_review",
