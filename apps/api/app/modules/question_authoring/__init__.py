@@ -8,6 +8,7 @@ from .providers import (
     PROMPT_REVISION,
     DeepSeekQuestionAuthoringProvider,
     QuestionAuthoringContext,
+    QuestionAuthoringProgressStage,
     QuestionAuthoringProvider,
     QuestionAuthoringProviderError,
 )
@@ -35,6 +36,7 @@ __all__ = [
     "QuestionAuthoring",
     "QuestionAuthoringClarificationRequired",
     "QuestionAuthoringContext",
+    "QuestionAuthoringProgressStage",
     "QuestionAuthoringError",
     "QuestionAuthoringProvider",
     "QuestionAuthoringProviderError",

@@ -14,7 +14,7 @@ from app.agent_runtime import (
     TeacherAgentRuntime,
     get_teacher_agent_runtime,
 )
-from app.modules.question_authoring import GeneratedQuestionDraft, QuestionDesignBrief
+from app.modules.question_authoring import GeneratedQuestionDraft
 from app.modules.question_authoring_agent.domain import (
     QuestionAuthoringAgentCommand,
     QuestionAuthoringAgentResponse,
@@ -52,7 +52,7 @@ class QuestionAuthoringAgentWorkflow:
         try:
             result = await runtime.run(
                 self._runtime_request(
-                    command.brief,
+                    command,
                     request_id=request_id,
                     session_id=command.session_id,
                     owner_id=owner_id,
@@ -68,11 +68,11 @@ class QuestionAuthoringAgentWorkflow:
                 code=TeacherAgentErrorCode.INTERNAL_ERROR,
                 message="辅助命题 Agent Runtime 执行异常",
             )
-        return self._response_from_run(command.brief, result, request_id=request_id)
+        return self._response_from_run(command, result, request_id=request_id)
 
     def _response_from_run(
         self,
-        brief: QuestionDesignBrief,
+        command: QuestionAuthoringAgentCommand,
         result: TeacherAgentRunResult,
         *,
         request_id: str,
@@ -116,7 +116,11 @@ class QuestionAuthoringAgentWorkflow:
                 tool_call_count=len(result.tool_calls),
             )
         call = authoring_calls[0]
-        if call.input != brief.model_dump(mode="json", exclude_none=True):
+        brief = command.brief
+        expected_input = brief.model_dump(mode="json", exclude_none=True)
+        if command.progress_id:
+            expected_input["progress_id"] = command.progress_id
+        if call.input != expected_input:
             return self._error_response(
                 request_id=request_id,
                 run_id=result.run_id,
@@ -161,14 +165,17 @@ class QuestionAuthoringAgentWorkflow:
 
     @staticmethod
     def _runtime_request(
-        brief: QuestionDesignBrief,
+        command: QuestionAuthoringAgentCommand,
         *,
         request_id: str,
         session_id: str | None,
         owner_id: str,
     ) -> TeacherAgentRunRequest:
+        tool_input = command.brief.model_dump(mode="json", exclude_none=True)
+        if command.progress_id:
+            tool_input["progress_id"] = command.progress_id
         brief_json = json.dumps(
-            brief.model_dump(mode="json", exclude_none=True),
+            tool_input,
             ensure_ascii=False,
             separators=(",", ":"),
         )

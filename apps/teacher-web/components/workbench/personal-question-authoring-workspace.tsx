@@ -331,8 +331,6 @@ export function PersonalQuestionAuthoringWorkspace({
     setGenerationStage("brief");
     setBusy("generating");
     try {
-      await Promise.resolve();
-      setGenerationStage("agent");
       const response = await teacherWorkspace.createQuestionAuthoringDraft({
         requestText: requestText.trim(),
         grade: grade || undefined,
@@ -342,6 +340,8 @@ export function PersonalQuestionAuthoringWorkspace({
         expectedMinutes: expectedMinutes ? Number(expectedMinutes) : undefined,
         additionalConstraints: constraints.trim(),
         sessionId: sessionRef.current,
+      }, {
+        onProgress: setGenerationStage,
       });
       if (sequence !== requestRef.current || !response.draft) return;
       setGenerationStage("staging");

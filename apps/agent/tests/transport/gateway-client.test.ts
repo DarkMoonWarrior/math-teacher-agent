@@ -168,7 +168,7 @@ describe("ToolGatewayClient", () => {
   it("辅助命题只向固定 route 发送教师确认的 brief，不发送 owner 或保存动作", async () => {
     stub.handlers[CREATE_QUESTION_DRAFT_ROUTE] = ({ body }) => gatewayJson(200, {
       draft: {
-        request_text: body.request_text,
+        request_text: (body.brief as Record<string, unknown>).request_text,
         visibility: "owner_only",
         saved: false,
         source_type: "ai_generated",
@@ -187,10 +187,12 @@ describe("ToolGatewayClient", () => {
     expect(result.ok).toBe(true);
     const call = stub.requests.find((request) => request.route === CREATE_QUESTION_DRAFT_ROUTE);
     expect(call?.body).toMatchObject({
-      request_text: "围绕函数单调性命制一道单选题。",
-      curriculum_node_id: "kp_monotonicity",
-      question_type: "single_choice",
-      target_difficulty: 2,
+      brief: {
+        request_text: "围绕函数单调性命制一道单选题。",
+        curriculum_node_id: "kp_monotonicity",
+        question_type: "single_choice",
+        target_difficulty: 2,
+      },
     });
     expect(call?.body).not.toHaveProperty("owner_id");
     expect(call?.body).not.toHaveProperty("save");

@@ -3,8 +3,8 @@ from __future__ import annotations
 import json
 import re
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass
-from typing import Protocol
+from dataclasses import dataclass, field
+from typing import Callable, Literal, Protocol
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -22,7 +22,10 @@ from app.modules.question_authoring.schemas import (
 from app.modules.question_authoring.scope import university_only_terms
 
 
-PROMPT_REVISION = "question-authoring-v7-high-school-choice-contract"
+PROMPT_REVISION = "question-authoring-v8-core-review-before-solution"
+
+QuestionAuthoringProgressStage = Literal["composing", "reviewing", "solving"]
+QUESTION_REPAIR_ATTEMPTS = 3
 
 
 _DELIBERATION_PATTERNS = (
@@ -68,6 +71,15 @@ class QuestionAuthoringContext:
     question_type: QuestionType
     curriculum: QuestionDraftCurriculum | None
     curriculum_options: tuple[QuestionDraftCurriculum, ...]
+    on_progress: Callable[[QuestionAuthoringProgressStage], None] | None = field(
+        default=None,
+        compare=False,
+        repr=False,
+    )
+
+    def report_progress(self, stage: QuestionAuthoringProgressStage) -> None:
+        if self.on_progress is not None:
+            self.on_progress(stage)
 
 
 class QuestionAuthoringProvider(Protocol):
@@ -94,6 +106,16 @@ class _QuestionCore(BaseModel):
     answer_value: str = Field(min_length=1, max_length=4000)
     final_answer: str = Field(min_length=1, max_length=4000)
     estimated_difficulty: int = Field(ge=1, le=5)
+
+
+class _QuestionReview(BaseModel):
+    """Adversarial review of the immutable question core before solution work."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    passed: bool
+    summary: str = Field(min_length=1, max_length=500)
+    issues: list[str] = Field(default_factory=list, max_length=10)
 
 
 class _SolutionPlanSection(BaseModel):
@@ -167,6 +189,7 @@ class DeepSeekQuestionAuthoringProvider:
     def generate(self, context: QuestionAuthoringContext) -> ProviderQuestionDraft:
         provider_input = self._provider_input(context)
         try:
+            context.report_progress("composing")
             core_payload = self._request_stage(
                 stage="core",
                 instructions=(
@@ -198,6 +221,9 @@ class DeepSeekQuestionAuthoringProvider:
             self._normalize_non_choice_answer(core_payload)
             core = _QuestionCore.model_validate(core_payload)
             core = self._repair_university_scope(core, provider_input)
+            context.report_progress("reviewing")
+            core = self._review_and_repair_question(core, provider_input)
+            context.report_progress("solving")
 
             plan: _SolutionPlan | None = None
             try:
@@ -619,6 +645,86 @@ class DeepSeekQuestionAuthoringProvider:
             )
         return repaired
 
+    def _review_and_repair_question(
+        self,
+        core: _QuestionCore,
+        provider_input: dict,
+    ) -> _QuestionCore:
+        review = self._review_question_core(core, stage="question-review")
+        if review.passed:
+            return core
+        rejected = core
+        for attempt in range(1, QUESTION_REPAIR_ATTEMPTS + 1):
+            suffix = "" if attempt == 1 else f"-{attempt}"
+            repaired_payload = self._request_stage(
+                stage=f"core-question-repair{suffix}",
+                instructions=(
+                    f"这是第 {attempt}/{QUESTION_REPAIR_ATTEMPTS} 次题面修订。上一版题面未通过生成前自审核。"
+                    "请依据审核问题完整重写题面、选项和最终答案，不要解释旧题，也不要进入解析。"
+                    "必须重新独立计算所有数值、取值范围和选择题正确选项，逐项消除 review_issues，"
+                    "不能只改文字或继续沿用未经复算的锁定答案。修订后必须条件相容、存在高中范围内"
+                    "的有效对象、全部小问可作答、锁定答案可由题面推出；选择题还必须有完整且互不"
+                    "重复的选项，单选恰有一个正确选项，多选答案集合明确。不得通过删除教师要求、"
+                    "降低难度或改成另一题型来绕过问题。题干与选项继续严格分离。"
+                    f"{MATH_DISPLAY_INSTRUCTIONS}"
+                ),
+                input_value={
+                    "design_brief": provider_input["design_brief"],
+                    "resolved_question_type": provider_input["resolved_question_type"],
+                    "rejected_question_core": rejected.model_dump(mode="json"),
+                    "review_summary": review.summary,
+                    "review_issues": review.issues,
+                },
+                output_schema=self._core_schema(),
+                max_tokens=8192,
+                recovery_instruction="只修复 JSON；完整返回复算后的题面、全部选项和锁定答案。",
+            )
+            self._normalize_non_choice_answer(repaired_payload)
+            repaired = _QuestionCore.model_validate(repaired_payload)
+            repaired = self._repair_university_scope(repaired, provider_input)
+            review = self._review_question_core(
+                repaired,
+                stage=f"question-review-repair-check{suffix}",
+            )
+            if review.passed:
+                return repaired
+            rejected = repaired
+
+        raise QuestionAuthoringProviderError(
+            "题面经过多轮修订后仍未通过生成前自审核，未进入解析。请重新生成题目。"
+        )
+
+    def _review_question_core(
+        self,
+        core: _QuestionCore,
+        *,
+        stage: str,
+    ) -> _QuestionReview:
+        payload = self._request_stage(
+            stage=stage,
+            instructions=(
+                "你是独立于命题步骤的高中数学题面审核器。只审核已经锁定的题面、选项和答案，"
+                "在本阶段严禁生成解析。请在内部逐项代入、求解或构造反例，并检查："
+                "(1) 几何、代数、概率与取值范围条件是否相容且对象真实存在；"
+                "(2) 每个小问是否信息充分、表述无歧义且能在高中范围内作答；"
+                "(3) 锁定答案是否确实可由题面推出；"
+                "(4) 选择题是否包含完整选项，并符合单选唯一正确或多选答案集合；"
+                "(5) 是否暗含大学专属概念。"
+                "任何一项无法确认都必须 passed=false；不得因为后续可以提示教师复核而放行。"
+                "输出只写审核结论和简洁问题清单，不得泄露试算过程或思维链。"
+            ),
+            input_value={"question_core": core.model_dump(mode="json")},
+            output_schema=self._question_review_schema(),
+            max_tokens=1800,
+            recovery_instruction="只修复审核 JSON；不得生成解析或修改题面。",
+        )
+        review = _QuestionReview.model_validate(payload)
+        if review.passed and review.issues:
+            raise ValueError("题面审核通过时 issues 必须为空")
+        if not review.passed and not review.issues:
+            raise ValueError("题面审核未通过时必须给出至少一个明确问题")
+        return review
+
     @staticmethod
     def _provider_input(context: QuestionAuthoringContext) -> dict:
         return {
@@ -703,6 +809,19 @@ class DeepSeekQuestionAuthoringProvider:
             "estimated_difficulty": {"type": "integer", "minimum": 1, "maximum": 5},
         }
         return cls._schema("private_question_authoring_core", properties)
+
+    @classmethod
+    def _question_review_schema(cls) -> dict:
+        properties = {
+            "passed": {"type": "boolean"},
+            "summary": {"type": "string", "minLength": 1, "maxLength": 500},
+            "issues": {
+                "type": "array",
+                "maxItems": 10,
+                "items": {"type": "string", "minLength": 1, "maxLength": 500},
+            },
+        }
+        return cls._schema("private_question_authoring_question_review", properties)
 
     @classmethod
     def _solution_plan_schema(cls) -> dict:

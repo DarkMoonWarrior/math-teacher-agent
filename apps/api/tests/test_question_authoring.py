@@ -188,6 +188,14 @@ class FakeProvider:
         )
 
 
+def passing_question_review() -> dict[str, object]:
+    return {
+        "passed": True,
+        "summary": "题面条件相容、可解，锁定答案与题面一致。",
+        "issues": [],
+    }
+
+
 def test_deepseek_provider_recovers_empty_non_choice_answer_value() -> None:
     core_payload = {
         "question_type": "open_response",
@@ -216,6 +224,8 @@ def test_deepseek_provider_recovers_empty_non_choice_answer_value() -> None:
             schema_name = kwargs["output_schema"]["name"]  # type: ignore[index]
             if schema_name == "private_question_authoring_core":
                 payload = core_payload
+            elif schema_name == "private_question_authoring_question_review":
+                payload = passing_question_review()
             elif schema_name == "private_question_authoring_solution_plan":
                 payload = plan_payload
             else:
@@ -283,6 +293,8 @@ def test_deepseek_provider_assembles_a_long_solution_from_bounded_sections() -> 
                     "final_answer": "三问结论依次为 $1$、$2$、$3$。",
                     "estimated_difficulty": 5,
                 }
+            elif schema_name == "private_question_authoring_question_review":
+                payload = passing_question_review()
             elif schema_name == "private_question_authoring_solution_plan":
                 payload = {
                     "solution_method": "解析几何与代数运算综合法",
@@ -334,6 +346,195 @@ def test_deepseek_provider_assembles_a_long_solution_from_bounded_sections() -> 
     assert calls.count("private_question_authoring_solution_section") == 4
 
 
+def test_deepseek_provider_reviews_and_repairs_an_impossible_question_before_solution() -> None:
+    calls: list[str] = []
+    progress: list[str] = []
+    review_count = 0
+
+    class FakeDeepSeekClient:
+        def request(self, **kwargs: object) -> dict:
+            nonlocal review_count
+            schema_name = kwargs["output_schema"]["name"]  # type: ignore[index]
+            action = str(kwargs["action"])
+            calls.append(action)
+            if action == "辅助命题（core）":
+                payload = {
+                    "question_type": "single_choice",
+                    "stem_plain": "在直角三角形 ABF₁ 中，AB⊥AF₁，AF₁=8，BF₁=6，求离心率。",
+                    "stem_latex": "在直角三角形 $ABF_1$ 中，$AB\\perp AF_1$，$AF_1=8$，$BF_1=6$，求离心率。",
+                    "options": [
+                        {"key": "A", "text": "$\\frac{1}{2}$"},
+                        {"key": "B", "text": "$\\frac{2}{3}$"},
+                        {"key": "C", "text": "$\\frac{3}{4}$"},
+                        {"key": "D", "text": "$\\frac{4}{5}$"},
+                    ],
+                    "answer_value": "C",
+                    "final_answer": "C",
+                    "estimated_difficulty": 4,
+                }
+            elif schema_name == "private_question_authoring_question_review":
+                review_count += 1
+                payload = (
+                    {
+                        "passed": False,
+                        "summary": "直角三角形的斜边 BF₁=6 小于直角边 AF₁=8，题设无实数解。",
+                        "issues": ["BF₁ 是斜边却短于 AF₁，几何条件矛盾。"],
+                    }
+                    if review_count == 1
+                    else {
+                        "passed": True,
+                        "summary": "修订后斜边长于两条直角边，题面可解且选项包含唯一答案。",
+                        "issues": [],
+                    }
+                )
+            elif action == "辅助命题（core-question-repair）":
+                payload = {
+                    "question_type": "single_choice",
+                    "stem_plain": "在直角三角形 ABF₁ 中，AB⊥AF₁，AF₁=8，BF₁=10，求 AB 的长。",
+                    "stem_latex": "在直角三角形 $ABF_1$ 中，$AB\\perp AF_1$，$AF_1=8$，$BF_1=10$，求 $AB$ 的长。",
+                    "options": [
+                        {"key": "A", "text": "$4$"},
+                        {"key": "B", "text": "$6$"},
+                        {"key": "C", "text": "$8$"},
+                        {"key": "D", "text": "$10$"},
+                    ],
+                    "answer_value": "B",
+                    "final_answer": "B",
+                    "estimated_difficulty": 2,
+                }
+            elif schema_name == "private_question_authoring_solution_plan":
+                payload = {
+                    "solution_method": "勾股定理",
+                    "sections": [{"order": 1, "title": "计算", "goal": "利用勾股定理求边长"}],
+                    "authoring_intent": "审核几何条件后考查勾股定理。",
+                    "curriculum_node_id": None,
+                    "knowledge_points": ["勾股定理"],
+                    "assessed_methods": ["直接计算"],
+                    "common_mistakes": ["误判斜边"],
+                }
+            else:
+                payload = {"order": 1, "steps": ["由勾股定理，$AB=\\sqrt{10^2-8^2}=6$，故选 B。"]}
+            text = json.dumps(payload, ensure_ascii=False)
+            return {"output": [{"type": "message", "content": [{"type": "output_text", "text": text}]}]}
+
+    provider = DeepSeekQuestionAuthoringProvider(
+        api_key="test-key",
+        model="deepseek-v4-flash",
+        base_url="https://api.deepseek.com",
+    )
+    provider.client = FakeDeepSeekClient()  # type: ignore[assignment]
+
+    content = provider.generate(
+        QuestionAuthoringContext(
+            brief=QuestionDesignBrief(
+                request_text="命制一道结合圆锥曲线背景的三角形选择题",
+                question_type="single_choice",
+                target_difficulty=4,
+            ),
+            question_type="single_choice",
+            curriculum=None,
+            curriculum_options=(),
+            on_progress=progress.append,
+        )
+    )
+
+    assert "BF₁=10" in content.stem_plain
+    assert "BF₁=6" not in content.stem_plain
+    assert content.answer_value == "B"
+    assert content.solution_status == "ready"
+    assert progress == ["composing", "reviewing", "solving"]
+    assert calls == [
+        "辅助命题（core）",
+        "辅助命题（question-review）",
+        "辅助命题（core-question-repair）",
+        "辅助命题（question-review-repair-check）",
+        "辅助命题（solution-plan）",
+        "辅助命题（solution-section-1）",
+    ]
+
+
+def test_deepseek_provider_stops_before_solution_when_repaired_question_still_fails_review() -> None:
+    calls: list[str] = []
+
+    class FakeDeepSeekClient:
+        def request(self, **kwargs: object) -> dict:
+            schema_name = kwargs["output_schema"]["name"]  # type: ignore[index]
+            action = str(kwargs["action"])
+            calls.append(action)
+            if schema_name == "private_question_authoring_core":
+                payload = {
+                    "question_type": "single_choice",
+                    "stem_plain": "在直角三角形中，斜边长 6，一条直角边长 8，求另一条直角边。",
+                    "stem_latex": "在直角三角形中，斜边长 $6$，一条直角边长 $8$，求另一条直角边。",
+                    "options": [
+                        {"key": "A", "text": "$2$"},
+                        {"key": "B", "text": "$4$"},
+                        {"key": "C", "text": "$6$"},
+                        {"key": "D", "text": "$10$"},
+                    ],
+                    "answer_value": "B",
+                    "final_answer": "B",
+                    "estimated_difficulty": 3,
+                }
+            elif schema_name == "private_question_authoring_question_review":
+                payload = {
+                    "passed": False,
+                    "summary": "斜边短于直角边，题面矛盾。",
+                    "issues": ["斜边长 6 小于直角边长 8。"],
+                }
+            elif action.startswith("辅助命题（core-question-repair"):
+                payload = {
+                    "question_type": "single_choice",
+                    "stem_plain": "在直角三角形中，斜边长 6，一条直角边长 8，求另一条直角边。",
+                    "stem_latex": "在直角三角形中，斜边长 $6$，一条直角边长 $8$，求另一条直角边。",
+                    "options": [
+                        {"key": "A", "text": "$2$"},
+                        {"key": "B", "text": "$4$"},
+                        {"key": "C", "text": "$6$"},
+                        {"key": "D", "text": "$10$"},
+                    ],
+                    "answer_value": "B",
+                    "final_answer": "B",
+                    "estimated_difficulty": 3,
+                }
+            else:
+                pytest.fail(f"题面未通过自审核时不应进入解析阶段：{action}")
+            text = json.dumps(payload, ensure_ascii=False)
+            return {"output": [{"type": "message", "content": [{"type": "output_text", "text": text}]}]}
+
+    provider = DeepSeekQuestionAuthoringProvider(
+        api_key="test-key",
+        model="deepseek-v4-flash",
+        base_url="https://api.deepseek.com",
+    )
+    provider.client = FakeDeepSeekClient()  # type: ignore[assignment]
+
+    with pytest.raises(QuestionAuthoringProviderError, match="未进入解析"):
+        provider.generate(
+            QuestionAuthoringContext(
+                brief=QuestionDesignBrief(
+                    request_text="命制一道直角三角形选择题",
+                    question_type="single_choice",
+                    target_difficulty=3,
+                ),
+                question_type="single_choice",
+                curriculum=None,
+                curriculum_options=(),
+            )
+        )
+
+    assert calls == [
+        "辅助命题（core）",
+        "辅助命题（question-review）",
+        "辅助命题（core-question-repair）",
+        "辅助命题（question-review-repair-check）",
+        "辅助命题（core-question-repair-2）",
+        "辅助命题（question-review-repair-check-2）",
+        "辅助命题（core-question-repair-3）",
+        "辅助命题（question-review-repair-check-3）",
+    ]
+
+
 def test_deepseek_provider_rewrites_deliberative_solution_before_returning() -> None:
     calls: Counter[str] = Counter()
 
@@ -351,6 +552,8 @@ def test_deepseek_provider_rewrites_deliberative_solution_before_returning() -> 
                     "final_answer": "参数范围为 $(-\\infty,-1)\\cup(1,+\\infty)$。",
                     "estimated_difficulty": 5,
                 }
+            elif schema_name == "private_question_authoring_question_review":
+                payload = passing_question_review()
             elif schema_name == "private_question_authoring_solution_plan":
                 payload = {
                     "solution_method": "解析几何法",
@@ -425,6 +628,8 @@ def test_deepseek_provider_preserves_complete_question_when_solution_conflicts()
                     "final_answer": "答案为 B，即 $\\frac{2}{3}$。",
                     "estimated_difficulty": 5,
                 }
+            elif schema_name == "private_question_authoring_question_review":
+                payload = passing_question_review()
             elif schema_name == "private_question_authoring_solution_plan":
                 payload = {
                     "solution_method": "建立数列递推并求事件概率。",
@@ -485,8 +690,8 @@ def test_deepseek_provider_preserves_complete_question_when_solution_stage_fails
     class FakeDeepSeekClient:
         def request(self, **kwargs: object) -> dict:
             schema_name = kwargs["output_schema"]["name"]  # type: ignore[index]
-            payload = (
-                {
+            if schema_name == "private_question_authoring_core":
+                payload = {
                     "question_type": "open_response",
                     "stem_plain": "已知数列满足递推关系，求其通项并证明所得结论。",
                     "stem_latex": "已知数列满足递推关系，求其通项并证明所得结论。",
@@ -495,9 +700,10 @@ def test_deepseek_provider_preserves_complete_question_when_solution_stage_fails
                     "final_answer": "完整结论已锁定。",
                     "estimated_difficulty": 5,
                 }
-                if schema_name == "private_question_authoring_core"
-                else {}
-            )
+            elif schema_name == "private_question_authoring_question_review":
+                payload = passing_question_review()
+            else:
+                payload = {}
             text = json.dumps(payload, ensure_ascii=False)
             return {"output": [{"type": "message", "content": [{"type": "output_text", "text": text}]}]}
 
@@ -545,6 +751,8 @@ def test_deepseek_provider_retries_only_the_failed_solution_section() -> None:
                     "final_answer": "最终结论",
                     "estimated_difficulty": 5,
                 }
+            elif schema_name == "private_question_authoring_question_review":
+                payload = passing_question_review()
             elif schema_name == "private_question_authoring_solution_plan":
                 payload = {
                     "solution_method": "解析几何法",
@@ -613,6 +821,8 @@ def test_deepseek_provider_subdivides_only_a_persistently_truncated_section() ->
                     "final_answer": "最终结论",
                     "estimated_difficulty": 5,
                 }
+            elif schema_name == "private_question_authoring_question_review":
+                payload = passing_question_review()
             elif schema_name == "private_question_authoring_solution_plan":
                 payload = {
                     "solution_method": "解析几何法",

@@ -12,6 +12,12 @@ class QuestionAuthoringAgentCommand(BaseModel):
 
     brief: QuestionDesignBrief
     session_id: str | None = Field(default=None, max_length=160)
+    progress_id: str | None = Field(
+        default=None,
+        min_length=20,
+        max_length=160,
+        pattern=r"^qap_[A-Za-z0-9_-]+$",
+    )
 
 
 class QuestionAuthoringAgentResponse(BaseModel):
