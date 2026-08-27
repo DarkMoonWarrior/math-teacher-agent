@@ -355,7 +355,7 @@ export function PersonalQuestionAuthoringWorkspace({
       setNotice(
         staged.current.draft.solution_status === "needs_teacher_verification"
           ? "草稿未通过题面、解析与答案一致性检查，请先校订或重新生成解析。"
-          : "草稿已生成，标准答案来自完整解析并已通过交叉审核；保存前仍请教师复核。",
+          : "已生成完整题目：题面、解析与解析所得标准答案已通过闭环一致性审核。",
       );
       window.requestAnimationFrame(() => document.querySelector<HTMLElement>("#authoring-draft")?.scrollIntoView({ behavior: "smooth", block: "start" }));
     } catch (cause) {
@@ -443,7 +443,7 @@ export function PersonalQuestionAuthoringWorkspace({
       setNotice(
         regenerated.current.draft.solution_status === "needs_teacher_verification"
           ? `题面和选项保持不变；REV ${regenerated.current_revision} 的解析与新推导答案仍未通过一致性检查。`
-          : `解析已重新生成并记录为 REV ${regenerated.current_revision}；题面和选项保持不变，标准答案已按新解析更新。`,
+          : `解析已重新生成并记录为 REV ${regenerated.current_revision}；题面和选项保持不变，新解析与标准答案已通过一致性审核。`,
       );
       window.requestAnimationFrame(() => document.querySelector<HTMLElement>(".authoring-draft__solution")?.scrollIntoView({ behavior: "smooth", block: "start" }));
     } catch (cause) {

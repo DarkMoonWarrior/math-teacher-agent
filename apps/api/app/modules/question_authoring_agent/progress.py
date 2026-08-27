@@ -14,6 +14,8 @@ QuestionAuthoringProgressStage = Literal[
     "reviewing",
     "refining",
     "solving",
+    "reviewing_solution",
+    "regenerating_solution",
     "staging",
 ]
 

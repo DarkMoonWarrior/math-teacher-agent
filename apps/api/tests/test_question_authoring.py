@@ -486,7 +486,13 @@ def test_deepseek_provider_reviews_and_repairs_an_impossible_question_before_sol
     assert "BF₁=6" not in content.stem_plain
     assert content.answer_value == "B"
     assert content.solution_status == "ready"
-    assert progress == ["composing", "reviewing", "refining", "solving"]
+    assert progress == [
+        "composing",
+        "reviewing",
+        "refining",
+        "solving",
+        "reviewing_solution",
+    ]
     assert calls == [
         "辅助命题（core）",
         "辅助命题（question-review）",
@@ -683,7 +689,15 @@ def test_deepseek_provider_repairs_and_reaudits_statement_when_full_solve_expose
     assert "x²-1=0" in content.stem_plain
     assert content.answer_value == "2"
     assert content.final_answer == "2"
-    assert progress == ["composing", "reviewing", "solving", "refining", "solving"]
+    assert progress == [
+        "composing",
+        "reviewing",
+        "solving",
+        "reviewing_solution",
+        "refining",
+        "solving",
+        "reviewing_solution",
+    ]
     assert question_review_count == 2
     assert completed_review_count == 2
 
@@ -773,9 +787,12 @@ def test_deepseek_provider_rewrites_deliberative_solution_before_returning() -> 
     assert calls["private_question_authoring_solution_cleanup"] == 1
 
 
-def test_deepseek_provider_rejects_draft_when_solution_reveals_math_conflict() -> None:
+def test_deepseek_provider_regenerates_solution_when_cleanup_blames_derivation() -> None:
+    section_attempt = 0
+
     class FakeDeepSeekClient:
         def request(self, **kwargs: object) -> dict:
+            nonlocal section_attempt
             schema_name = kwargs["output_schema"]["name"]  # type: ignore[index]
             if schema_name == "private_question_authoring_core":
                 payload = {
@@ -807,15 +824,25 @@ def test_deepseek_provider_rejects_draft_when_solution_reveals_math_conflict() -
                     "order": 1,
                     "steps": ["当前推导发现题面条件无法同时成立，请教师独立核验。"],
                     "mathematically_valid": False,
-                    "issue_summary": "题面中的递推条件互相矛盾。",
+                    "issue_summary": "当前解析错误地建立了递推关系。",
+                    "fault_source": "solution",
                 }
+            elif schema_name == "private_question_authoring_solution_conclusion":
+                payload = {"answer_value": "B", "final_answer": "B"}
+            elif schema_name == "private_question_authoring_completed_solution_review":
+                payload = passing_completed_solution_review("B", "B")
             else:
-                payload = {
-                    "order": 1,
-                    "steps": [
-                        "重新核对初始条件后发现与题设不符，说明题面有误，无法选出正确答案。"
-                    ],
-                }
+                section_attempt += 1
+                payload = (
+                    {
+                        "order": 1,
+                        "steps": [
+                            "重新核对初始条件后发现与题设不符，说明题面有误，无法选出正确答案。"
+                        ],
+                    }
+                    if section_attempt == 1
+                    else {"order": 1, "steps": ["建立正确递推关系后，计算得到选项 B。"]}
+                )
             text = json.dumps(payload, ensure_ascii=False)
             return {"output": [{"type": "message", "content": [{"type": "output_text", "text": text}]}]}
 
@@ -826,19 +853,22 @@ def test_deepseek_provider_rejects_draft_when_solution_reveals_math_conflict() -
     )
     provider.client = FakeDeepSeekClient()  # type: ignore[assignment]
 
-    with pytest.raises(QuestionAuthoringProviderError, match="数学冲突"):
-        provider.generate(
-            QuestionAuthoringContext(
-                brief=QuestionDesignBrief(
-                    request_text="命制一道数列与概率结合的复杂选择题",
-                    question_type="single_choice",
-                    target_difficulty=5,
-                ),
+    content = provider.generate(
+        QuestionAuthoringContext(
+            brief=QuestionDesignBrief(
+                request_text="命制一道数列与概率结合的复杂选择题",
                 question_type="single_choice",
-                curriculum=None,
-                curriculum_options=(),
-            )
+                target_difficulty=5,
+            ),
+            question_type="single_choice",
+            curriculum=None,
+            curriculum_options=(),
         )
+    )
+
+    assert section_attempt == 2
+    assert content.answer_value == "B"
+    assert content.solution_steps == ["建立正确递推关系后，计算得到选项 B。"]
 
 
 def test_deepseek_provider_uses_answer_derived_after_solution_not_core_guess() -> None:
@@ -910,7 +940,114 @@ def test_deepseek_provider_uses_answer_derived_after_solution_not_core_guess() -
     assert "对应选项 A" in content.solution_steps[-1]
 
 
-def test_deepseek_provider_rejects_disagreement_between_two_independent_solves() -> None:
+def test_deepseek_provider_regenerates_solution_when_final_audit_blames_solution() -> None:
+    """A valid statement must survive a bad solution and still become a complete draft."""
+
+    progress: list[str] = []
+    solution_attempt = 0
+    completed_review_count = 0
+
+    class FakeDeepSeekClient:
+        def request(self, **kwargs: object) -> dict:
+            nonlocal solution_attempt, completed_review_count
+            schema_name = kwargs["output_schema"]["name"]  # type: ignore[index]
+            action = str(kwargs["action"])
+            if schema_name == "private_question_authoring_core":
+                payload = {
+                    "question_type": "single_choice",
+                    "stem_plain": "若 x=1，则下列结论正确的是（ ）。",
+                    "stem_latex": "若 $x=1$，则下列结论正确的是（ ）。",
+                    "options": [
+                        {"key": "A", "text": "$x=1$"},
+                        {"key": "B", "text": "$x=2$"},
+                        {"key": "C", "text": "$x=3$"},
+                        {"key": "D", "text": "$x=4$"},
+                    ],
+                    "estimated_difficulty": 1,
+                }
+            elif schema_name == "private_question_authoring_question_review":
+                payload = passing_question_review("A", "A")
+            elif schema_name == "private_question_authoring_solution_plan":
+                solution_attempt += 1
+                payload = {
+                    "solution_method": "直接判断",
+                    "sections": [{"order": 1, "title": "判断", "goal": "由题设判断选项"}],
+                    "authoring_intent": "验证解析错误后的自动恢复。",
+                    "curriculum_node_id": None,
+                    "knowledge_points": [],
+                    "assessed_methods": [],
+                    "common_mistakes": [],
+                }
+            elif schema_name == "private_question_authoring_solution_section":
+                payload = {
+                    "order": 1,
+                    "steps": (
+                        ["错误地把 $x=1$ 看成 $x=2$，故选 B。"]
+                        if solution_attempt == 1
+                        else ["由题设直接得到 $x=1$，故选 A。"]
+                    ),
+                }
+            elif schema_name == "private_question_authoring_solution_conclusion":
+                answer = "B" if solution_attempt == 1 else "A"
+                payload = {"answer_value": answer, "final_answer": answer}
+            elif schema_name == "private_question_authoring_completed_solution_review":
+                completed_review_count += 1
+                payload = (
+                    {
+                        "passed": False,
+                        "question_valid": True,
+                        "solution_valid": False,
+                        "answer_consistent": False,
+                        "summary": "题面成立，错误来自解析。",
+                        "issues": ["解析把题设 x=1 错读为 x=2。"],
+                        "independent_answer_value": "A",
+                        "independent_final_answer": "A",
+                    }
+                    if completed_review_count == 1
+                    else passing_completed_solution_review("A", "A")
+                )
+            else:  # pragma: no cover - staged-contract guard
+                pytest.fail(f"unexpected stage: {action}")
+            text = json.dumps(payload, ensure_ascii=False)
+            return {"output": [{"type": "message", "content": [{"type": "output_text", "text": text}]}]}
+
+    provider = DeepSeekQuestionAuthoringProvider(
+        api_key="test-key",
+        model="deepseek-v4-flash",
+        base_url="https://api.deepseek.com",
+    )
+    provider.client = FakeDeepSeekClient()  # type: ignore[assignment]
+
+    content = provider.generate(
+        QuestionAuthoringContext(
+            brief=QuestionDesignBrief(
+                request_text="命制一道单项选择题",
+                question_type="single_choice",
+            ),
+            question_type="single_choice",
+            curriculum=None,
+            curriculum_options=(),
+            on_progress=progress.append,
+        )
+    )
+
+    assert content.stem_plain == "若 x=1，则下列结论正确的是（ ）。"
+    assert content.answer_value == "A"
+    assert content.final_answer == "A"
+    assert content.solution_steps == ["由题设直接得到 $x=1$，故选 A。"]
+    assert solution_attempt == 2
+    assert completed_review_count == 2
+    assert progress == [
+        "composing",
+        "reviewing",
+        "solving",
+        "reviewing_solution",
+        "regenerating_solution",
+        "reviewing_solution",
+    ]
+
+
+def test_deepseek_provider_uses_final_audit_to_resolve_an_incorrect_initial_review() -> None:
     class FakeDeepSeekClient:
         def request(self, **kwargs: object) -> dict:
             schema_name = kwargs["output_schema"]["name"]  # type: ignore[index]
@@ -955,19 +1092,22 @@ def test_deepseek_provider_rejects_disagreement_between_two_independent_solves()
     )
     provider.client = FakeDeepSeekClient()  # type: ignore[assignment]
 
-    with pytest.raises(QuestionAuthoringProviderError, match="选项不一致"):
-        provider.generate(
-            QuestionAuthoringContext(
-                brief=QuestionDesignBrief(
-                    request_text="命制一道简单单选题用于交叉核验",
-                    question_type="single_choice",
-                    target_difficulty=1,
-                ),
+    content = provider.generate(
+        QuestionAuthoringContext(
+            brief=QuestionDesignBrief(
+                request_text="命制一道简单单选题用于交叉核验",
                 question_type="single_choice",
-                curriculum=None,
-                curriculum_options=(),
-            )
+                target_difficulty=1,
+            ),
+            question_type="single_choice",
+            curriculum=None,
+            curriculum_options=(),
         )
+    )
+
+    assert content.answer_value == "A"
+    assert content.final_answer == "A"
+    assert content.solution_steps == ["由题设直接得到 $x=1$，故选 A。"]
 
 
 def test_deepseek_provider_does_not_publish_answer_when_solution_stage_fails() -> None:
@@ -1203,7 +1343,7 @@ def test_create_draft_resolves_curriculum_and_forces_unsaved_owner_only_state() 
     assert "owner_id" not in draft.model_dump(mode="json")
 
 
-def test_create_draft_returns_complete_question_when_solution_needs_teacher_verification() -> None:
+def test_create_draft_refuses_to_return_a_solution_conflict_as_a_user_draft() -> None:
     class ConflictProvider(FakeProvider):
         def generate(self, context: QuestionAuthoringContext) -> ProviderQuestionDraft:
             return super().generate(context).model_copy(
@@ -1217,33 +1357,19 @@ def test_create_draft_returns_complete_question_when_solution_needs_teacher_veri
                 }
             )
 
-    draft = QuestionAuthoring(
+    authoring = QuestionAuthoring(
         curriculum=curriculum(),
         provider=ConflictProvider(),
         math_verifier=MathVerifier(),
-    ).create_draft(
-        QuestionDesignBrief(
-            request_text="命制一道完整但解析可能需要复核的函数题。",
-            question_type="single_choice",
-        )
     )
 
-    assert draft.stem_plain == "已知函数 f(x)=x²，判断其在实数范围内的单调性。"
-    assert len(draft.options) == 4
-    assert draft.answer_value == "B"
-    assert draft.final_answer
-    assert draft.solution_status == "needs_teacher_verification"
-    assert draft.solution_issue == "解析推导与标准答案存在冲突。"
-    assert draft.verification.status == "checks_failed"
-    consistency = next(
-        check
-        for check in draft.verification.checks
-        if check.code == "answer_solution_consistency"
-    )
-    assert consistency.status == "failed"
-    assert any("题目或解析未通过一致性检查" in warning for warning in draft.warnings)
-    assert draft.saved is False
-    assert draft.visibility == "owner_only"
+    with pytest.raises(QuestionAuthoringUnavailableError, match="不会返回半成品"):
+        authoring.create_draft(
+            QuestionDesignBrief(
+                request_text="命制一道完整但解析可能需要复核的函数题。",
+                question_type="single_choice",
+            )
+        )
 
 
 def test_create_draft_keeps_choice_options_out_of_both_readable_stems() -> None:
@@ -1387,7 +1513,7 @@ def test_regenerate_solution_keeps_question_but_uses_newly_derived_answer() -> N
     assert any("重新推导" in warning for warning in regenerated.warnings)
 
 
-def test_regenerate_solution_returns_flagged_revision_instead_of_hiding_question() -> None:
+def test_regenerate_solution_refuses_to_return_a_conflicting_half_result() -> None:
     class ConflictRegenerationProvider(FakeProvider):
         def regenerate_solution(
             self, current: ProviderQuestionDraft
@@ -1414,16 +1540,8 @@ def test_regenerate_solution_returns_flagged_revision_instead_of_hiding_question
         )
     )
 
-    regenerated = authoring.regenerate_solution(draft)
-
-    assert regenerated.stem_plain == draft.stem_plain
-    assert regenerated.options == draft.options
-    assert regenerated.answer_value == draft.answer_value
-    assert regenerated.final_answer == draft.final_answer
-    assert regenerated.solution_status == "needs_teacher_verification"
-    assert regenerated.solution_issue == "新解析仍与标准答案存在冲突。"
-    assert regenerated.verification.status == "checks_failed"
-    assert any("自行核验" in warning for warning in regenerated.warnings)
+    with pytest.raises(QuestionAuthoringUnavailableError, match="不会返回半成品"):
+        authoring.regenerate_solution(draft)
 
 
 def test_non_choice_draft_has_one_canonical_final_answer() -> None:
@@ -1640,19 +1758,14 @@ def test_trust_checks_block_clear_choice_contract_failures() -> None:
         (FakeProvider(final_answer="答案为 C"), "answer_solution_consistency"),
         (FakeProvider(duplicate_option_text=True), "distractor_quality"),
     ]
-    for provider, failed_code in cases:
-        draft = QuestionAuthoring(
+    for provider, _failed_code in cases:
+        authoring = QuestionAuthoring(
             curriculum=curriculum(),
             provider=provider,
             math_verifier=MathVerifier(),
-        ).create_draft(brief)
-        assert draft.verification.status == "checks_failed"
-        failed = {
-            check.code for check in draft.verification.checks if check.status == "failed"
-        }
-        assert failed_code in failed
-        assert draft.saved is False
-        assert draft.visibility == "owner_only"
+        )
+        with pytest.raises(QuestionAuthoringUnavailableError, match="不会把半成品交给教师"):
+            authoring.create_draft(brief)
 
 
 def test_difficulty_gap_is_disclosed_without_becoming_math_evidence() -> None:

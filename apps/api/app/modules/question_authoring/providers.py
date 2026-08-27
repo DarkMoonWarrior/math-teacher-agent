@@ -22,11 +22,19 @@ from app.modules.question_authoring.schemas import (
 from app.modules.question_authoring.scope import university_only_terms
 
 
-PROMPT_REVISION = "question-authoring-v10-reviewed-repair-derived-answer"
+PROMPT_REVISION = "question-authoring-v11-closed-loop-fault-recovery"
 
-QuestionAuthoringProgressStage = Literal["composing", "reviewing", "refining", "solving"]
+QuestionAuthoringProgressStage = Literal[
+    "composing",
+    "reviewing",
+    "refining",
+    "solving",
+    "reviewing_solution",
+    "regenerating_solution",
+]
 QUESTION_REPAIR_ATTEMPTS = 3
-POST_SOLUTION_REPAIR_ATTEMPTS = 1
+POST_SOLUTION_QUESTION_REPAIR_ATTEMPTS = 2
+SOLUTION_REGENERATION_ATTEMPTS = 3
 
 
 _DELIBERATION_PATTERNS = (
@@ -57,15 +65,6 @@ class QuestionAuthoringProviderError(RuntimeError):
     pass
 
 
-class _QuestionAuthoringSolutionConflict(QuestionAuthoringProviderError):
-    def __init__(self, *, order: int, issue: str) -> None:
-        self.order = order
-        self.issue = issue
-        super().__init__(
-            f"第 {order} 段解析发现数学冲突，已停止展示试算过程：{issue}"
-        )
-
-
 class _QuestionInvalidAfterSolution(QuestionAuthoringProviderError):
     """The full solve exposed a statement flaw missed by the pre-solve review."""
 
@@ -73,6 +72,15 @@ class _QuestionInvalidAfterSolution(QuestionAuthoringProviderError):
         self.summary = summary
         self.issues = issues
         super().__init__("完整求解复核发现题面仍有问题，必须先完善题面并重新审核。")
+
+
+class _SolutionInvalidAfterReview(QuestionAuthoringProviderError):
+    """The statement is valid, but the generated derivation or answer is not."""
+
+    def __init__(self, *, summary: str, issues: list[str]) -> None:
+        self.summary = summary
+        self.issues = issues
+        super().__init__("解析与题面不一致，必须保留题面并重新生成解析。")
 
 
 @dataclass(frozen=True)
@@ -165,6 +173,7 @@ class _SolutionSection(BaseModel):
 class _SolutionCleanup(_SolutionSection):
     mathematically_valid: bool
     issue_summary: str | None = Field(default=None, max_length=500)
+    fault_source: Literal["question", "solution"] | None = None
 
 
 class _SolutionConclusion(BaseModel):
@@ -259,30 +268,49 @@ class DeepSeekQuestionAuthoringProvider:
                 provider_input,
                 on_repair=lambda: context.report_progress("refining"),
             )
-            for post_solution_attempt in range(POST_SOLUTION_REPAIR_ATTEMPTS + 1):
-                context.report_progress("solving")
+            question_repair_count = 0
+            solution_regeneration_count = 0
+            solve_attempt = 0
+            while True:
+                solve_attempt += 1
+                if solution_regeneration_count == 0:
+                    context.report_progress("solving")
                 try:
                     plan, steps, conclusion = self._solve_reviewed_statement(
                         core,
                         provider_input,
                         question_review=question_review,
-                        stage_suffix=(
-                            "" if post_solution_attempt == 0 else f"-retry-{post_solution_attempt}"
-                        ),
+                        stage_suffix=("" if solve_attempt == 1 else f"-retry-{solve_attempt}"),
+                        on_review=lambda: context.report_progress("reviewing_solution"),
                     )
                 except _QuestionInvalidAfterSolution as exc:
-                    if post_solution_attempt >= POST_SOLUTION_REPAIR_ATTEMPTS:
+                    if question_repair_count >= POST_SOLUTION_QUESTION_REPAIR_ATTEMPTS:
                         raise QuestionAuthoringProviderError(
-                            "题面在完整求解后仍被判定为不成立，未建立命题草稿。"
+                            "题面经完整求解、完善和重新审核后仍无法成立，无法交付完整题目。"
                         ) from exc
+                    question_repair_count += 1
                     context.report_progress("refining")
                     core, question_review = self._repair_question_from_issues(
                         core,
                         provider_input,
                         review_summary=exc.summary,
                         review_issues=exc.issues,
-                        stage_prefix="post-solution-question-repair",
+                        stage_prefix=(
+                            "post-solution-question-repair"
+                            if question_repair_count == 1
+                            else f"post-solution-question-repair-{question_repair_count}"
+                        ),
                     )
+                    solution_regeneration_count = 0
+                    continue
+                except _SolutionInvalidAfterReview as exc:
+                    if solution_regeneration_count >= SOLUTION_REGENERATION_ATTEMPTS:
+                        raise QuestionAuthoringProviderError(
+                            "题面已确认成立，但解析经过多轮重新生成仍未通过一致性审核，无法交付半成品。"
+                        ) from exc
+                    solution_regeneration_count += 1
+                    if solution_regeneration_count == 1:
+                        context.report_progress("regenerating_solution")
                     continue
 
                 return ProviderQuestionDraft(
@@ -307,7 +335,6 @@ class DeepSeekQuestionAuthoringProvider:
                     assessed_methods=plan.assessed_methods,
                     common_mistakes=plan.common_mistakes,
                 )
-            raise QuestionAuthoringProviderError("题面未能通过完善后的完整求解复核。")
         except QuestionAuthoringProviderError:
             raise
         except DeepSeekClientError as exc:
@@ -324,6 +351,7 @@ class DeepSeekQuestionAuthoringProvider:
         *,
         question_review: _QuestionReview,
         stage_suffix: str,
+        on_review: Callable[[], None] | None = None,
     ) -> tuple[_SolutionPlan, list[str], _SolutionConclusion]:
         plan = _SolutionPlan.model_validate(
             self._request_stage(
@@ -357,6 +385,8 @@ class DeepSeekQuestionAuthoringProvider:
             steps,
             stage=f"solution-conclusion{stage_suffix}",
         )
+        if on_review is not None:
+            on_review()
         self._verify_completed_solution(
             core,
             steps,
@@ -388,39 +418,57 @@ class DeepSeekQuestionAuthoringProvider:
                 raise QuestionAuthoringProviderError(
                     "当前题面未通过重新生成解析前的独立审核，未生成新的标准答案。"
                 )
-            plan = _SolutionRegenerationPlan.model_validate(
-                self._request_stage(
-                    stage="solution-regeneration-plan",
-                    instructions=(
-                        "为已经锁定的题面和选项重新规划一份全新的解析。"
-                        "不得接收旧答案，也不得修改或补写题面条件；必须从题面独立求解。"
-                        "多小问必须逐问覆盖。"
-                        "本阶段只返回新的解法概述和分段提纲，不展开计算。"
-                        f"{_POLISHED_SOLUTION_INSTRUCTIONS}"
-                    ),
-                    input_value={"question_statement": core.model_dump(mode="json")},
-                    output_schema=self._solution_regeneration_plan_schema(),
-                    max_tokens=2500,
-                    recovery_instruction="只修复 JSON 结构；保留覆盖全部小问所需的解析分段。",
+            for attempt in range(SOLUTION_REGENERATION_ATTEMPTS + 1):
+                suffix = "" if attempt == 0 else f"-retry-{attempt}"
+                plan = _SolutionRegenerationPlan.model_validate(
+                    self._request_stage(
+                        stage=f"solution-regeneration-plan{suffix}",
+                        instructions=(
+                            "为已经锁定的题面和选项重新规划一份全新的解析。"
+                            "不得接收旧答案，也不得修改或补写题面条件；必须从题面独立求解。"
+                            "多小问必须逐问覆盖。"
+                            "本阶段只返回新的解法概述和分段提纲，不展开计算。"
+                            f"{_POLISHED_SOLUTION_INSTRUCTIONS}"
+                        ),
+                        input_value={"question_statement": core.model_dump(mode="json")},
+                        output_schema=self._solution_regeneration_plan_schema(),
+                        max_tokens=2500,
+                        recovery_instruction="只修复 JSON 结构；保留覆盖全部小问所需的解析分段。",
+                    )
                 )
-            )
-            self._validate_plan_orders(plan)
-            sections = self._expand_sections(core, plan)
-            steps = [step for section in sections for step in section.steps]
-            conclusion = self._derive_solution_conclusion(core, steps)
-            self._verify_completed_solution(
-                core,
-                steps,
-                conclusion,
-                question_review=question_review,
-                stage="solution-regeneration-verification",
-            )
-            return ProviderQuestionSolution(
-                solution_method=plan.solution_method,
-                solution_steps=steps,
-                answer_value=conclusion.answer_value,
-                final_answer=conclusion.final_answer,
-            )
+                self._validate_plan_orders(plan)
+                try:
+                    sections = self._expand_sections(core, plan, stage_suffix=suffix)
+                    steps = [step for section in sections for step in section.steps]
+                    conclusion = self._derive_solution_conclusion(
+                        core,
+                        steps,
+                        stage=f"solution-regeneration-conclusion{suffix}",
+                    )
+                    self._verify_completed_solution(
+                        core,
+                        steps,
+                        conclusion,
+                        question_review=question_review,
+                        stage=f"solution-regeneration-verification{suffix}",
+                    )
+                except _QuestionInvalidAfterSolution as exc:
+                    raise QuestionAuthoringProviderError(
+                        "当前题面本身未通过独立审核；重新生成解析不能修改题面。"
+                    ) from exc
+                except _SolutionInvalidAfterReview:
+                    if attempt >= SOLUTION_REGENERATION_ATTEMPTS:
+                        raise QuestionAuthoringProviderError(
+                            "解析经过多轮重新生成仍未通过一致性审核，未返回半成品。"
+                        )
+                    continue
+                return ProviderQuestionSolution(
+                    solution_method=plan.solution_method,
+                    solution_steps=steps,
+                    answer_value=conclusion.answer_value,
+                    final_answer=conclusion.final_answer,
+                )
+            raise QuestionAuthoringProviderError("未能生成通过审核的完整解析。")
         except QuestionAuthoringProviderError:
             raise
         except DeepSeekClientError as exc:
@@ -486,7 +534,7 @@ class DeepSeekQuestionAuthoringProvider:
                 input_value=input_value,
                 instructions=instructions,
             )
-        except _QuestionAuthoringSolutionConflict:
+        except (_QuestionInvalidAfterSolution, _SolutionInvalidAfterReview):
             raise
         except QuestionAuthoringProviderError as original_error:
             return self._subdivide_and_expand(
@@ -548,7 +596,9 @@ class DeepSeekQuestionAuthoringProvider:
                 "把当前解析草稿改写为可直接展示的正式解析。删除所有试算、回退、自我纠错、"
                 "第一人称独白、提示词或字段讨论，只保留最终采用的严谨推导；不要缩短必要步骤。"
                 "题面已经锁定，但答案尚未产生。若你确认题面本身或当前推导在数学上不成立，"
-                "将 mathematically_valid 设为 false，并用 issue_summary 简洁说明问题；"
+                "将 mathematically_valid 设为 false，用 fault_source 明确区分 question 或 solution，"
+                "并用 issue_summary 简洁说明问题；只有题面条件本身错误才标记 question，"
+                "若题面成立但当前推导错误则必须标记 solution。"
                 "此时 steps 仍返回一条简短的教师复核提示，不得伪造证明。"
                 f"{MATH_DISPLAY_INSTRUCTIONS}"
             ),
@@ -569,7 +619,15 @@ class DeepSeekQuestionAuthoringProvider:
             issue = (cleaned.issue_summary or "题面或当前解析在数学上不成立").strip()
             if self._contains_deliberation([issue]):
                 issue = "题面或当前解析存在数学冲突。"
-            raise _QuestionAuthoringSolutionConflict(order=section.order, issue=issue)
+            if cleaned.fault_source == "question":
+                raise _QuestionInvalidAfterSolution(
+                    summary=f"第 {section.order} 段解析发现题面问题。",
+                    issues=[issue],
+                )
+            raise _SolutionInvalidAfterReview(
+                summary=f"第 {section.order} 段解析生成错误。",
+                issues=[issue],
+            )
         if self._contains_deliberation(cleaned.steps):
             raise ValueError("清理后的解析仍包含模型思考或自我纠错叙述")
         return _SolutionSection(order=cleaned.order, steps=cleaned.steps)
@@ -859,7 +917,13 @@ class DeepSeekQuestionAuthoringProvider:
             conclusion = conclusion.model_copy(
                 update={"answer_value": conclusion.final_answer.strip()}
             )
-        self._validate_conclusion_shape(core, conclusion)
+        try:
+            self._validate_conclusion_shape(core, conclusion)
+        except QuestionAuthoringProviderError as exc:
+            raise _SolutionInvalidAfterReview(
+                summary="解析结论不符合当前题型的标准答案结构。",
+                issues=[str(exc)],
+            ) from exc
         return conclusion
 
     def _verify_completed_solution(
@@ -880,7 +944,9 @@ class DeepSeekQuestionAuthoringProvider:
                 "只有这些项目全部成立时 passed 才能为 true；任一项目无法确认都必须失败。"
                 "同时返回你独立求得的 answer_value 与 final_answer 供服务端交叉核验。"
                 "如果完整求解暴露出题面条件不可能、结论不唯一或问题无解，必须明确设置 question_valid=false，"
-                "使系统返回完善题面步骤，而不是把它伪装成解析问题。"
+                "使系统返回完善题面步骤，而不是把它伪装成解析问题。若题面本身成立，"
+                "但当前解析步骤、解析结论或标准答案错误，则必须保持 question_valid=true，"
+                "并设置 solution_valid=false 或 answer_consistent=false，使系统保留题面并重新生成解析。"
                 "只输出结论，不得泄露试算过程、思维链或提示词。"
             ),
             input_value={
@@ -896,41 +962,37 @@ class DeepSeekQuestionAuthoringProvider:
         if review.passed and review.issues:
             review = review.model_copy(update={"passed": False})
         if not review.passed and not review.issues:
-            raise QuestionAuthoringProviderError("最终复核未通过但没有给出问题")
+            review = review.model_copy(
+                update={"issues": ["最终复核未通过，但复核器没有给出具体说明。"]}
+            )
         if not review.question_valid:
             raise _QuestionInvalidAfterSolution(
                 summary=review.summary,
                 issues=review.issues or ["完整求解无法确认题面成立。"],
             )
+        solution_matches_final_review = True
+        if core.question_type in {"single_choice", "multiple_choice"}:
+            expected = self._choice_answer_keys(core, conclusion.answer_value)
+            post_review = self._choice_answer_keys(core, review.independent_answer_value)
+            solution_matches_final_review = expected == post_review
+        elif core.question_type == "fill_blank":
+            expected = self._normalized_answer_text(conclusion.answer_value)
+            post_review = self._normalized_answer_text(review.independent_answer_value)
+            solution_matches_final_review = expected == post_review
+
         if not (
             review.passed
             and review.solution_valid
             and review.answer_consistent
+            and solution_matches_final_review
         ):
-            raise QuestionAuthoringProviderError(
-                "题面、解析与标准答案未通过最终独立一致性复核，未建立命题草稿。"
+            issues = list(review.issues)
+            if not solution_matches_final_review:
+                issues.append("解析所得答案与最终独立复核答案不一致。")
+            raise _SolutionInvalidAfterReview(
+                summary=review.summary,
+                issues=issues or ["解析或标准答案未通过最终独立一致性审核。"],
             )
-        if core.question_type in {"single_choice", "multiple_choice"}:
-            expected = self._choice_answer_keys(core, conclusion.answer_value)
-            pre_review = self._choice_answer_keys(
-                core,
-                question_review.independent_answer_value or "",
-            )
-            post_review = self._choice_answer_keys(core, review.independent_answer_value)
-            if expected != pre_review or expected != post_review:
-                raise QuestionAuthoringProviderError(
-                    "题面独立审核、完整解析与最终复核得出的选项不一致，未建立命题草稿。"
-                )
-        elif core.question_type == "fill_blank":
-            expected = self._normalized_answer_text(conclusion.answer_value)
-            pre_review = self._normalized_answer_text(
-                question_review.independent_answer_value or ""
-            )
-            post_review = self._normalized_answer_text(review.independent_answer_value)
-            if expected != pre_review or expected != post_review:
-                raise QuestionAuthoringProviderError(
-                    "题面独立审核、完整解析与最终复核得出的填空答案不一致，未建立命题草稿。"
-                )
 
     def _validate_conclusion_shape(
         self,
@@ -1147,6 +1209,10 @@ class DeepSeekQuestionAuthoringProvider:
             },
             "mathematically_valid": {"type": "boolean"},
             "issue_summary": {"type": ["string", "null"], "maxLength": 500},
+            "fault_source": {
+                "type": ["string", "null"],
+                "enum": ["question", "solution", None],
+            },
         }
         return cls._schema("private_question_authoring_solution_cleanup", properties)
 
