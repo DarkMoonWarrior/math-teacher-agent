@@ -6,6 +6,7 @@ const STAGES: Array<{ key: AuthoringGenerationStage; label: string }> = [
   { key: "brief", label: "整理命题要求" },
   { key: "composing", label: "命制题面" },
   { key: "reviewing", label: "审核题面" },
+  { key: "refining", label: "完善题面（按需）" },
   { key: "solving", label: "生成解析" },
   { key: "staging", label: "建立私有草稿" },
 ];
@@ -14,7 +15,8 @@ const CURRENT_STAGE_COPY: Record<AuthoringGenerationStage, string> = {
   brief: "正在整理命题要求",
   composing: "Agent 正在命制完整题面",
   reviewing: "Agent 正在审核题面是否合理",
-  solving: "题面已通过自审核，正在生成解析",
+  refining: "审核发现问题，Agent 正在完善题面并重新审核",
+  solving: "题面已通过审核，正在生成解析并据此确定标准答案",
   staging: "题面已生成，正在建立私有草稿",
 };
 

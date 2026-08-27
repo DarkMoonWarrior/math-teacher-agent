@@ -185,14 +185,37 @@ class FakeProvider:
         return ProviderQuestionSolution(
             solution_method="重新组织的定义法",
             solution_steps=["先固定题面与答案。", "再给出不含试错过程的成稿推导。"],
+            answer_value=current.answer_value,
+            final_answer=current.final_answer,
         )
 
 
-def passing_question_review() -> dict[str, object]:
+def passing_question_review(
+    answer_value: str = "B",
+    final_answer: str = "B",
+) -> dict[str, object]:
     return {
         "passed": True,
-        "summary": "题面条件相容、可解，锁定答案与题面一致。",
+        "summary": "题面条件相容、可解，已从题面独立求得答案。",
         "issues": [],
+        "independent_answer_value": answer_value,
+        "independent_final_answer": final_answer,
+    }
+
+
+def passing_completed_solution_review(
+    answer_value: str = "B",
+    final_answer: str = "B",
+) -> dict[str, object]:
+    return {
+        "passed": True,
+        "question_valid": True,
+        "solution_valid": True,
+        "answer_consistent": True,
+        "summary": "题面、解析与标准答案一致。",
+        "issues": [],
+        "independent_answer_value": answer_value,
+        "independent_final_answer": final_answer,
     }
 
 
@@ -202,8 +225,6 @@ def test_deepseek_provider_recovers_empty_non_choice_answer_value() -> None:
         "stem_plain": "已知椭圆的离心率与一个过点条件，求其标准方程。",
         "stem_latex": r"已知椭圆的离心率与一个过点条件，求其标准方程。",
         "options": [],
-        "answer_value": "",
-        "final_answer": r"$\frac{x^2}{4}+\frac{y^2}{3}=1$",
         "estimated_difficulty": 5,
     }
     plan_payload = {
@@ -225,9 +246,22 @@ def test_deepseek_provider_recovers_empty_non_choice_answer_value() -> None:
             if schema_name == "private_question_authoring_core":
                 payload = core_payload
             elif schema_name == "private_question_authoring_question_review":
-                payload = passing_question_review()
+                payload = passing_question_review(
+                    r"$\frac{x^2}{4}+\frac{y^2}{3}=1$",
+                    r"$\frac{x^2}{4}+\frac{y^2}{3}=1$",
+                )
             elif schema_name == "private_question_authoring_solution_plan":
                 payload = plan_payload
+            elif schema_name == "private_question_authoring_solution_conclusion":
+                payload = {
+                    "answer_value": r"$\frac{x^2}{4}+\frac{y^2}{3}=1$",
+                    "final_answer": r"$\frac{x^2}{4}+\frac{y^2}{3}=1$",
+                }
+            elif schema_name == "private_question_authoring_completed_solution_review":
+                payload = passing_completed_solution_review(
+                    r"$\frac{x^2}{4}+\frac{y^2}{3}=1$",
+                    r"$\frac{x^2}{4}+\frac{y^2}{3}=1$",
+                )
             else:
                 section = json.loads(str(kwargs["input_text"]))["section"]
                 payload = {
@@ -269,8 +303,8 @@ def test_deepseek_provider_recovers_empty_non_choice_answer_value() -> None:
         )
     )
 
-    assert content.answer_value == core_payload["final_answer"]
-    assert content.final_answer == core_payload["final_answer"]
+    assert content.answer_value == r"$\frac{x^2}{4}+\frac{y^2}{3}=1$"
+    assert content.final_answer == r"$\frac{x^2}{4}+\frac{y^2}{3}=1$"
     assert content.solution_steps == ["设元：设出椭圆标准方程。", "求解：代入条件求出参数。"]
 
 
@@ -289,12 +323,10 @@ def test_deepseek_provider_assembles_a_long_solution_from_bounded_sections() -> 
                     "stem_plain": long_stem,
                     "stem_latex": long_stem,
                     "options": [],
-                    "answer_value": "结论见最终答案",
-                    "final_answer": "三问结论依次为 $1$、$2$、$3$。",
                     "estimated_difficulty": 5,
                 }
             elif schema_name == "private_question_authoring_question_review":
-                payload = passing_question_review()
+                payload = passing_question_review("三问结论", "三问结论依次为 $1$、$2$、$3$。")
             elif schema_name == "private_question_authoring_solution_plan":
                 payload = {
                     "solution_method": "解析几何与代数运算综合法",
@@ -308,6 +340,16 @@ def test_deepseek_provider_assembles_a_long_solution_from_bounded_sections() -> 
                     "assessed_methods": ["设而不求"],
                     "common_mistakes": ["遗漏参数范围"],
                 }
+            elif schema_name == "private_question_authoring_solution_conclusion":
+                payload = {
+                    "answer_value": "三问结论依次为 $1$、$2$、$3$。",
+                    "final_answer": "三问结论依次为 $1$、$2$、$3$。",
+                }
+            elif schema_name == "private_question_authoring_completed_solution_review":
+                payload = passing_completed_solution_review(
+                    "三问结论依次为 $1$、$2$、$3$。",
+                    "三问结论依次为 $1$、$2$、$3$。",
+                )
             else:
                 section = json.loads(str(kwargs["input_text"]))["section"]
                 payload = {
@@ -368,8 +410,6 @@ def test_deepseek_provider_reviews_and_repairs_an_impossible_question_before_sol
                         {"key": "C", "text": "$\\frac{3}{4}$"},
                         {"key": "D", "text": "$\\frac{4}{5}$"},
                     ],
-                    "answer_value": "C",
-                    "final_answer": "C",
                     "estimated_difficulty": 4,
                 }
             elif schema_name == "private_question_authoring_question_review":
@@ -385,6 +425,8 @@ def test_deepseek_provider_reviews_and_repairs_an_impossible_question_before_sol
                         "passed": True,
                         "summary": "修订后斜边长于两条直角边，题面可解且选项包含唯一答案。",
                         "issues": [],
+                        "independent_answer_value": "B",
+                        "independent_final_answer": "B",
                     }
                 )
             elif action == "辅助命题（core-question-repair）":
@@ -398,8 +440,6 @@ def test_deepseek_provider_reviews_and_repairs_an_impossible_question_before_sol
                         {"key": "C", "text": "$8$"},
                         {"key": "D", "text": "$10$"},
                     ],
-                    "answer_value": "B",
-                    "final_answer": "B",
                     "estimated_difficulty": 2,
                 }
             elif schema_name == "private_question_authoring_solution_plan":
@@ -412,6 +452,10 @@ def test_deepseek_provider_reviews_and_repairs_an_impossible_question_before_sol
                     "assessed_methods": ["直接计算"],
                     "common_mistakes": ["误判斜边"],
                 }
+            elif schema_name == "private_question_authoring_solution_conclusion":
+                payload = {"answer_value": "B", "final_answer": "B"}
+            elif schema_name == "private_question_authoring_completed_solution_review":
+                payload = passing_completed_solution_review()
             else:
                 payload = {"order": 1, "steps": ["由勾股定理，$AB=\\sqrt{10^2-8^2}=6$，故选 B。"]}
             text = json.dumps(payload, ensure_ascii=False)
@@ -442,14 +486,16 @@ def test_deepseek_provider_reviews_and_repairs_an_impossible_question_before_sol
     assert "BF₁=6" not in content.stem_plain
     assert content.answer_value == "B"
     assert content.solution_status == "ready"
-    assert progress == ["composing", "reviewing", "solving"]
+    assert progress == ["composing", "reviewing", "refining", "solving"]
     assert calls == [
         "辅助命题（core）",
         "辅助命题（question-review）",
         "辅助命题（core-question-repair）",
-        "辅助命题（question-review-repair-check）",
+        "辅助命题（core-question-repair-review-check）",
         "辅助命题（solution-plan）",
         "辅助命题（solution-section-1）",
+        "辅助命题（solution-conclusion）",
+        "辅助命题（completed-solution-review）",
     ]
 
 
@@ -472,8 +518,6 @@ def test_deepseek_provider_stops_before_solution_when_repaired_question_still_fa
                         {"key": "C", "text": "$6$"},
                         {"key": "D", "text": "$10$"},
                     ],
-                    "answer_value": "B",
-                    "final_answer": "B",
                     "estimated_difficulty": 3,
                 }
             elif schema_name == "private_question_authoring_question_review":
@@ -493,8 +537,6 @@ def test_deepseek_provider_stops_before_solution_when_repaired_question_still_fa
                         {"key": "C", "text": "$6$"},
                         {"key": "D", "text": "$10$"},
                     ],
-                    "answer_value": "B",
-                    "final_answer": "B",
                     "estimated_difficulty": 3,
                 }
             else:
@@ -509,7 +551,7 @@ def test_deepseek_provider_stops_before_solution_when_repaired_question_still_fa
     )
     provider.client = FakeDeepSeekClient()  # type: ignore[assignment]
 
-    with pytest.raises(QuestionAuthoringProviderError, match="未进入解析"):
+    with pytest.raises(QuestionAuthoringProviderError, match="未建立命题草稿"):
         provider.generate(
             QuestionAuthoringContext(
                 brief=QuestionDesignBrief(
@@ -527,12 +569,123 @@ def test_deepseek_provider_stops_before_solution_when_repaired_question_still_fa
         "辅助命题（core）",
         "辅助命题（question-review）",
         "辅助命题（core-question-repair）",
-        "辅助命题（question-review-repair-check）",
+        "辅助命题（core-question-repair-review-check）",
         "辅助命题（core-question-repair-2）",
-        "辅助命题（question-review-repair-check-2）",
+        "辅助命题（core-question-repair-review-check-2）",
         "辅助命题（core-question-repair-3）",
-        "辅助命题（question-review-repair-check-3）",
+        "辅助命题（core-question-repair-review-check-3）",
     ]
+
+
+def test_deepseek_provider_repairs_and_reaudits_statement_when_full_solve_exposes_a_flaw() -> None:
+    progress: list[str] = []
+    question_review_count = 0
+    conclusion_count = 0
+    completed_review_count = 0
+
+    class FakeDeepSeekClient:
+        def request(self, **kwargs: object) -> dict:
+            nonlocal question_review_count, conclusion_count, completed_review_count
+            schema_name = kwargs["output_schema"]["name"]  # type: ignore[index]
+            action = str(kwargs["action"])
+            input_value = json.loads(str(kwargs["input_text"]))
+            if action == "辅助命题（core）":
+                payload = {
+                    "question_type": "fill_blank",
+                    "stem_plain": "关于 x 的方程 x²+1=0 的实数根个数为______。",
+                    "stem_latex": "关于 $x$ 的方程 $x^2+1=0$ 的实数根个数为 $\\_\\_\\_\\_$。",
+                    "options": [],
+                    "estimated_difficulty": 5,
+                }
+            elif action == "辅助命题（post-solution-question-repair）":
+                payload = {
+                    "question_type": "fill_blank",
+                    "stem_plain": "关于 x 的方程 x²-1=0 的实数根个数为______。",
+                    "stem_latex": "关于 $x$ 的方程 $x^2-1=0$ 的实数根个数为 $\\_\\_\\_\\_$。",
+                    "options": [],
+                    "estimated_difficulty": 5,
+                }
+            elif schema_name == "private_question_authoring_question_review":
+                question_review_count += 1
+                expected = "1" if question_review_count == 1 else "2"
+                payload = passing_question_review(expected, expected)
+                if question_review_count == 1:
+                    payload["summary"] = "复杂题面审核摘要。" * 80
+            elif schema_name == "private_question_authoring_solution_plan":
+                payload = {
+                    "solution_method": "方程求解",
+                    "sections": [{"order": 1, "title": "求根", "goal": "求解并核对根的个数"}],
+                    "authoring_intent": "考查实数根与方程求解。",
+                    "curriculum_node_id": None,
+                    "knowledge_points": ["方程的根"],
+                    "assessed_methods": ["直接求解"],
+                    "common_mistakes": ["忽略实数范围"],
+                }
+            elif schema_name == "private_question_authoring_solution_section":
+                statement = input_value["question_statement"]["stem_plain"]
+                payload = {
+                    "order": 1,
+                    "steps": (
+                        ["因为 $x^2=-1$ 在实数范围内无解，所以实数根个数为 $0$。"]
+                        if "x²+1" in statement
+                        else ["由 $x^2-1=0$ 得 $x=\\pm1$，所以实数根个数为 $2$。"]
+                    ),
+                }
+            elif schema_name == "private_question_authoring_solution_conclusion":
+                conclusion_count += 1
+                expected = "0" if conclusion_count == 1 else "2"
+                payload = {"answer_value": expected, "final_answer": expected}
+            elif schema_name == "private_question_authoring_completed_solution_review":
+                completed_review_count += 1
+                payload = (
+                    {
+                        "passed": True,
+                        "question_valid": False,
+                        "solution_valid": True,
+                        "answer_consistent": True,
+                        "summary": "完整求解表明题面与预期的命题目标冲突。",
+                        "issues": ["方程在实数范围内无根，题面必须修改。"],
+                        "independent_answer_value": "0",
+                        "independent_final_answer": "0",
+                    }
+                    if completed_review_count == 1
+                    else passing_completed_solution_review("2", "2")
+                )
+            else:  # pragma: no cover - protects the staged contract
+                pytest.fail(f"unexpected stage: {action}")
+            text = json.dumps(payload, ensure_ascii=False)
+            return {"output": [{"type": "message", "content": [{"type": "output_text", "text": text}]}]}
+
+    provider = DeepSeekQuestionAuthoringProvider(
+        api_key="test-key",
+        model="deepseek-v4-flash",
+        base_url="https://api.deepseek.com",
+    )
+    provider.client = FakeDeepSeekClient()  # type: ignore[assignment]
+
+    content = provider.generate(
+        QuestionAuthoringContext(
+            brief=QuestionDesignBrief(
+                request_text="来一道能作为填空压轴题的导数计算题",
+                grade="高三",
+                question_type="fill_blank",
+                target_difficulty=5,
+                teaching_purpose="考试压轴",
+                additional_constraints="一定要难，要有压轴题的水平",
+            ),
+            question_type="fill_blank",
+            curriculum=None,
+            curriculum_options=(),
+            on_progress=progress.append,
+        )
+    )
+
+    assert "x²-1=0" in content.stem_plain
+    assert content.answer_value == "2"
+    assert content.final_answer == "2"
+    assert progress == ["composing", "reviewing", "solving", "refining", "solving"]
+    assert question_review_count == 2
+    assert completed_review_count == 2
 
 
 def test_deepseek_provider_rewrites_deliberative_solution_before_returning() -> None:
@@ -548,12 +701,13 @@ def test_deepseek_provider_rewrites_deliberative_solution_before_returning() -> 
                     "stem_plain": "已知双曲线条件，完成证明并求参数范围。",
                     "stem_latex": "已知双曲线条件，完成证明并求参数范围。",
                     "options": [],
-                    "answer_value": "参数范围为 $(-\\infty,-1)\\cup(1,+\\infty)$。",
-                    "final_answer": "参数范围为 $(-\\infty,-1)\\cup(1,+\\infty)$。",
                     "estimated_difficulty": 5,
                 }
             elif schema_name == "private_question_authoring_question_review":
-                payload = passing_question_review()
+                payload = passing_question_review(
+                    "参数范围为 $(-\\infty,-1)\\cup(1,+\\infty)$。",
+                    "参数范围为 $(-\\infty,-1)\\cup(1,+\\infty)$。",
+                )
             elif schema_name == "private_question_authoring_solution_plan":
                 payload = {
                     "solution_method": "解析几何法",
@@ -568,9 +722,19 @@ def test_deepseek_provider_rewrites_deliberative_solution_before_returning() -> 
                 payload = {
                     "order": 1,
                     "steps": ["由判别式大于零，解得参数范围为 $(-\\infty,-1)\\cup(1,+\\infty)$。"],
-                    "consistent_with_locked_answer": True,
+                    "mathematically_valid": True,
                     "issue_summary": None,
                 }
+            elif schema_name == "private_question_authoring_solution_conclusion":
+                payload = {
+                    "answer_value": "参数范围为 $(-\\infty,-1)\\cup(1,+\\infty)$。",
+                    "final_answer": "参数范围为 $(-\\infty,-1)\\cup(1,+\\infty)$。",
+                }
+            elif schema_name == "private_question_authoring_completed_solution_review":
+                payload = passing_completed_solution_review(
+                    "参数范围为 $(-\\infty,-1)\\cup(1,+\\infty)$。",
+                    "参数范围为 $(-\\infty,-1)\\cup(1,+\\infty)$。",
+                )
             else:
                 payload = {
                     "order": 1,
@@ -609,7 +773,7 @@ def test_deepseek_provider_rewrites_deliberative_solution_before_returning() -> 
     assert calls["private_question_authoring_solution_cleanup"] == 1
 
 
-def test_deepseek_provider_preserves_complete_question_when_solution_conflicts() -> None:
+def test_deepseek_provider_rejects_draft_when_solution_reveals_math_conflict() -> None:
     class FakeDeepSeekClient:
         def request(self, **kwargs: object) -> dict:
             schema_name = kwargs["output_schema"]["name"]  # type: ignore[index]
@@ -624,8 +788,6 @@ def test_deepseek_provider_preserves_complete_question_when_solution_conflicts()
                         {"key": "C", "text": "$\\frac{3}{4}$"},
                         {"key": "D", "text": "$1$"},
                     ],
-                    "answer_value": "B",
-                    "final_answer": "答案为 B，即 $\\frac{2}{3}$。",
                     "estimated_difficulty": 5,
                 }
             elif schema_name == "private_question_authoring_question_review":
@@ -643,9 +805,9 @@ def test_deepseek_provider_preserves_complete_question_when_solution_conflicts()
             elif schema_name == "private_question_authoring_solution_cleanup":
                 payload = {
                     "order": 1,
-                    "steps": ["当前解析与锁定答案不一致，请教师独立核验。"],
-                    "consistent_with_locked_answer": False,
-                    "issue_summary": "递推方程推出选项 A，但锁定答案为 B。",
+                    "steps": ["当前推导发现题面条件无法同时成立，请教师独立核验。"],
+                    "mathematically_valid": False,
+                    "issue_summary": "题面中的递推条件互相矛盾。",
                 }
             else:
                 payload = {
@@ -664,12 +826,77 @@ def test_deepseek_provider_preserves_complete_question_when_solution_conflicts()
     )
     provider.client = FakeDeepSeekClient()  # type: ignore[assignment]
 
+    with pytest.raises(QuestionAuthoringProviderError, match="数学冲突"):
+        provider.generate(
+            QuestionAuthoringContext(
+                brief=QuestionDesignBrief(
+                    request_text="命制一道数列与概率结合的复杂选择题",
+                    question_type="single_choice",
+                    target_difficulty=5,
+                ),
+                question_type="single_choice",
+                curriculum=None,
+                curriculum_options=(),
+            )
+        )
+
+
+def test_deepseek_provider_uses_answer_derived_after_solution_not_core_guess() -> None:
+    """The authored standard answer must follow the completed derivation, not a core-stage guess."""
+
+    class FakeDeepSeekClient:
+        def request(self, **kwargs: object) -> dict:
+            schema_name = kwargs["output_schema"]["name"]  # type: ignore[index]
+            if schema_name == "private_question_authoring_core":
+                payload = {
+                    "question_type": "single_choice",
+                    "stem_plain": "已知条件可推出函数恒为 1，判断其满足的不等式解集。",
+                    "stem_latex": "已知条件可推出函数恒为 $1$，判断其满足的不等式解集。",
+                    "options": [
+                        {"key": "A", "text": "$(0,e]$"},
+                        {"key": "B", "text": "$[e,+\\infty)$"},
+                        {"key": "C", "text": "$(0,1]\\cup[e,+\\infty)$"},
+                        {"key": "D", "text": "$[1,e]$"},
+                    ],
+                    "estimated_difficulty": 4,
+                }
+            elif schema_name == "private_question_authoring_question_review":
+                payload = passing_question_review("A", "A")
+            elif schema_name == "private_question_authoring_solution_plan":
+                payload = {
+                    "solution_method": "先求函数，再解不等式。",
+                    "sections": [{"order": 1, "title": "求解", "goal": "完成推导并判断选项"}],
+                    "authoring_intent": "考查函数与不等式。",
+                    "curriculum_node_id": None,
+                    "knowledge_points": ["函数与不等式"],
+                    "assessed_methods": ["等价转化"],
+                    "common_mistakes": ["直接沿用暂定答案"],
+                }
+            elif schema_name == "private_question_authoring_solution_conclusion":
+                payload = {"answer_value": "A", "final_answer": "A"}
+            elif schema_name == "private_question_authoring_completed_solution_review":
+                payload = passing_completed_solution_review("A", "A")
+            else:
+                payload = {
+                    "order": 1,
+                    "steps": ["由题设解得 $f(x)=1$，不等式等价于 $x\\le e$；结合 $x>0$，解集为 $(0,e]$，对应选项 A。"],
+                }
+            text = json.dumps(payload, ensure_ascii=False)
+            return {"output": [{"type": "message", "content": [{"type": "output_text", "text": text}]}]}
+
+    provider = DeepSeekQuestionAuthoringProvider(
+        api_key="test-key",
+        model="deepseek-v4-flash",
+        base_url="https://api.deepseek.com",
+    )
+    provider.client = FakeDeepSeekClient()  # type: ignore[assignment]
+
     content = provider.generate(
         QuestionAuthoringContext(
             brief=QuestionDesignBrief(
-                request_text="命制一道数列与概率结合的复杂选择题",
+                request_text="命制一道函数与不等式单选题",
                 question_type="single_choice",
-                target_difficulty=5,
+                target_difficulty=4,
             ),
             question_type="single_choice",
             curriculum=None,
@@ -677,16 +904,73 @@ def test_deepseek_provider_preserves_complete_question_when_solution_conflicts()
         )
     )
 
-    assert content.stem_plain.startswith("某校组织投币闯关活动")
-    assert [option.key for option in content.options] == ["A", "B", "C", "D"]
-    assert content.answer_value == "B"
-    assert content.final_answer == "答案为 B，即 $\\frac{2}{3}$。"
-    assert content.solution_status == "needs_teacher_verification"
-    assert content.solution_issue == "递推方程推出选项 A，但锁定答案为 B。"
-    assert content.solution_steps == ["解析未通过一致性检查，请教师根据完整题面自行核验，或重新生成解析。"]
+    assert content.answer_value == "A"
+    assert content.final_answer == "A"
+    assert content.solution_status == "ready"
+    assert "对应选项 A" in content.solution_steps[-1]
 
 
-def test_deepseek_provider_preserves_complete_question_when_solution_stage_fails() -> None:
+def test_deepseek_provider_rejects_disagreement_between_two_independent_solves() -> None:
+    class FakeDeepSeekClient:
+        def request(self, **kwargs: object) -> dict:
+            schema_name = kwargs["output_schema"]["name"]  # type: ignore[index]
+            if schema_name == "private_question_authoring_core":
+                payload = {
+                    "question_type": "single_choice",
+                    "stem_plain": "若 x=1，则下列结论正确的是（ ）。",
+                    "stem_latex": "若 $x=1$，则下列结论正确的是（ ）。",
+                    "options": [
+                        {"key": "A", "text": "$x=1$"},
+                        {"key": "B", "text": "$x=2$"},
+                        {"key": "C", "text": "$x=3$"},
+                        {"key": "D", "text": "$x=4$"},
+                    ],
+                    "estimated_difficulty": 1,
+                }
+            elif schema_name == "private_question_authoring_question_review":
+                payload = passing_question_review("B", "B")
+            elif schema_name == "private_question_authoring_solution_plan":
+                payload = {
+                    "solution_method": "直接判断",
+                    "sections": [{"order": 1, "title": "判断", "goal": "由题设确定选项"}],
+                    "authoring_intent": "验证独立答案交叉核验。",
+                    "curriculum_node_id": None,
+                    "knowledge_points": [],
+                    "assessed_methods": [],
+                    "common_mistakes": [],
+                }
+            elif schema_name == "private_question_authoring_solution_conclusion":
+                payload = {"answer_value": "A", "final_answer": "A"}
+            elif schema_name == "private_question_authoring_completed_solution_review":
+                payload = passing_completed_solution_review("A", "A")
+            else:
+                payload = {"order": 1, "steps": ["由题设直接得到 $x=1$，故选 A。"]}
+            text = json.dumps(payload, ensure_ascii=False)
+            return {"output": [{"type": "message", "content": [{"type": "output_text", "text": text}]}]}
+
+    provider = DeepSeekQuestionAuthoringProvider(
+        api_key="test-key",
+        model="deepseek-v4-flash",
+        base_url="https://api.deepseek.com",
+    )
+    provider.client = FakeDeepSeekClient()  # type: ignore[assignment]
+
+    with pytest.raises(QuestionAuthoringProviderError, match="选项不一致"):
+        provider.generate(
+            QuestionAuthoringContext(
+                brief=QuestionDesignBrief(
+                    request_text="命制一道简单单选题用于交叉核验",
+                    question_type="single_choice",
+                    target_difficulty=1,
+                ),
+                question_type="single_choice",
+                curriculum=None,
+                curriculum_options=(),
+            )
+        )
+
+
+def test_deepseek_provider_does_not_publish_answer_when_solution_stage_fails() -> None:
     class FakeDeepSeekClient:
         def request(self, **kwargs: object) -> dict:
             schema_name = kwargs["output_schema"]["name"]  # type: ignore[index]
@@ -696,8 +980,6 @@ def test_deepseek_provider_preserves_complete_question_when_solution_stage_fails
                     "stem_plain": "已知数列满足递推关系，求其通项并证明所得结论。",
                     "stem_latex": "已知数列满足递推关系，求其通项并证明所得结论。",
                     "options": [],
-                    "answer_value": "通项见最终答案。",
-                    "final_answer": "完整结论已锁定。",
                     "estimated_difficulty": 5,
                 }
             elif schema_name == "private_question_authoring_question_review":
@@ -714,24 +996,19 @@ def test_deepseek_provider_preserves_complete_question_when_solution_stage_fails
     )
     provider.client = FakeDeepSeekClient()  # type: ignore[assignment]
 
-    content = provider.generate(
-        QuestionAuthoringContext(
-            brief=QuestionDesignBrief(
-                request_text="命制一道复杂数列解答题",
+    with pytest.raises(QuestionAuthoringProviderError, match="命题草稿结构"):
+        provider.generate(
+            QuestionAuthoringContext(
+                brief=QuestionDesignBrief(
+                    request_text="命制一道复杂数列解答题",
+                    question_type="open_response",
+                    target_difficulty=5,
+                ),
                 question_type="open_response",
-                target_difficulty=5,
-            ),
-            question_type="open_response",
-            curriculum=None,
-            curriculum_options=(),
+                curriculum=None,
+                curriculum_options=(),
+            )
         )
-    )
-
-    assert content.stem_plain.startswith("已知数列")
-    assert content.final_answer == "完整结论已锁定。"
-    assert content.solution_status == "needs_teacher_verification"
-    assert content.solution_issue == "解析生成未完成；题面、选项与最终答案已完整保留。"
-    assert content.solution_steps == ["解析生成未完成，请教师根据完整题面自行核验，或重新生成解析。"]
 
 
 def test_deepseek_provider_retries_only_the_failed_solution_section() -> None:
@@ -747,8 +1024,6 @@ def test_deepseek_provider_retries_only_the_failed_solution_section() -> None:
                     "stem_plain": "已知椭圆条件，完成两问并给出完整证明。",
                     "stem_latex": "已知椭圆条件，完成两问并给出完整证明。",
                     "options": [],
-                    "answer_value": "最终结论",
-                    "final_answer": "最终结论",
                     "estimated_difficulty": 5,
                 }
             elif schema_name == "private_question_authoring_question_review":
@@ -767,6 +1042,10 @@ def test_deepseek_provider_retries_only_the_failed_solution_section() -> None:
                     "assessed_methods": [],
                     "common_mistakes": [],
                 }
+            elif schema_name == "private_question_authoring_solution_conclusion":
+                payload = {"answer_value": "最终结论", "final_answer": "最终结论"}
+            elif schema_name == "private_question_authoring_completed_solution_review":
+                payload = passing_completed_solution_review("最终结论", "最终结论")
             else:
                 section = json.loads(str(kwargs["input_text"]))["section"]
                 order = int(section["order"])
@@ -817,8 +1096,6 @@ def test_deepseek_provider_subdivides_only_a_persistently_truncated_section() ->
                     "stem_plain": "一道需要完整长解析的圆锥曲线综合题。",
                     "stem_latex": "一道需要完整长解析的圆锥曲线综合题。",
                     "options": [],
-                    "answer_value": "最终结论",
-                    "final_answer": "最终结论",
                     "estimated_difficulty": 5,
                 }
             elif schema_name == "private_question_authoring_question_review":
@@ -833,6 +1110,10 @@ def test_deepseek_provider_subdivides_only_a_persistently_truncated_section() ->
                     "assessed_methods": [],
                     "common_mistakes": [],
                 }
+            elif schema_name == "private_question_authoring_solution_conclusion":
+                payload = {"answer_value": "最终结论", "final_answer": "最终结论"}
+            elif schema_name == "private_question_authoring_completed_solution_review":
+                payload = passing_completed_solution_review("最终结论", "最终结论")
             elif schema_name == "private_question_authoring_solution_subplan":
                 payload = {
                     "parts": [
@@ -932,7 +1213,7 @@ def test_create_draft_returns_complete_question_when_solution_needs_teacher_veri
                         "解析未通过一致性检查，请教师根据完整题面自行核验，或重新生成解析。"
                     ],
                     "solution_status": "needs_teacher_verification",
-                    "solution_issue": "解析推导与锁定答案存在冲突。",
+                    "solution_issue": "解析推导与标准答案存在冲突。",
                 }
             )
 
@@ -952,7 +1233,7 @@ def test_create_draft_returns_complete_question_when_solution_needs_teacher_veri
     assert draft.answer_value == "B"
     assert draft.final_answer
     assert draft.solution_status == "needs_teacher_verification"
-    assert draft.solution_issue == "解析推导与锁定答案存在冲突。"
+    assert draft.solution_issue == "解析推导与标准答案存在冲突。"
     assert draft.verification.status == "checks_failed"
     consistency = next(
         check
@@ -960,7 +1241,7 @@ def test_create_draft_returns_complete_question_when_solution_needs_teacher_veri
         if check.code == "answer_solution_consistency"
     )
     assert consistency.status == "failed"
-    assert any("题面、选项和最终答案已完整保留" in warning for warning in draft.warnings)
+    assert any("题目或解析未通过一致性检查" in warning for warning in draft.warnings)
     assert draft.saved is False
     assert draft.visibility == "owner_only"
 
@@ -1063,8 +1344,19 @@ def test_teacher_revision_rechecks_structure_and_cannot_supply_trust_evidence() 
     assert any("教师编辑" in warning for warning in revised.warnings)
 
 
-def test_regenerate_solution_keeps_question_and_answer_immutable() -> None:
-    provider = FakeProvider()
+def test_regenerate_solution_keeps_question_but_uses_newly_derived_answer() -> None:
+    class ReansweringProvider(FakeProvider):
+        def regenerate_solution(
+            self, current: ProviderQuestionDraft
+        ) -> ProviderQuestionSolution:
+            return ProviderQuestionSolution(
+                solution_method="重新组织的定义法",
+                solution_steps=["只依据题面重新求解。", "完整推导得到选项 A。"],
+                answer_value="A",
+                final_answer="答案为 A。",
+            )
+
+    provider = ReansweringProvider()
     authoring = QuestionAuthoring(
         curriculum=curriculum(), provider=provider, math_verifier=MathVerifier()
     )
@@ -1083,16 +1375,16 @@ def test_regenerate_solution_keeps_question_and_answer_immutable() -> None:
     assert regenerated.stem_plain == draft.stem_plain
     assert regenerated.stem_latex == draft.stem_latex
     assert regenerated.options == draft.options
-    assert regenerated.answer_value == draft.answer_value
-    assert regenerated.final_answer == draft.final_answer
+    assert regenerated.answer_value == "A"
+    assert regenerated.final_answer == "答案为 A。"
     assert regenerated.authoring_intent == draft.authoring_intent
     assert regenerated.curriculum == draft.curriculum
     assert regenerated.solution_method == "重新组织的定义法"
-    assert regenerated.solution_steps == ["先固定题面与答案。", "再给出不含试错过程的成稿推导。"]
+    assert regenerated.solution_steps == ["只依据题面重新求解。", "完整推导得到选项 A。"]
     assert regenerated.visibility == "owner_only"
     assert regenerated.saved is False
     assert regenerated.verification.teacher_review_required is True
-    assert any("重新生成" in warning for warning in regenerated.warnings)
+    assert any("重新推导" in warning for warning in regenerated.warnings)
 
 
 def test_regenerate_solution_returns_flagged_revision_instead_of_hiding_question() -> None:
@@ -1105,8 +1397,10 @@ def test_regenerate_solution_returns_flagged_revision_instead_of_hiding_question
                 solution_steps=[
                     "解析未通过一致性检查，请教师根据完整题面自行核验，或再次重新生成解析。"
                 ],
+                answer_value=current.answer_value,
+                final_answer=current.final_answer,
                 solution_status="needs_teacher_verification",
-                solution_issue="新解析仍与锁定答案存在冲突。",
+                solution_issue="新解析仍与标准答案存在冲突。",
             )
 
     provider = ConflictRegenerationProvider()
@@ -1127,7 +1421,7 @@ def test_regenerate_solution_returns_flagged_revision_instead_of_hiding_question
     assert regenerated.answer_value == draft.answer_value
     assert regenerated.final_answer == draft.final_answer
     assert regenerated.solution_status == "needs_teacher_verification"
-    assert regenerated.solution_issue == "新解析仍与锁定答案存在冲突。"
+    assert regenerated.solution_issue == "新解析仍与标准答案存在冲突。"
     assert regenerated.verification.status == "checks_failed"
     assert any("自行核验" in warning for warning in regenerated.warnings)
 

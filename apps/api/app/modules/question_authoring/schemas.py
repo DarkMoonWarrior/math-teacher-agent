@@ -213,11 +213,13 @@ class ProviderQuestionDraft(BaseModel):
 
 
 class ProviderQuestionSolution(BaseModel):
-    """Provider-owned replacement for solution fields only."""
+    """Provider-owned re-solve result, including the answer derived from it."""
 
     model_config = ConfigDict(extra="forbid")
 
     solution_method: str = Field(min_length=1, max_length=500)
     solution_steps: list[str] = Field(min_length=1, max_length=100)
+    answer_value: str = Field(min_length=1, max_length=4000)
+    final_answer: str = Field(min_length=1, max_length=4000)
     solution_status: QuestionSolutionStatus = "ready"
     solution_issue: str | None = Field(default=None, max_length=500)

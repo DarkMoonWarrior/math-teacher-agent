@@ -22,10 +22,11 @@ from app.modules.question_authoring.schemas import (
 from app.modules.question_authoring.scope import university_only_terms
 
 
-PROMPT_REVISION = "question-authoring-v8-core-review-before-solution"
+PROMPT_REVISION = "question-authoring-v10-reviewed-repair-derived-answer"
 
-QuestionAuthoringProgressStage = Literal["composing", "reviewing", "solving"]
+QuestionAuthoringProgressStage = Literal["composing", "reviewing", "refining", "solving"]
 QUESTION_REPAIR_ATTEMPTS = 3
+POST_SOLUTION_REPAIR_ATTEMPTS = 1
 
 
 _DELIBERATION_PATTERNS = (
@@ -65,6 +66,15 @@ class _QuestionAuthoringSolutionConflict(QuestionAuthoringProviderError):
         )
 
 
+class _QuestionInvalidAfterSolution(QuestionAuthoringProviderError):
+    """The full solve exposed a statement flaw missed by the pre-solve review."""
+
+    def __init__(self, *, summary: str, issues: list[str]) -> None:
+        self.summary = summary
+        self.issues = issues
+        super().__init__("完整求解复核发现题面仍有问题，必须先完善题面并重新审核。")
+
+
 @dataclass(frozen=True)
 class QuestionAuthoringContext:
     brief: QuestionDesignBrief
@@ -94,8 +104,8 @@ class QuestionAuthoringProvider(Protocol):
     ) -> ProviderQuestionSolution: ...
 
 
-class _QuestionCore(BaseModel):
-    """Immutable question and answer contract used by every later stage."""
+class _QuestionStatement(BaseModel):
+    """Question wording and options; no answer is fixed before solving."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -103,19 +113,19 @@ class _QuestionCore(BaseModel):
     stem_plain: str = Field(min_length=5, max_length=20000)
     stem_latex: str | None = Field(default=None, max_length=20000)
     options: list[QuestionDraftOption] = Field(default_factory=list, max_length=20)
-    answer_value: str = Field(min_length=1, max_length=4000)
-    final_answer: str = Field(min_length=1, max_length=4000)
     estimated_difficulty: int = Field(ge=1, le=5)
 
 
 class _QuestionReview(BaseModel):
-    """Adversarial review of the immutable question core before solution work."""
+    """Independent solvability review of the answer-free question statement."""
 
     model_config = ConfigDict(extra="forbid")
 
     passed: bool
-    summary: str = Field(min_length=1, max_length=500)
+    summary: str = Field(min_length=1, max_length=4000)
     issues: list[str] = Field(default_factory=list, max_length=10)
+    independent_answer_value: str | None = Field(default=None, max_length=4000)
+    independent_final_answer: str | None = Field(default=None, max_length=4000)
 
 
 class _SolutionPlanSection(BaseModel):
@@ -153,8 +163,32 @@ class _SolutionSection(BaseModel):
 
 
 class _SolutionCleanup(_SolutionSection):
-    consistent_with_locked_answer: bool
+    mathematically_valid: bool
     issue_summary: str | None = Field(default=None, max_length=500)
+
+
+class _SolutionConclusion(BaseModel):
+    """Canonical answer extracted only after the complete derivation exists."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    answer_value: str = Field(min_length=1, max_length=4000)
+    final_answer: str = Field(min_length=1, max_length=4000)
+
+
+class _CompletedSolutionReview(BaseModel):
+    """Independent post-solution audit of statement, derivation, and answer."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    passed: bool
+    question_valid: bool
+    solution_valid: bool
+    answer_consistent: bool
+    summary: str = Field(min_length=1, max_length=4000)
+    issues: list[str] = Field(default_factory=list, max_length=10)
+    independent_answer_value: str = Field(min_length=1, max_length=4000)
+    independent_final_answer: str = Field(min_length=1, max_length=4000)
 
 
 class _SolutionSubplan(BaseModel):
@@ -193,11 +227,10 @@ class DeepSeekQuestionAuthoringProvider:
             core_payload = self._request_stage(
                 stage="core",
                 instructions=(
-                    "你是面向中国高中数学教师的辅助命题模块。先生成完整题面与最终答案骨架。"
+                    "你是面向中国高中数学教师的辅助命题模块。先只生成完整题面与选项。"
                     "教师可能要求综合题、多小问题或长题干；必须完整保留解题所需条件和所有小问，"
-                    "不得为了缩短输出删题、合并小问或降低难度。题目必须可独立作答且题干、答案自洽。"
-                    "选择题必须给出明确且互不重复的选项；单选 answer_value 只能有一个编号，"
-                    "多选用逗号分隔。填空题和解答题的 answer_value 与 final_answer 必须相同。"
+                    "不得为了缩短输出删题、合并小问或降低难度。题目必须可独立作答且条件自洽。"
+                    "选择题必须给出明确且互不重复的完整选项。"
                     "题目只能使用中国普通高中数学课程范围内的概念、方法与符号；"
                     "不得引入马尔可夫链、随机过程、傅里叶分析、微积分、线性代数等大学内容。"
                     "不得虚构学校、考试、年份、教材页码、题库来源或版权信息。"
@@ -205,7 +238,7 @@ class DeepSeekQuestionAuthoringProvider:
                     "stem_plain 应是无需 LaTeX 渲染也能校对的题面；stem_latex 是供页面展示的可读版本。"
                     "选择题的 stem_plain 与 stem_latex 只能写公共题干，严禁包含 A/B/C/D 等选项；"
                     "全部选项必须且只能逐项写入 options 数组，option.text 不得重复写选项编号。"
-                    "本阶段只返回题面、选项、最终答案与难度，不展开解析。"
+                    "本阶段严禁给出或暗示答案，也不展开解析；标准答案必须在完整解析完成后产生。"
                 ),
                 input_value={
                     "design_brief": provider_input["design_brief"],
@@ -216,88 +249,65 @@ class DeepSeekQuestionAuthoringProvider:
                 },
                 output_schema=self._core_schema(),
                 max_tokens=8192,
-                recovery_instruction="只修复 JSON 结构并完整返回题面与全部小问；不得截短题目。",
+                recovery_instruction="只修复 JSON 结构并完整返回题面与全部小问；不得返回答案或截短题目。",
             )
-            self._normalize_non_choice_answer(core_payload)
-            core = _QuestionCore.model_validate(core_payload)
+            core = _QuestionStatement.model_validate(core_payload)
             core = self._repair_university_scope(core, provider_input)
             context.report_progress("reviewing")
-            core = self._review_and_repair_question(core, provider_input)
-            context.report_progress("solving")
-
-            plan: _SolutionPlan | None = None
-            try:
-                plan = _SolutionPlan.model_validate(
-                    self._request_stage(
-                        stage="solution-plan",
-                        instructions=(
-                            "根据已经锁定的题面与最终答案，规划一份适合教师审核和讲解的完整解析。"
-                            "先把长解析拆成有明确目标的若干段，本阶段不要展开详细计算。"
-                            "多小问题必须逐问覆盖；复杂推导应继续拆段，不能因篇幅省略关键论证。"
-                            "教师可以只描述想要的题，不得因缺少知识点、考查方法或易错点而拒绝。"
-                            "生成题目后，再从 allowed_curriculum_nodes 中选择最贴切的 curriculum_node_id；"
-                            "只能返回列表内 ID，无法可靠映射时返回 null。"
-                            "knowledge_points、assessed_methods 与 common_mistakes 必须依据最终题目归纳，"
-                            "不要把模型推断冒充教师确认。"
-                        ),
-                        input_value={
-                            "design_brief": provider_input["design_brief"],
-                            "question_core": core.model_dump(mode="json"),
-                            "allowed_curriculum_nodes": provider_input[
-                                "allowed_curriculum_nodes"
-                            ],
-                        },
-                        output_schema=self._solution_plan_schema(),
-                        max_tokens=3500,
-                        recovery_instruction="只修复 JSON 结构；保留覆盖全部小问所需的解析分段。",
-                    )
-                )
-                self._validate_plan_orders(plan)
-                sections = self._expand_sections(core, plan)
-                steps = [step for section in sections for step in section.steps]
-                solution_status = "ready"
-                solution_issue = None
-            except _QuestionAuthoringSolutionConflict as exc:
-                steps = [
-                    "解析未通过一致性检查，请教师根据完整题面自行核验，或重新生成解析。"
-                ]
-                solution_status = "needs_teacher_verification"
-                solution_issue = exc.issue
-            except (
-                QuestionAuthoringProviderError,
-                DeepSeekClientError,
-                KeyError,
-                TypeError,
-                ValueError,
-            ):
-                steps = [
-                    "解析生成未完成，请教师根据完整题面自行核验，或重新生成解析。"
-                ]
-                solution_status = "needs_teacher_verification"
-                solution_issue = "解析生成未完成；题面、选项与最终答案已完整保留。"
-
-            return ProviderQuestionDraft(
-                question_type=core.question_type,
-                stem_plain=core.stem_plain,
-                stem_latex=core.stem_latex,
-                options=core.options,
-                answer_value=core.answer_value,
-                solution_method=(plan.solution_method if plan else "解析待教师核验"),
-                solution_steps=steps,
-                solution_status=solution_status,
-                solution_issue=solution_issue,
-                final_answer=core.final_answer,
-                authoring_intent=(plan.authoring_intent if plan else context.brief.request_text),
-                estimated_difficulty=core.estimated_difficulty,
-                curriculum_node_id=(
-                    plan.curriculum_node_id
-                    if plan
-                    else (context.curriculum.node_id if context.curriculum else None)
-                ),
-                knowledge_points=(plan.knowledge_points if plan else []),
-                assessed_methods=(plan.assessed_methods if plan else []),
-                common_mistakes=(plan.common_mistakes if plan else []),
+            core, question_review = self._review_and_repair_question(
+                core,
+                provider_input,
+                on_repair=lambda: context.report_progress("refining"),
             )
+            for post_solution_attempt in range(POST_SOLUTION_REPAIR_ATTEMPTS + 1):
+                context.report_progress("solving")
+                try:
+                    plan, steps, conclusion = self._solve_reviewed_statement(
+                        core,
+                        provider_input,
+                        question_review=question_review,
+                        stage_suffix=(
+                            "" if post_solution_attempt == 0 else f"-retry-{post_solution_attempt}"
+                        ),
+                    )
+                except _QuestionInvalidAfterSolution as exc:
+                    if post_solution_attempt >= POST_SOLUTION_REPAIR_ATTEMPTS:
+                        raise QuestionAuthoringProviderError(
+                            "题面在完整求解后仍被判定为不成立，未建立命题草稿。"
+                        ) from exc
+                    context.report_progress("refining")
+                    core, question_review = self._repair_question_from_issues(
+                        core,
+                        provider_input,
+                        review_summary=exc.summary,
+                        review_issues=exc.issues,
+                        stage_prefix="post-solution-question-repair",
+                    )
+                    continue
+
+                return ProviderQuestionDraft(
+                    question_type=core.question_type,
+                    stem_plain=core.stem_plain,
+                    stem_latex=core.stem_latex,
+                    options=core.options,
+                    answer_value=conclusion.answer_value,
+                    solution_method=plan.solution_method,
+                    solution_steps=steps,
+                    solution_status="ready",
+                    solution_issue=None,
+                    final_answer=conclusion.final_answer,
+                    authoring_intent=plan.authoring_intent,
+                    estimated_difficulty=core.estimated_difficulty,
+                    curriculum_node_id=(
+                        plan.curriculum_node_id
+                        if plan.curriculum_node_id
+                        else (context.curriculum.node_id if context.curriculum else None)
+                    ),
+                    knowledge_points=plan.knowledge_points,
+                    assessed_methods=plan.assessed_methods,
+                    common_mistakes=plan.common_mistakes,
+                )
+            raise QuestionAuthoringProviderError("题面未能通过完善后的完整求解复核。")
         except QuestionAuthoringProviderError:
             raise
         except DeepSeekClientError as exc:
@@ -307,53 +317,110 @@ class DeepSeekQuestionAuthoringProvider:
                 f"DeepSeek 返回内容不符合命题草稿结构：{exc}"
             ) from exc
 
+    def _solve_reviewed_statement(
+        self,
+        core: _QuestionStatement,
+        provider_input: dict,
+        *,
+        question_review: _QuestionReview,
+        stage_suffix: str,
+    ) -> tuple[_SolutionPlan, list[str], _SolutionConclusion]:
+        plan = _SolutionPlan.model_validate(
+            self._request_stage(
+                stage=f"solution-plan{stage_suffix}",
+                instructions=(
+                    "根据已通过题面自审核的题干与选项，规划一份适合教师审核和讲解的完整解析。"
+                    "不得接收或猜测命题阶段的答案，必须从题面独立求解。"
+                    "先把长解析拆成有明确目标的若干段，本阶段不要展开详细计算。"
+                    "多小问题必须逐问覆盖；复杂推导应继续拆段，不能因篇幅省略关键论证。"
+                    "教师可以只描述想要的题，不得因缺少知识点、考查方法或易错点而拒绝。"
+                    "生成题目后，再从 allowed_curriculum_nodes 中选择最贴切的 curriculum_node_id；"
+                    "只能返回列表内 ID，无法可靠映射时返回 null。"
+                    "knowledge_points、assessed_methods 与 common_mistakes 必须依据最终题目归纳，"
+                    "不要把模型推断冒充教师确认。"
+                ),
+                input_value={
+                    "design_brief": provider_input["design_brief"],
+                    "question_statement": core.model_dump(mode="json"),
+                    "allowed_curriculum_nodes": provider_input["allowed_curriculum_nodes"],
+                },
+                output_schema=self._solution_plan_schema(),
+                max_tokens=3500,
+                recovery_instruction="只修复 JSON 结构；保留覆盖全部小问所需的解析分段。",
+            )
+        )
+        self._validate_plan_orders(plan)
+        sections = self._expand_sections(core, plan, stage_suffix=stage_suffix)
+        steps = [step for section in sections for step in section.steps]
+        conclusion = self._derive_solution_conclusion(
+            core,
+            steps,
+            stage=f"solution-conclusion{stage_suffix}",
+        )
+        self._verify_completed_solution(
+            core,
+            steps,
+            conclusion,
+            question_review=question_review,
+            stage=f"completed-solution-review{stage_suffix}",
+        )
+        return plan, steps, conclusion
+
     def regenerate_solution(
         self,
         current: ProviderQuestionDraft,
     ) -> ProviderQuestionSolution:
-        """Regenerate only the explanation behind an immutable question contract."""
+        """Re-solve an immutable statement and derive a fresh canonical answer."""
 
-        core = _QuestionCore(
+        core = _QuestionStatement(
             question_type=current.question_type,
             stem_plain=current.stem_plain,
             stem_latex=current.stem_latex,
             options=current.options,
-            answer_value=current.answer_value,
-            final_answer=current.final_answer,
             estimated_difficulty=current.estimated_difficulty,
         )
         try:
+            question_review = self._review_question_core(
+                core,
+                stage="solution-regeneration-question-review",
+            )
+            if not question_review.passed:
+                raise QuestionAuthoringProviderError(
+                    "当前题面未通过重新生成解析前的独立审核，未生成新的标准答案。"
+                )
             plan = _SolutionRegenerationPlan.model_validate(
                 self._request_stage(
                     stage="solution-regeneration-plan",
                     instructions=(
-                        "为已经锁定的题面、选项和最终答案重新规划一份全新的解析。"
-                        "不得修改或补写题面条件，不得改变答案；多小问必须逐问覆盖。"
+                        "为已经锁定的题面和选项重新规划一份全新的解析。"
+                        "不得接收旧答案，也不得修改或补写题面条件；必须从题面独立求解。"
+                        "多小问必须逐问覆盖。"
                         "本阶段只返回新的解法概述和分段提纲，不展开计算。"
                         f"{_POLISHED_SOLUTION_INSTRUCTIONS}"
                     ),
-                    input_value={"locked_question_core": core.model_dump(mode="json")},
+                    input_value={"question_statement": core.model_dump(mode="json")},
                     output_schema=self._solution_regeneration_plan_schema(),
                     max_tokens=2500,
                     recovery_instruction="只修复 JSON 结构；保留覆盖全部小问所需的解析分段。",
                 )
             )
             self._validate_plan_orders(plan)
-            try:
-                sections = self._expand_sections(core, plan)
-                return ProviderQuestionSolution(
-                    solution_method=plan.solution_method,
-                    solution_steps=[step for section in sections for step in section.steps],
-                )
-            except _QuestionAuthoringSolutionConflict as exc:
-                return ProviderQuestionSolution(
-                    solution_method=plan.solution_method,
-                    solution_steps=[
-                        "解析未通过一致性检查，请教师根据完整题面自行核验，或再次重新生成解析。"
-                    ],
-                    solution_status="needs_teacher_verification",
-                    solution_issue=exc.issue,
-                )
+            sections = self._expand_sections(core, plan)
+            steps = [step for section in sections for step in section.steps]
+            conclusion = self._derive_solution_conclusion(core, steps)
+            self._verify_completed_solution(
+                core,
+                steps,
+                conclusion,
+                question_review=question_review,
+                stage="solution-regeneration-verification",
+            )
+            return ProviderQuestionSolution(
+                solution_method=plan.solution_method,
+                solution_steps=steps,
+                answer_value=conclusion.answer_value,
+                final_answer=conclusion.final_answer,
+            )
         except QuestionAuthoringProviderError:
             raise
         except DeepSeekClientError as exc:
@@ -365,14 +432,21 @@ class DeepSeekQuestionAuthoringProvider:
 
     def _expand_sections(
         self,
-        core: _QuestionCore,
+        core: _QuestionStatement,
         plan: _SolutionPlan | _SolutionRegenerationPlan,
+        *,
+        stage_suffix: str = "",
     ) -> list[_SolutionSection]:
         workers = min(3, len(plan.sections))
         with ThreadPoolExecutor(max_workers=workers) as executor:
             sections = list(
                 executor.map(
-                    lambda section: self._expand_solution_section(core, plan, section),
+                    lambda section: self._expand_solution_section(
+                        core,
+                        plan,
+                        section,
+                        stage_suffix=stage_suffix,
+                    ),
                     plan.sections,
                 )
             )
@@ -384,19 +458,21 @@ class DeepSeekQuestionAuthoringProvider:
 
     def _expand_solution_section(
         self,
-        core: _QuestionCore,
+        core: _QuestionStatement,
         plan: _SolutionPlan | _SolutionRegenerationPlan,
         section: _SolutionPlanSection,
+        *,
+        stage_suffix: str = "",
     ) -> _SolutionSection:
         input_value = {
-            "question_core": core.model_dump(mode="json"),
+            "question_statement": core.model_dump(mode="json"),
             "solution_method": plan.solution_method,
             "solution_outline": [item.model_dump(mode="json") for item in plan.sections],
             "section": section.model_dump(mode="json"),
         }
         instructions = (
             "只展开解析提纲中指定的当前一段，给出教师和学生都能读懂的完整推导步骤。"
-            "必须以锁定题面和锁定最终答案为准，不得改题、添加未给条件或改变最终结论。"
+            "必须只依据题面独立推导，不得接收预设答案、改题或添加未给条件。"
             "每一步都写清数学依据；涉及多个小问时保留当前小问的层次。"
             "不要重复整道题，也不要重复其他解析段。"
             f"{_POLISHED_SOLUTION_INSTRUCTIONS}"
@@ -406,7 +482,7 @@ class DeepSeekQuestionAuthoringProvider:
         try:
             return self._request_solution_section(
                 section=section,
-                stage=f"solution-section-{section.order}",
+                stage=f"solution-section-{section.order}{stage_suffix}",
                 input_value=input_value,
                 instructions=instructions,
             )
@@ -471,8 +547,8 @@ class DeepSeekQuestionAuthoringProvider:
             instructions=(
                 "把当前解析草稿改写为可直接展示的正式解析。删除所有试算、回退、自我纠错、"
                 "第一人称独白、提示词或字段讨论，只保留最终采用的严谨推导；不要缩短必要步骤。"
-                "题面与最终答案已锁定，不得修改。若你确认二者在数学上无法同时成立，"
-                "将 consistent_with_locked_answer 设为 false，并用 issue_summary 简洁说明矛盾；"
+                "题面已经锁定，但答案尚未产生。若你确认题面本身或当前推导在数学上不成立，"
+                "将 mathematically_valid 设为 false，并用 issue_summary 简洁说明问题；"
                 "此时 steps 仍返回一条简短的教师复核提示，不得伪造证明。"
                 f"{MATH_DISPLAY_INSTRUCTIONS}"
             ),
@@ -489,10 +565,10 @@ class DeepSeekQuestionAuthoringProvider:
             raise ValueError(
                 f"清理后解析段序号应为 {section.order}，实际为 {cleaned.order}"
             )
-        if not cleaned.consistent_with_locked_answer:
-            issue = (cleaned.issue_summary or "题面与锁定答案可能不一致").strip()
+        if not cleaned.mathematically_valid:
+            issue = (cleaned.issue_summary or "题面或当前解析在数学上不成立").strip()
             if self._contains_deliberation([issue]):
-                issue = "解析与锁定题面或最终答案存在数学冲突。"
+                issue = "题面或当前解析存在数学冲突。"
             raise _QuestionAuthoringSolutionConflict(order=section.order, issue=issue)
         if self._contains_deliberation(cleaned.steps):
             raise ValueError("清理后的解析仍包含模型思考或自我纠错叙述")
@@ -509,7 +585,7 @@ class DeepSeekQuestionAuthoringProvider:
     def _subdivide_and_expand(
         self,
         *,
-        core: _QuestionCore,
+        core: _QuestionStatement,
         plan: _SolutionPlan | _SolutionRegenerationPlan,
         section: _SolutionPlanSection,
         original_error: QuestionAuthoringProviderError,
@@ -520,11 +596,11 @@ class DeepSeekQuestionAuthoringProvider:
                     stage=f"solution-section-{section.order}-subplan",
                     instructions=(
                         "当前解析段对于一次模型输出过长。只把该段拆成 2 到 6 个连续、互不重叠的原子子段。"
-                        "子段合并后必须完整实现原段目标，不得删减推导、改变题面或最终答案。"
+                        "子段合并后必须完整实现原段目标，不得删减推导或改变题面。"
                         "本阶段只返回子段标题和目标，不展开计算。"
                     ),
                     input_value={
-                        "question_core": core.model_dump(mode="json"),
+                        "question_statement": core.model_dump(mode="json"),
                         "solution_method": plan.solution_method,
                         "parent_section": section.model_dump(mode="json"),
                     },
@@ -542,7 +618,7 @@ class DeepSeekQuestionAuthoringProvider:
                     section=part,
                     stage=f"solution-section-{section.order}-part-{part.order}",
                     input_value={
-                        "question_core": core.model_dump(mode="json"),
+                        "question_statement": core.model_dump(mode="json"),
                         "solution_method": plan.solution_method,
                         "solution_outline": [
                             item.model_dump(mode="json") for item in plan.sections
@@ -552,7 +628,7 @@ class DeepSeekQuestionAuthoringProvider:
                     },
                     instructions=(
                         "只展开当前原子子段，完整写出教师可读的数学推导；不得重复父段或其他子段。"
-                        "必须使用锁定题面和最终答案，不得改题或省略当前目标所需的依据。"
+                        "必须只使用锁定题面独立推导，不得改题或省略当前目标所需的依据。"
                         f"{_POLISHED_SOLUTION_INSTRUCTIONS}"
                         f"{MATH_DISPLAY_INSTRUCTIONS}"
                     ),
@@ -603,9 +679,9 @@ class DeepSeekQuestionAuthoringProvider:
 
     def _repair_university_scope(
         self,
-        core: _QuestionCore,
+        core: _QuestionStatement,
         provider_input: dict,
-    ) -> _QuestionCore:
+    ) -> _QuestionStatement:
         violations = university_only_terms(
             core.stem_plain,
             core.stem_latex or "",
@@ -626,14 +702,13 @@ class DeepSeekQuestionAuthoringProvider:
                 "design_brief": provider_input["design_brief"],
                 "resolved_question_type": provider_input["resolved_question_type"],
                 "rejected_university_terms": violations,
-                "rejected_question_core": core.model_dump(mode="json"),
+                "rejected_question_statement": core.model_dump(mode="json"),
             },
             output_schema=self._core_schema(),
             max_tokens=8192,
-            recovery_instruction="只修复 JSON，并完整返回高中范围内的题面、全部选项和答案。",
+            recovery_instruction="只修复 JSON，并完整返回高中范围内的题面和全部选项；不得返回答案。",
         )
-        self._normalize_non_choice_answer(repaired_payload)
-        repaired = _QuestionCore.model_validate(repaired_payload)
+        repaired = _QuestionStatement.model_validate(repaired_payload)
         remaining = university_only_terms(
             repaired.stem_plain,
             repaired.stem_latex or "",
@@ -647,23 +722,48 @@ class DeepSeekQuestionAuthoringProvider:
 
     def _review_and_repair_question(
         self,
-        core: _QuestionCore,
+        core: _QuestionStatement,
         provider_input: dict,
-    ) -> _QuestionCore:
+        *,
+        on_repair: Callable[[], None] | None = None,
+    ) -> tuple[_QuestionStatement, _QuestionReview]:
         review = self._review_question_core(core, stage="question-review")
         if review.passed:
-            return core
-        rejected = core
+            return core, review
+        if on_repair is not None:
+            on_repair()
+        return self._repair_question_from_issues(
+            core,
+            provider_input,
+            review_summary=review.summary,
+            review_issues=review.issues,
+            stage_prefix="core-question-repair",
+        )
+
+    def _repair_question_from_issues(
+        self,
+        rejected: _QuestionStatement,
+        provider_input: dict,
+        *,
+        review_summary: str,
+        review_issues: list[str],
+        stage_prefix: str,
+    ) -> tuple[_QuestionStatement, _QuestionReview]:
+        review = _QuestionReview(
+            passed=False,
+            summary=review_summary,
+            issues=review_issues,
+        )
         for attempt in range(1, QUESTION_REPAIR_ATTEMPTS + 1):
             suffix = "" if attempt == 1 else f"-{attempt}"
             repaired_payload = self._request_stage(
-                stage=f"core-question-repair{suffix}",
+                stage=f"{stage_prefix}{suffix}",
                 instructions=(
-                    f"这是第 {attempt}/{QUESTION_REPAIR_ATTEMPTS} 次题面修订。上一版题面未通过生成前自审核。"
-                    "请依据审核问题完整重写题面、选项和最终答案，不要解释旧题，也不要进入解析。"
-                    "必须重新独立计算所有数值、取值范围和选择题正确选项，逐项消除 review_issues，"
-                    "不能只改文字或继续沿用未经复算的锁定答案。修订后必须条件相容、存在高中范围内"
-                    "的有效对象、全部小问可作答、锁定答案可由题面推出；选择题还必须有完整且互不"
+                    f"这是第 {attempt}/{QUESTION_REPAIR_ATTEMPTS} 次题面完善。上一版题面在独立审核或完整求解复核中发现问题。"
+                    "请依据审核问题完整重写题面和选项，不要解释旧题，也不要进入解析或返回答案。"
+                    "必须重新独立检查所有数值、取值范围和选择题选项，逐项消除 review_issues，"
+                    "不能只改文字。修订后必须条件相容、存在高中范围内"
+                    "的有效对象、全部小问可作答；选择题还必须有完整且互不"
                     "重复的选项，单选恰有一个正确选项，多选答案集合明确。不得通过删除教师要求、"
                     "降低难度或改成另一题型来绕过问题。题干与选项继续严格分离。"
                     f"{MATH_DISPLAY_INSTRUCTIONS}"
@@ -671,59 +771,200 @@ class DeepSeekQuestionAuthoringProvider:
                 input_value={
                     "design_brief": provider_input["design_brief"],
                     "resolved_question_type": provider_input["resolved_question_type"],
-                    "rejected_question_core": rejected.model_dump(mode="json"),
+                    "rejected_question_statement": rejected.model_dump(mode="json"),
                     "review_summary": review.summary,
                     "review_issues": review.issues,
                 },
                 output_schema=self._core_schema(),
                 max_tokens=8192,
-                recovery_instruction="只修复 JSON；完整返回复算后的题面、全部选项和锁定答案。",
+                recovery_instruction="只修复 JSON；完整返回复核后的题面和全部选项，不得返回答案。",
             )
-            self._normalize_non_choice_answer(repaired_payload)
-            repaired = _QuestionCore.model_validate(repaired_payload)
+            repaired = _QuestionStatement.model_validate(repaired_payload)
             repaired = self._repair_university_scope(repaired, provider_input)
             review = self._review_question_core(
                 repaired,
-                stage=f"question-review-repair-check{suffix}",
+                stage=f"{stage_prefix}-review-check{suffix}",
             )
             if review.passed:
-                return repaired
+                return repaired, review
             rejected = repaired
 
         raise QuestionAuthoringProviderError(
-            "题面经过多轮修订后仍未通过生成前自审核，未进入解析。请重新生成题目。"
+            "题面经过多轮完善和重新审核后仍未通过，未建立命题草稿。请重新生成题目。"
         )
 
     def _review_question_core(
         self,
-        core: _QuestionCore,
+        core: _QuestionStatement,
         *,
         stage: str,
     ) -> _QuestionReview:
         payload = self._request_stage(
             stage=stage,
             instructions=(
-                "你是独立于命题步骤的高中数学题面审核器。只审核已经锁定的题面、选项和答案，"
-                "在本阶段严禁生成解析。请在内部逐项代入、求解或构造反例，并检查："
+                "你是独立于命题步骤的高中数学题面审核器。你只能看到题面和选项，看不到任何预设答案。"
+                "在本阶段严禁生成展示用解析。请从零开始在内部逐项代入、求解或构造反例，并检查："
                 "(1) 几何、代数、概率与取值范围条件是否相容且对象真实存在；"
                 "(2) 每个小问是否信息充分、表述无歧义且能在高中范围内作答；"
-                "(3) 锁定答案是否确实可由题面推出；"
+                "(3) 是否能独立推出明确结论；"
                 "(4) 选择题是否包含完整选项，并符合单选唯一正确或多选答案集合；"
                 "(5) 是否暗含大学专属概念。"
                 "任何一项无法确认都必须 passed=false；不得因为后续可以提示教师复核而放行。"
-                "输出只写审核结论和简洁问题清单，不得泄露试算过程或思维链。"
+                "审核通过时必须同时返回独立求得的 answer_value 和 final_answer，供后续交叉核验；"
+                "这不是最终标准答案，后续解析仍须重新独立求解。输出不得泄露试算过程或思维链。"
             ),
-            input_value={"question_core": core.model_dump(mode="json")},
+            input_value={"question_statement": core.model_dump(mode="json")},
             output_schema=self._question_review_schema(),
             max_tokens=1800,
             recovery_instruction="只修复审核 JSON；不得生成解析或修改题面。",
         )
         review = _QuestionReview.model_validate(payload)
         if review.passed and review.issues:
-            raise ValueError("题面审核通过时 issues 必须为空")
+            review = review.model_copy(update={"passed": False})
+        if review.passed and not (
+            review.independent_answer_value and review.independent_final_answer
+        ):
+            raise ValueError("题面审核通过时必须提供独立求得的答案用于交叉核验")
         if not review.passed and not review.issues:
             raise ValueError("题面审核未通过时必须给出至少一个明确问题")
         return review
+
+    def _derive_solution_conclusion(
+        self,
+        core: _QuestionStatement,
+        steps: list[str],
+        *,
+        stage: str = "solution-conclusion",
+    ) -> _SolutionConclusion:
+        payload = self._request_stage(
+            stage=stage,
+            instructions=(
+                "完整解析已经生成。只根据题面、选项和这份最终采用的解析步骤提取标准答案。"
+                "不得参考命题阶段的任何答案，因为命题阶段没有锁定答案。"
+                "answer_value 用于答题卡：单选只写一个选项编号，多选用英文逗号分隔；"
+                "填空题和解答题的 answer_value 必须与 final_answer 完全相同。"
+                "final_answer 写可直接展示的简洁标准答案，不重复解析过程。"
+                f"{MATH_DISPLAY_INSTRUCTIONS}"
+            ),
+            input_value={
+                "question_statement": core.model_dump(mode="json"),
+                "completed_solution_steps": steps,
+            },
+            output_schema=self._solution_conclusion_schema(),
+            max_tokens=2200,
+            recovery_instruction="只修复标准答案 JSON；答案必须来自已经完成的解析。",
+        )
+        conclusion = _SolutionConclusion.model_validate(payload)
+        if core.question_type in {"fill_blank", "open_response"}:
+            conclusion = conclusion.model_copy(
+                update={"answer_value": conclusion.final_answer.strip()}
+            )
+        self._validate_conclusion_shape(core, conclusion)
+        return conclusion
+
+    def _verify_completed_solution(
+        self,
+        core: _QuestionStatement,
+        steps: list[str],
+        conclusion: _SolutionConclusion,
+        *,
+        question_review: _QuestionReview,
+        stage: str = "completed-solution-review",
+    ) -> None:
+        payload = self._request_stage(
+            stage=stage,
+            instructions=(
+                "你是最终独立复核器。请从题面重新求解，不得沿用先前审核答案或当前标准答案，"
+                "并逐项检查：题面条件与数学对象是否成立、全部小问是否可解、解析每步是否正确且完整、"
+                "解析推出的答案是否与标准答案一致、选择题是否恰有规定数量的正确选项。"
+                "只有这些项目全部成立时 passed 才能为 true；任一项目无法确认都必须失败。"
+                "同时返回你独立求得的 answer_value 与 final_answer 供服务端交叉核验。"
+                "如果完整求解暴露出题面条件不可能、结论不唯一或问题无解，必须明确设置 question_valid=false，"
+                "使系统返回完善题面步骤，而不是把它伪装成解析问题。"
+                "只输出结论，不得泄露试算过程、思维链或提示词。"
+            ),
+            input_value={
+                "question_statement": core.model_dump(mode="json"),
+                "completed_solution_steps": steps,
+                "solution_derived_answer": conclusion.model_dump(mode="json"),
+            },
+            output_schema=self._completed_solution_review_schema(),
+            max_tokens=2400,
+            recovery_instruction="只修复最终复核 JSON；不得修改题面、解析或标准答案。",
+        )
+        review = _CompletedSolutionReview.model_validate(payload)
+        if review.passed and review.issues:
+            review = review.model_copy(update={"passed": False})
+        if not review.passed and not review.issues:
+            raise QuestionAuthoringProviderError("最终复核未通过但没有给出问题")
+        if not review.question_valid:
+            raise _QuestionInvalidAfterSolution(
+                summary=review.summary,
+                issues=review.issues or ["完整求解无法确认题面成立。"],
+            )
+        if not (
+            review.passed
+            and review.solution_valid
+            and review.answer_consistent
+        ):
+            raise QuestionAuthoringProviderError(
+                "题面、解析与标准答案未通过最终独立一致性复核，未建立命题草稿。"
+            )
+        if core.question_type in {"single_choice", "multiple_choice"}:
+            expected = self._choice_answer_keys(core, conclusion.answer_value)
+            pre_review = self._choice_answer_keys(
+                core,
+                question_review.independent_answer_value or "",
+            )
+            post_review = self._choice_answer_keys(core, review.independent_answer_value)
+            if expected != pre_review or expected != post_review:
+                raise QuestionAuthoringProviderError(
+                    "题面独立审核、完整解析与最终复核得出的选项不一致，未建立命题草稿。"
+                )
+        elif core.question_type == "fill_blank":
+            expected = self._normalized_answer_text(conclusion.answer_value)
+            pre_review = self._normalized_answer_text(
+                question_review.independent_answer_value or ""
+            )
+            post_review = self._normalized_answer_text(review.independent_answer_value)
+            if expected != pre_review or expected != post_review:
+                raise QuestionAuthoringProviderError(
+                    "题面独立审核、完整解析与最终复核得出的填空答案不一致，未建立命题草稿。"
+                )
+
+    def _validate_conclusion_shape(
+        self,
+        core: _QuestionStatement,
+        conclusion: _SolutionConclusion,
+    ) -> None:
+        if core.question_type not in {"single_choice", "multiple_choice"}:
+            return
+        keys = self._choice_answer_keys(core, conclusion.answer_value)
+        expected_count = 1 if core.question_type == "single_choice" else None
+        if expected_count is not None and len(keys) != expected_count:
+            raise QuestionAuthoringProviderError("单项选择题的解析结论必须唯一对应一个选项")
+        if core.question_type == "multiple_choice" and not keys:
+            raise QuestionAuthoringProviderError("多项选择题的解析结论没有给出正确选项")
+
+    @staticmethod
+    def _choice_answer_keys(
+        core: _QuestionStatement,
+        answer_value: str,
+    ) -> tuple[str, ...]:
+        valid = {option.key.strip().upper() for option in core.options}
+        discovered = {
+            match
+            for match in re.findall(r"(?<![A-Z])[A-Z](?![A-Z])", answer_value.upper())
+            if match in valid
+        }
+        return tuple(sorted(discovered))
+
+    @staticmethod
+    def _normalized_answer_text(value: str) -> str:
+        normalized = value.strip().replace("\\(", "").replace("\\)", "")
+        normalized = normalized.replace("$", "").replace("，", ",")
+        normalized = re.sub(r"^(?:答案(?:为|是)?|故填|填)\s*[:：]?\s*", "", normalized)
+        return re.sub(r"\s+", "", normalized).rstrip("。.;；")
 
     @staticmethod
     def _provider_input(context: QuestionAuthoringContext) -> dict:
@@ -770,14 +1011,6 @@ class DeepSeekQuestionAuthoringProvider:
         raise KeyError("output_text")
 
     @staticmethod
-    def _normalize_non_choice_answer(payload: dict) -> None:
-        if payload.get("question_type") not in {"fill_blank", "open_response"}:
-            return
-        final_answer = payload.get("final_answer")
-        if isinstance(final_answer, str) and final_answer.strip():
-            payload["answer_value"] = final_answer.strip()
-
-    @staticmethod
     def _option_schema() -> dict:
         return {
             "type": "object",
@@ -804,8 +1037,6 @@ class DeepSeekQuestionAuthoringProvider:
             "stem_plain": {"type": "string", "minLength": 5, "maxLength": 20000},
             "stem_latex": {"type": ["string", "null"], "maxLength": 20000},
             "options": {"type": "array", "maxItems": 20, "items": cls._option_schema()},
-            "answer_value": {"type": "string", "maxLength": 4000},
-            "final_answer": {"type": "string", "minLength": 1, "maxLength": 4000},
             "estimated_difficulty": {"type": "integer", "minimum": 1, "maximum": 5},
         }
         return cls._schema("private_question_authoring_core", properties)
@@ -814,12 +1045,14 @@ class DeepSeekQuestionAuthoringProvider:
     def _question_review_schema(cls) -> dict:
         properties = {
             "passed": {"type": "boolean"},
-            "summary": {"type": "string", "minLength": 1, "maxLength": 500},
+            "summary": {"type": "string", "minLength": 1, "maxLength": 4000},
             "issues": {
                 "type": "array",
                 "maxItems": 10,
-                "items": {"type": "string", "minLength": 1, "maxLength": 500},
+                "items": {"type": "string", "minLength": 1, "maxLength": 2000},
             },
+            "independent_answer_value": {"type": ["string", "null"], "maxLength": 4000},
+            "independent_final_answer": {"type": ["string", "null"], "maxLength": 4000},
         }
         return cls._schema("private_question_authoring_question_review", properties)
 
@@ -912,10 +1145,39 @@ class DeepSeekQuestionAuthoringProvider:
                 "maxItems": 100,
                 "items": {"type": "string", "minLength": 1, "maxLength": 6000},
             },
-            "consistent_with_locked_answer": {"type": "boolean"},
+            "mathematically_valid": {"type": "boolean"},
             "issue_summary": {"type": ["string", "null"], "maxLength": 500},
         }
         return cls._schema("private_question_authoring_solution_cleanup", properties)
+
+    @classmethod
+    def _solution_conclusion_schema(cls) -> dict:
+        properties = {
+            "answer_value": {"type": "string", "minLength": 1, "maxLength": 4000},
+            "final_answer": {"type": "string", "minLength": 1, "maxLength": 4000},
+        }
+        return cls._schema("private_question_authoring_solution_conclusion", properties)
+
+    @classmethod
+    def _completed_solution_review_schema(cls) -> dict:
+        properties = {
+            "passed": {"type": "boolean"},
+            "question_valid": {"type": "boolean"},
+            "solution_valid": {"type": "boolean"},
+            "answer_consistent": {"type": "boolean"},
+            "summary": {"type": "string", "minLength": 1, "maxLength": 4000},
+            "issues": {
+                "type": "array",
+                "maxItems": 10,
+                "items": {"type": "string", "minLength": 1, "maxLength": 2000},
+            },
+            "independent_answer_value": {"type": "string", "minLength": 1, "maxLength": 4000},
+            "independent_final_answer": {"type": "string", "minLength": 1, "maxLength": 4000},
+        }
+        return cls._schema(
+            "private_question_authoring_completed_solution_review",
+            properties,
+        )
 
     @classmethod
     def _solution_subplan_schema(cls) -> dict:

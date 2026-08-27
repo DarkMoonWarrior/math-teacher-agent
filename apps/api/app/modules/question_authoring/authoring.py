@@ -107,7 +107,7 @@ class QuestionAuthoring:
             warnings.append("确定性可信检查发现阻断项；修正前不得作为正式题目使用。")
         if content.solution_status == "needs_teacher_verification":
             warnings.append(
-                "题面、选项和最终答案已完整保留，但解析未通过一致性检查；请教师自行核验或重新生成解析。"
+                "题目或解析未通过一致性检查；修正并重新审核前不得作为正式题目使用。"
             )
         if brief.question_type is None:
             warnings.append(f"未明确题型，已从要求推断为 {question_type}。")
@@ -232,7 +232,7 @@ class QuestionAuthoring:
         self,
         current: GeneratedQuestionDraft,
     ) -> GeneratedQuestionDraft:
-        """Replace only solution fields, then recompute server-owned trust evidence."""
+        """Re-solve the fixed statement, replace its answer, and rebuild trust evidence."""
 
         if self.provider is None:
             raise QuestionAuthoringUnavailableError(
@@ -265,6 +265,8 @@ class QuestionAuthoring:
             update={
                 "solution_method": replacement.solution_method.strip(),
                 "solution_steps": [step.strip() for step in replacement.solution_steps],
+                "answer_value": replacement.answer_value.strip(),
+                "final_answer": replacement.final_answer.strip(),
                 "solution_status": replacement.solution_status,
                 "solution_issue": replacement.solution_issue,
             }
@@ -282,7 +284,7 @@ class QuestionAuthoring:
             draft_id=current.draft_id,
         )
         warnings = [
-            "解析已由 AI 重新生成；题面、选项和最终答案保持不变。",
+            "题面和选项保持不变；标准答案已按新解析重新推导。",
             "重新生成后的解析仍必须由教师复核，不构成 MathVerifier 独立证据。",
             "当前内容仍在个人命题工作区；不会进入公共题库或公共搜索。",
         ]
@@ -292,12 +294,14 @@ class QuestionAuthoring:
             warnings.append("确定性可信检查发现阻断项；修正前不得作为正式题目使用。")
         if revised.solution_status == "needs_teacher_verification":
             warnings.append(
-                "重新生成的解析仍未通过一致性检查；题面、选项和最终答案未改变，请教师自行核验。"
+                "重新生成的解析仍未通过一致性检查，请教师自行核验。"
             )
         return current.model_copy(
             update={
                 "solution_method": revised.solution_method,
                 "solution_steps": revised.solution_steps,
+                "answer_value": revised.answer_value,
+                "final_answer": revised.final_answer,
                 "solution_status": revised.solution_status,
                 "solution_issue": revised.solution_issue,
                 "verification": verification,
@@ -657,7 +661,7 @@ class QuestionAuthoring:
                 status="failed",
                 capability="supported",
                 evidence_source="deterministic_structure",
-                summary="解析与锁定答案存在已知冲突或解析未完成",
+                summary="题目、解析与解析所得标准答案存在已知冲突或解析未完成",
                 details=[content.solution_issue or "解析需要教师独立核验。"],
             )
         if content.question_type in {"single_choice", "multiple_choice"}:

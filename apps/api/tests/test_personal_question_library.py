@@ -784,7 +784,9 @@ def test_http_regenerate_solution_appends_ai_revision_without_changing_question(
             assert current.final_answer == draft.final_answer
             return ProviderQuestionSolution(
                 solution_method="重新生成的定义法",
-                solution_steps=["固定题面和答案后，给出新的成稿推导。"],
+                solution_steps=["固定题面后重新求解，并据此更新标准答案。"],
+                answer_value="A",
+                final_answer="A",
             )
 
     library = make_library(tmp_path)
@@ -813,10 +815,10 @@ def test_http_regenerate_solution_appends_ai_revision_without_changing_question(
             assert regenerated["stem_plain"] == draft.stem_plain
             assert regenerated["stem_latex"] == draft.stem_latex
             assert regenerated["options"] == [item.model_dump(mode="json") for item in draft.options]
-            assert regenerated["answer_value"] == draft.answer_value
-            assert regenerated["final_answer"] == draft.final_answer
+            assert regenerated["answer_value"] == "A"
+            assert regenerated["final_answer"] == "A"
             assert regenerated["solution_method"] == "重新生成的定义法"
-            assert regenerated["solution_steps"] == ["固定题面和答案后，给出新的成稿推导。"]
+            assert regenerated["solution_steps"] == ["固定题面后重新求解，并据此更新标准答案。"]
             assert regenerated["visibility"] == "owner_only"
             assert regenerated["saved"] is False
 

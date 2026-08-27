@@ -81,6 +81,7 @@ const QUESTION_AUTHORING_PROGRESS_STAGES = new Set<QuestionAuthoringProgressStag
   "brief",
   "composing",
   "reviewing",
+  "refining",
   "solving",
   "staging",
 ]);

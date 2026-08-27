@@ -354,8 +354,8 @@ export function PersonalQuestionAuthoringWorkspace({
       setCurriculumMatches([]);
       setNotice(
         staged.current.draft.solution_status === "needs_teacher_verification"
-          ? "完整题目已生成。解析未通过一致性检查，请自行核验或点击“重新生成解析”。"
-          : "草稿已生成，但尚未保存。请先核对题面、最终答案与解析。",
+          ? "草稿未通过题面、解析与答案一致性检查，请先校订或重新生成解析。"
+          : "草稿已生成，标准答案来自完整解析并已通过交叉审核；保存前仍请教师复核。",
       );
       window.requestAnimationFrame(() => document.querySelector<HTMLElement>("#authoring-draft")?.scrollIntoView({ behavior: "smooth", block: "start" }));
     } catch (cause) {
@@ -442,8 +442,8 @@ export function PersonalQuestionAuthoringWorkspace({
       setDraftEditor(editableContent(regenerated.current.draft));
       setNotice(
         regenerated.current.draft.solution_status === "needs_teacher_verification"
-          ? `题面、选项和最终答案保持不变；REV ${regenerated.current_revision} 的解析仍需你自行核验。`
-          : `解析已重新生成并记录为 REV ${regenerated.current_revision}；题面、选项和最终答案均未改变。`,
+          ? `题面和选项保持不变；REV ${regenerated.current_revision} 的解析与新推导答案仍未通过一致性检查。`
+          : `解析已重新生成并记录为 REV ${regenerated.current_revision}；题面和选项保持不变，标准答案已按新解析更新。`,
       );
       window.requestAnimationFrame(() => document.querySelector<HTMLElement>(".authoring-draft__solution")?.scrollIntoView({ behavior: "smooth", block: "start" }));
     } catch (cause) {
@@ -814,9 +814,9 @@ export function PersonalQuestionAuthoringWorkspace({
               />
               {draft.solution_status === "needs_teacher_verification" && (
                 <section className="authoring-solution-warning" role="status">
-                  <strong>题目已完整生成，解析需要你核验</strong>
+                  <strong>题目、解析或标准答案需要你核验</strong>
                   <p>{draft.solution_issue || "解析未通过一致性检查。"}</p>
-                  <p>题面、选项和最终答案均已保留；你可以自行校订解析，或点击下方“重新生成解析”。</p>
+                  <p>你可以校订题面与解析，或重新生成解析；重新生成后标准答案会随新解析更新。</p>
                 </section>
               )}
               <details className="personal-question-edit authoring-draft__editor">

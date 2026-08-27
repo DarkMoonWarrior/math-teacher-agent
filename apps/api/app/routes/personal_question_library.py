@@ -270,7 +270,7 @@ def regenerate_personal_authoring_solution(
             regenerated,
             owner_id=teacher.teacher_id,
             expected_revision=command.expected_revision,
-            edit_summary="AI 重新生成解析；题面、选项与最终答案保持不变",
+            edit_summary="AI 重新生成解析；题面和选项保持不变，标准答案按新解析重新推导",
         )
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="命题草稿不存在") from exc

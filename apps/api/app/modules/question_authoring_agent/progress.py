@@ -12,6 +12,7 @@ QuestionAuthoringProgressStage = Literal[
     "brief",
     "composing",
     "reviewing",
+    "refining",
     "solving",
     "staging",
 ]

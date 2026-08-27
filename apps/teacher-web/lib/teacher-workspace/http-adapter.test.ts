@@ -853,7 +853,7 @@ describe("HttpTeacherWorkspace", () => {
         ...staged.current,
         revision_number: 2,
         revision_source: "ai_generated" as const,
-        edit_summary: "AI 重新生成解析；题面、选项与最终答案保持不变",
+        edit_summary: "AI 重新生成解析；题面和选项保持不变，标准答案按新解析重新推导",
         draft: {
           ...staged.current.draft,
           solution_method: "重新规划的解法",

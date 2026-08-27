@@ -472,6 +472,7 @@ export type QuestionAuthoringProgressStage =
   | "brief"
   | "composing"
   | "reviewing"
+  | "refining"
   | "solving"
   | "staging";
 

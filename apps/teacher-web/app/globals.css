@@ -1779,7 +1779,7 @@ svg { flex: 0 0 auto; }
   height: 1.75rem;
   width: 1.75rem;
 }
-.authoring-progress > ol { display: grid; gap: var(--space-xs); grid-template-columns: repeat(5, minmax(0, 1fr)); list-style: none; margin: 0; padding: 0; }
+.authoring-progress > ol { display: grid; gap: var(--space-xs); grid-template-columns: repeat(6, minmax(0, 1fr)); list-style: none; margin: 0; padding: 0; }
 .authoring-progress > ol li { align-items: center; color: var(--color-muted); display: flex; font-size: var(--text-sm); gap: var(--space-xs); min-width: 0; }
 .authoring-progress > ol li > span { align-items: center; border: 0.0625rem solid var(--color-rule-strong); border-radius: 50%; display: inline-flex; flex: 0 0 auto; height: 1.5rem; justify-content: center; width: 1.5rem; }
 .authoring-progress > ol li[data-state="current"] { color: var(--color-ink); font-weight: 700; }
