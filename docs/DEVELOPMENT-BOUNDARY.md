@@ -1,6 +1,6 @@
 # 当前开发边界
 
-更新日期：2026-08-26
+更新日期：2026-08-28
 状态：当前 source of truth；历史 PDF 和旧 Prompt 保留为决策证据，但不再决定当前阶段编号。
 
 ## 1. 产品定位与唯一目标用户
@@ -48,11 +48,11 @@
 
 辅助命制题使用独立 `PersonalQuestionLibrary` 模块和 owner-isolated storage namespace，不以公共 `QuestionBank` 的一个可变 visibility 字段作为唯一隔离手段。该模块没有 publish/share 接口；后台运营/内容管理员没有内容查看和管理接口。详细规则见 [`M8-PRIVATE-QUESTION-AUTHORING.md`](M8-PRIVATE-QUESTION-AUTHORING.md)。
 
-## 4. 当前阶段：M8 私有辅助命题 Agent
+## 4. 当前阶段：M8 已完成，等待进入 M9 的确认
 
-M0-M7 已完成；项目所有者在查看 M7 Gate E 结果后于 2026-08-24 明确确认进入 M8。当前只能按 [`M8-PRIVATE-QUESTION-AUTHORING.md`](M8-PRIVATE-QUESTION-AUTHORING.md) 的纵向切片开发私有辅助命题，不得并行进入 Paper、Lesson、Memory 或其他后续阶段。
+M0-M8 已完成；M8 的固定评测、Gate E 与 Gate P 于 2026-08-28 通过。项目所有者查看 [`M8-GATE-REVIEW.md`](M8-GATE-REVIEW.md) 并明确确认阶段转换前，不得开始 Paper、Lesson、Memory 或其他后续阶段。
 
-M8 切片 1–8 已建立独立 `PersonalQuestionLibrary` 深模块、本地 owner-isolated SQLite namespace、身份绑定的个人题库/分类、结构化生成、六项可信检查、私有命题工作区、append-only revision、显式保存、完整 owner 管理接口及 Teacher Web 入口。教师只需描述命题意图；年级、题型、难度是可选便捷约束，教材知识点、细分知识点、考查方法和易错点由 Agent 在生成后归纳。provider 必须先生成不含答案的题面与选项，再进行独立求解审核；审核发现条件矛盾、对象不存在、结论不唯一或题目不可作答时，进入按需题面完善，并在每次完善后重新审核。只有审核通过的题面才能生成解析；标准答案只能从完整解析推导，随后由第二次独立求解审核题面、解析与答案。若审核判定题面有误，必须完善题面、重新审核并重新生成解析；若题面成立但解析或答案有误，必须保留题面并重新生成解析。初次题面审核答案、解析结论与最终独立审核不一致时，以最终审核判责并进入对应返工分支，而不是直接终止或返回半成品。只有题面、解析和标准答案闭环一致后才能建立草稿。命题生成只能落在中国普通高中数学范围；明确大学专属术语触发受控重写，仍越界时诚实失败。选择题题干与选项必须分字段，展示层逐项渲染。生成 UI 显示“整理命题要求、命制题面、审核题面、完善题面（按需）、生成解析、审核解析与答案、重生成解析（按需）、建立私有草稿”八个真实阶段、旋转状态和已用时间，不暴露思维链或虚构进度。解析只允许展示正式成稿。教师单独重新生成解析时，业务层保持题面和选项不变，标准答案按新解析重新推导，新 revision 再经过一致性检查。模型只能选择受控 Curriculum 节点；浏览器不能提交 owner、隐私状态或可信证据；Agent 没有保存、管理、发布、共享或删除权限。
+M8 已建立独立 `PersonalQuestionLibrary` 深模块、本地 owner-isolated SQLite namespace、身份绑定的个人题库/分类、结构化生成、六项可信检查、私有命题工作区、append-only revision、显式保存、完整 owner 管理接口及 Teacher Web 入口。教师只需描述命题意图；教材知识点、细分知识点、考查方法和易错点由 Agent 在生成后归纳。provider 先生成不含答案的题面与选项，再独立审核；题面错误进入完善、复审和重新解析，解析错误保留题面并重生成解析。标准答案只从完整解析推导并接受最终一致性审核。只有题面、选项、可读解析和答案闭环一致后才能建立草稿。命题限定普通高中数学，明确大学专属术语经受控重写后仍越界才终止。后台任务独立于页面生命周期并可恢复；owner 可显式取消，且取消在私人草稿写入前再次检查，保证不提交半成品。模型只能选择受控 Curriculum 节点；浏览器不能提交 owner、隐私状态或可信证据；Agent 没有保存、管理、发布、共享或删除权限。
 
 本阶段允许：
 
@@ -75,7 +75,7 @@ M8 切片 1–8 已建立独立 `PersonalQuestionLibrary` 深模块、本地 own
 
 ## 5. M8 完成 Gate
 
-M8 必须同时满足 [`M8-PRIVATE-QUESTION-AUTHORING.md`](M8-PRIVATE-QUESTION-AUTHORING.md) 的功能 Gate、[`PRODUCT-GATES.md`](PRODUCT-GATES.md) 的 Gate E 与 Gate P，并完成固定 synthetic evaluation、跨 owner/IDOR/公共搜索泄漏/后台权限测试、完整工程回归和响应式/可访问性验收。当前切片 1–8 完成，尚未达到 M8 Gate。
+M8 已同时满足 [`M8-PRIVATE-QUESTION-AUTHORING.md`](M8-PRIVATE-QUESTION-AUTHORING.md) 的功能 Gate、[`PRODUCT-GATES.md`](PRODUCT-GATES.md) 的 Gate E 与 Gate P。26 场景固定 synthetic evaluation、跨 owner/IDOR/公共搜索泄漏/后台权限测试、完整工程回归和响应式/可访问性验收均已完成，证据见 [`M8-GATE-REVIEW.md`](M8-GATE-REVIEW.md)。
 
 ## 6. 下一阶段启动条件
 

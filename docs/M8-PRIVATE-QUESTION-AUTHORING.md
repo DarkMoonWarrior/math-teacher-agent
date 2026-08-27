@@ -1,7 +1,7 @@
 # M8 私有辅助命题 Agent
 
-更新日期：2026-08-26
-状态：进行中；M7 Gate E 已通过且项目所有者已确认阶段转换
+更新日期：2026-08-28
+状态：已完成；固定评测、Gate E 与 Gate P 已通过，等待所有者确认进入 M9
 
 ## 实施进度
 
@@ -17,11 +17,12 @@
 - **M8 解析质量补强已完成**：解析段契约只允许可直接展示的成稿推导，禁止第一人称试算、自我怀疑、回退、提示词或内部字段讨论。标准答案不在题面生成阶段预设，只能在完整解析完成后提取；教师点击“重新生成解析”时保持题面和选项不变，标准答案随新解析重新推导并追加 `ai_generated` revision。未记录的本地编辑会先提示保存，避免静默覆盖。
 - **M8 题面、解析与答案闭环补强已完成**：不含答案的题面生成后、解析规划前执行第一次独立求解审核，检查条件相容性、数学对象存在性、全部小问可答性、高中范围及选择题唯一性。审核失败最多触发三轮不降低难度、不改变题型、不删除教师要求的题面完善，每轮完善后必须重新审核。完整解析完成后执行最终独立求解审核并判责：题面错误进入“完善题面 → 重新审核 → 重新解析”，题面成立但解析或解析所得答案错误进入“保留题面 → 重新生成解析 → 再审核”。初次审核答案与最终审核不一致但解析和最终审核一致时，由最终审核纠正内部初审，不丢弃有效题目。只有完整题面、完整选项、正式解析和解析所得标准答案闭环一致时才建立草稿；不得返回 `needs_teacher_verification` 半成品让教师替 Agent 修错。Teacher Web 显示八步真实进度与已用时间：“整理命题要求、命制题面、审核题面、完善题面（按需）、生成解析、审核解析与答案、重生成解析（按需）、建立私有草稿”。
 - **M8 后台闭环与命题历史补强已完成**：同一候选题的题面或解析恢复耗尽后自动整题重命，非大学范围内容不会以“无法交付半成品”结束。命题由 owner-scoped 后台任务持有，切换页面只停止当前页面轮询；返回命题区会恢复真实阶段和计时。可视化增加“重新命题（按需）”。“上一次”直接恢复最近完整结果，“命题历史”可打开和删除任意 owner 自有记录；删除已保存记录不删除私题。
+- **M8 后台取消补强已完成**：教师可以明确取消自己的在途命题；共享 `BackgroundJobRegistry` 在 provider 返回后、私人草稿写入前再次执行取消检查。已取消任务固定返回 `cancelled + result={}`，其他 owner 不能查看或取消，也不会出现界面已取消但后台仍保存的假取消。
 - DeepSeek 只实现可替换 provider adapter；Agent 必须且只能调用一次 `create_question_draft`，模型不能增加 owner、保存、发布、共享或删除参数。Agent Tool 仍只返回 `owner_only + saved=false`；暂存和保存由公开 FastAPI 在认证业务层分别执行，Agent 没有相应写 Tool。
 - 当前 MathVerifier 只接受带受控 `verification_spec` 的已知规则；任意模型生成题没有这种独立证据，因此固定诚实披露 `math_verifier_status=unsupported`，不得用模型自述冒充程序验证。结构检查通过也不等于数学正确。
 - FastAPI 只从 `get_current_teacher` 注入 owner；请求模型 `extra=forbid`，浏览器伪造 `owner_id` 返回 422，跨 owner 读取或修改返回 404。
 - 所有返回固定为 `owner_only`，并明确 `public_search_allowed=false`、`share_allowed=false`、`commercial_use_allowed=false`、`model_training_allowed=false`；没有 publish/share/admin 接口。唯一 DELETE 路由只属于认证 owner 的私题，且受回收站、版本与固定确认三重门禁保护。
-- **仍未完成**：固定 synthetic evaluation、完整隐私/可信/工程审计与 Gate E/Gate P。M8 尚未完成，不得进入 M9。
+- **切片 9 与完成 Gate 已通过**：26 场景固定 synthetic evaluation 的 12 类违规均为 0；完整 FastAPI、Teacher Web、Agent 与 legacy 回归通过；Gate E/Gate P 评审见 [`M8-GATE-REVIEW.md`](M8-GATE-REVIEW.md)。M8 已完成，但在所有者查看 Gate 结果并确认前仍不得进入 M9。
 
 ## 1. 已确认的产品规则
 
@@ -109,6 +110,8 @@ Teacher Web 顶部能力导航另提供“命题”直达入口，方便教师�
 8. **完整题型与过程可见性**：选择题题干/选项强制分离，高中范围终检，长请求显示真实阶段与已用时间，并保留有界 15 分钟总预算。
 9. **固定评测与 Gate E**：覆盖主要高中模块和题型、模型不可用、验证失败、权利拒绝、重复、越权、公共搜索泄漏、后台权限、删除与恢复。
 
+以上九个切片均已完成。固定评测见 [`M8-PRIVATE-QUESTION-AUTHORING-EVALUATION.md`](M8-PRIVATE-QUESTION-AUTHORING-EVALUATION.md)，完成评审见 [`M8-GATE-REVIEW.md`](M8-GATE-REVIEW.md)。
+
 ## 7. M8 完成 Gate
 
 - 教师能够从自然语言要求生成一题结构化草稿，编辑、命名、分类并明确保存到自己的私题库。
@@ -120,4 +123,4 @@ Teacher Web 顶部能力导航另提供“命题”直达入口，方便教师�
 - Analytics/日志不记录私题正文或完整命题提示；生产 owner/tenant isolation 与 IDOR 测试在商业化前持续保留。
 - FastAPI、Agent、Teacher Web、响应式/可访问性、完整工程回归和 Gate E 全部通过。
 
-M8 Gate E 通过并由项目所有者确认前，不进入 M9 Paper Agent。
+M8 Gate E 与 Gate P 已通过；项目所有者确认阶段转换前，不进入 M9 Paper Agent。

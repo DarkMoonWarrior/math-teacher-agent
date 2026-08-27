@@ -35,9 +35,11 @@ export function formatAuthoringElapsed(totalSeconds: number): string {
 
 export function AuthoringGenerationStatus({
   elapsedSeconds,
+  onCancel,
   stage,
 }: {
   elapsedSeconds: number;
+  onCancel?: () => void;
   stage: AuthoringGenerationStage;
 }) {
   const activeIndex = STAGES.findIndex((item) => item.key === stage);
@@ -57,6 +59,11 @@ export function AuthoringGenerationStatus({
           </li>
         ))}
       </ol>
+      {onCancel && (
+        <button className="authoring-progress__cancel" type="button" onClick={onCancel}>
+          取消本次命题
+        </button>
+      )}
     </section>
   );
 }

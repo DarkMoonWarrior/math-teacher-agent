@@ -300,6 +300,10 @@ export function PersonalQuestionAuthoringWorkspace({
           setError(job.error || "命题内容超出高中数学范围。");
           setAuthoringJob(null);
           setBusy(null);
+        } else if (job.status === "cancelled") {
+          setNotice("本次命题已取消，没有建立私有草稿。");
+          setAuthoringJob(null);
+          setBusy(null);
         }
       } catch (cause) {
         if (!controller.signal.aborted) setError(errorMessage(cause));
@@ -400,6 +404,23 @@ export function PersonalQuestionAuthoringWorkspace({
     } catch (cause) {
       setError(errorMessage(cause));
       setBusy(null);
+    }
+  }
+
+  async function cancelGeneration() {
+    if (!authoringJob || busy !== "generating") return;
+    clearFeedback();
+    try {
+      const cancelled = await teacherWorkspace.cancelQuestionAuthoringJob(authoringJob.job_id);
+      if (cancelled.status === "cancelled") {
+        setAuthoringJob(null);
+        setBusy(null);
+        setNotice("本次命题已取消，没有建立私有草稿。");
+      } else {
+        setAuthoringJob(cancelled);
+      }
+    } catch (cause) {
+      setError(errorMessage(cause));
     }
   }
 
@@ -838,7 +859,7 @@ export function PersonalQuestionAuthoringWorkspace({
               <div className="authoring-submit">
                 <button disabled={!canGenerate} type="submit"><span>{busy === "generating" ? "正在分阶段生成…" : "生成私有草稿"}</span><ArrowRightIcon /></button>
               </div>
-              {busy === "generating" && <AuthoringGenerationStatus elapsedSeconds={generationElapsed} stage={generationStage} />}
+              {busy === "generating" && <AuthoringGenerationStatus elapsedSeconds={generationElapsed} onCancel={authoringJob ? () => void cancelGeneration() : undefined} stage={generationStage} />}
             </form>
           </section>
 

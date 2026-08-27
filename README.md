@@ -19,10 +19,10 @@
 - M6 第四条切片：只从教师确认的当前文本版本生成可编辑候选；教材路径由受控 Curriculum 补全，导入固定为 owner 私有、待审核、待数学验证；
 - M6 第五条切片：每次私人检索都需教师明确同意；一次性许可绑定当前教师、查询与数量，Agent 只能看到确认文本的有界匹配片段及来源版本/权利状态；
 - M7 多模态 Solve：可上传、粘贴或拍摄单题图片；`QuestionCapture` 保留 owner-scoped private media/OCR revision，并通过本地、DeepSeek Vision 或 OpenAI adapter 输出可校对题面；教师确认后，精确图片/识别 revision 通过短时一次性许可接入 Solve，带图题才逐次授权发送受控原图；15 场景固定评测与 Gate E 已通过；
-- M8 切片 1–8：独立 `PersonalQuestionLibrary` 已建立个人题库/分类、owner 私有命题工作区、append-only revision 与完整个人管理；命题只要求自然语言意图，教材知识点、考查方法和易错点由 Agent 在生成后归纳并交给教师确认/校订。题面与选项先以“不含答案”的结构生成，再经过独立求解审核；审核失败会进入“完善题面（按需）”并重新审核。完整解析生成后，标准答案只从最终解析中提取，再由最终独立审核判责：题面错误则完善题面、复审并重新解析，解析或答案错误则保留题面并重新生成解析，直到题面、解析和标准答案闭环一致。`draft` 只表示尚未保存，不允许把已知错误或待补全内容交给教师。界面显示八个真实阶段：整理要求、命制题面、审核题面、完善题面（按需）、生成解析、审核解析与答案、重生成解析（按需）、建立草稿，并持续显示已用时间。选择题题干与 A–D 选项采用独立结构化契约，生成内容限定在中国普通高中数学范围，解析禁止模型思考、自我纠正和回退独白。教师重新生成解析时题面与选项保持不变，标准答案按新解析重新推导并交叉复核。明确保存后可列表/搜索、重命名、分类、标签排序、复制、私有导出、回收或永久删除。Agent 仍无保存、管理、发布、共享或删除能力；
+- M8 私有辅助命题：独立 `PersonalQuestionLibrary` 已建立个人题库/分类、owner 私有命题工作区、append-only revision 与完整个人管理；命题只要求自然语言意图，教材知识点、考查方法和易错点由 Agent 在生成后归纳并交给教师确认/校订。题面与选项先以“不含答案”的结构生成并审核；题面错误自动完善、复审和重新解析，解析错误保留题面并重生成解析，直到题面、解析和解析所得标准答案闭环一致。后台任务可跨页面恢复并由 owner 明确取消；取消在私人草稿写入前再次检查，不会留下半成品。选择题题干与 A–D 选项独立，内容限定中国普通高中数学，解析只展示正式成稿。明确保存后可搜索、重命名、分类、复制、私有导出、回收或永久删除。26 场景固定评测 12 类违规为 0，Gate E/Gate P 已通过；Agent 仍无保存、管理、发布、共享或删除能力；
 - QuestionBank、MathVerifier、Curriculum、PrivateLibrary、PDF、试卷、教案等成熟业务模块。
 
-当前 Search、Solve、Private Library、多模态图片解题与私有辅助命题入口已接入新工作台；M7 Gate E 于 2026-08-24 严格通过，项目所有者已确认进入 M8。辅助命题已完成隔离存储、结构化草稿、分级可信检查、生成后教学元数据归纳、教师 revision、明确保存、完整个人管理及四个 Teacher Web 入口；固定评测与 M8 Gate 尚未完成，教案和组卷继续明确标记为预览。最新状态见 [`docs/PROJECT-STATUS.md`](docs/PROJECT-STATUS.md)。
+当前 Search、Solve、Private Library、多模态图片解题与私有辅助命题均已接入新工作台；M8 固定评测、Gate E 与 Gate P 于 2026-08-28 通过。教案和组卷继续明确标记为预览，项目所有者确认阶段转换前不启动 M9。最新状态见 [`docs/PROJECT-STATUS.md`](docs/PROJECT-STATUS.md)。
 
 ## 核心原则
 
@@ -110,9 +110,9 @@ pnpm build:agent
 
 ## 当前开发顺序
 
-`Search 稳定化（完成） → Solve（完成） → Private Library（完成） → 多模态图片解题（完成） → 私有辅助命题（进行中） → Paper → Lesson → Memory → Beta 准备 → Beta 验证 → 商业基础 → Teacher Pro → 教研组 → 学校`
+`Search 稳定化（完成） → Solve（完成） → Private Library（完成） → 多模态图片解题（完成） → 私有辅助命题（完成，待转换确认） → Paper → Lesson → Memory → Beta 准备 → Beta 验证 → 商业基础 → Teacher Pro → 教研组 → 学校`
 
-不要并行铺开后续阶段。最新版 M0-M17 路线见 [`docs/ROADMAP.md`](docs/ROADMAP.md)，M7/M8 的固定边界见 [`docs/M7-MULTIMODAL-QUESTION-SOLVE.md`](docs/M7-MULTIMODAL-QUESTION-SOLVE.md) 与 [`docs/M8-PRIVATE-QUESTION-AUTHORING.md`](docs/M8-PRIVATE-QUESTION-AUTHORING.md)，每阶段和商业发布门禁见 [`docs/PRODUCT-GATES.md`](docs/PRODUCT-GATES.md)。
+不要并行铺开后续阶段。最新版 M0-M17 路线见 [`docs/ROADMAP.md`](docs/ROADMAP.md)，M8 的固定边界与 Gate 见 [`docs/M8-PRIVATE-QUESTION-AUTHORING.md`](docs/M8-PRIVATE-QUESTION-AUTHORING.md) 与 [`docs/M8-GATE-REVIEW.md`](docs/M8-GATE-REVIEW.md)，每阶段和商业发布门禁见 [`docs/PRODUCT-GATES.md`](docs/PRODUCT-GATES.md)。
 
 ## 数据与密钥
 

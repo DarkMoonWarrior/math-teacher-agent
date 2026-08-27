@@ -536,6 +536,83 @@ def test_background_authoring_job_stages_complete_result_and_is_resumable(
         get_question_authoring_progress_registry().clear()
 
 
+def test_background_authoring_cancel_does_not_stage_a_partial_draft(
+    monkeypatch, tmp_path: Path
+) -> None:
+    from threading import Event
+
+    class BlockingWorkflow:
+        def __init__(self) -> None:
+            self.entered = Event()
+            self.release = Event()
+
+        async def run(self, command, *, owner_id: str, request_id: str):
+            self.entered.set()
+            await asyncio.to_thread(self.release.wait, 2)
+            return QuestionAuthoringAgentResponse(
+                request_id=request_id,
+                status="ok",
+                draft=draft_payload(),
+            )
+
+    workflow = BlockingWorkflow()
+    library = PersonalQuestionLibrary(tmp_path / "background-authoring-cancel.sqlite3")
+    monkeypatch.setattr(
+        question_authoring_routes,
+        "get_settings",
+        lambda: SimpleNamespace(question_authoring_agent_enabled=True),
+    )
+    monkeypatch.setattr(
+        question_authoring_routes,
+        "get_question_authoring_agent_workflow",
+        lambda: workflow,
+    )
+    app.dependency_overrides[get_current_teacher] = lambda: CurrentTeacher(
+        teacher_id="teacher_cancel", source="authenticated_session"
+    )
+    app.dependency_overrides[get_personal_question_library] = lambda: library
+    jobs = question_authoring_routes.get_question_authoring_job_registry()
+    jobs.clear()
+    get_question_authoring_progress_registry().clear()
+    try:
+        with TestClient(app) as client:
+            started = client.post(
+                "/api/v1/agent/question-authoring/jobs",
+                json={"brief": brief().model_dump(mode="json", exclude_none=True)},
+            ).json()
+            assert workflow.entered.wait(timeout=1)
+            cancelled = client.post(
+                f"/api/v1/agent/question-authoring/jobs/{started['job_id']}/cancel"
+            )
+            assert cancelled.status_code == 200
+            assert cancelled.json()["status"] == "cancelled"
+            workflow.release.set()
+            for _ in range(50):
+                current = client.get(
+                    f"/api/v1/agent/question-authoring/jobs/{started['job_id']}"
+                ).json()
+                if (
+                    current["status"] == "cancelled"
+                    and current["updated_at"] != cancelled.json()["updated_at"]
+                ):
+                    break
+                import time
+
+                time.sleep(0.01)
+        assert current["status"] == "cancelled"
+        assert current["result"] == {}
+        with pytest.raises(KeyError):
+            library.get_authoring_draft(
+                "qad_synthetic_1", owner_id="teacher_cancel"
+            )
+    finally:
+        workflow.release.set()
+        app.dependency_overrides.pop(get_current_teacher, None)
+        app.dependency_overrides.pop(get_personal_question_library, None)
+        jobs.clear()
+        get_question_authoring_progress_registry().clear()
+
+
 def test_background_authoring_retries_dict_shaped_agent_errors_without_exposing_them(
     monkeypatch, tmp_path: Path
 ) -> None:

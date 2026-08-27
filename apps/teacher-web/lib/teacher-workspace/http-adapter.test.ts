@@ -794,7 +794,8 @@ describe("HttpTeacherWorkspace", () => {
     };
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
-      const payload = url.endsWith("/jobs") ? job
+      const payload = url.endsWith("/cancel") ? { ...job, status: "cancelled", message: "任务已取消" }
+        : url.endsWith("/jobs") ? job
         : url.includes("authoring-drafts?") ? { items: [staged], total: 1, limit: 100, offset: 0 }
           : { draft_id: staged.draft_id, deleted: true, saved_question_preserved: false };
       return new Response(JSON.stringify(payload), {
@@ -809,15 +810,18 @@ describe("HttpTeacherWorkspace", () => {
       requestText: "命一道高三导数填空题", questionType: "fill_blank",
       targetDifficulty: 5, teachingPurpose: "考试压轴", sessionId: "session_1",
     });
+    await workspace.cancelQuestionAuthoringJob(job.job_id);
     await workspace.listPersonalAuthoringDrafts();
     await workspace.deletePersonalAuthoringHistory(staged.draft_id);
 
     expect(fetchMock.mock.calls.map(([url]) => String(url))).toEqual([
       "/api/v1/agent/question-authoring/jobs",
+      "/api/v1/agent/question-authoring/jobs/job_authoring_1/cancel",
       "/api/v1/personal-question-library/authoring-drafts?limit=100&offset=0",
       "/api/v1/personal-question-library/authoring-drafts/qad_1/history",
     ]);
-    expect((fetchMock.mock.calls[2]?.[1] as RequestInit).method).toBe("DELETE");
+    expect((fetchMock.mock.calls[1]?.[1] as RequestInit).method).toBe("POST");
+    expect((fetchMock.mock.calls[3]?.[1] as RequestInit).method).toBe("DELETE");
     expect(String((fetchMock.mock.calls[0]?.[1] as RequestInit).body)).not.toContain("owner_id");
   });
 

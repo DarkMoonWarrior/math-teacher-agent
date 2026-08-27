@@ -1792,6 +1792,16 @@ svg { flex: 0 0 auto; }
 .authoring-progress > ol li[data-state="current"] { color: var(--color-ink); font-weight: 700; }
 .authoring-progress > ol li[data-state="current"] > span { background: var(--color-teal); border-color: var(--color-teal); color: var(--color-paper); }
 .authoring-progress > ol li[data-state="complete"] { color: var(--color-teal); }
+.authoring-progress__cancel {
+  background: transparent;
+  border: 0;
+  border-bottom: 0.0625rem solid currentColor;
+  color: var(--color-muted);
+  cursor: pointer;
+  justify-self: start;
+  padding: var(--space-2xs) 0;
+}
+.authoring-progress__cancel:hover { color: var(--color-red); }
 
 @keyframes authoring-progress-spin { to { transform: rotate(360deg); } }
 .authoring-submit button,

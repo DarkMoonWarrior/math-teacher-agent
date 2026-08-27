@@ -573,7 +573,7 @@ export type QuestionAuthoringJob = {
   job_id: string;
   kind: "question_authoring";
   subject_id: string;
-  status: "queued" | "running" | "succeeded" | "failed";
+  status: "queued" | "running" | "succeeded" | "failed" | "cancelled";
   current: number;
   total: number;
   message: string;
@@ -801,6 +801,7 @@ export interface TeacherWorkspace {
 
   startQuestionAuthoringJob(request: QuestionAuthoringBrief, signal?: AbortSignal): Promise<QuestionAuthoringJob>;
   getQuestionAuthoringJob(jobId: string, signal?: AbortSignal): Promise<QuestionAuthoringJob>;
+  cancelQuestionAuthoringJob(jobId: string, signal?: AbortSignal): Promise<QuestionAuthoringJob>;
   getLatestQuestionAuthoringJob(signal?: AbortSignal): Promise<QuestionAuthoringJob | null>;
   getQuestionAuthoringProgress(progressId: string, signal?: AbortSignal): Promise<{ stage: QuestionAuthoringProgressStage }>;
 

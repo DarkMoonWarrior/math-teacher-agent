@@ -13,7 +13,7 @@ class BackgroundJobView(BaseModel):
     job_id: str
     kind: str
     subject_id: str
-    status: Literal["queued", "running", "succeeded", "failed"]
+    status: Literal["queued", "running", "succeeded", "failed", "cancelled"]
     current: int = 0
     total: int = 0
     message: str = ""
@@ -25,6 +25,10 @@ class BackgroundJobView(BaseModel):
 
 Progress = Callable[[int, int, str], None]
 Runner = Callable[[Progress], dict]
+
+
+class _BackgroundJobCancelled(Exception):
+    """Internal control flow used to stop a runner before it commits a result."""
 
 
 class BackgroundJobRegistry:
@@ -47,6 +51,7 @@ class BackgroundJobRegistry:
             self._jobs[job_id] = {
                 "job_id": job_id, "kind": kind, "subject_id": subject_id,
                 "owner_id": owner_id,
+                "cancel_requested": False,
                 "status": "queued", "current": 0, "total": 0,
                 "message": "任务已排队", "error": "", "result": {},
                 "created_at": now, "updated_at": now,
@@ -59,9 +64,7 @@ class BackgroundJobRegistry:
             value = self._jobs.get(job_id)
             if value is None or value["owner_id"] != owner_id:
                 raise KeyError(job_id)
-            public_value = {
-                key: item for key, item in deepcopy(value).items() if key != "owner_id"
-            }
+            public_value = self._public_value(value)
             return BackgroundJobView.model_validate(public_value)
 
     def list(self, *, owner_id: str, kind: str | None = None) -> list[BackgroundJobView]:
@@ -76,7 +79,7 @@ class BackgroundJobRegistry:
         values.sort(key=lambda value: value["created_at"], reverse=True)
         return [
             BackgroundJobView.model_validate(
-                {key: item for key, item in value.items() if key != "owner_id"}
+                self._public_value(value)
             )
             for value in values
         ]
@@ -87,24 +90,85 @@ class BackgroundJobRegistry:
             raise KeyError(kind)
         return jobs[0]
 
+    def cancel(self, job_id: str, *, owner_id: str) -> BackgroundJobView:
+        """Request owner-scoped cancellation without exposing partial results.
+
+        A provider call already in flight cannot always be interrupted. The runner's
+        next progress checkpoint raises before any domain write, so cancellation is
+        still a reliable no-commit boundary.
+        """
+        with self._lock:
+            value = self._jobs.get(job_id)
+            if value is None or value["owner_id"] != owner_id:
+                raise KeyError(job_id)
+            if value["status"] in {"queued", "running"}:
+                value.update(
+                    cancel_requested=True,
+                    status="cancelled",
+                    message="任务已取消",
+                    error="",
+                    result={},
+                    updated_at=datetime.now(UTC).isoformat(),
+                )
+            return BackgroundJobView.model_validate(self._public_value(value))
+
     def clear(self) -> None:
         """Drop transient records; intended for process teardown and tests."""
         with self._lock:
             self._jobs.clear()
 
-    def _update(self, job_id: str, **values) -> None:
+    @staticmethod
+    def _public_value(value: dict) -> dict:
+        return {
+            key: item
+            for key, item in deepcopy(value).items()
+            if key not in {"owner_id", "cancel_requested"}
+        }
+
+    def _start_running(self, job_id: str) -> None:
         with self._lock:
-            self._jobs[job_id].update(values)
-            self._jobs[job_id]["updated_at"] = datetime.now(UTC).isoformat()
+            value = self._jobs[job_id]
+            if value["cancel_requested"]:
+                raise _BackgroundJobCancelled
+            value.update(status="running", message="正在处理")
+            value["updated_at"] = datetime.now(UTC).isoformat()
+
+    def _update_active(self, job_id: str, **values) -> None:
+        with self._lock:
+            value = self._jobs[job_id]
+            if value["cancel_requested"]:
+                raise _BackgroundJobCancelled
+            value.update(values)
+            value["updated_at"] = datetime.now(UTC).isoformat()
+
+    def _finish_cancelled(self, job_id: str) -> None:
+        with self._lock:
+            value = self._jobs[job_id]
+            value.update(
+                cancel_requested=True,
+                status="cancelled",
+                message="任务已取消",
+                error="",
+                result={},
+                updated_at=datetime.now(UTC).isoformat(),
+            )
 
     def _run(self, job_id: str, runner: Runner) -> None:
-        self._update(job_id, status="running", message="正在处理")
-
         def progress(current: int, total: int, message: str) -> None:
-            self._update(job_id, current=current, total=total, message=message)
+            self._update_active(job_id, current=current, total=total, message=message)
 
         try:
+            self._start_running(job_id)
             result = runner(progress)
-            self._update(job_id, status="succeeded", message="处理完成", result=result)
+            self._update_active(
+                job_id, status="succeeded", message="处理完成", result=result
+            )
+        except _BackgroundJobCancelled:
+            self._finish_cancelled(job_id)
         except Exception as exc:  # boundary: the API reports the domain error to the UI
-            self._update(job_id, status="failed", message="处理失败", error=str(exc))
+            try:
+                self._update_active(
+                    job_id, status="failed", message="处理失败", error=str(exc)
+                )
+            except _BackgroundJobCancelled:
+                self._finish_cancelled(job_id)

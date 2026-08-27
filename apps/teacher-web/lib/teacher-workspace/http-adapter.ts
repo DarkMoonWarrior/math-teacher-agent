@@ -99,7 +99,7 @@ type ErrorEnvelope = {
 
 type LibraryBackgroundJob = {
   job_id: string;
-  status: "queued" | "running" | "succeeded" | "failed";
+  status: "queued" | "running" | "succeeded" | "failed" | "cancelled";
   message: string;
   error: string;
   result: Record<string, unknown>;
@@ -916,6 +916,14 @@ export class HttpTeacherWorkspace implements TeacherWorkspace {
       `/api/v1/agent/question-authoring/jobs/${encodeURIComponent(jobId)}`,
       { method: "GET", signal },
       "无法读取后台命题进度。",
+    );
+  }
+
+  cancelQuestionAuthoringJob(jobId: string, signal?: AbortSignal): Promise<QuestionAuthoringJob> {
+    return libraryJsonRequest(
+      `/api/v1/agent/question-authoring/jobs/${encodeURIComponent(jobId)}/cancel`,
+      { method: "POST", signal },
+      "无法取消后台命题任务。",
     );
   }
 

@@ -162,6 +162,9 @@ async def start_question_authoring_job(
                 time.sleep(min(2 ** min(attempt - 1, 4), 15))
                 continue
             if response.status == "ok" and response.draft is not None:
+                # This checkpoint is the cancellation boundary before the durable
+                # private-library write. A cancelled model call never stages a draft.
+                report(attempt, attempt, "正在建立私有草稿")
                 get_question_authoring_progress_registry().update(progress_id, "staging")
                 library.stage_generated_draft(response.draft, owner_id=owner_id)
                 report(attempt, attempt, "完整题目与解析已生成")
@@ -202,6 +205,19 @@ async def get_question_authoring_job(
 ) -> BackgroundJobView:
     try:
         return get_question_authoring_job_registry().get(
+            job_id, owner_id=teacher.teacher_id
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="命题任务不存在或已过期") from exc
+
+
+@router.post("/jobs/{job_id}/cancel", response_model=BackgroundJobView)
+async def cancel_question_authoring_job(
+    job_id: str,
+    teacher: CurrentTeacher = Depends(get_current_teacher),
+) -> BackgroundJobView:
+    try:
+        return get_question_authoring_job_registry().cancel(
             job_id, owner_id=teacher.teacher_id
         )
     except KeyError as exc:
