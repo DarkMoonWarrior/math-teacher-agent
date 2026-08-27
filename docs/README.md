@@ -17,6 +17,8 @@
 - [`M6-GATE-REVIEW.md`](M6-GATE-REVIEW.md)：M6 完成 Gate、工程回归、浏览器验收和阶段转换结论。
 - [`M7-MULTIMODAL-QUESTION-SOLVE.md`](M7-MULTIMODAL-QUESTION-SOLVE.md)：当前 M7 的单题图片/截图、公式 OCR、图形保真输入、可信 Solve 边界与切片状态。
 - [`M8-PRIVATE-QUESTION-AUTHORING.md`](M8-PRIVATE-QUESTION-AUTHORING.md)：辅助命题、owner 独占私题库、个人分类管理和永久公共禁入规则。
+- [`M8-PRIVATE-QUESTION-AUTHORING-EVALUATION.md`](M8-PRIVATE-QUESTION-AUTHORING-EVALUATION.md)：M8 的 26 场景固定 synthetic evaluation、违规计数和结果边界。
+- [`M8-GATE-REVIEW.md`](M8-GATE-REVIEW.md)：M8 功能 Gate、Gate E/Gate P、工程回归和阶段转换结论。
 - [`../AGENTS.md`](../AGENTS.md)：供代码开发 Agent 执行的精简规则。
 
 ## 治理与历史记录

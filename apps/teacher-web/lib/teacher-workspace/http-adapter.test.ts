@@ -785,6 +785,46 @@ describe("HttpTeacherWorkspace", () => {
     expect(result.draft.visibility).toBe("owner_only");
   });
 
+  it("starts resumable background authoring and exposes owner history controls", async () => {
+    const staged = personalAuthoringDraftFixture();
+    const job = {
+      job_id: "job_authoring_1", kind: "question_authoring", subject_id: "qap_1",
+      status: "running", current: 1, total: 0, message: "正在命制并闭环审核", error: "",
+      result: {}, created_at: "2026-08-27T10:00:00Z", updated_at: "2026-08-27T10:00:01Z",
+    };
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const payload = url.endsWith("/cancel") ? { ...job, status: "cancelled", message: "任务已取消" }
+        : url.endsWith("/jobs") ? job
+        : url.includes("authoring-drafts?") ? { items: [staged], total: 1, limit: 100, offset: 0 }
+          : { draft_id: staged.draft_id, deleted: true, saved_question_preserved: false };
+      return new Response(JSON.stringify(payload), {
+        status: url.endsWith("/jobs") ? 202 : 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const workspace = new HttpTeacherWorkspace();
+    await workspace.startQuestionAuthoringJob({
+      requestText: "命一道高三导数填空题", questionType: "fill_blank",
+      targetDifficulty: 5, teachingPurpose: "考试压轴", sessionId: "session_1",
+    });
+    await workspace.cancelQuestionAuthoringJob(job.job_id);
+    await workspace.listPersonalAuthoringDrafts();
+    await workspace.deletePersonalAuthoringHistory(staged.draft_id);
+
+    expect(fetchMock.mock.calls.map(([url]) => String(url))).toEqual([
+      "/api/v1/agent/question-authoring/jobs",
+      "/api/v1/agent/question-authoring/jobs/job_authoring_1/cancel",
+      "/api/v1/personal-question-library/authoring-drafts?limit=100&offset=0",
+      "/api/v1/personal-question-library/authoring-drafts/qad_1/history",
+    ]);
+    expect((fetchMock.mock.calls[1]?.[1] as RequestInit).method).toBe("POST");
+    expect((fetchMock.mock.calls[3]?.[1] as RequestInit).method).toBe("DELETE");
+    expect(String((fetchMock.mock.calls[0]?.[1] as RequestInit).body)).not.toContain("owner_id");
+  });
+
   it("keeps explicit save, versioned lifecycle actions and permanent deletion owner-bound", async () => {
     const staged = personalAuthoringDraftFixture();
     const question = personalQuestionFixture();
@@ -853,7 +893,7 @@ describe("HttpTeacherWorkspace", () => {
         ...staged.current,
         revision_number: 2,
         revision_source: "ai_generated" as const,
-        edit_summary: "AI 重新生成解析；题面、选项与最终答案保持不变",
+        edit_summary: "AI 重新生成解析；题面和选项保持不变，标准答案按新解析重新推导",
         draft: {
           ...staged.current.draft,
           solution_method: "重新规划的解法",

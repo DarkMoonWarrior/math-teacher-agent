@@ -1,0 +1,33 @@
+{
+  "evaluation_id": "private-question-authoring-synthetic-v1",
+  "source": "project-authored-synthetic",
+  "synthetic": true,
+  "cases": [
+    {"id": "single_choice_complete", "group": "question_types", "expected": "complete_private_draft"},
+    {"id": "multiple_choice_complete", "group": "question_types", "expected": "complete_private_draft"},
+    {"id": "fill_blank_complete", "group": "question_types", "expected": "complete_private_draft"},
+    {"id": "open_response_complete", "group": "question_types", "expected": "complete_private_draft"},
+    {"id": "conic_section_scope", "group": "high_school_modules", "expected": "complete_private_draft"},
+    {"id": "probability_scope", "group": "high_school_modules", "expected": "complete_private_draft"},
+    {"id": "sequence_scope", "group": "high_school_modules", "expected": "complete_private_draft"},
+    {"id": "trigonometry_scope", "group": "high_school_modules", "expected": "complete_private_draft"},
+    {"id": "solid_geometry_scope", "group": "high_school_modules", "expected": "complete_private_draft"},
+    {"id": "choice_options_separated", "group": "content_contract", "expected": "structured_options"},
+    {"id": "unfinished_solution_rejected", "group": "content_contract", "expected": "no_half_result"},
+    {"id": "university_scope_rejected", "group": "content_contract", "expected": "explicit_scope_failure"},
+    {"id": "model_unavailable", "group": "failure", "expected": "explicit_failure"},
+    {"id": "background_cancelled", "group": "failure", "expected": "no_partial_commit"},
+    {"id": "reference_rights_unverified", "group": "rights", "expected": "fail_closed"},
+    {"id": "owner_only_policy", "group": "privacy", "expected": "no_public_transition"},
+    {"id": "browser_owner_spoof", "group": "privacy", "expected": "validation_failure"},
+    {"id": "cross_owner_isolation", "group": "privacy", "expected": "no_leak"},
+    {"id": "public_search_isolation", "group": "privacy", "expected": "no_leak"},
+    {"id": "agent_management_forbidden", "group": "privacy", "expected": "no_privileged_tool"},
+    {"id": "explicit_save_only", "group": "lifecycle", "expected": "owner_confirmed_save"},
+    {"id": "copy_is_independent", "group": "lifecycle", "expected": "independent_private_copy"},
+    {"id": "trash_restore", "group": "lifecycle", "expected": "recoverable_delete"},
+    {"id": "permanent_delete_guarded", "group": "lifecycle", "expected": "confirmed_delete"},
+    {"id": "history_delete_preserves_saved", "group": "lifecycle", "expected": "saved_question_preserved"},
+    {"id": "revision_trace_preserved", "group": "lifecycle", "expected": "append_only_revision"}
+  ]
+}

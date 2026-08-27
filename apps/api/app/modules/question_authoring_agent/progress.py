@@ -11,8 +11,12 @@ from pydantic import BaseModel
 QuestionAuthoringProgressStage = Literal[
     "brief",
     "composing",
+    "reauthoring",
     "reviewing",
+    "refining",
     "solving",
+    "reviewing_solution",
+    "regenerating_solution",
     "staging",
 ]
 

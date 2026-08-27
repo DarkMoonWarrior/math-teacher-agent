@@ -119,6 +119,25 @@ def generated_draft(draft_id: str = "qad_private_fixture") -> GeneratedQuestionD
     )
 
 
+def test_authoring_history_is_owner_scoped_and_freely_removable(tmp_path: Path) -> None:
+    library = make_library(tmp_path)
+    first = library.stage_generated_draft(generated_draft("qad_history_first"), owner_id="teacher_a")
+    second = library.stage_generated_draft(generated_draft("qad_history_second"), owner_id="teacher_a")
+    library.stage_generated_draft(generated_draft("qad_history_other"), owner_id="teacher_b")
+
+    history = library.list_authoring_drafts(owner_id="teacher_a")
+    assert history.total == 2
+    assert {item.draft_id for item in history.items} == {first.draft_id, second.draft_id}
+
+    receipt = library.delete_authoring_history(first.draft_id, owner_id="teacher_a")
+    assert receipt.saved_question_preserved is False
+    assert [item.draft_id for item in library.list_authoring_drafts(owner_id="teacher_a").items] == [second.draft_id]
+    with pytest.raises(KeyError):
+        library.get_authoring_draft(first.draft_id, owner_id="teacher_a")
+    with pytest.raises(KeyError):
+        library.delete_authoring_history(second.draft_id, owner_id="teacher_b")
+
+
 def editable_content(draft: GeneratedQuestionDraft, *, stem: str) -> QuestionDraftEditableContent:
     return QuestionDraftEditableContent(
         question_type=draft.question_type,
@@ -160,6 +179,19 @@ def create_saved_question(
         owner_id=owner_id,
     )
     return collection, category, question
+
+
+def test_deleting_saved_authoring_history_preserves_private_question(tmp_path: Path) -> None:
+    library = make_library(tmp_path)
+    _, _, question = create_saved_question(library, suffix="history-preserved")
+
+    receipt = library.delete_authoring_history(
+        question.source_draft_id, owner_id="teacher_a"
+    )
+
+    assert receipt.saved_question_preserved is True
+    assert library.list_authoring_drafts(owner_id="teacher_a").total == 0
+    assert library.get_question(question.question_id, owner_id="teacher_a").question_id == question.question_id
 
 
 def test_collections_are_owner_only_and_never_expose_owner_or_public_transitions(
@@ -784,7 +816,9 @@ def test_http_regenerate_solution_appends_ai_revision_without_changing_question(
             assert current.final_answer == draft.final_answer
             return ProviderQuestionSolution(
                 solution_method="重新生成的定义法",
-                solution_steps=["固定题面和答案后，给出新的成稿推导。"],
+                solution_steps=["固定题面后重新求解，并据此更新标准答案。"],
+                answer_value="A",
+                final_answer="A",
             )
 
     library = make_library(tmp_path)
@@ -813,10 +847,10 @@ def test_http_regenerate_solution_appends_ai_revision_without_changing_question(
             assert regenerated["stem_plain"] == draft.stem_plain
             assert regenerated["stem_latex"] == draft.stem_latex
             assert regenerated["options"] == [item.model_dump(mode="json") for item in draft.options]
-            assert regenerated["answer_value"] == draft.answer_value
-            assert regenerated["final_answer"] == draft.final_answer
+            assert regenerated["answer_value"] == "A"
+            assert regenerated["final_answer"] == "A"
             assert regenerated["solution_method"] == "重新生成的定义法"
-            assert regenerated["solution_steps"] == ["固定题面和答案后，给出新的成稿推导。"]
+            assert regenerated["solution_steps"] == ["固定题面后重新求解，并据此更新标准答案。"]
             assert regenerated["visibility"] == "owner_only"
             assert regenerated["saved"] is False
 
@@ -944,7 +978,10 @@ def test_public_routes_have_no_publish_share_or_admin_interface() -> None:
     delete_paths = {
         path for path, operations in personal_paths.items() if "delete" in operations
     }
-    assert delete_paths == {"/api/v1/personal-question-library/questions/{question_id}"}
+    assert delete_paths == {
+        "/api/v1/personal-question-library/questions/{question_id}",
+        "/api/v1/personal-question-library/authoring-drafts/{draft_id}/history",
+    }
     assert "publish" not in serialized
     assert "share" not in serialized
     assert "admin" not in serialized

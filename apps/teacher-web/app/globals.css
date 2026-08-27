@@ -1661,6 +1661,13 @@ svg { flex: 0 0 auto; }
 .authoring-brief,
 .authoring-draft,
 .personal-question-shelf { display: grid; gap: var(--space-lg); min-width: 0; }
+.authoring-history__list { border-top: 0.0625rem solid var(--color-rule-strong); display: grid; list-style: none; margin: 0; padding: 0; }
+.authoring-history__list li { align-items: center; border-bottom: 0.0625rem solid var(--color-rule); display: grid; gap: var(--space-md); grid-template-columns: minmax(0, 1fr) auto; padding: var(--space-md); }
+.authoring-history__list li > div:first-child { display: grid; gap: var(--space-xs); min-width: 0; }
+.authoring-history__list p { color: var(--color-muted); margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.authoring-history__list small { color: var(--color-muted); }
+.authoring-history__list li > div:last-child { display: flex; gap: var(--space-xs); }
+.authoring-history__list button { border: 0.0625rem solid var(--color-rule-strong); min-height: 2.5rem; padding: var(--space-xs) var(--space-md); }
 .authoring-brief > header,
 .authoring-draft > header,
 .authoring-save > header,
@@ -1779,12 +1786,22 @@ svg { flex: 0 0 auto; }
   height: 1.75rem;
   width: 1.75rem;
 }
-.authoring-progress > ol { display: grid; gap: var(--space-xs); grid-template-columns: repeat(5, minmax(0, 1fr)); list-style: none; margin: 0; padding: 0; }
+.authoring-progress > ol { display: grid; gap: var(--space-xs); grid-template-columns: repeat(4, minmax(0, 1fr)); list-style: none; margin: 0; padding: 0; }
 .authoring-progress > ol li { align-items: center; color: var(--color-muted); display: flex; font-size: var(--text-sm); gap: var(--space-xs); min-width: 0; }
 .authoring-progress > ol li > span { align-items: center; border: 0.0625rem solid var(--color-rule-strong); border-radius: 50%; display: inline-flex; flex: 0 0 auto; height: 1.5rem; justify-content: center; width: 1.5rem; }
 .authoring-progress > ol li[data-state="current"] { color: var(--color-ink); font-weight: 700; }
 .authoring-progress > ol li[data-state="current"] > span { background: var(--color-teal); border-color: var(--color-teal); color: var(--color-paper); }
 .authoring-progress > ol li[data-state="complete"] { color: var(--color-teal); }
+.authoring-progress__cancel {
+  background: transparent;
+  border: 0;
+  border-bottom: 0.0625rem solid currentColor;
+  color: var(--color-muted);
+  cursor: pointer;
+  justify-self: start;
+  padding: var(--space-2xs) 0;
+}
+.authoring-progress__cancel:hover { color: var(--color-red); }
 
 @keyframes authoring-progress-spin { to { transform: rotate(360deg); } }
 .authoring-submit button,

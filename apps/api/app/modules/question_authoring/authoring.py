@@ -83,6 +83,10 @@ class QuestionAuthoring:
             )
         except QuestionAuthoringProviderError as exc:
             raise QuestionAuthoringUnavailableError(str(exc)) from exc
+        if content.solution_status != "ready":
+            raise QuestionAuthoringUnavailableError(
+                "命题模型未能交付完整且通过一致性审核的题目，系统不会返回半成品"
+            )
         content = self._canonicalize_generated_content(content)
         self._validate_structure(content, expected_type=question_type)
         self._validate_high_school_scope(content)
@@ -96,19 +100,21 @@ class QuestionAuthoring:
             brief=brief,
             draft_id=draft_id,
         )
+        if verification.status == "checks_failed":
+            failed = [
+                check.summary for check in verification.checks if check.status == "failed"
+            ]
+            raise QuestionAuthoringUnavailableError(
+                "生成结果仍存在阻断问题，系统不会把半成品交给教师："
+                + "；".join(failed)
+            )
         warnings = [
-            "本题由 AI 辅助生成；结构检查不等于数学正确，必须由教师复核。",
+            "本题已完成题面、解析与解析所得答案的内部闭环审核；教师仍可按教学需要自主修改。",
             "当前草稿尚未保存，仅自己可见；不会进入公共题库或公共搜索。",
             "预计难度来自模型判断，不是统计校准或程序验证结果。",
         ]
         if verification.math_verifier_status == "unsupported":
-            warnings.append("当前 MathVerifier 不支持对此任意生成题做独立数学验证。")
-        if verification.status == "checks_failed":
-            warnings.append("确定性可信检查发现阻断项；修正前不得作为正式题目使用。")
-        if content.solution_status == "needs_teacher_verification":
-            warnings.append(
-                "题面、选项和最终答案已完整保留，但解析未通过一致性检查；请教师自行核验或重新生成解析。"
-            )
+            warnings.append("当前 MathVerifier 不支持对此任意生成题提供形式化证明；这不改变已完成的内部闭环审核状态。")
         if brief.question_type is None:
             warnings.append(f"未明确题型，已从要求推断为 {question_type}。")
         if curriculum_warning:
@@ -232,7 +238,7 @@ class QuestionAuthoring:
         self,
         current: GeneratedQuestionDraft,
     ) -> GeneratedQuestionDraft:
-        """Replace only solution fields, then recompute server-owned trust evidence."""
+        """Re-solve the fixed statement, replace its answer, and rebuild trust evidence."""
 
         if self.provider is None:
             raise QuestionAuthoringUnavailableError(
@@ -265,10 +271,16 @@ class QuestionAuthoring:
             update={
                 "solution_method": replacement.solution_method.strip(),
                 "solution_steps": [step.strip() for step in replacement.solution_steps],
+                "answer_value": replacement.answer_value.strip(),
+                "final_answer": replacement.final_answer.strip(),
                 "solution_status": replacement.solution_status,
                 "solution_issue": replacement.solution_issue,
             }
         )
+        if revised.solution_status != "ready":
+            raise QuestionAuthoringUnavailableError(
+                "重新生成的解析未通过一致性审核，系统不会返回半成品"
+            )
         self._validate_structure(revised, expected_type=current.question_type)
         brief = QuestionDesignBrief(
             request_text=current.request_text,
@@ -281,23 +293,27 @@ class QuestionAuthoring:
             brief=brief,
             draft_id=current.draft_id,
         )
+        if verification.status == "checks_failed":
+            failed = [
+                check.summary for check in verification.checks if check.status == "failed"
+            ]
+            raise QuestionAuthoringUnavailableError(
+                "重新生成结果仍存在阻断问题，系统不会返回半成品："
+                + "；".join(failed)
+            )
         warnings = [
-            "解析已由 AI 重新生成；题面、选项和最终答案保持不变。",
-            "重新生成后的解析仍必须由教师复核，不构成 MathVerifier 独立证据。",
+            "题面和选项保持不变；标准答案已按新解析重新推导。",
+            "新解析已经过题面、解析与答案一致性审核；教师仍可按教学需要自主修改。",
             "当前内容仍在个人命题工作区；不会进入公共题库或公共搜索。",
         ]
         if verification.math_verifier_status == "unsupported":
-            warnings.append("当前 MathVerifier 不支持对此任意生成题做独立数学验证。")
-        if verification.status == "checks_failed":
-            warnings.append("确定性可信检查发现阻断项；修正前不得作为正式题目使用。")
-        if revised.solution_status == "needs_teacher_verification":
-            warnings.append(
-                "重新生成的解析仍未通过一致性检查；题面、选项和最终答案未改变，请教师自行核验。"
-            )
+            warnings.append("当前 MathVerifier 不支持对此任意生成题提供形式化证明。")
         return current.model_copy(
             update={
                 "solution_method": revised.solution_method,
                 "solution_steps": revised.solution_steps,
+                "answer_value": revised.answer_value,
+                "final_answer": revised.final_answer,
                 "solution_status": revised.solution_status,
                 "solution_issue": revised.solution_issue,
                 "verification": verification,
@@ -657,7 +673,7 @@ class QuestionAuthoring:
                 status="failed",
                 capability="supported",
                 evidence_source="deterministic_structure",
-                summary="解析与锁定答案存在已知冲突或解析未完成",
+                summary="题目、解析与解析所得标准答案存在已知冲突或解析未完成",
                 details=[content.solution_issue or "解析需要教师独立核验。"],
             )
         if content.question_type in {"single_choice", "multiple_choice"}:

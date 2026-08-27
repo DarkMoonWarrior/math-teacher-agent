@@ -1,7 +1,7 @@
 # M8 私有辅助命题 Agent
 
-更新日期：2026-08-26
-状态：进行中；M7 Gate E 已通过且项目所有者已确认阶段转换
+更新日期：2026-08-28
+状态：已完成；固定评测、Gate E 与 Gate P 已通过，等待所有者确认进入 M9
 
 ## 实施进度
 
@@ -13,14 +13,16 @@
 - **切片 6 已完成**：Teacher Web 已从“新任务”、Search 空结果/不合适结果和 Paper 题量不足提示三个必需位置接入独立辅助命题工作区，并在顶部能力导航增加“命题”直达入口。教师可填写结构化 brief、查看并编辑未保存草稿、记录 revision、重新执行六项检查、明确选择或新建个人题库/分类后保存；保存后可在同一 owner 工作区管理、导出、回收、恢复或确认永久删除。生成题始终以 `AI GENERATED · UNSAVED` 与真实检索题分开，Paper 入口不自动生成、不自动保存，也不自动加入试卷。临时成功、失败和不可逆删除确认使用可关闭弹窗；可信检查与数学风险披露仍保留在正文。
 - **切片 7 已完成**：知识点、考查方法和易错点不再作为生成前门禁。教师只需自然语言意图，年级、题型、难度和其他限制均为可选约束；provider 在题目完成后归纳细分知识点、考查方法、常见错误并建议受控 Curriculum 节点。未知节点被业务层丢弃，无法映射也不阻断 owner-only 草稿；Agent 推断固定为待确认，教师可在结果页检索目录并通过 revision 确认或修正，同时校订全部教学元数据。
 - **切片 8 已完成**：选择题题干与选项采用强制分离契约，provider 不得把 A–D 写进题干，业务层会清理重复嵌入的选项并规范化选项编号，Teacher Web 在题面下逐项显示完整选项。命题 provider 明确限定中国普通高中数学范围，业务层对明确大学专属概念执行终检；首次越界会在锁定题面阶段受控重写，仍越界则诚实失败。长时间生成显示持续旋转状态、当前真实外层阶段和已用时间，不虚构百分比也不展示模型思维链。整体 Tool/API 转发预算扩展为有界 15 分钟，内容仍不设长度上限。
-- **切片 7 长题能力收口已完成**：撤销“缩短题干/限制解析总字数”方案，DeepSeek adapter 在单一 `create_draft` seam 内依次锁定完整题面与最终答案、规划解析段、并行展开各段、按序组装并执行原有可信检查。单段格式失败只重试该段；持续截断时仅把该段再拆成原子子段，不重新生成题面或其他成功段。Teacher Web 使用与 Solve 相同的数学展示契约和 KaTeX 组件呈现题面、长解析步骤与唯一最终答案，原始 LaTeX 只放在可展开校订区。真实三小问 5/5 解答题已通过 Web 全链路生成 62 步、约 17470 字符解析，并保持 `owner_only + saved=false + teacher_review_required`。
-- **M8 解析质量补强已完成**：解析段契约只允许可直接展示的成稿推导，禁止第一人称试算、自我怀疑、回退、提示词或内部字段讨论。服务端检测到“让我们重新审视”“重新核对初始条件”“题面有误”“与题设不符”“无法选出正确答案”等元推理或自我推翻时，只重写受污染的解析段。完整题面、选项和最终答案一旦由 core 阶段锁定，清理后仍污染、解析生成异常或确认数学冲突都不得让整道题失败；系统返回完整题目，把解析标记为 `needs_teacher_verification`、可信状态降为 `checks_failed`，并明确提示教师自行核验或单独重新生成解析。只有题面 core 本身未完成时才诚实失败。结果页“重新生成解析”锁定当前 revision 的题面、选项、答案和最终答案，只替换解法与解析步骤、重跑可信检查并追加 `ai_generated` revision；未记录的本地编辑会先提示保存，避免静默覆盖。
-- **M8 题面自审核补强已完成**：core 生成后、解析规划前新增独立题面审核调用，必须检查条件相容性、数学对象存在性、全部小问可答性、锁定答案以及选择题唯一性。审核失败最多触发三轮不降低难度、不改变题型、不删除教师要求的完整题面修订与复审，每轮必须重新计算数值、范围和正确选项；三轮复审仍失败时才在解析前停止，错误提示不得泄露审核试算过程。Teacher Web 通过 owner-bound、无正文的短期进度标识显示“整理命题要求、命制题面、审核题面、生成解析、建立私有草稿”五步真实进度与已用时间，不再显示额外的长题说明行。
+- **切片 7 长题能力收口已完成**：撤销“缩短题干/限制解析总字数”方案，DeepSeek adapter 在单一 `create_draft` seam 内生成完整题面，规划解析段、并行展开各段、按序组装。单段格式失败只重试该段；持续截断时仅把该段再拆成原子子段。Teacher Web 使用与 Solve 相同的数学展示契约和 KaTeX 组件呈现题面、长解析步骤与唯一最终答案，原始 LaTeX 只放在可展开校订区。
+- **M8 解析质量补强已完成**：解析段契约只允许可直接展示的成稿推导，禁止第一人称试算、自我怀疑、回退、提示词或内部字段讨论。标准答案不在题面生成阶段预设，只能在完整解析完成后提取；教师点击“重新生成解析”时保持题面和选项不变，标准答案随新解析重新推导并追加 `ai_generated` revision。未记录的本地编辑会先提示保存，避免静默覆盖。
+- **M8 题面、解析与答案闭环补强已完成**：不含答案的题面生成后、解析规划前执行第一次独立求解审核，检查条件相容性、数学对象存在性、全部小问可答性、高中范围及选择题唯一性。审核失败最多触发三轮不降低难度、不改变题型、不删除教师要求的题面完善，每轮完善后必须重新审核。完整解析完成后执行最终独立求解审核并判责：题面错误进入“完善题面 → 重新审核 → 重新解析”，题面成立但解析或解析所得答案错误进入“保留题面 → 重新生成解析 → 再审核”。初次审核答案与最终审核不一致但解析和最终审核一致时，由最终审核纠正内部初审，不丢弃有效题目。只有完整题面、完整选项、正式解析和解析所得标准答案闭环一致时才建立草稿；不得返回 `needs_teacher_verification` 半成品让教师替 Agent 修错。Teacher Web 显示八步真实进度与已用时间：“整理命题要求、命制题面、审核题面、完善题面（按需）、生成解析、审核解析与答案、重生成解析（按需）、建立私有草稿”。
+- **M8 后台闭环与命题历史补强已完成**：同一候选题的题面或解析恢复耗尽后自动整题重命，非大学范围内容不会以“无法交付半成品”结束。命题由 owner-scoped 后台任务持有，切换页面只停止当前页面轮询；返回命题区会恢复真实阶段和计时。可视化增加“重新命题（按需）”。“上一次”直接恢复最近完整结果，“命题历史”可打开和删除任意 owner 自有记录；删除已保存记录不删除私题。
+- **M8 后台取消补强已完成**：教师可以明确取消自己的在途命题；共享 `BackgroundJobRegistry` 在 provider 返回后、私人草稿写入前再次执行取消检查。已取消任务固定返回 `cancelled + result={}`，其他 owner 不能查看或取消，也不会出现界面已取消但后台仍保存的假取消。
 - DeepSeek 只实现可替换 provider adapter；Agent 必须且只能调用一次 `create_question_draft`，模型不能增加 owner、保存、发布、共享或删除参数。Agent Tool 仍只返回 `owner_only + saved=false`；暂存和保存由公开 FastAPI 在认证业务层分别执行，Agent 没有相应写 Tool。
 - 当前 MathVerifier 只接受带受控 `verification_spec` 的已知规则；任意模型生成题没有这种独立证据，因此固定诚实披露 `math_verifier_status=unsupported`，不得用模型自述冒充程序验证。结构检查通过也不等于数学正确。
 - FastAPI 只从 `get_current_teacher` 注入 owner；请求模型 `extra=forbid`，浏览器伪造 `owner_id` 返回 422，跨 owner 读取或修改返回 404。
 - 所有返回固定为 `owner_only`，并明确 `public_search_allowed=false`、`share_allowed=false`、`commercial_use_allowed=false`、`model_training_allowed=false`；没有 publish/share/admin 接口。唯一 DELETE 路由只属于认证 owner 的私题，且受回收站、版本与固定确认三重门禁保护。
-- **仍未完成**：固定 synthetic evaluation、完整隐私/可信/工程审计与 Gate E/Gate P。M8 尚未完成，不得进入 M9。
+- **切片 9 与完成 Gate 已通过**：26 场景固定 synthetic evaluation 的 12 类违规均为 0；完整 FastAPI、Teacher Web、Agent 与 legacy 回归通过；Gate E/Gate P 评审见 [`M8-GATE-REVIEW.md`](M8-GATE-REVIEW.md)。M8 已完成，但在所有者查看 Gate 结果并确认前仍不得进入 M9。
 
 ## 1. 已确认的产品规则
 
@@ -45,9 +47,11 @@ M8 不建设公共投稿、公共发布、共享协作、商业内容审核、�
 
 ### QuestionAuthoring
 
-`QuestionAuthoring.create_draft(QuestionDesignBrief) -> GeneratedQuestionDraft` 与 `QuestionAuthoring.regenerate_solution(GeneratedQuestionDraft) -> GeneratedQuestionDraft` 是命题业务深模块接口。前者拥有可选需求约束、结构化生成和生成后教学元数据归纳；后者只允许 provider 替换解析字段。两者共同把受控教材映射、答案/解析一致性检查、选择题唯一性检查、MathVerifier、可信状态和错误语义留在实现内部。`GeneratedQuestionDraft.solution_status` 区分可直接复核的 `ready` 与解析异常但题面可用的 `needs_teacher_verification`；后者必须携带简洁 `solution_issue`，不得包含模型内部试算过程。
+`QuestionAuthoring.create_draft(QuestionDesignBrief) -> GeneratedQuestionDraft` 与 `QuestionAuthoring.regenerate_solution(GeneratedQuestionDraft) -> GeneratedQuestionDraft` 是命题业务深模块接口。前者拥有可选需求约束、题面完善、结构化生成和生成后教学元数据归纳；后者保持题面与选项不变，重新求解并同时替换解析和解析所得标准答案。两者共同把受控教材映射、题面审核、答案/解析一致性检查、选择题唯一性检查、MathVerifier、可信状态和错误语义留在实现内部。
 
-初次长题生成不会增加 Agent Tool。DeepSeek provider 在内部执行 `question core → solution plan → solution sections → assembly`：题面与最终答案先锁定，解析段只读该锁定内容；多个段可并行生成，某一段失败时只在 provider 内局部重试。教师明确点击“重新生成解析”时，认证 FastAPI 业务接口从 owner 当前 revision 恢复锁定题面，不经浏览器或 Agent 选择 owner，也不开放整题重生成、保存或发布权限。内容 Schema 与业务模型允许长题干和长解析，基础设施保留 15 分钟有界总预算以防失控请求，但不得把超时保护变成删题、压缩步骤或降低难度的内容规则。
+这里的 `draft` 只表示当前 owner 尚未明确保存或确认，不表示内容可以残缺。AI 初次生成和“重新生成解析”都只能返回通过闭环审核的完整结果；已知题面错误、已知解析错误、答案冲突、缺失选项、占位内容或 `solution_status=needs_teacher_verification` 不得成为正常用户交付。教师仍可主动编辑完整草稿，教师编辑后的 revision 可以诚实显示阻断检查，但系统不得把自身未完成的核心命题责任转嫁给教师。
+
+初次长题生成不会增加 Agent Tool。DeepSeek provider 在内部执行 `answer-free statement → independent statement review → conditional statement repair → solution → solution-derived answer → final fault-classifying review → conditional statement repair or solution regeneration → accepted complete draft`。多个解析段可并行生成，某一段失败时只在 provider 内局部重试；数学冲突必须标记来自题面还是当前解析并进入对应恢复分支。教师明确点击“重新生成解析”时，认证 FastAPI 业务接口从 owner 当前 revision 恢复题面与选项，不经浏览器或 Agent 选择 owner；新解析完成后重新推导标准答案并再次审核，失败时在内部受控重试而不是返回冲突 revision。内容 Schema 与业务模型允许长题干和长解析，基础设施保留 15 分钟有界总预算以防失控请求，但不得把超时保护变成删题、压缩步骤或降低难度的内容规则。
 
 `QuestionDesignBrief` 只强制要求自然语言命题意图；年级、教师明确选择的教材节点、题型、目标难度、教学用途、预计用时、显式方法/干扰项约束、可选参考题和补充限制都是可选信息。不得因教师没有先填写知识点、考查方法或易错点而拒绝生成。`GeneratedQuestionDraft` 包含题干、LaTeX、选项、答案、分步解析、命题意图、可空的教材映射、细分知识点、考查方法、常见易错点、目标/预计难度、验证证据、warnings、provider/model/prompt revision 和 `source_type=ai_generated`。
 
@@ -82,7 +86,7 @@ Agent 只生成或提出修改草稿；保存、覆盖、删除和永久删除�
 
 Teacher Web 顶部能力导航另提供“命题”直达入口，方便教师不依赖某次 Search/Paper 上下文直接进入；它不改变上述三个业务触发条件，也不会自动生成或保存。
 
-生成结果页提供：重新生成解析、编辑题面/答案/解析、记录校订并重检、命名、选择或新建分类、保存为我的私题。重新生成解析只创建新的解析 revision，不改变题面、选项或最终答案；保存前后始终显示“仅自己可见”和可信状态。
+生成结果页提供：重新生成解析、编辑题面/答案/解析、记录校订并重检、命名、选择或新建分类、保存为我的私题。重新生成解析创建新的 AI revision，不改变题面与选项，标准答案按新解析更新；保存前后始终显示“仅自己可见”和可信状态。
 
 ## 5. 数据与管理规则
 
@@ -106,6 +110,8 @@ Teacher Web 顶部能力导航另提供“命题”直达入口，方便教师�
 8. **完整题型与过程可见性**：选择题题干/选项强制分离，高中范围终检，长请求显示真实阶段与已用时间，并保留有界 15 分钟总预算。
 9. **固定评测与 Gate E**：覆盖主要高中模块和题型、模型不可用、验证失败、权利拒绝、重复、越权、公共搜索泄漏、后台权限、删除与恢复。
 
+以上九个切片均已完成。固定评测见 [`M8-PRIVATE-QUESTION-AUTHORING-EVALUATION.md`](M8-PRIVATE-QUESTION-AUTHORING-EVALUATION.md)，完成评审见 [`M8-GATE-REVIEW.md`](M8-GATE-REVIEW.md)。
+
 ## 7. M8 完成 Gate
 
 - 教师能够从自然语言要求生成一题结构化草稿，编辑、命名、分类并明确保存到自己的私题库。
@@ -117,4 +123,4 @@ Teacher Web 顶部能力导航另提供“命题”直达入口，方便教师�
 - Analytics/日志不记录私题正文或完整命题提示；生产 owner/tenant isolation 与 IDOR 测试在商业化前持续保留。
 - FastAPI、Agent、Teacher Web、响应式/可访问性、完整工程回归和 Gate E 全部通过。
 
-M8 Gate E 通过并由项目所有者确认前，不进入 M9 Paper Agent。
+M8 Gate E 与 Gate P 已通过；项目所有者确认阶段转换前，不进入 M9 Paper Agent。

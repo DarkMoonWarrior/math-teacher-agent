@@ -13,7 +13,7 @@
 - 行内公式使用单个 `$...$`；
 - 需要单独成行的公式使用 `$$...$$`；
 - 公式使用 KaTeX 兼容 LaTeX，不使用 Markdown 代码块包装；
-- Solution 与 Question Authoring provider 必须共用同一数学输出约定，提示版本分别可追踪；命题当前为 `question-authoring-v8-core-review-before-solution`。
+- Solution 与 Question Authoring provider 必须共用同一数学输出约定，提示版本分别可追踪；命题当前为 `question-authoring-v13-background-closed-loop`。
 
 这一约定继续保留现有 `steps: string[]` 与 `final_answer: string` 业务契约，避免为了展示问题改动可信状态和 Agent Tool 接口。长解析由命题 provider 分段生成和组装，但每段中的中文与公式仍遵守同一约定。
 

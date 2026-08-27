@@ -1,6 +1,6 @@
 # 当前开发边界
 
-更新日期：2026-08-26
+更新日期：2026-08-28
 状态：当前 source of truth；历史 PDF 和旧 Prompt 保留为决策证据，但不再决定当前阶段编号。
 
 ## 1. 产品定位与唯一目标用户
@@ -27,6 +27,9 @@
 12. 辅助命制题永久属于创建教师的 `PersonalQuestionLibrary`，不存在进入 public/shared/team/school/commercial-approved 的产品路径。
 13. 公共 Search、公共 QuestionBank、后台内容管理和其他 owner 均无权读取或管理辅助命制题；教师拥有命名、分类、编辑、导出、删除和永久删除自己私题的权利。
 14. 面向教师展示的数学内容必须渲染为可读公式；不能把 LaTeX 源码作为默认正文，也不能把排版成功冒充数学验证通过。统一规范见 [`MATH-CONTENT-PRESENTATION.md`](MATH-CONTENT-PRESENTATION.md)。
+15. 所有面向用户交付的 Agent 内容必须闭环完成。“草稿”只表示尚未由用户保存或确认，不表示允许残缺、已知错误或需要用户代替系统完成核心工作。辅助命题交付前必须具备完整题面、完整选项（如适用）、可读解析、由解析推导的标准答案和一致性审核；发现题面或解析问题必须在内部判责并返工，不能把半成品交给教师自行修错。教师可以自主编辑已完成内容，但不承担替 Agent 补全交付物的责任。
+16. 辅助命题的单个候选或同一题解析重试耗尽不是用户终点。系统必须在后台继续完善题面、重生成解析或整题重命，直至交付完整正确题目；只有明确检测到大学范围内容时可以终止并说明边界。后台任务不与页面生命周期绑定，切换页面不得取消已受理任务。
+17. “上一次”和“命题历史”只能读取当前 owner 的完整结果。owner 可以删除历史；未保存结果随历史删除，已保存私题仅隐藏历史入口，不得连带删除私题。
 
 完整量化门禁见 [`PRODUCT-GATES.md`](PRODUCT-GATES.md)。
 
@@ -45,11 +48,11 @@
 
 辅助命制题使用独立 `PersonalQuestionLibrary` 模块和 owner-isolated storage namespace，不以公共 `QuestionBank` 的一个可变 visibility 字段作为唯一隔离手段。该模块没有 publish/share 接口；后台运营/内容管理员没有内容查看和管理接口。详细规则见 [`M8-PRIVATE-QUESTION-AUTHORING.md`](M8-PRIVATE-QUESTION-AUTHORING.md)。
 
-## 4. 当前阶段：M8 私有辅助命题 Agent
+## 4. 当前阶段：M8 已完成，等待进入 M9 的确认
 
-M0-M7 已完成；项目所有者在查看 M7 Gate E 结果后于 2026-08-24 明确确认进入 M8。当前只能按 [`M8-PRIVATE-QUESTION-AUTHORING.md`](M8-PRIVATE-QUESTION-AUTHORING.md) 的纵向切片开发私有辅助命题，不得并行进入 Paper、Lesson、Memory 或其他后续阶段。
+M0-M8 已完成；M8 的固定评测、Gate E 与 Gate P 于 2026-08-28 通过。项目所有者查看 [`M8-GATE-REVIEW.md`](M8-GATE-REVIEW.md) 并明确确认阶段转换前，不得开始 Paper、Lesson、Memory 或其他后续阶段。
 
-M8 切片 1–8 已建立独立 `PersonalQuestionLibrary` 深模块、本地 owner-isolated SQLite namespace、身份绑定的个人题库/分类、结构化生成、六项可信检查、私有命题工作区、append-only revision、显式保存、完整 owner 管理接口及 Teacher Web 入口。教师只需描述命题意图；年级、题型、难度是可选便捷约束，教材知识点、细分知识点、考查方法和易错点由 Agent 在生成后归纳。长题在 provider 内分为题面/答案锁定、独立题面自审核、受控修订与复审、解析提纲、解析段和组装，失败段局部重试；题面未通过复审时不得进入解析，不得通过删题、压缩步骤或降低难度规避输出问题。命题生成只能落在中国普通高中数学范围；明确大学专属术语触发一次受控重写，仍越界时诚实失败。选择题的题干和选项是不同字段：题干不得嵌入 A–D，选项不得丢失或改成解答题正文，业务层必须规范化重复内容，展示层必须逐项渲染。生成中的 UI 只显示“整理命题要求、命制题面、审核题面、生成解析、建立私有草稿”五个真实服务端阶段、旋转状态和已用时间，不暴露模型思维链或虚构进度。解析面向教师时只允许展示正式成稿，不展示模型试算、自我推翻、提示词或字段讨论。完整题面、选项和最终答案一旦锁定，解析冲突、清理失败或解析阶段 provider 异常只能使解析进入 `needs_teacher_verification` 与 `checks_failed`，不得把完整题目改报为整项失败；教师可以自行校订或单独重新生成解析。题面 core 本身未完成或未通过生成前复审时仍必须诚实失败，不得捏造题目。教师单独重新生成解析时，业务层必须锁定题面、选项和最终答案，新解析追加为 AI revision 并重新经过可信检查。模型只能选择受控 Curriculum 中的节点，未知节点会被丢弃；推断映射保持待确认，教师可通过 revision 明确修正或确认。浏览器不能提交 `owner_id`、隐私状态或可信证据；跨 owner 一律返回不存在，旧版本修改返回冲突。Agent 没有管理或删除 Tool，模块不存在 publish/share/admin 接口。Search 与 Paper 只显式转入独立命题工作区，不会自动生成、保存或把私题加入真实检索结果/试卷。
+M8 已建立独立 `PersonalQuestionLibrary` 深模块、本地 owner-isolated SQLite namespace、身份绑定的个人题库/分类、结构化生成、六项可信检查、私有命题工作区、append-only revision、显式保存、完整 owner 管理接口及 Teacher Web 入口。教师只需描述命题意图；教材知识点、细分知识点、考查方法和易错点由 Agent 在生成后归纳。provider 先生成不含答案的题面与选项，再独立审核；题面错误进入完善、复审和重新解析，解析错误保留题面并重生成解析。标准答案只从完整解析推导并接受最终一致性审核。只有题面、选项、可读解析和答案闭环一致后才能建立草稿。命题限定普通高中数学，明确大学专属术语经受控重写后仍越界才终止。后台任务独立于页面生命周期并可恢复；owner 可显式取消，且取消在私人草稿写入前再次检查，保证不提交半成品。模型只能选择受控 Curriculum 节点；浏览器不能提交 owner、隐私状态或可信证据；Agent 没有保存、管理、发布、共享或删除权限。
 
 本阶段允许：
 
@@ -72,7 +75,7 @@ M8 切片 1–8 已建立独立 `PersonalQuestionLibrary` 深模块、本地 own
 
 ## 5. M8 完成 Gate
 
-M8 必须同时满足 [`M8-PRIVATE-QUESTION-AUTHORING.md`](M8-PRIVATE-QUESTION-AUTHORING.md) 的功能 Gate、[`PRODUCT-GATES.md`](PRODUCT-GATES.md) 的 Gate E 与 Gate P，并完成固定 synthetic evaluation、跨 owner/IDOR/公共搜索泄漏/后台权限测试、完整工程回归和响应式/可访问性验收。当前切片 1–8 完成，尚未达到 M8 Gate。
+M8 已同时满足 [`M8-PRIVATE-QUESTION-AUTHORING.md`](M8-PRIVATE-QUESTION-AUTHORING.md) 的功能 Gate、[`PRODUCT-GATES.md`](PRODUCT-GATES.md) 的 Gate E 与 Gate P。26 场景固定 synthetic evaluation、跨 owner/IDOR/公共搜索泄漏/后台权限测试、完整工程回归和响应式/可访问性验收均已完成，证据见 [`M8-GATE-REVIEW.md`](M8-GATE-REVIEW.md)。
 
 ## 6. 下一阶段启动条件
 

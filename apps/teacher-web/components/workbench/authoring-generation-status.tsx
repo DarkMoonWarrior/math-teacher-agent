@@ -5,16 +5,24 @@ export type AuthoringGenerationStage = QuestionAuthoringProgressStage;
 const STAGES: Array<{ key: AuthoringGenerationStage; label: string }> = [
   { key: "brief", label: "整理命题要求" },
   { key: "composing", label: "命制题面" },
+  { key: "reauthoring", label: "重新命题（按需）" },
   { key: "reviewing", label: "审核题面" },
+  { key: "refining", label: "完善题面（按需）" },
   { key: "solving", label: "生成解析" },
+  { key: "reviewing_solution", label: "审核解析与答案" },
+  { key: "regenerating_solution", label: "重生成解析（按需）" },
   { key: "staging", label: "建立私有草稿" },
 ];
 
 const CURRENT_STAGE_COPY: Record<AuthoringGenerationStage, string> = {
   brief: "正在整理命题要求",
   composing: "Agent 正在命制完整题面",
+  reauthoring: "候选题未通过闭环审核，Agent 正在重新命题",
   reviewing: "Agent 正在审核题面是否合理",
-  solving: "题面已通过自审核，正在生成解析",
+  refining: "审核发现问题，Agent 正在完善题面并重新审核",
+  solving: "题面已通过审核，正在生成解析并据此确定标准答案",
+  reviewing_solution: "Agent 正在审核题面、解析与标准答案是否一致",
+  regenerating_solution: "题面成立但解析未通过审核，正在重新生成解析",
   staging: "题面已生成，正在建立私有草稿",
 };
 
@@ -27,9 +35,11 @@ export function formatAuthoringElapsed(totalSeconds: number): string {
 
 export function AuthoringGenerationStatus({
   elapsedSeconds,
+  onCancel,
   stage,
 }: {
   elapsedSeconds: number;
+  onCancel?: () => void;
   stage: AuthoringGenerationStage;
 }) {
   const activeIndex = STAGES.findIndex((item) => item.key === stage);
@@ -39,7 +49,7 @@ export function AuthoringGenerationStatus({
         <span className="authoring-progress__spinner" aria-hidden="true" />
         <div>
           <strong>{CURRENT_STAGE_COPY[stage]}</strong>
-          <span>已处理 {formatAuthoringElapsed(elapsedSeconds)} · 请保持本页打开</span>
+          <span>已处理 {formatAuthoringElapsed(elapsedSeconds)} · 可切换到其他页面</span>
         </div>
       </div>
       <ol aria-label="生成步骤">
@@ -49,6 +59,11 @@ export function AuthoringGenerationStatus({
           </li>
         ))}
       </ol>
+      {onCancel && (
+        <button className="authoring-progress__cancel" type="button" onClick={onCancel}>
+          取消本次命题
+        </button>
+      )}
     </section>
   );
 }

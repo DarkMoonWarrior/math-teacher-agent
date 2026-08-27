@@ -1034,9 +1034,7 @@ export function TeacherWorkbench() {
 
       {authoringEntry ? (
         <PersonalQuestionAuthoringWorkspace
-          entrySource={authoringEntry.source}
           initialBrief={authoringEntry.brief}
-          onExit={() => setAuthoringEntry(null)}
         />
       ) : libraryVisible ? (
         <PrivateLibraryWorkspace />

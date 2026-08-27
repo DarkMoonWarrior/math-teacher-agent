@@ -144,6 +144,19 @@ class PersonalAuthoringDraftView(OwnerOnlyContentPolicy):
     updated_at: str
 
 
+class PersonalAuthoringDraftList(BaseModel):
+    items: list[PersonalAuthoringDraftView]
+    total: int = Field(ge=0)
+    limit: int = Field(ge=1)
+    offset: int = Field(ge=0)
+
+
+class PersonalAuthoringHistoryDeletionReceipt(BaseModel):
+    draft_id: str
+    deleted: Literal[True] = True
+    saved_question_preserved: bool
+
+
 class PersonalQuestionSave(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

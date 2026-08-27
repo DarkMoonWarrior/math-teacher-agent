@@ -5,11 +5,11 @@ import { MathText } from "@/components/math-text";
 import {
   type GeneratedQuestionDraft,
   type PersonalAuthoringDraft,
+  type QuestionAuthoringJob,
   type PersonalQuestion,
   type PersonalQuestionCategory,
   type PersonalQuestionCollection,
   type CurriculumSearchItem,
-  type QuestionAuthoringEntrySource,
   type QuestionDraftEditableContent,
   TeacherWorkspaceError,
 } from "@/lib/teacher-workspace/contracts";
@@ -29,14 +29,8 @@ import { WorkbenchNoticeDialog } from "./workbench-notice-dialog";
 import { MathSolutionView } from "./math-solution-view";
 import { AuthoringGenerationStatus, type AuthoringGenerationStage } from "./authoring-generation-status";
 
-type WorkspaceSection = "compose" | "mine" | "trash";
+type WorkspaceSection = "compose" | "history" | "mine" | "trash";
 type BusyAction = "loading" | "generating" | "revising" | "regenerating-solution" | "saving" | "managing" | null;
-
-const ENTRY_COPY: Record<QuestionAuthoringEntrySource, string> = {
-  new_task: "从新任务进入",
-  search: "来自当前搜题条件",
-  paper: "由组卷需求明确转入",
-};
 
 function editableContent(draft: GeneratedQuestionDraft): QuestionDraftEditableContent {
   const choiceQuestion = draft.question_type === "single_choice" || draft.question_type === "multiple_choice";
@@ -168,13 +162,9 @@ function QuestionEditor({
 }
 
 export function PersonalQuestionAuthoringWorkspace({
-  entrySource,
   initialBrief,
-  onExit,
 }: {
-  entrySource: QuestionAuthoringEntrySource;
   initialBrief: string;
-  onExit: () => void;
 }) {
   const [section, setSection] = useState<WorkspaceSection>("compose");
   const [requestText, setRequestText] = useState(initialBrief);
@@ -188,6 +178,9 @@ export function PersonalQuestionAuthoringWorkspace({
   const [curriculumMatches, setCurriculumMatches] = useState<CurriculumSearchItem[]>([]);
   const [curriculumBusy, setCurriculumBusy] = useState(false);
   const [draftView, setDraftView] = useState<PersonalAuthoringDraft | null>(null);
+  const [history, setHistory] = useState<PersonalAuthoringDraft[]>([]);
+  const [authoringJob, setAuthoringJob] = useState<QuestionAuthoringJob | null>(null);
+  const [historyDeleteTarget, setHistoryDeleteTarget] = useState<PersonalAuthoringDraft | null>(null);
   const [draftEditor, setDraftEditor] = useState<QuestionDraftEditableContent | null>(null);
   const [editSummary, setEditSummary] = useState("教师校订题面与解析");
   const [saveName, setSaveName] = useState("");
@@ -217,7 +210,6 @@ export function PersonalQuestionAuthoringWorkspace({
   const feedbackReturnFocusRef = useRef<HTMLElement | null>(null);
   const generationStartedAtRef = useRef(0);
   const sessionRef = useRef(`authoring_${Date.now().toString(36)}`);
-  const requestRef = useRef(0);
 
   const draft = draftView?.current.draft ?? null;
   const canGenerate = requestText.trim().length >= 5 && busy === null;
@@ -240,11 +232,39 @@ export function PersonalQuestionAuthoringWorkspace({
     return response.items;
   }
 
+  async function loadHistory(signal?: AbortSignal) {
+    const response = await teacherWorkspace.listPersonalAuthoringDrafts(signal);
+    setHistory(response.items);
+    return response.items;
+  }
+
+  function presentDraft(staged: PersonalAuthoringDraft) {
+    setDraftView(staged);
+    setDraftEditor(editableContent(staged.current.draft));
+    setSaveName(`${staged.current.draft.curriculum?.name ?? "待确认知识点"} · 自主命题`);
+    setCurriculumQuery(staged.current.draft.curriculum?.name ?? "");
+    setCurriculumMatches([]);
+    setSection("compose");
+  }
+
   useEffect(() => {
     const controller = new AbortController();
     void (async () => {
       try {
-        await Promise.all([loadCollections(controller.signal), loadQuestions("mine", "", controller.signal)]);
+        const [, , latest, historyItems] = await Promise.all([
+          loadCollections(controller.signal),
+          loadQuestions("mine", "", controller.signal),
+          teacherWorkspace.getLatestQuestionAuthoringJob(controller.signal),
+          loadHistory(controller.signal),
+        ]);
+        if (latest && (latest.status === "queued" || latest.status === "running")) {
+          setAuthoringJob(latest);
+          generationStartedAtRef.current = Date.parse(latest.created_at);
+          setBusy("generating");
+        } else if (latest?.status === "succeeded" && latest.result.draft_id) {
+          const completed = historyItems.find((item) => item.draft_id === latest.result.draft_id);
+          if (completed) presentDraft(completed);
+        }
       } catch (cause) {
         if (!controller.signal.aborted) setError(errorMessage(cause));
       } finally {
@@ -253,6 +273,46 @@ export function PersonalQuestionAuthoringWorkspace({
     })();
     return () => controller.abort();
   }, []);
+
+  useEffect(() => {
+    if (!authoringJob || (authoringJob.status !== "queued" && authoringJob.status !== "running")) return;
+    setBusy("generating");
+    const controller = new AbortController();
+    let stopped = false;
+    const poll = async () => {
+      try {
+        const [job, progress] = await Promise.all([
+          teacherWorkspace.getQuestionAuthoringJob(authoringJob.job_id, controller.signal),
+          teacherWorkspace.getQuestionAuthoringProgress(authoringJob.subject_id, controller.signal).catch(() => null),
+        ]);
+        if (stopped) return;
+        setAuthoringJob(job);
+        if (progress) setGenerationStage(progress.stage);
+        if (job.status === "succeeded" && job.result.draft_id) {
+          const staged = await teacherWorkspace.getPersonalAuthoringDraft(job.result.draft_id, controller.signal);
+          if (stopped) return;
+          presentDraft(staged);
+          await loadHistory(controller.signal);
+          setNotice("已生成完整题目：题面、解析与解析所得标准答案已通过闭环一致性审核。");
+          setAuthoringJob(null);
+          setBusy(null);
+        } else if (job.status === "failed") {
+          setError(job.error || "命题内容超出高中数学范围。");
+          setAuthoringJob(null);
+          setBusy(null);
+        } else if (job.status === "cancelled") {
+          setNotice("本次命题已取消，没有建立私有草稿。");
+          setAuthoringJob(null);
+          setBusy(null);
+        }
+      } catch (cause) {
+        if (!controller.signal.aborted) setError(errorMessage(cause));
+      }
+    };
+    void poll();
+    const timer = window.setInterval(() => void poll(), 800);
+    return () => { stopped = true; controller.abort(); window.clearInterval(timer); };
+  }, [authoringJob?.job_id]);
 
   useEffect(() => {
     if (!collectionId) {
@@ -324,14 +384,13 @@ export function PersonalQuestionAuthoringWorkspace({
   async function generateDraft(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!canGenerate) return;
-    const sequence = ++requestRef.current;
     clearFeedback();
     generationStartedAtRef.current = Date.now();
     setGenerationElapsed(0);
     setGenerationStage("brief");
     setBusy("generating");
     try {
-      const response = await teacherWorkspace.createQuestionAuthoringDraft({
+      const job = await teacherWorkspace.startQuestionAuthoringJob({
         requestText: requestText.trim(),
         grade: grade || undefined,
         questionType,
@@ -340,29 +399,50 @@ export function PersonalQuestionAuthoringWorkspace({
         expectedMinutes: expectedMinutes ? Number(expectedMinutes) : undefined,
         additionalConstraints: constraints.trim(),
         sessionId: sessionRef.current,
-      }, {
-        onProgress: setGenerationStage,
       });
-      if (sequence !== requestRef.current || !response.draft) return;
-      setGenerationStage("staging");
-      const staged = await teacherWorkspace.getPersonalAuthoringDraft(response.draft.draft_id);
-      if (sequence !== requestRef.current) return;
-      setDraftView(staged);
-      setDraftEditor(editableContent(staged.current.draft));
-      setSaveName(`${staged.current.draft.curriculum?.name ?? "待确认知识点"} · 自主命题`);
-      setCurriculumQuery(staged.current.draft.curriculum?.name ?? "");
-      setCurriculumMatches([]);
-      setNotice(
-        staged.current.draft.solution_status === "needs_teacher_verification"
-          ? "完整题目已生成。解析未通过一致性检查，请自行核验或点击“重新生成解析”。"
-          : "草稿已生成，但尚未保存。请先核对题面、最终答案与解析。",
-      );
-      window.requestAnimationFrame(() => document.querySelector<HTMLElement>("#authoring-draft")?.scrollIntoView({ behavior: "smooth", block: "start" }));
+      setAuthoringJob(job);
     } catch (cause) {
       setError(errorMessage(cause));
-    } finally {
-      if (sequence === requestRef.current) setBusy(null);
+      setBusy(null);
     }
+  }
+
+  async function cancelGeneration() {
+    if (!authoringJob || busy !== "generating") return;
+    clearFeedback();
+    try {
+      const cancelled = await teacherWorkspace.cancelQuestionAuthoringJob(authoringJob.job_id);
+      if (cancelled.status === "cancelled") {
+        setAuthoringJob(null);
+        setBusy(null);
+        setNotice("本次命题已取消，没有建立私有草稿。");
+      } else {
+        setAuthoringJob(cancelled);
+      }
+    } catch (cause) {
+      setError(errorMessage(cause));
+    }
+  }
+
+  async function openLastResult() {
+    clearFeedback();
+    const items = history.length ? history : await loadHistory();
+    if (!items[0]) { setNotice("还没有上一次命题结果。"); return; }
+    presentDraft(items[0]);
+  }
+
+  async function deleteHistoryItem(item: PersonalAuthoringDraft) {
+    clearFeedback();
+    setBusy("managing");
+    try {
+      const receipt = await teacherWorkspace.deletePersonalAuthoringHistory(item.draft_id);
+      if (draftView?.draft_id === item.draft_id) {
+        setDraftView(null); setDraftEditor(null);
+      }
+      await loadHistory();
+      setNotice(receipt.saved_question_preserved ? "命题历史已删除；已保存的私题仍保留。" : "命题历史已删除。 ");
+    } catch (cause) { setError(errorMessage(cause)); }
+    finally { setBusy(null); setHistoryDeleteTarget(null); }
   }
 
   async function searchDraftCurriculum(event: FormEvent<HTMLFormElement>) {
@@ -442,8 +522,8 @@ export function PersonalQuestionAuthoringWorkspace({
       setDraftEditor(editableContent(regenerated.current.draft));
       setNotice(
         regenerated.current.draft.solution_status === "needs_teacher_verification"
-          ? `题面、选项和最终答案保持不变；REV ${regenerated.current_revision} 的解析仍需你自行核验。`
-          : `解析已重新生成并记录为 REV ${regenerated.current_revision}；题面、选项和最终答案均未改变。`,
+          ? `题面和选项保持不变；REV ${regenerated.current_revision} 的解析与新推导答案仍未通过一致性检查。`
+          : `解析已重新生成并记录为 REV ${regenerated.current_revision}；题面和选项保持不变，新解析与标准答案已通过一致性审核。`,
       );
       window.requestAnimationFrame(() => document.querySelector<HTMLElement>(".authoring-draft__solution")?.scrollIntoView({ behavior: "smooth", block: "start" }));
     } catch (cause) {
@@ -532,7 +612,11 @@ export function PersonalQuestionAuthoringWorkspace({
     setSection(next);
     setSelectedQuestion(null);
     clearFeedback();
-    if (next !== "compose") {
+    if (next === "history") {
+      setBusy("loading");
+      try { await loadHistory(); } catch (cause) { setError(errorMessage(cause)); }
+      finally { setBusy(null); }
+    } else if (next !== "compose") {
       setBusy("loading");
       try {
         await loadQuestions(next, next === "trash" ? "" : filter);
@@ -708,8 +792,6 @@ export function PersonalQuestionAuthoringWorkspace({
     <main className="authoring-workspace">
       <header className="authoring-masthead">
         <div>
-          <button className="authoring-back" type="button" onClick={onExit}><ArrowLeftIcon /> 返回原任务</button>
-          <p><SparkIcon /> Question Authoring Agent · {ENTRY_COPY[entrySource]}</p>
           <h1>命一道自己的题。</h1>
           <span>生成结果只进入当前教师的私有命题工作区；不会混入真实检索结果，也不会自动保存。</span>
         </div>
@@ -722,6 +804,8 @@ export function PersonalQuestionAuthoringWorkspace({
 
       <nav className="authoring-sections" aria-label="辅助命题工作区">
         <button aria-pressed={section === "compose"} type="button" onClick={() => void switchSection("compose")}><SparkIcon /> 命题书桌</button>
+        <button type="button" onClick={() => void openLastResult()}><ClockIcon /> 上一次</button>
+        <button aria-pressed={section === "history"} type="button" onClick={() => void switchSection("history")}><PaperIcon /> 命题历史 <span>{history.length || ""}</span></button>
         <button aria-pressed={section === "mine"} type="button" onClick={() => void switchSection("mine")}><LibraryIcon /> 我的私题 <span>{section === "mine" ? activeCount : ""}</span></button>
         <button aria-pressed={section === "trash"} type="button" onClick={() => void switchSection("trash")}><ClockIcon /> 回收站</button>
       </nav>
@@ -775,7 +859,7 @@ export function PersonalQuestionAuthoringWorkspace({
               <div className="authoring-submit">
                 <button disabled={!canGenerate} type="submit"><span>{busy === "generating" ? "正在分阶段生成…" : "生成私有草稿"}</span><ArrowRightIcon /></button>
               </div>
-              {busy === "generating" && <AuthoringGenerationStatus elapsedSeconds={generationElapsed} stage={generationStage} />}
+              {busy === "generating" && <AuthoringGenerationStatus elapsedSeconds={generationElapsed} onCancel={authoringJob ? () => void cancelGeneration() : undefined} stage={generationStage} />}
             </form>
           </section>
 
@@ -814,9 +898,9 @@ export function PersonalQuestionAuthoringWorkspace({
               />
               {draft.solution_status === "needs_teacher_verification" && (
                 <section className="authoring-solution-warning" role="status">
-                  <strong>题目已完整生成，解析需要你核验</strong>
+                  <strong>题目、解析或标准答案需要你核验</strong>
                   <p>{draft.solution_issue || "解析未通过一致性检查。"}</p>
-                  <p>题面、选项和最终答案均已保留；你可以自行校订解析，或点击下方“重新生成解析”。</p>
+                  <p>你可以校订题面与解析，或重新生成解析；重新生成后标准答案会随新解析更新。</p>
                 </section>
               )}
               <details className="personal-question-edit authoring-draft__editor">
@@ -849,7 +933,21 @@ export function PersonalQuestionAuthoringWorkspace({
         </>
       )}
 
-      {section !== "compose" && (
+      {section === "history" && (
+        <section className="personal-question-shelf authoring-history">
+          <header><div><span>命题历史</span><h2>返回任意一次完整命制结果。</h2></div></header>
+          {history.length === 0 ? <p>还没有命题历史。</p> : (
+            <ol className="authoring-history__list">{history.map((item) => (
+              <li key={item.draft_id}>
+                <div><strong>{item.current.draft.curriculum?.name ?? "自主命题"}</strong><p>{item.current.draft.stem_plain}</p><small>{new Date(item.updated_at).toLocaleString("zh-CN")} · {item.saved ? "已保存" : "未保存"}</small></div>
+                <div><button type="button" onClick={() => presentDraft(item)}>打开</button><button className="is-danger" disabled={busy !== null} type="button" onClick={() => setHistoryDeleteTarget(item)}>删除</button></div>
+              </li>
+            ))}</ol>
+          )}
+        </section>
+      )}
+
+      {(section === "mine" || section === "trash") && (
         <section className="personal-question-shelf">
           <header>
             <div><span>{section === "trash" ? "回收站" : "我的私题"}</span><h2>{section === "trash" ? "只有你可以恢复或永久删除。" : "生成题与公共题库永久分离。"}</h2></div>
@@ -912,6 +1010,17 @@ export function PersonalQuestionAuthoringWorkspace({
           </div>
         </section>
       )}
+      <WorkbenchNoticeDialog
+        actionLabel="删除历史"
+        busy={busy === "managing" && Boolean(historyDeleteTarget)}
+        closeLabel="保留"
+        message={historyDeleteTarget?.saved ? "这条记录会从命题历史中移除；已经保存的私题仍会保留。" : "这会删除这次未保存的题面、答案、解析和全部修订记录。"}
+        onAction={() => historyDeleteTarget && void deleteHistoryItem(historyDeleteTarget)}
+        onDismiss={() => setHistoryDeleteTarget(null)}
+        open={Boolean(historyDeleteTarget)}
+        title="删除这条命题历史？"
+        tone="danger"
+      />
       <WorkbenchNoticeDialog
         actionDisabled={deleteConfirmation !== "永久删除我的私题"}
         actionLabel="永久删除"

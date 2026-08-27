@@ -477,6 +477,43 @@ def test_background_jobs_are_visible_only_to_the_starting_owner() -> None:
         registry.get(job.job_id, owner_id="other_teacher")
 
 
+def test_background_job_cancellation_is_owner_scoped_and_prevents_completion() -> None:
+    from threading import Event
+
+    registry = BackgroundJobRegistry()
+    entered = Event()
+    release = Event()
+    checkpoint_finished = Event()
+
+    def runner(progress):
+        entered.set()
+        release.wait(timeout=2)
+        try:
+            progress(1, 1, "准备提交结果")
+        finally:
+            checkpoint_finished.set()
+        return {"should_not_commit": True}
+
+    job = registry.start(
+        kind="synthetic",
+        subject_id="lib_cancel",
+        owner_id="owner_teacher",
+        runner=runner,
+    )
+    assert entered.wait(timeout=1)
+    with pytest.raises(KeyError):
+        registry.cancel(job.job_id, owner_id="other_teacher")
+
+    cancelled = registry.cancel(job.job_id, owner_id="owner_teacher")
+    release.set()
+    assert checkpoint_finished.wait(timeout=1)
+
+    assert cancelled.status == "cancelled"
+    assert cancelled.result == {}
+    assert registry.get(job.job_id, owner_id="owner_teacher").status == "cancelled"
+    assert "cancel_requested" not in cancelled.model_dump()
+
+
 def test_image_waits_for_ocr_then_can_be_manually_confirmed(tmp_path: Path) -> None:
     library = make_library(tmp_path)
     item = library.ingest(
