@@ -89,33 +89,18 @@ class ExamPaperComposer:
             raise ExamPaperComposeError("综合题与解答题属于同一组卷题型，不能重复设置")
         for quota in command.type_quotas:
             canonical_type = self._canonical_type(quota.question_type)
-            matching = [
-                item
-                for item in candidates
-                if self._canonical_type(item.question_type) == canonical_type
-            ]
-            if len(matching) < quota.count:
-                label = self._question_type_label(quota.question_type)
-                raise ExamPaperComposeError(
-                    f"符合条件的{label}不足：需要 {quota.count} 道，当前只有 {len(matching)} 道"
+            selections.extend(
+                self.select_questions(
+                    candidates=candidates,
+                    question_type=canonical_type,
+                    count=quota.count,
+                    difficulty_profile=command.difficulty_profile,
+                    seed=command.seed,
+                    chapter_usage=chapter_usage,
                 )
-            targets = self._difficulty_slots(quota.count, command.difficulty_profile)
-            remaining = list(matching)
-            for target in targets:
-                selected = min(
-                    remaining,
-                    key=lambda item: (
-                        abs(item.difficulty - target),
-                        chapter_usage[item.chapter or "未分类"],
-                        0 if item.review_status == "approved" else 1,
-                        self._stable_rank(command.seed, item.question_id),
-                    ),
-                )
-                remaining.remove(selected)
-                chapter_usage[selected.chapter or "未分类"] += 1
-                selections.append((selected, target))
+            )
 
-        scores = command.item_scores or self._allocate_scores(
+        scores = command.item_scores or self.allocate_scores(
             command.target_score,
             [
                 self.TYPE_SCORE_WEIGHTS.get(self._canonical_type(item.question_type), 10)
@@ -164,6 +149,48 @@ class ExamPaperComposer:
             )
         ]
 
+    def select_questions(
+        self,
+        *,
+        candidates: list[QuestionSummary],
+        question_type: str,
+        count: int,
+        difficulty_profile: str,
+        seed: str,
+        chapter_usage: Counter[str] | None = None,
+    ) -> list[tuple[QuestionSummary, int]]:
+        """Select verified candidates using the same deterministic ranking as compose()."""
+
+        usage = chapter_usage if chapter_usage is not None else Counter()
+        canonical_type = self._canonical_type(question_type)
+        matching = [
+            item
+            for item in candidates
+            if self._canonical_type(item.question_type) == canonical_type
+        ]
+        if len(matching) < count:
+            label = self._question_type_label(question_type)
+            raise ExamPaperComposeError(
+                f"符合条件的{label}不足：需要 {count} 道，当前只有 {len(matching)} 道"
+            )
+        targets = self._difficulty_slots(count, difficulty_profile)
+        remaining = list(matching)
+        selections: list[tuple[QuestionSummary, int]] = []
+        for target in targets:
+            selected = min(
+                remaining,
+                key=lambda item: (
+                    abs(item.difficulty - target),
+                    usage[item.chapter or "未分类"],
+                    0 if item.review_status == "approved" else 1,
+                    self._stable_rank(seed, item.question_id),
+                ),
+            )
+            remaining.remove(selected)
+            usage[selected.chapter or "未分类"] += 1
+            selections.append((selected, target))
+        return selections
+
     def _difficulty_slots(self, count: int, profile: str) -> list[int]:
         weights = self.PROFILE_WEIGHTS[profile]
         raw = {difficulty: count * weight for difficulty, weight in weights.items()}
@@ -183,7 +210,7 @@ class ExamPaperComposer:
         ]
 
     @staticmethod
-    def _allocate_scores(target_score: float, weights: list[int]) -> list[float]:
+    def allocate_scores(target_score: float, weights: list[int]) -> list[float]:
         target_units = round(target_score * 2)
         allocated = [1] * len(weights)
         desired = [target_units * weight / sum(weights) for weight in weights]

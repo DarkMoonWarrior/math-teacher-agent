@@ -1,5 +1,11 @@
 from app.modules.exam_papers.composer import ExamPaperComposer, ExamPaperComposeError
+from app.modules.exam_papers.planning import PaperBlueprintPlanning, PaperBlueprintPlanningError
+from app.modules.exam_papers.selection import (
+    PaperBlueprintSelection,
+    PaperBlueprintSelectionError,
+)
 from app.modules.exam_papers.schemas import (
+    ConfirmedPaperBlueprint,
     ExamPaperComposeCommand,
     ExamPaperCreateCommand,
     ExamPaperDifficultyProfile,
@@ -19,6 +25,17 @@ from app.modules.exam_papers.schemas import (
     ExamPaperTemplateSection,
     ExamPaperUpdateCommand,
     ExamPaperView,
+    PaperBlueprintBrief,
+    PaperBlueprintDraft,
+    PaperBlueprintSelectionCommand,
+    PaperBlueprintSelectionDraft,
+    PaperBlueprintQuestionType,
+    PaperBlueprintSection,
+    PaperBlueprintTrustPolicy,
+    PaperSelectionGap,
+    PaperSelectionItem,
+    PaperSelectionOption,
+    PaperSimilarityExclusion,
 )
 from app.modules.exam_papers.studio import ExamPaperStudio, ExamPaperStudioError
 from app.modules.exam_papers.templates import ExamPaperTemplateCatalog, ExamPaperTemplateError
@@ -49,4 +66,20 @@ __all__ = [
     "ExamPaperTemplateSection",
     "ExamPaperUpdateCommand",
     "ExamPaperView",
+    "ConfirmedPaperBlueprint",
+    "PaperBlueprintBrief",
+    "PaperBlueprintDraft",
+    "PaperBlueprintPlanning",
+    "PaperBlueprintPlanningError",
+    "PaperBlueprintSelection",
+    "PaperBlueprintSelectionCommand",
+    "PaperBlueprintSelectionDraft",
+    "PaperBlueprintSelectionError",
+    "PaperBlueprintQuestionType",
+    "PaperBlueprintSection",
+    "PaperBlueprintTrustPolicy",
+    "PaperSelectionGap",
+    "PaperSelectionItem",
+    "PaperSelectionOption",
+    "PaperSimilarityExclusion",
 ]

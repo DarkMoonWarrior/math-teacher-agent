@@ -20,9 +20,10 @@
 - M6 第五条切片：每次私人检索都需教师明确同意；一次性许可绑定当前教师、查询与数量，Agent 只能看到确认文本的有界匹配片段及来源版本/权利状态；
 - M7 多模态 Solve：可上传、粘贴或拍摄单题图片；`QuestionCapture` 保留 owner-scoped private media/OCR revision，并通过本地、DeepSeek Vision 或 OpenAI adapter 输出可校对题面；教师确认后，精确图片/识别 revision 通过短时一次性许可接入 Solve，带图题才逐次授权发送受控原图；15 场景固定评测与 Gate E 已通过；
 - M8 私有辅助命题：独立 `PersonalQuestionLibrary` 已建立个人题库/分类、owner 私有命题工作区、append-only revision 与完整个人管理；命题只要求自然语言意图，教材知识点、考查方法和易错点由 Agent 在生成后归纳并交给教师确认/校订。题面与选项先以“不含答案”的结构生成并审核；题面错误自动完善、复审和重新解析，解析错误保留题面并重生成解析，直到题面、解析和解析所得标准答案闭环一致。后台任务可跨页面恢复并由 owner 明确取消；取消在私人草稿写入前再次检查，不会留下半成品。选择题题干与 A–D 选项独立，内容限定中国普通高中数学，解析只展示正式成稿。明确保存后可搜索、重命名、分类、复制、私有导出、回收或永久删除。26 场景固定评测 12 类违规为 0，Gate E/Gate P 已通过；Agent 仍无保存、管理、发布、共享或删除能力；
+- M9 Paper Agent 前两条切片：自然语言组卷要求先转为可编辑、未确认、未保存蓝图；教师确认后，系统只从通过范围、验证、审核、权利和相似度门禁的公共题，以及当前 owner 明确勾选的私题中建立候选草案。公共/私题、来源、revision 与可信状态保持可见，供给不足返回真实缺口，不自动命题、不保存；
 - QuestionBank、MathVerifier、Curriculum、PrivateLibrary、PDF、试卷、教案等成熟业务模块。
 
-当前 Search、Solve、Private Library、多模态图片解题与私有辅助命题均已接入新工作台；M8 固定评测、Gate E 与 Gate P 于 2026-08-28 通过。教案和组卷继续明确标记为预览，项目所有者确认阶段转换前不启动 M9。最新状态见 [`docs/PROJECT-STATUS.md`](docs/PROJECT-STATUS.md)。
+当前 Search、Solve、Private Library、多模态图片解题与私有辅助命题均已接入新工作台；M8 固定评测、Gate E 与 Gate P 于 2026-08-28 通过。M9 Paper Agent 正按切片开发，蓝图规划与受控选题已经接入；教案仍保持预览。最新状态见 [`docs/PROJECT-STATUS.md`](docs/PROJECT-STATUS.md)。
 
 ## 核心原则
 

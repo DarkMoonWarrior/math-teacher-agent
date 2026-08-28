@@ -28,6 +28,7 @@ import {
 import { WorkbenchNoticeDialog } from "./workbench-notice-dialog";
 import { MathSolutionView } from "./math-solution-view";
 import { AuthoringGenerationStatus, type AuthoringGenerationStage } from "./authoring-generation-status";
+import { ResizableSplitPane } from "./resizable-split-pane";
 
 type WorkspaceSection = "compose" | "history" | "mine" | "trash";
 type BusyAction = "loading" | "generating" | "revising" | "regenerating-solution" | "saving" | "managing" | null;
@@ -822,7 +823,11 @@ export function PersonalQuestionAuthoringWorkspace({
       />
 
       {section === "compose" && (
-        <>
+        <ResizableSplitPane
+          ariaLabel="调整命题要求与题目结果区域宽度"
+          className="authoring-compose-split"
+          defaultPrimaryPercent={40}
+        >
           <section className="authoring-brief">
             <header><div><span>先写命题意图</span><h2>告诉我要出一道什么题</h2></div></header>
             <form onSubmit={generateDraft}>
@@ -863,7 +868,7 @@ export function PersonalQuestionAuthoringWorkspace({
             </form>
           </section>
 
-          {draft && draftView && draftEditor && (
+          {draft && draftView && draftEditor ? (
             <section className="authoring-draft" id="authoring-draft">
               <header>
                 <div><h2>已生成属于你的题目</h2></div>
@@ -929,8 +934,15 @@ export function PersonalQuestionAuthoringWorkspace({
                 <button className="authoring-save__button" type="button" disabled={!canSave} onClick={() => void saveDraft()}>{busy === "saving" ? "正在保存…" : "保存为我的私题"}<ArrowRightIcon /></button>
               </section>
             </section>
+          ) : (
+            <section className="authoring-draft-empty" aria-live="polite">
+              <PaperIcon />
+              <p>QUESTION AUTHORING · PRIVATE DRAFT</p>
+              <h2>题目与解析会在这里展开。</h2>
+              <span>请在左侧填写命题要求并生成私有草稿。</span>
+            </section>
           )}
-        </>
+        </ResizableSplitPane>
       )}
 
       {section === "history" && (

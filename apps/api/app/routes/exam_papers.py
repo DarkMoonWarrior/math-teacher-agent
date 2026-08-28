@@ -3,10 +3,11 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import Literal
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import FileResponse
 
 from app.core.config import get_settings
+from app.core.identity import CurrentTeacher, get_current_teacher
 from app.modules.exam_exports import ExamPaperDocumentRenderer, ExamPaperExportError
 from app.modules.exam_papers import (
     ExamPaperComposer,
@@ -26,7 +27,16 @@ from app.modules.exam_papers import (
     ExamPaperTemplateList,
     ExamPaperUpdateCommand,
     ExamPaperView,
+    PaperBlueprintBrief,
+    PaperBlueprintDraft,
+    PaperBlueprintPlanning,
+    PaperBlueprintPlanningError,
+    PaperBlueprintSelection,
+    PaperBlueprintSelectionCommand,
+    PaperBlueprintSelectionDraft,
+    PaperBlueprintSelectionError,
 )
+from app.routes.personal_question_library import get_personal_question_library
 from app.routes.questions import get_question_bank
 
 
@@ -48,6 +58,19 @@ def get_exam_paper_composer() -> ExamPaperComposer:
     return ExamPaperComposer(
         question_bank=get_question_bank(),
         template_catalog=get_exam_paper_template_catalog(),
+    )
+
+
+@lru_cache
+def get_paper_blueprint_planning() -> PaperBlueprintPlanning:
+    return PaperBlueprintPlanning()
+
+
+@lru_cache
+def get_paper_blueprint_selection() -> PaperBlueprintSelection:
+    return PaperBlueprintSelection(
+        question_bank=get_question_bank(),
+        personal_question_library=get_personal_question_library(),
     )
 
 
@@ -93,6 +116,26 @@ def compose_exam_paper(command: ExamPaperComposeCommand) -> ExamPaperProposal:
     try:
         return get_exam_paper_composer().compose(command)
     except ExamPaperComposeError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.post("/blueprints/plan", response_model=PaperBlueprintDraft)
+def plan_paper_blueprint(command: PaperBlueprintBrief) -> PaperBlueprintDraft:
+    try:
+        return get_paper_blueprint_planning().plan(command)
+    except PaperBlueprintPlanningError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.post("/blueprints/select", response_model=PaperBlueprintSelectionDraft)
+def select_paper_blueprint(
+    command: PaperBlueprintSelectionCommand,
+    teacher: CurrentTeacher = Depends(get_current_teacher),
+    selection: PaperBlueprintSelection = Depends(get_paper_blueprint_selection),
+) -> PaperBlueprintSelectionDraft:
+    try:
+        return selection.select(command, owner_id=teacher.teacher_id)
+    except PaperBlueprintSelectionError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 

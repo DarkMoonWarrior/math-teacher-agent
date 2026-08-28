@@ -27,6 +27,8 @@ import {
   type PersonalQuestionCollectionList,
   type PersonalQuestionExport,
   type PersonalQuestionList,
+  type PaperBlueprintDraft,
+  type PaperBlueprintSelectionDraft,
   type QuestionAuthoringAgentResult,
   type QuestionAuthoringJob,
   type QuestionAuthoringBrief,
@@ -401,6 +403,48 @@ async function readSolveStream(
 }
 
 export class HttpTeacherWorkspace implements TeacherWorkspace {
+  planPaperBlueprint(brief: string, signal?: AbortSignal): Promise<PaperBlueprintDraft> {
+    return libraryJsonRequest(
+      "/api/v1/exam-papers/blueprints/plan",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ brief }),
+        signal,
+      },
+      "无法整理组卷蓝图。",
+    );
+  }
+
+  selectPaperBlueprint(
+    blueprint: PaperBlueprintDraft,
+    selectedPrivateQuestionIds: string[],
+    signal?: AbortSignal,
+  ): Promise<PaperBlueprintSelectionDraft> {
+    return libraryJsonRequest(
+      "/api/v1/exam-papers/blueprints/select",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          blueprint: {
+            title: blueprint.title,
+            grade_scope: blueprint.grade_scope,
+            teaching_usage: blueprint.teaching_usage,
+            duration_minutes: blueprint.duration_minutes,
+            target_score: blueprint.target_score,
+            difficulty_profile: blueprint.difficulty_profile,
+            knowledge_points: blueprint.knowledge_points,
+            sections: blueprint.sections,
+          },
+          selected_private_question_ids: selectedPrivateQuestionIds,
+        }),
+        signal,
+      },
+      "无法完成蓝图确认与受控选题。",
+    );
+  }
+
   async uploadQuestionMedia(
     request: QuestionMediaUpload,
     signal?: AbortSignal,

@@ -17,8 +17,9 @@
 - M5 Solve Agent：Gate E 已严格通过并完成阶段确认。
 - M6 Private Library Agent：已完成；六条纵向切片、12 场景固定评测与完整 Gate E 于 2026-08-22 严格通过。
 - **M7 多模态题目采集与图片解题：已完成；15 场景固定评测 9 类违规为 0，Gate E 于 2026-08-24 通过。**
-- **M8 私有辅助命题：已完成；26 场景固定评测 12 类违规为 0，完整工程回归与 Gate E/Gate P 于 2026-08-28 通过，等待所有者确认进入 M9。**
-- M9-M11：Paper、Lesson、Memory 均未开始。
+- **M8 私有辅助命题：已完成；26 场景固定评测 12 类违规为 0，完整工程回归与 Gate E/Gate P 于 2026-08-28 通过，所有者已确认进入 M9。**
+- **M9 Paper Agent：进行中；蓝图规划与教师确认后的受控选题两条切片已实现，结果仍是未保存候选草案。**
+- M10-M11：Lesson、Memory 均未开始。
 - M12-M13：Closed Beta 准备与数据验证，均未开始。
 - M14-M17：商业基础、Teacher Pro、教研组和学校，均未开始。
 
@@ -35,7 +36,7 @@
 | Private Library Agent | 可用（M6 已完成） | 成熟 PrivateLibrary/PDF/Curriculum/QuestionBank 模块继续复用；owner-scoped 聚合、同源上传/列表、提取/OCR/校对、拆题编辑、可信教材映射和逐次授权的私人检索已接入。检索许可短时、单次、绑定当前教师与查询，只返回确认文本的有界片段；候选导入仍固定为 owner 私有、待审核、待数学验证。固定评测与 Gate E 已通过。 |
 | 多模态图片解题 | 可用；M7 Gate E 已通过 | Solve 可上传、粘贴或拍摄单题图片并校对题面；教师确认后，canonical 题面和精确 media/OCR revision 通过短时一次性许可接入 Solve。只有图形依赖题在逐次同意后读取受控原图；Agent 不获得路径或字节，结果展示实际视觉 provider/model/revision，且不冒充 MathVerifier。15 场景固定评测和完整 Gate E 已通过。 |
 | 私有辅助命题 | 可用；M8 Gate E/Gate P 已通过 | 独立 `PersonalQuestionLibrary` 与结构化 `QuestionAuthoring` 已实现。题面、解析和解析所得答案在内部判责返工直至闭环；选择题选项独立，高中范围终检生效。命题在 owner-scoped 后台继续运行、可跨页面恢复并可由 owner 取消；取消不会写入半成品。结果只暂存为 owner 草稿，显式保存后才成为私题；Agent 无管理写权限。26 场景固定评测 12 类违规为 0。 |
-| Paper | 界面预览 + 后端已有 | 新 UI 可整理组卷需求，但按钮明确禁用；旧 exam_papers 模块不是 Paper Agent 完成证明。 |
+| Paper | 进行中（M9 前两条切片） | 新 UI 将自然语言整理为可编辑 PaperBlueprint；教师确认后才从通过范围、验证、审核、权利、owner 和相似度门禁的公共题/明确选择私题中建立未保存候选草案。真实缺口可见，不自动命题、不写存储；覆盖/难度对照、版本和导出仍待后续切片。 |
 | Lesson | 界面预览 + 后端已有 | 新 UI 可整理教案需求，但按钮明确禁用；旧 lesson_plans 模块不是 Lesson Agent 完成证明。 |
 | Teacher Memory | 未开始 | 等真实教师验证后再定义。 |
 | 账号/多租户/支付 | 未开始 | 当前教师/管理员模式不是认证或授权系统。 |
@@ -43,9 +44,11 @@
 
 ## 2026-08-28 验证快照
 
-- FastAPI：381 项测试通过；另有 1 条来自 Starlette TestClient 的依赖弃用提示。
+- M9 第二条纵向切片：新增 `PaperBlueprintSelection.select(...) -> PaperBlueprintSelectionDraft` 深模块，FastAPI 服务端绑定当前教师身份，浏览器只能提交可编辑蓝图事实和明确勾选的私题 ID。公共候选固定经过 passed/approved/active/public 门禁，私题只能读取当前 owner 明确选择的完整结果；题型、知识范围、高中范围、重复与高相似检查在候选草案前完成。结果按分区保留题面、独立选项、配分、来源、rights、revision、verification、review 与 owner scope；供给不足返回分区级真实缺口，不自动命题、保存、复制或改变可见性。Teacher Web 已接入私题显式选择、公共/私题视觉区分和候选/缺口结果；M9 仍在进行中。
+- M9 第一条纵向切片：新增 `PaperBlueprintPlanning.plan(PaperBlueprintBrief) -> PaperBlueprintDraft` 深模块，把自然语言整理为可编辑的年级、用途、时间、总分、难度、知识范围和题型配额；缺失字段以可见假设返回，明确大学范围在业务层拒绝。响应固定 `draft + editable + unconfirmed + unsaved`、无 side effect，并固化 verified-only、owner 明确选择私题和禁止自动命题策略。Teacher Web 的组卷入口已接入蓝图编辑桌面，确认选题按钮保持禁用；真实浏览器验证典型 150 分蓝图、默认假设、本地编辑、高中范围弹窗、375px 无横向溢出和控制台零告警。当前切片不查题、不生成题、不保存；M9 仍在进行中。
+- FastAPI：391 项测试通过；另有 1 条来自 Starlette TestClient 的依赖弃用提示。
 - Agent Runtime：类型检查、42 项测试和生产构建通过（含 Search/Solve seam、M6 私人聚合与一次性许可检索 Tool、M7 图片 Solve 单一 capability 透传、M8 单次结构化命题 Tool/可信证据契约、开发 mock 能力分流、验证冲突/模型不可用失败路径与 SSE 客户端断开取消）。
-- 新教师工作台：类型检查、50 项 TeacherWorkspace / Search/Solve / Private Library / Question Capture / 私有辅助命题 / 数学展示契约测试和生产构建通过；辅助命题请求不提交 owner、隐私状态或可信证据，生成与保存是两个独立动作，后台取消使用 owner-scoped POST，永久删除提交当前版本和固定确认短语。
+- 新教师工作台：类型检查、58 项 TeacherWorkspace / Search/Solve / Private Library / Question Capture / 私有辅助命题 / PaperBlueprint / 数学展示契约测试和生产构建通过；辅助命题请求不提交 owner、隐私状态或可信证据，生成与保存是两个独立动作，后台取消使用 owner-scoped POST，永久删除提交当前版本和固定确认短语；PaperBlueprint 规划请求只提交 brief，受控选题请求只提交可编辑蓝图事实和私题 ID。
 - 新教师工作台浏览器验收：320px 无关键横向溢出；记录抽屉的初始焦点、Tab 约束、Escape 关闭、焦点返回和关闭态 `inert` 通过；检索完成与历史恢复会自动定位结果区，新任务会返回输入区并恢复焦点；延迟 SSE 下理解、搜索、可信核对、中途取消和同一 run 恢复状态均可见。
 - Search 故障体验验收：模型不可用、Tool 超时、网络失败、权限拒绝均展示明确原因、处置建议与请求编号，输入框恢复可编辑且允许重试；真实 QuestionBank 枚举 `single_choice`、`passed` 和 `commercial_granted` 分别显示为“单选题”“程序验证通过”和“已获商业使用授权”，未验证或冲突状态不会使用可信样式。
 - Search 恢复故障演练：主流中断后严格保持一次 Search `POST`，仅追加一次同一 `run_id` 的只读快照 `GET`；有终态时恢复结果，无终态时展示 `STREAM_RECOVERY_FAILED` 和请求编号。
@@ -94,12 +97,12 @@
 
 - 自由格式解释中的学校名/考试名等事实仍以结构化结果为唯一可信来源；通用实体消毒是后续增强。
 - Search run 记录当前为进程内实现；云端持久化在封闭测试阶段处理。
-- Lesson/Paper 导航当前只展示未来工作流和需求草稿，不调用后端生成。
+- Lesson 导航当前仍只展示未来工作流；Paper 已进入 M9 前两条切片，尚未接入正式试卷保存与导出。
 - 真实教师身份、会话级权限、云端数据隔离和下架流程尚未上线。
 - Closed Beta 指标事件、Week-4 留存、任务采用率、严重数学错误率和单位成本尚未进入真实教师统计阶段。
 - 当前身份 adapter 仍是本地固定教师，不代表生产认证、商业多租户或云端隔离已经完成。
 - M7 已完成；只有结果中的 `visual_context.image_used=true` 才能描述为“原图参与本次推理”。固定评测和 Gate E 证据见 `M7-MULTIMODAL-SOLVE-EVALUATION.md` 与 `M7-GATE-REVIEW.md`。
-- M8 已完成，固定评测、Gate E 与 Gate P 证据见 `M8-PRIVATE-QUESTION-AUTHORING-EVALUATION.md` 和 `M8-GATE-REVIEW.md`。项目所有者明确确认阶段转换前，M9 及后续阶段仍不得开始。
+- M8 已完成，固定评测、Gate E 与 Gate P 证据见 `M8-PRIVATE-QUESTION-AUTHORING-EVALUATION.md` 和 `M8-GATE-REVIEW.md`。项目所有者已确认进入 M9；M10 及后续阶段仍不得开始。
 
 ## 历史能力与新产品的关系
 
