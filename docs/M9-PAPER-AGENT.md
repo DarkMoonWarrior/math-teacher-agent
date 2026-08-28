@@ -53,7 +53,29 @@ M9 复用既有 `ExamPaperComposer`、`ExamPaperStudio`、`ExamPaperDocumentRend
 8. Agent 不直接访问数据库或私人文件；链路仍为 Agent → Tool → FastAPI 业务模块 → 门禁 → storage。
 9. M9 的用户验收终点是一份可编辑、来源可追踪、结构与配分一致、可导出的完整试卷及双向细目表；内部失败不能被伪装成完成。
 
-## 5. 第一切片验收
+## 5. 第二切片接口与边界
+
+`PaperBlueprintSelection.select(PaperBlueprintSelectionCommand, owner_id=...) -> PaperBlueprintSelectionDraft`
+
+该深模块统一负责：
+
+- 只接收教师可编辑的蓝图事实和明确勾选的私题 ID；当前教师身份由 FastAPI 注入；
+- 公共候选固定经过 `passed + approved + active + public` 门禁，且不得带发布阻断项；
+- 私题只能读取当前 owner 明确选择的 active 完整题目，不复制、不改 owner、不提升 visibility；
+- 进入候选草案前执行题型、知识范围、高中范围、重复与高相似检查；
+- 按蓝图分区、难度与配分建立确定性候选顺序，并保留来源、权利、revision、verification、review 与 owner scope；
+- 供给不足时返回分区级题量/分值缺口与建议，不用未通过门禁的题目凑数，也不触发辅助命题；
+- 固定返回 `selection_draft + editable + confirmed + unsaved`，副作用为空。
+
+第二切片不得：
+
+- 接收浏览器提交的 owner、rights、verification、review、visibility 或保存结论；
+- 查询或采用其他 owner 未明确授权的私题；
+- 把教师确认蓝图解释为保存试卷、建立版本或允许导出；
+- 为填满蓝图自动命题、自动复制私题或降低验证/审核门槛；
+- 隐藏题库真实缺口，或把候选清单表述为完整正式试卷。
+
+## 6. 当前切片验收
 
 - 三条典型高中组卷描述能得到结构化且总分守恒的蓝图；
 - 缺少年级、时间、总分或范围时，默认假设在结果中可见并可修改；
@@ -62,3 +84,7 @@ M9 复用既有 `ExamPaperComposer`、`ExamPaperStudio`、`ExamPaperDocumentRend
 - Teacher Web 可编辑标题、年级、时长、总分、难度、范围和各题型数量/配分；
 - 页面切换不会产生业务写入；
 - FastAPI、Teacher Web 专项测试、类型检查与生产构建通过。
+- 蓝图确认前不执行选题，确认请求只包含可编辑蓝图事实和私题 ID；
+- 公共题、当前 owner 私题、跨 owner 私题、未通过门禁题和重复/高相似题均有自动化边界测试；
+- Teacher Web 能明确勾选自己的私题，并在候选结果中区分公共/私题、展示选项、配分、来源与可信事实；
+- 供给不足以分区级真实缺口呈现，候选草案仍保持未保存且不出现自动命题、保存或导出入口。

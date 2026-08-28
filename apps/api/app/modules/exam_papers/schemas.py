@@ -271,3 +271,127 @@ class PaperBlueprintDraft(BaseModel):
         if abs(sum(item.target_score for item in self.sections) - self.target_score) > 1e-6:
             raise ValueError("各分区分值合计必须等于目标总分")
         return self
+
+
+class ConfirmedPaperBlueprint(BaseModel):
+    """Teacher-editable blueprint facts accepted by the controlled selection seam."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    title: str = Field(min_length=2, max_length=200)
+    grade_scope: str = Field(min_length=2, max_length=40)
+    teaching_usage: str = Field(min_length=2, max_length=80)
+    duration_minutes: int = Field(ge=10, le=300)
+    target_score: float = Field(ge=5, le=300)
+    difficulty_profile: ExamPaperDifficultyProfile
+    knowledge_points: list[str] = Field(min_length=1, max_length=20)
+    sections: list[PaperBlueprintSection] = Field(min_length=1, max_length=8)
+
+    @model_validator(mode="after")
+    def validate_blueprint_totals(self) -> "ConfirmedPaperBlueprint":
+        section_ids = [item.section_id for item in self.sections]
+        if len(section_ids) != len(set(section_ids)):
+            raise ValueError("蓝图分区编号不能重复")
+        question_count = sum(item.question_count for item in self.sections)
+        if not 1 <= question_count <= 50:
+            raise ValueError("确认蓝图的题量必须介于 1 至 50 道")
+        for section in self.sections:
+            if section.question_count == 0 and section.target_score != 0:
+                raise ValueError("零题量分区的分值必须为 0")
+            if section.question_count > 0 and not (
+                section.question_count * 0.5
+                <= section.target_score
+                <= section.question_count * 50
+            ):
+                raise ValueError("每个分区的单题分值必须介于 0.5 至 50 分")
+        if abs(sum(item.target_score for item in self.sections) - self.target_score) > 1e-6:
+            raise ValueError("各分区分值合计必须等于目标总分")
+        return self
+
+
+class PaperBlueprintSelectionCommand(BaseModel):
+    """Browser-owned facts only; identity and trust conclusions stay server-owned."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    blueprint: ConfirmedPaperBlueprint
+    selected_private_question_ids: list[str] = Field(default_factory=list, max_length=50)
+
+    @model_validator(mode="after")
+    def validate_private_selection(self) -> "PaperBlueprintSelectionCommand":
+        if len(self.selected_private_question_ids) != len(set(self.selected_private_question_ids)):
+            raise ValueError("同一道私题只能选择一次")
+        return self
+
+
+class PaperSelectionOption(BaseModel):
+    key: str
+    text: str
+
+
+class PaperSelectionItem(BaseModel):
+    section_id: str
+    section_title: str
+    position: int = Field(ge=1)
+    question_id: str
+    source_kind: Literal["public_question_bank", "personal_question_library"]
+    question_type: str
+    stem_plain: str
+    options: list[PaperSelectionOption] = Field(default_factory=list)
+    score: float = Field(gt=0, le=50)
+    difficulty: int = Field(ge=1, le=5)
+    chapter: str | None = None
+    knowledge_points: list[str] = Field(default_factory=list)
+    source_document: str
+    source_page_start: int | None = None
+    source_page_end: int | None = None
+    license_status: str
+    revision_count: int = Field(ge=0)
+    verification_status: str
+    review_status: str
+    visibility: str
+    owner_scope: Literal["public_catalog", "current_owner_only"]
+    source_preserved: Literal[True] = True
+    copied: Literal[False] = False
+    selection_reason: str
+
+
+class PaperSelectionGap(BaseModel):
+    section_id: str
+    section_title: str
+    question_type: PaperBlueprintQuestionType
+    required_count: int = Field(ge=1)
+    selected_count: int = Field(ge=0)
+    missing_count: int = Field(ge=1)
+    missing_score: float = Field(gt=0)
+    reason: str
+    suggestions: list[str] = Field(min_length=1, max_length=5)
+
+
+class PaperSimilarityExclusion(BaseModel):
+    question_id: str
+    matched_question_id: str
+    relation: Literal["exact_duplicate", "variant"]
+    confidence: float = Field(ge=0, le=1)
+    reason: str
+
+
+class PaperBlueprintSelectionDraft(BaseModel):
+    status: Literal["selection_draft"] = "selection_draft"
+    blueprint_confirmed: Literal[True] = True
+    editable: Literal[True] = True
+    saved: Literal[False] = False
+    selection_complete: bool
+    blueprint: ConfirmedPaperBlueprint
+    target_question_count: int = Field(ge=1, le=50)
+    actual_question_count: int = Field(ge=0, le=50)
+    target_score: float
+    actual_score: float
+    items: list[PaperSelectionItem] = Field(default_factory=list, max_length=50)
+    gaps: list[PaperSelectionGap] = Field(default_factory=list, max_length=8)
+    similarity_exclusions: list[PaperSimilarityExclusion] = Field(default_factory=list)
+    unselected_private_question_ids: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    trust_policy: PaperBlueprintTrustPolicy = Field(default_factory=PaperBlueprintTrustPolicy)
+    auto_authoring_used: Literal[False] = False
+    side_effects: list[str] = Field(default_factory=list, max_length=0)

@@ -10,6 +10,7 @@ import type {
   PersonalAuthoringDraft,
   PersonalQuestion,
   PaperBlueprintDraft,
+  PaperBlueprintSelectionDraft,
   QuestionInputBundle,
 } from "./contracts";
 import { HttpTeacherWorkspace } from "./http-adapter";
@@ -367,6 +368,78 @@ describe("HttpTeacherWorkspace", () => {
     expect(init).toEqual(expect.objectContaining({ method: "POST" }));
     expect(JSON.parse(String(init.body))).toEqual({ brief: "组一份高二期中卷" });
     expect(String(init.body)).not.toMatch(/owner|verification|visibility|save/i);
+  });
+
+  it("confirms editable blueprint facts and explicit private ids without browser-owned trust facts", async () => {
+    const blueprint: PaperBlueprintDraft = {
+      status: "draft",
+      editable: true,
+      confirmed: false,
+      saved: false,
+      source_brief: "组一份函数测验",
+      title: "函数测验",
+      grade_scope: "高二",
+      teaching_usage: "专题测验",
+      duration_minutes: 30,
+      target_score: 10,
+      difficulty_profile: "balanced",
+      knowledge_points: ["函数"],
+      sections: [{ section_id: "single", title: "单选题", question_type: "single_choice", question_count: 2, target_score: 10 }],
+      assumptions: [],
+      trust_policy: {
+        verification_policy: "passed_only",
+        review_policy: "approved_only",
+        private_question_policy: "explicit_owner_selection_only",
+        auto_authoring_allowed: false,
+        preserves_source_and_rights: true,
+      },
+      side_effects: [],
+    };
+    const selection = {
+      status: "selection_draft",
+      blueprint_confirmed: true,
+      editable: true,
+      saved: false,
+      selection_complete: false,
+      blueprint: {
+        title: blueprint.title,
+        grade_scope: blueprint.grade_scope,
+        teaching_usage: blueprint.teaching_usage,
+        duration_minutes: blueprint.duration_minutes,
+        target_score: blueprint.target_score,
+        difficulty_profile: blueprint.difficulty_profile,
+        knowledge_points: blueprint.knowledge_points,
+        sections: blueprint.sections,
+      },
+      target_question_count: 2,
+      actual_question_count: 0,
+      target_score: 10,
+      actual_score: 0,
+      items: [],
+      gaps: [],
+      similarity_exclusions: [],
+      unselected_private_question_ids: [],
+      warnings: [],
+      trust_policy: blueprint.trust_policy,
+      auto_authoring_used: false,
+      side_effects: [],
+    } satisfies PaperBlueprintSelectionDraft;
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify(selection), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await new HttpTeacherWorkspace().selectPaperBlueprint(blueprint, ["pqq_1"]);
+
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    const body = JSON.parse(String(init.body));
+    expect(url).toBe("/api/v1/exam-papers/blueprints/select");
+    expect(body.selected_private_question_ids).toEqual(["pqq_1"]);
+    expect(body.blueprint).toEqual(expect.objectContaining({ title: "函数测验", target_score: 10 }));
+    expect(body.blueprint).not.toHaveProperty("trust_policy");
+    expect(body).not.toHaveProperty("owner_id");
+    expect(String(init.body)).not.toMatch(/verification_policy|visibility|save/i);
   });
 
   it("uploads a private question image without exposing owner or external consent", async () => {

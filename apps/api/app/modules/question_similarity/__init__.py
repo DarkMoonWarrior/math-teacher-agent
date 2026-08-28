@@ -1,4 +1,8 @@
-from .registry import QuestionSimilarityError, QuestionSimilarityRegistry
+from .registry import (
+    QuestionSimilarityError,
+    QuestionSimilarityRegistry,
+    compare_question_similarity,
+)
 from .schemas import (
     DuplicateCandidate,
     DuplicateLibraryStateCommand,
@@ -21,4 +25,5 @@ __all__ = [
     "DuplicateWorkspaceStats",
     "QuestionSimilarityError",
     "QuestionSimilarityRegistry",
+    "compare_question_similarity",
 ]

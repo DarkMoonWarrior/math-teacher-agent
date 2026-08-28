@@ -83,6 +83,56 @@ def _ratio(left: str, right: str) -> float:
     return SequenceMatcher(None, left, right, autojunk=False).ratio()
 
 
+def compare_question_similarity(
+    *,
+    left_stem: str,
+    right_stem: str,
+    left_options: Iterable[str] = (),
+    right_options: Iterable[str] = (),
+    left_knowledge_points: Iterable[str] = (),
+    right_knowledge_points: Iterable[str] = (),
+    left_chapter: str | None = None,
+    right_chapter: str | None = None,
+) -> tuple[str, float, list[str]] | None:
+    """Pure, read-only duplicate gate for callers that must not mutate the registry."""
+
+    left_core = _normalize("|".join([left_stem, *left_options]))
+    right_core = _normalize("|".join([right_stem, *right_options]))
+    if not left_core or not right_core:
+        return None
+    if left_core == right_core:
+        return (
+            "exact_duplicate",
+            0.99,
+            ["去除题号、来源前缀和排版差异后，题干与选项一致"],
+        )
+
+    left_skeleton = _skeleton(left_core)
+    right_skeleton = _skeleton(right_core)
+    skeleton_ratio = _ratio(left_skeleton, right_skeleton)
+    core_ratio = _ratio(left_core, right_core)
+    knowledge_overlap = bool(
+        set(left_knowledge_points) & set(right_knowledge_points)
+    )
+    same_chapter = bool(
+        left_chapter and right_chapter and left_chapter == right_chapter
+    )
+    if left_skeleton == right_skeleton:
+        return "variant", 0.96, ["题目结构一致，仅数字或参数发生变化"]
+    if skeleton_ratio >= 0.90 and core_ratio >= 0.76 and (
+        knowledge_overlap or same_chapter
+    ):
+        return (
+            "variant",
+            round(min(0.95, 0.68 + skeleton_ratio * 0.25), 4),
+            [
+                f"结构相似度 {round(skeleton_ratio * 100)}%",
+                "知识点相同" if knowledge_overlap else "教材章节相同",
+            ],
+        )
+    return None
+
+
 def _raw_parts(question: QuestionDetail) -> tuple[str, str, str, str]:
     raw = question.raw or {}
     options = "|".join(

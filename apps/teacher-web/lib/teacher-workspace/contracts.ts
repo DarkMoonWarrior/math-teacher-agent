@@ -726,8 +726,81 @@ export type PaperBlueprintDraft = {
   side_effects: [];
 };
 
+export type PaperSelectionOption = { key: string; text: string };
+
+export type PaperSelectionItem = {
+  section_id: string;
+  section_title: string;
+  position: number;
+  question_id: string;
+  source_kind: "public_question_bank" | "personal_question_library";
+  question_type: string;
+  stem_plain: string;
+  options: PaperSelectionOption[];
+  score: number;
+  difficulty: number;
+  chapter: string | null;
+  knowledge_points: string[];
+  source_document: string;
+  source_page_start: number | null;
+  source_page_end: number | null;
+  license_status: string;
+  revision_count: number;
+  verification_status: string;
+  review_status: string;
+  visibility: string;
+  owner_scope: "public_catalog" | "current_owner_only";
+  source_preserved: true;
+  copied: false;
+  selection_reason: string;
+};
+
+export type PaperSelectionGap = {
+  section_id: string;
+  section_title: string;
+  question_type: PaperBlueprintQuestionType;
+  required_count: number;
+  selected_count: number;
+  missing_count: number;
+  missing_score: number;
+  reason: string;
+  suggestions: string[];
+};
+
+export type PaperBlueprintSelectionDraft = {
+  status: "selection_draft";
+  blueprint_confirmed: true;
+  editable: true;
+  saved: false;
+  selection_complete: boolean;
+  blueprint: Omit<PaperBlueprintDraft, "status" | "editable" | "confirmed" | "saved" | "source_brief" | "assumptions" | "trust_policy" | "side_effects">;
+  target_question_count: number;
+  actual_question_count: number;
+  target_score: number;
+  actual_score: number;
+  items: PaperSelectionItem[];
+  gaps: PaperSelectionGap[];
+  similarity_exclusions: Array<{
+    question_id: string;
+    matched_question_id: string;
+    relation: "exact_duplicate" | "variant";
+    confidence: number;
+    reason: string;
+  }>;
+  unselected_private_question_ids: string[];
+  warnings: string[];
+  trust_policy: PaperBlueprintDraft["trust_policy"];
+  auto_authoring_used: false;
+  side_effects: [];
+};
+
 export interface TeacherWorkspace {
   planPaperBlueprint(brief: string, signal?: AbortSignal): Promise<PaperBlueprintDraft>;
+  selectPaperBlueprint(
+    blueprint: PaperBlueprintDraft,
+    selectedPrivateQuestionIds: string[],
+    signal?: AbortSignal,
+  ): Promise<PaperBlueprintSelectionDraft>;
 
   searchQuestions(
     request: SearchTaskRequest,
