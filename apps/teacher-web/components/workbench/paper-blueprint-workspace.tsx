@@ -8,6 +8,7 @@ import {
 } from "@/lib/teacher-workspace/contracts";
 import { teacherWorkspace } from "@/lib/teacher-workspace/http-adapter";
 import { ArrowRightIcon, ArrowUpIcon, CloseIcon, PaperIcon } from "./icons";
+import { ResizableSplitPane } from "./resizable-split-pane";
 import { WorkbenchNoticeDialog } from "./workbench-notice-dialog";
 
 type PaperBlueprintWorkspaceProps = {
@@ -79,7 +80,12 @@ export function PaperBlueprintWorkspace({ initialBrief, onBriefChange, onOpenAut
 
   return (
     <main className="paper-blueprint-workspace">
-      <section className="paper-blueprint-intent">
+      <ResizableSplitPane
+        ariaLabel="调整组卷要求与蓝图区域宽度"
+        className="paper-blueprint-split"
+        defaultPrimaryPercent={40}
+      >
+        <section className="paper-blueprint-intent">
         <p className="mode-status"><i className="is-ready" aria-hidden="true" />Paper Agent · 蓝图规划已接入</p>
         <h1>先把组卷要求，<br />整理成可编辑蓝图。</h1>
         <p className="intro-copy">这一阶段只整理范围、结构、题量与配分。不会查题、生成题目、保存试卷或改变任何私题权限。</p>
@@ -115,9 +121,9 @@ export function PaperBlueprintWorkspace({ initialBrief, onBriefChange, onOpenAut
           <p><strong>另有明确命题需求？</strong><span>辅助命题是独立私有工作流，不会自动保存或加入当前蓝图。</span></p>
           <button onClick={() => onOpenAuthoring(brief)} type="button">进入辅助命题 <ArrowRightIcon /></button>
         </section>
-      </section>
+        </section>
 
-      <section className="paper-blueprint-desk" aria-live="polite">
+        <section className="paper-blueprint-desk" aria-live="polite">
         {!blueprint ? (
           <div className="paper-blueprint-empty">
             <PaperIcon />
@@ -169,7 +175,8 @@ export function PaperBlueprintWorkspace({ initialBrief, onBriefChange, onOpenAut
             </footer>
           </article>
         )}
-      </section>
+        </section>
+      </ResizableSplitPane>
 
       <WorkbenchNoticeDialog
         message={error}

@@ -17,6 +17,8 @@ describe("PaperBlueprintWorkspace", () => {
     expect(html).toContain("不会查题、生成题目、保存试卷或改变任何私题权限");
     expect(html).toContain("当前没有题目，也没有产生任何保存或权限变更");
     expect(html).toContain("辅助命题是独立私有工作流，不会自动保存或加入当前蓝图");
+    expect(html).toContain('aria-label="调整组卷要求与蓝图区域宽度"');
+    expect(html).toContain('role="separator"');
     expect(html).not.toContain("确认蓝图并选题（下一切片）");
   });
 });
