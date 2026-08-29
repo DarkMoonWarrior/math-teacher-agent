@@ -1,6 +1,6 @@
 # 当前架构与模块 seam
 
-更新日期：2026-08-22
+更新日期：2026-08-29
 
 ## 1. 总体结构
 
@@ -72,9 +72,10 @@ apps/web (legacy/reference Next.js UI, :3000)
 - Second slice: `QuestionCapture.recognize/review_recognition` 隐藏本地/外部 OCR adapter、逐次外部同意、结构化题面与 append-only 识别 revision。生产 adapter 包括本地 pix2text、DeepSeek `deepseek-v4-flash-vision-exp` 与 OpenAI 图像模型，DeepSeek 优先级只属于路由装配，不进入业务 interface。识别与具体 media revision 绑定；媒体变化后结果显式 `stale`。教师端能校对普通题面、LaTeX、选项和低置信度区域；只有教师确认的 current revision 才能进入第三切片。
 - Third slice: `QuestionCapture.prepare_for_solve` 是 owner-scoped、revision-pinned 的深模块 seam；只把教师确认的 canonical 题面和必要视觉字节交给 `SolutionAssistant`。FastAPI 在 Agent 运行前签发一次性 `QuestionSolveGrant`，绑定 owner、canonical 题面、解题模式/要求、asset/media/OCR revision 与本次视觉同意；模型只转发 capability，Tool 在读取图片前消费并从中恢复完整 server-owned 意图，因此模型改写参数不能替换私人资源或改变授权。Agent/Web 不接触文件路径或字节。视觉结果携带实际 provider/model/revision，始终与 MathVerifier 证据分层。
 
-### Private Question Authoring modules（M8 进行中）
+### Private Question Authoring modules（M8 已完成）
 
 - Seam: `QuestionAuthoring.create_draft(QuestionDesignBrief) -> GeneratedQuestionDraft` 负责整题生成；`QuestionAuthoring.regenerate_solution(GeneratedQuestionDraft) -> GeneratedQuestionDraft` 保持题面与选项不变，重新求解并用新解析推导标准答案，再重建可信证据。两者隐藏 provider、受控教材映射、结构检查、MathVerifier 和错误语义。
+- Live-progress seam: `QuestionAuthoringProgressRegistry` 是 owner + job 绑定的唯一进行态接口。它发布真实阶段、已用时间、题面 revision 和 `pending/approved/adjusting` 状态；provider 只能在独立题面审核通过后发布 answer-free snapshot，返工开始即把旧 revision 标为调整中，再次审核通过后原子替换。左右界面都只读这一个快照，因此进度与题面不会各自猜测状态。
 - Storage seam: `PersonalQuestionLibrary` 独立拥有 owner 私题的个人题库命名、分类、CRUD、revision、导出和删除语义。
 - Isolation: `PersonalQuestionLibrary` 不只是公共 `QuestionBank` 的一个 visibility 过滤器；它使用独立业务接口和 owner-isolated storage namespace，没有 publish/share/public/commercial-approved 接口。
 - Ownership: current owner 只来自服务端认证上下文；Public Search、Public QuestionBank、后台内容工具、其他 owner、教研组和学校管理员均没有读取接口。
@@ -86,9 +87,19 @@ apps/web (legacy/reference Next.js UI, :3000)
 - Fifth slice: `PersonalQuestionLibrary` 的同一 interface 隐藏 owner 私题列表/搜索、保存后内容 revision、元数据与分类、标签排序、独立复制、JSON/Markdown 导出及 lifecycle。复制创建独立 draft/revision 链；永久删除只对已 trashed 的当前版本生效，并在事务中删除个人题目快照及其独占 revision 链。公开路由只做认证绑定和下载响应适配，Agent/Internal Tool Gateway 没有这些管理能力。
 - Sixth slice: `apps/teacher-web` 只依赖产品自有 `TeacherWorkspace` contract，把新任务、Search 空/不合适结果和 Paper 缺题提示转入独立 authoring workspace。生成、教师 revision、明确保存和 owner 管理是可观察的不同动作；生成题保持 `AI GENERATED · UNSAVED`，不进入 Search result，Paper 也不会自动生成、保存或加题。浏览器 payload 不暴露 owner、policy 或可信证据控制面。
 - Seventh slice: 教师不再需要在生成前填写教材知识点、考查方法或易错点。provider 在完成题目后返回细分知识点、方法、常见错误和一个可空的 Curriculum node ID；业务层只接受 catalog allowlist 内的知识点，并把 Agent 映射标记为待确认。教师可在结果页检索目录并用普通 teacher revision 确认/修正，未知或无法映射的节点不会阻断 owner-only 草稿，也不会获得可信状态。
-- Long-form hardening: `QuestionAuthoring` 对外仍只有一次 `create_draft`，Agent 仍只能调用一次 `create_question_draft`。DeepSeek adapter 内部先生成不含答案的题面与选项，再由第一次独立求解审核检查条件相容性、对象存在性、可答性、高中范围与选择题唯一性；未通过时最多执行三轮题面完善，每次完善后必须重新审核。通过后生成解析提纲与解析段，标准答案只在完整解析组装后提取。最终独立审核是判责 seam：`question_valid=false` 进入“完善题面 → 重新审核 → 重新解析”，题面成立但 `solution_valid=false`、答案不一致或解析结论与最终独立答案不同则进入“保留题面 → 重新生成解析 → 再审核”。初次审核答案与最终审核不同但最终解析和最终审核一致时，以最终审核纠正内部初审，不丢弃有效题目。只有完整题面、解析和解析所得答案闭环一致时才返回 owner-only 未保存草稿；`draft` 不等于半成品。该实现不截短题目，不新增模型权限。命题和 Solve 共用数学内容输出规范与 Teacher Web `MathText`/`MathSolutionView` 渲染路径。
+- Long-form hardening: `QuestionAuthoring` 对外仍只有一次 `create_draft`，Agent 仍只能调用一次 `create_question_draft`。DeepSeek adapter 内部先生成不含答案的题面与选项，再由第一次独立求解审核检查条件相容性、对象存在性、可答性、高中范围与选择题唯一性；未通过时最多执行三轮题面完善，每次完善后必须重新审核。通过后，进度 seam 立即发布可读题面，后台继续生成解析提纲与解析段，标准答案只在完整解析组装后提取。最终独立审核是判责 seam：`question_valid=false` 先把题面标为调整中，再进入“完善题面 → 重新审核 → 发布新 revision → 重新解析”；题面成立但 `solution_valid=false`、答案不一致或解析结论与最终独立答案不同则进入“保留题面 → 重新生成解析 → 再审核”。初次审核答案与最终审核不同但最终解析和最终审核一致时，以最终审核纠正内部初审，不丢弃有效题目。正常完成只有完整题面、解析和解析所得答案闭环一致时才返回 owner-only 未保存草稿；`draft` 不等于半成品。owner 主动停止时可选择把最新 approved snapshot 保存到 owner-only `PersonalQuestionLibrary`，其答案和解析字段明确为“无”、状态标注缺少解析；它可以被该 owner 主动加入组卷，组卷/导出中的解析和答案显示“无”，但不会进入公共题库、完整公共历史或其他 owner 的视图。该实现不截短题目，不新增模型权限。命题和 Solve 共用数学内容输出规范与 Teacher Web `MathText`/`MathSolutionView` 渲染路径。
 - Solution presentation guard: provider 解析段只允许成稿推导；确定性元推理检测会触发单段清理，持续污染或确认数学冲突时 fail closed。教师触发的解析重生成由认证 FastAPI 直接调用业务 seam，并通过 `PersonalQuestionLibrary.append_ai_revision` 追加版本；Agent Tool、owner/policy 字段和公共题库接口均不扩张。
 - Third slice: 同一深模块在返回前生成六项固定可信证据，并由 `QuestionDraftVerification` 强制检查项唯一、总状态与阻断项一致、MathVerifier 能力与是否真正运行一致。答案数量、明显答案冲突、选项重复和难度偏差可确定性检查；一般数学可解性、干扰项语义及无受控 rule spec 的任意生成题保持 `inconclusive/unsupported`，模型自述不能升级为 MathVerifier 证据。
+
+### Paper Agent modules（M9 进行中）
+
+- Planning seam: `PaperBlueprintPlanning.plan` 只把自然语言整理为可编辑、未确认、未保存蓝图；缺失字段用可见假设补全，不查题、不写存储。
+- Selection seam: `PaperBlueprintSelection.select` 只在教师确认后调用受控题库能力。公共题经过范围、权利、verification、review、active 与相似度门禁；私题只允许当前 owner 明确选择，且保持 owner/visibility/revision 不变。供给不足返回真实缺口，不调用辅助命题。
+- Audit/edit seam: `PaperBlueprintCoverage.audit` 用确定性规则核对分区和配分，并归纳教师所选题目的实际知识范围与难度；后两者是非阻断分析。`PaperEditableDrafting.build` 在服务器重新执行选题后，只接受完整的题号/分区/分值布局编辑并生成草稿指纹、修改记录和双向细目表。两者都无业务写入。
+- Version seam: `PaperVersioning.save` 是第五切片的唯一持久化入口。Teacher Web 对所有保存请求先提供取消/确认二次选择；它从 current-teacher context 获得 owner，重新解析公共题和当前 owner 私题的精确 current revision，重新构建草稿并核对浏览器持有的 `draft_fingerprint`、题目完整性和可信状态。题量、题型/分区、配分、总分、知识范围和难度按实际状态写入版本与细目表，但不阻止教师确认保存；无题、题目不完整、越权、可信状态变化或过期指纹仍 fail closed。成功时调用 `ExamPaperStudio` 建立 append-only 不可变版本；失败没有版本副作用。
+- Export seam: `PaperSavedExporting.export` 只接受当前 owner 的精确 `paper_id + version + kind + format`，读取保存时的题目快照与双向细目表，不读取页面草稿或题库最新 revision。它复用 `ExamPaperDocumentRenderer` 生成学生卷、答案卷和双向细目表的 DOCX/PDF，不改变任何业务状态。
+- Ownership: 浏览器和 Agent 均不能提交 owner、版本号生成规则、可信结论或保存结论；跨 owner 的版本与导出统一不可见。保存试卷不会复制、发布或改变 PersonalQuestionLibrary 内容。
+- Current completion boundary: 六条实现切片、28 场景固定 synthetic evaluation、工程回归、权限/仓库卫生和真实浏览器/PDF 回归已通过；当前等待形成可回滚提交和项目所有者阶段确认，因此不能进入 M10。
 
 ### Teacher Agent Runtime module
 
@@ -158,6 +169,7 @@ The primary UI should normally call `/api/v1` on its own origin. Next.js rewrite
 - Private Library tests target owner-scoped 结果、private-by-default、revision、逐次外部处理同意、无正文概览 Tool 与越权失败路径。
 - M7 tests target `QuestionCapture` 的图片/公式/图形保真、revision、逐次外部同意、Solve 可观察结果和跨 owner 失败，不测试供应商内部实现。15 场景固定 synthetic evaluation 与 Gate E 已于 2026-08-24 通过。
 - M8 tests target `QuestionAuthoring`、`PersonalQuestionLibrary` 与 Teacher Web adapter 的可观察接口，强制公共 Search/QuestionBank/后台访问缺失、跨 owner fail closed、浏览器无 owner/policy/trust 控制面、生成与明确保存分离、owner 管理和永久删除语义。
+- M9 tests target规划/确认/受控选题/覆盖审计/编辑/保存/导出的深模块 seam：浏览器不能伪造 owner、version 或 trust；过期草稿指纹不得产生版本；成功保存必须是不可变快照；六种导出必须精确读取当前 owner 的指定版本。真实学生卷、答案卷和双向细目表 PDF 还需逐页检查公式、分页、裁切、答案泄露与反向规格完整性。
 - Runtime conformance tests exercise both runtime adapters through the product-owned interface.
 - Security tests enforce the exact Tool allowlist and absence of database access in `apps/agent`；当前 8 个 Tool 只读，第 9 个 `create_question_draft` 只生成未保存草稿且不执行业务写入。
 - Business tests use synthetic/local adapters and assert published behaviour, rights, verification and privacy invariants.

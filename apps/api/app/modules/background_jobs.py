@@ -90,7 +90,14 @@ class BackgroundJobRegistry:
             raise KeyError(kind)
         return jobs[0]
 
-    def cancel(self, job_id: str, *, owner_id: str) -> BackgroundJobView:
+    def cancel(
+        self,
+        job_id: str,
+        *,
+        owner_id: str,
+        result: dict | None = None,
+        message: str = "任务已取消",
+    ) -> BackgroundJobView:
         """Request owner-scoped cancellation without exposing partial results.
 
         A provider call already in flight cannot always be interrupted. The runner's
@@ -105,9 +112,15 @@ class BackgroundJobRegistry:
                 value.update(
                     cancel_requested=True,
                     status="cancelled",
-                    message="任务已取消",
+                    message=message,
                     error="",
-                    result={},
+                    result=deepcopy(result or {}),
+                    updated_at=datetime.now(UTC).isoformat(),
+                )
+            elif value["status"] == "cancelled" and result is not None:
+                value.update(
+                    message=message,
+                    result=deepcopy(result),
                     updated_at=datetime.now(UTC).isoformat(),
                 )
             return BackgroundJobView.model_validate(self._public_value(value))
@@ -127,7 +140,9 @@ class BackgroundJobRegistry:
 
     def _start_running(self, job_id: str) -> None:
         with self._lock:
-            value = self._jobs[job_id]
+            value = self._jobs.get(job_id)
+            if value is None:
+                raise _BackgroundJobCancelled
             if value["cancel_requested"]:
                 raise _BackgroundJobCancelled
             value.update(status="running", message="正在处理")
@@ -135,7 +150,9 @@ class BackgroundJobRegistry:
 
     def _update_active(self, job_id: str, **values) -> None:
         with self._lock:
-            value = self._jobs[job_id]
+            value = self._jobs.get(job_id)
+            if value is None:
+                raise _BackgroundJobCancelled
             if value["cancel_requested"]:
                 raise _BackgroundJobCancelled
             value.update(values)
@@ -143,13 +160,14 @@ class BackgroundJobRegistry:
 
     def _finish_cancelled(self, job_id: str) -> None:
         with self._lock:
-            value = self._jobs[job_id]
+            value = self._jobs.get(job_id)
+            if value is None:
+                return
             value.update(
                 cancel_requested=True,
                 status="cancelled",
-                message="任务已取消",
+                message=value["message"] or "任务已取消",
                 error="",
-                result={},
                 updated_at=datetime.now(UTC).isoformat(),
             )
 

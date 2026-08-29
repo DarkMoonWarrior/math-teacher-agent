@@ -4,11 +4,14 @@ from collections import Counter
 from dataclasses import dataclass
 
 from app.modules.exam_papers.composer import ExamPaperComposer
+from app.modules.exam_papers.coverage import PaperBlueprintCoverage
 from app.modules.exam_papers.planning import PaperBlueprintPlanning
 from app.modules.exam_papers.schemas import (
     ConfirmedPaperBlueprint,
     PaperBlueprintSelectionCommand,
     PaperBlueprintSelectionDraft,
+    PaperPublicQuestionCandidate,
+    PaperPublicQuestionCandidateList,
     PaperSelectionGap,
     PaperSelectionItem,
     PaperSelectionOption,
@@ -29,6 +32,8 @@ class _Candidate:
     options: tuple[PaperSelectionOption, ...]
     source_kind: str
     revision_count: int
+    solution_status: str = "ready"
+    solution_issue: str | None = None
 
 
 class PaperBlueprintSelection:
@@ -42,6 +47,7 @@ class PaperBlueprintSelection:
         self.question_bank = question_bank
         self.personal_question_library = personal_question_library
         self.composer = ExamPaperComposer(question_bank)
+        self.coverage = PaperBlueprintCoverage(self.composer)
 
     def select(
         self,
@@ -65,25 +71,53 @@ class PaperBlueprintSelection:
                     "所选私题不存在或不属于当前教师。"
                 ) from exc
             candidate = self._private_candidate(question)
-            if candidate is None or not self._matches_scope(candidate, blueprint):
+            if candidate is None:
                 unselected_private.append(question_id)
                 continue
             private_candidates.append(candidate)
 
+        all_public_candidates = self._public_candidates(owner_id=owner_id)
+        public_by_id = {
+            item.summary.question_id: item for item in all_public_candidates
+        }
+        selected_public_candidates: list[_Candidate] = []
+        for question_id in command.selected_public_question_ids:
+            candidate = public_by_id.get(question_id)
+            if candidate is None:
+                raise PaperBlueprintSelectionError(
+                    "所选公共题不存在或未通过公共题库门禁。"
+                )
+            selected_public_candidates.append(candidate)
+
+        selected_public_ids = set(command.selected_public_question_ids)
         public_candidates = sorted(
-            [
-            item
-            for item in self._public_candidates(owner_id=owner_id)
-            if self._matches_scope(item, blueprint)
-            ],
+            (
+                item
+                for item in all_public_candidates
+                if item.summary.question_id not in selected_public_ids
+                and self._matches_scope(item, blueprint)
+            ),
             key=lambda item: item.summary.question_id,
         )
         private_candidates, private_exclusions = self._deduplicate(private_candidates)
-        public_candidates, public_exclusions = self._deduplicate(
-            public_candidates,
+        selected_public_candidates, selected_public_exclusions = self._deduplicate(
+            selected_public_candidates,
             against=private_candidates,
         )
-        similarity_exclusions = [*private_exclusions, *public_exclusions]
+        public_candidates, public_exclusions = self._deduplicate(
+            public_candidates,
+            against=[*private_candidates, *selected_public_candidates],
+        )
+        similarity_exclusions = [
+            *private_exclusions,
+            *selected_public_exclusions,
+            *public_exclusions,
+        ]
+        unselected_public = [
+            item.question_id
+            for item in selected_public_exclusions
+            if item.question_id in selected_public_ids
+        ]
         unselected_private.extend(
             item.question_id
             for item in similarity_exclusions
@@ -120,6 +154,17 @@ class PaperBlueprintSelection:
             used_question_ids.update(item.summary.question_id for item in section_candidates)
 
             remaining_count = section.question_count - len(section_candidates)
+            matching_selected_public = [
+                item
+                for item in selected_public_candidates
+                if item.summary.question_id not in used_question_ids
+                and self.composer._canonical_type(item.summary.question_type)
+                == self.composer._canonical_type(section.question_type)
+            ]
+            section_candidates.extend(matching_selected_public[:remaining_count])
+            used_question_ids.update(item.summary.question_id for item in section_candidates)
+
+            remaining_count = section.question_count - len(section_candidates)
             matching_public = [
                 item
                 for item in public_candidates
@@ -153,6 +198,8 @@ class PaperBlueprintSelection:
                 summary = candidate.summary
                 if candidate.source_kind == "personal_question_library":
                     reason = "教师明确选择的当前 owner 私题 · 未复制、未改变可见性"
+                elif summary.question_id in selected_public_ids:
+                    reason = "教师从受控公共题库中明确选择 · 来源与可信状态已由服务端复核"
                 else:
                     target = public_targets.get(summary.question_id, summary.difficulty)
                     reason = (
@@ -201,6 +248,12 @@ class PaperBlueprintSelection:
             if item.summary.question_id not in used_question_ids
         ]
         unselected_private = list(dict.fromkeys([*unselected_private, *unused_private]))
+        unused_public = [
+            item.summary.question_id
+            for item in selected_public_candidates
+            if item.summary.question_id not in used_question_ids
+        ]
+        unselected_public = list(dict.fromkeys([*unselected_public, *unused_public]))
         warnings: list[str] = []
         if gaps:
             warnings.append("存在真实供给缺口；系统没有自动命题、自动保存或用未通过门禁的题目凑数。")
@@ -210,7 +263,11 @@ class PaperBlueprintSelection:
             )
         if unselected_private:
             warnings.append(
-                f"有 {len(unselected_private)} 道明确选择的私题因门禁、范围、重复或蓝图题型不匹配而未采用。"
+                f"有 {len(unselected_private)} 道明确选择的私题因硬门禁、重复或蓝图题型/容量不匹配而未采用。"
+            )
+        if unselected_public:
+            warnings.append(
+                f"有 {len(unselected_public)} 道明确选择的公共题因重复或蓝图题型/容量不匹配而未采用。"
             )
 
         return PaperBlueprintSelectionDraft(
@@ -223,9 +280,124 @@ class PaperBlueprintSelection:
             items=items,
             gaps=gaps,
             similarity_exclusions=similarity_exclusions,
+            coverage_audit=self.coverage.audit(blueprint=blueprint, items=items),
+            unselected_public_question_ids=unselected_public,
             unselected_private_question_ids=unselected_private,
             warnings=warnings,
         )
+
+    def list_public_candidates(
+        self,
+        *,
+        owner_id: str,
+        query: str | None = None,
+        question_type: str | None = None,
+        limit: int = 50,
+    ) -> PaperPublicQuestionCandidateList:
+        """Return only public questions that already passed every M9 hard gate."""
+
+        normalized_query = (query or "").strip().lower()
+        candidates = sorted(
+            self._public_candidates(owner_id=owner_id),
+            key=lambda item: item.summary.question_id,
+        )
+        if question_type:
+            canonical_type = self.composer._canonical_type(question_type)
+            candidates = [
+                item
+                for item in candidates
+                if self.composer._canonical_type(item.summary.question_type)
+                == canonical_type
+            ]
+        if normalized_query:
+            candidates = [
+                item
+                for item in candidates
+                if normalized_query
+                in " ".join(
+                    [
+                        item.summary.stem_plain,
+                        item.summary.chapter or "",
+                        item.summary.section or "",
+                        *item.summary.knowledge_point_ids,
+                    ]
+                ).lower()
+            ]
+        total = len(candidates)
+        return PaperPublicQuestionCandidateList(
+            items=[
+                PaperPublicQuestionCandidate(
+                    question_id=item.summary.question_id,
+                    question_type=item.summary.question_type,
+                    stem_plain=item.summary.stem_plain,
+                    options=list(item.options),
+                    difficulty=item.summary.difficulty,
+                    chapter=item.summary.chapter,
+                    knowledge_points=item.summary.knowledge_point_ids,
+                    source_document=item.summary.source_document,
+                )
+                for item in candidates[:limit]
+            ],
+            total=total,
+        )
+
+    def resolve_explicit_candidates(
+        self,
+        *,
+        owner_id: str,
+        public_question_ids: list[str],
+        private_question_ids: list[str],
+    ) -> list[PaperSelectionItem]:
+        """Re-resolve explicitly added history questions through current hard gates.
+
+        Unlike blueprint selection this does not filter by planned knowledge or
+        difficulty: the teacher is editing an existing paper and remains free to
+        choose the content. Trust, rights, owner and high-school gates still apply.
+        """
+
+        public_by_id = {
+            candidate.summary.question_id: candidate
+            for candidate in self._public_candidates(owner_id=owner_id)
+        }
+        candidates: list[_Candidate] = []
+        for question_id in public_question_ids:
+            candidate = public_by_id.get(question_id)
+            if candidate is None:
+                raise PaperBlueprintSelectionError(
+                    "新增公共题不存在或未通过公共题库门禁。"
+                )
+            candidates.append(candidate)
+        for question_id in private_question_ids:
+            try:
+                question = self.personal_question_library.get_question(
+                    question_id,
+                    owner_id=owner_id,
+                )
+            except KeyError as exc:
+                raise PaperBlueprintSelectionError(
+                    "新增私题不存在或不属于当前教师。"
+                ) from exc
+            candidate = self._private_candidate(question)
+            if candidate is None:
+                raise PaperBlueprintSelectionError(
+                    "新增私题尚未通过完整性、数学验证或高中范围门禁。"
+                )
+            candidates.append(candidate)
+
+        accepted, exclusions = self._deduplicate(candidates)
+        if exclusions or len(accepted) != len(candidates):
+            raise PaperBlueprintSelectionError("新增题目存在重复或高度相似内容，请重新选择。")
+        return [
+            self._selection_item(
+                candidate,
+                section_id=f"history-{index}",
+                section_title="新增题目",
+                position=index,
+                score=1,
+                reason="教师在历史试卷编辑器中明确新增，服务端已重新执行门禁",
+            )
+            for index, candidate in enumerate(accepted, start=1)
+        ]
 
     def _public_candidates(self, *, owner_id: str) -> list[_Candidate]:
         candidates: list[_Candidate] = []
@@ -287,9 +459,15 @@ class PaperBlueprintSelection:
 
     def _private_candidate(self, question: PersonalQuestionView) -> _Candidate | None:
         draft = question.question
+        solution_issue = getattr(draft, "solution_issue", None)
+        statement_only = (
+            draft.solution_status == "needs_teacher_verification"
+            and bool(solution_issue)
+            and "解析未生成" in solution_issue
+        )
         if (
             question.lifecycle_state != "active"
-            or draft.solution_status != "ready"
+            or (draft.solution_status != "ready" and not statement_only)
             or draft.verification.status == "checks_failed"
             or any(check.status == "failed" for check in draft.verification.checks)
             or self._contains_university_marker(draft.stem_plain)
@@ -304,8 +482,8 @@ class PaperBlueprintSelection:
         return _Candidate(
             summary=QuestionSummary(
                 question_id=question.question_id,
-                status="saved_private_complete",
-                review_status="owner_saved_complete",
+                status=("saved_private_statement_only" if statement_only else "saved_private_complete"),
+                review_status=("owner_saved_statement_only" if statement_only else "owner_saved_complete"),
                 visibility="owner_only",
                 question_type=draft.question_type,
                 stem_plain=draft.stem_plain,
@@ -328,6 +506,8 @@ class PaperBlueprintSelection:
             ),
             source_kind="personal_question_library",
             revision_count=question.selected_revision,
+            solution_status=draft.solution_status,
+            solution_issue=solution_issue,
         )
 
     def _deduplicate(
@@ -454,5 +634,7 @@ class PaperBlueprintSelection:
             review_status=summary.review_status,
             visibility=summary.visibility,
             owner_scope="current_owner_only" if is_private else "public_catalog",
+            solution_status=(candidate.solution_status if is_private else "ready"),
+            solution_issue=(candidate.solution_issue if is_private else None),
             selection_reason=reason,
         )

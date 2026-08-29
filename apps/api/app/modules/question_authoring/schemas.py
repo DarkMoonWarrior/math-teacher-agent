@@ -59,6 +59,18 @@ class QuestionDraftOption(BaseModel):
     text: str = Field(min_length=1, max_length=4000)
 
 
+class QuestionAuthoringStatementPreview(BaseModel):
+    """Answer-free statement exposed only after the statement review passes."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    question_type: QuestionType
+    stem_plain: str = Field(min_length=5, max_length=20000)
+    stem_latex: str | None = Field(default=None, max_length=20000)
+    options: list[QuestionDraftOption] = Field(default_factory=list, max_length=20)
+    estimated_difficulty: int = Field(ge=1, le=5)
+
+
 class QuestionDraftCurriculum(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

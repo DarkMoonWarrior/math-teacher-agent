@@ -229,13 +229,38 @@ class ExamPaperDocumentRenderer:
                 "、".join(item.question.knowledge_point_ids) or "未标注",
                 str(item.question.difficulty),
                 self._score(item.score),
-                "通过" if item.question.verification_status == "passed" else "待验算",
-                "通过" if item.question.review_status == "approved" else "待审核",
+                self._verification_label(item.question.verification_status),
+                self._review_label(item.question.review_status),
             ]
             for cell, value in zip(table.add_row().cells, values, strict=True):
                 self._set_run(cell.paragraphs[0].add_run(value), 8, self.TEXT)
         self._docx_breakdown(document, "章节结构", paper.chapter_breakdown)
         self._docx_breakdown(document, "难度结构", paper.difficulty_breakdown)
+        if paper.specification:
+            reverse_heading = document.add_paragraph()
+            reverse_heading.paragraph_format.space_before = Pt(12)
+            self._set_run(reverse_heading.add_run("教学维度到题目"), 12, self.BLUE, bold=True)
+            reverse_table = document.add_table(rows=1, cols=5)
+            reverse_table.style = "Table Grid"
+            for cell, label in zip(
+                reverse_table.rows[0].cells,
+                ["维度", "项目", "对应题号", "题量", "分值"],
+                strict=True,
+            ):
+                self._shade_cell(cell, self.PALE_BLUE)
+                self._set_run(cell.paragraphs[0].add_run(label), 8.5, self.BLUE, bold=True)
+            for row in paper.specification.dimension_to_questions:
+                values = [
+                    self._dimension_label(row.dimension),
+                    self._question_type_label(row.label)
+                    if row.dimension == "question_type"
+                    else row.label,
+                    "、".join(str(position) for position in row.positions),
+                    str(row.question_count),
+                    self._score(row.score),
+                ]
+                for cell, value in zip(reverse_table.add_row().cells, values, strict=True):
+                    self._set_run(cell.paragraphs[0].add_run(value), 8, self.TEXT)
         self._docx_sources(document, paper)
 
     def _docx_breakdown(self, document: Document, title: str, rows) -> None:
@@ -269,7 +294,8 @@ class ExamPaperDocumentRenderer:
             self._set_run(
                 paragraph.add_run(
                     f"{item.position}. {item.question.question_id}｜{item.question.source_document}｜"
-                    f"数学验证：通过｜教师审核：{'通过' if item.question.review_status == 'approved' else '待审核'}"
+                    f"数学验证：{self._verification_label(item.question.verification_status)}｜"
+                    f"教师审核：{self._review_label(item.question.review_status)}"
                 ),
                 8.5,
                 self.TEXT,
@@ -389,8 +415,8 @@ class ExamPaperDocumentRenderer:
                 "、".join(item.question.knowledge_point_ids) or "未标注",
                 str(item.question.difficulty),
                 self._score(item.score),
-                "通过",
-                "通过" if item.question.review_status == "approved" else "待审核",
+                self._verification_label(item.question.verification_status),
+                self._review_label(item.question.review_status),
             ]
             rows.append([Paragraph(self._escape(value), styles["TableCell"]) for value in values])
         table = Table(
@@ -421,6 +447,40 @@ class ExamPaperDocumentRenderer:
                         styles["Body"],
                     )
                 )
+        if paper.specification:
+            reverse_rows = [[
+                Paragraph(label, styles["TableHead"])
+                for label in ["维度", "项目", "对应题号", "题量", "分值"]
+            ]]
+            for row in paper.specification.dimension_to_questions:
+                values = [
+                    self._dimension_label(row.dimension),
+                    self._question_type_label(row.label)
+                    if row.dimension == "question_type"
+                    else row.label,
+                    "、".join(str(position) for position in row.positions),
+                    str(row.question_count),
+                    self._score(row.score),
+                ]
+                reverse_rows.append([
+                    Paragraph(self._escape(value), styles["TableCell"])
+                    for value in values
+                ])
+            reverse_table = Table(
+                reverse_rows,
+                colWidths=[0.7 * inch, 1.55 * inch, 1.8 * inch, 0.55 * inch, 0.55 * inch],
+                repeatRows=1,
+            )
+            reverse_table.setStyle(TableStyle([
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor(f"#{self.PALE_BLUE}")),
+                ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor(f"#{self.LINE}")),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 4),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+                ("TOPPADDING", (0, 0), (-1, -1), 5),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+            ]))
+            blocks.extend([Paragraph("教学维度到题目", styles["Heading2"]), reverse_table])
         blocks.extend([PageBreak(), *self._pdf_sources(paper, styles)])
         return blocks
 
@@ -436,8 +496,9 @@ class ExamPaperDocumentRenderer:
             blocks.append(
                 Paragraph(
                     f"{item.position}. {self._escape(item.question.question_id)}｜"
-                    f"{self._escape(item.question.source_document)}｜数学验证：通过｜教师审核："
-                    f"{'通过' if item.question.review_status == 'approved' else '待审核'}",
+                    f"{self._escape(item.question.source_document)}｜数学验证："
+                    f"{self._verification_label(item.question.verification_status)}｜教师审核："
+                    f"{self._review_label(item.question.review_status)}",
                     styles["Small"],
                 )
             )
@@ -486,6 +547,27 @@ class ExamPaperDocumentRenderer:
         run.font.size = Pt(size)
         run.font.bold = bold
         run.font.color.rgb = RGBColor.from_string(color)
+
+    @staticmethod
+    def _verification_label(status: str) -> str:
+        return {
+            "passed": "通过",
+            "math_verifier_passed": "MathVerifier 通过",
+            "authoring_checks_passed_teacher_review_required": "命题检查通过",
+        }.get(status, "待验算")
+
+    @staticmethod
+    def _review_label(status: str) -> str:
+        return "通过" if status in {"approved", "owner_saved_complete"} else "待审核"
+
+    @staticmethod
+    def _dimension_label(dimension: str) -> str:
+        return {
+            "section": "分区",
+            "question_type": "题型",
+            "knowledge_point": "知识点",
+            "difficulty": "难度",
+        }.get(dimension, dimension)
 
     def _add_docx_math_text(
         self,

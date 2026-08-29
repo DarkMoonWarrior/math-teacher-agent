@@ -24,10 +24,14 @@ from app.agent_runtime import (
 )
 from app.core.identity import CurrentTeacher, get_current_teacher
 from app.main import app
-from app.modules.question_authoring import QuestionDesignBrief
+from app.modules.question_authoring import (
+    QuestionAuthoringStatementPreview,
+    QuestionDesignBrief,
+)
 from app.modules.question_authoring_agent import (
     QuestionAuthoringAgentCommand,
     QuestionAuthoringAgentResponse,
+    QuestionAuthoringCancelCommand,
     QuestionAuthoringAgentWorkflow,
     QuestionAuthoringProgressRegistry,
     get_question_authoring_progress_registry,
@@ -255,6 +259,38 @@ def test_progress_registry_exposes_stage_only_to_the_bound_owner() -> None:
     assert registry.snapshot(progress_id, owner_id="teacher_a").stage == "reviewing"
     with pytest.raises(KeyError):
         registry.snapshot(progress_id, owner_id="teacher_b")
+
+
+def test_progress_registry_publishes_only_versioned_reviewed_statement_snapshots() -> None:
+    registry = QuestionAuthoringProgressRegistry()
+    progress_id = "qap_statement_preview_1234567890"
+    registry.register(progress_id, owner_id="teacher_a")
+    first = QuestionAuthoringStatementPreview(
+        question_type="fill_blank",
+        stem_plain="已知函数 f(x)=x²，则 f(2)=______。",
+        stem_latex=r"已知函数 $f(x)=x^2$，则 $f(2)=\_\_\_\_$。",
+        estimated_difficulty=1,
+    )
+    second = first.model_copy(
+        update={"stem_plain": "已知函数 f(x)=x²+1，则 f(2)=______。"}
+    )
+
+    assert registry.publish_statement(progress_id, first) is True
+    approved = registry.snapshot(progress_id, owner_id="teacher_a")
+    assert approved.statement == first
+    assert approved.statement_revision == 1
+    assert approved.statement_state == "approved"
+
+    registry.update(progress_id, "refining")
+    assert registry.snapshot(
+        progress_id, owner_id="teacher_a"
+    ).statement_state == "adjusting"
+
+    assert registry.publish_statement(progress_id, second) is True
+    repaired = registry.snapshot(progress_id, owner_id="teacher_a")
+    assert repaired.statement == second
+    assert repaired.statement_revision == 2
+    assert repaired.statement_state == "approved"
 
 
 def test_workflow_accepts_only_exact_structured_tool_result() -> None:
@@ -611,6 +647,176 @@ def test_background_authoring_cancel_does_not_stage_a_partial_draft(
         app.dependency_overrides.pop(get_personal_question_library, None)
         jobs.clear()
         get_question_authoring_progress_registry().clear()
+
+
+def test_background_authoring_cancel_can_preserve_the_latest_reviewed_statement(
+    monkeypatch, tmp_path: Path
+) -> None:
+    from threading import Event
+
+    statement = QuestionAuthoringStatementPreview(
+        question_type="single_choice",
+        stem_plain="已知函数 f(x)=x²，判断其单调性。",
+        stem_latex=r"已知函数 $f(x)=x^2$，判断其单调性。",
+        options=[
+            {"key": "A", "text": "恒增"},
+            {"key": "B", "text": "先减后增"},
+            {"key": "C", "text": "恒减"},
+            {"key": "D", "text": "不是函数"},
+        ],
+        estimated_difficulty=2,
+    )
+
+    class BlockingWorkflow:
+        def __init__(self) -> None:
+            self.entered = Event()
+            self.release = Event()
+
+        async def run(self, command, *, owner_id: str, request_id: str):
+            get_question_authoring_progress_registry().publish_statement(
+                command.progress_id,
+                statement,
+            )
+            get_question_authoring_progress_registry().update(
+                command.progress_id,
+                "solving",
+            )
+            self.entered.set()
+            await asyncio.to_thread(self.release.wait, 2)
+            return QuestionAuthoringAgentResponse(
+                request_id=request_id,
+                status="ok",
+                draft=draft_payload(),
+            )
+
+    workflow = BlockingWorkflow()
+    library = PersonalQuestionLibrary(tmp_path / "background-authoring-preserve.sqlite3")
+    monkeypatch.setattr(
+        question_authoring_routes,
+        "get_settings",
+        lambda: SimpleNamespace(question_authoring_agent_enabled=True),
+    )
+    monkeypatch.setattr(
+        question_authoring_routes,
+        "get_question_authoring_agent_workflow",
+        lambda: workflow,
+    )
+    app.dependency_overrides[get_current_teacher] = lambda: CurrentTeacher(
+        teacher_id="teacher_preserve", source="authenticated_session"
+    )
+    app.dependency_overrides[get_personal_question_library] = lambda: library
+    jobs = question_authoring_routes.get_question_authoring_job_registry()
+    jobs.clear()
+    get_question_authoring_progress_registry().clear()
+    try:
+        with TestClient(app) as client:
+            started = client.post(
+                "/api/v1/agent/question-authoring/jobs",
+                json={"brief": brief().model_dump(mode="json", exclude_none=True)},
+            ).json()
+            assert workflow.entered.wait(timeout=1)
+            progress = client.get(
+                f"/api/v1/agent/question-authoring/progress/{started['subject_id']}"
+            )
+            cancelled = client.post(
+                f"/api/v1/agent/question-authoring/jobs/{started['job_id']}/cancel",
+                json={"preserve_statement": True},
+            )
+            workflow.release.set()
+            for _ in range(50):
+                current = client.get(
+                    f"/api/v1/agent/question-authoring/jobs/{started['job_id']}"
+                ).json()
+                if current["status"] == "cancelled":
+                    break
+                import time
+
+                time.sleep(0.01)
+
+        assert progress.status_code == 200
+        assert progress.json()["statement"]["stem_plain"] == statement.stem_plain
+        assert progress.json()["statement_revision"] == 1
+        assert current["status"] == "cancelled"
+        assert current["result"]["statement_preserved"] is True
+        assert current["result"]["statement"]["stem_plain"] == statement.stem_plain
+        preserved_id = current["result"]["draft_id"]
+        assert current["result"]["solution_missing"] is True
+        preserved = library.get_authoring_draft(
+            preserved_id,
+            owner_id="teacher_preserve",
+        )
+        assert preserved.saved is False
+        assert preserved.current.draft.stem_plain == statement.stem_plain
+        assert preserved.current.draft.answer_value == "无"
+        assert preserved.current.draft.solution_method == "无"
+        assert preserved.current.draft.solution_steps == ["无"]
+        assert preserved.current.draft.final_answer == "无"
+        assert preserved.current.draft.solution_status == "needs_teacher_verification"
+        assert "解析未生成" in (preserved.current.draft.solution_issue or "")
+        with pytest.raises(KeyError):
+            library.get_authoring_draft(
+                "qad_synthetic_1", owner_id="teacher_preserve"
+            )
+    finally:
+        workflow.release.set()
+        app.dependency_overrides.pop(get_current_teacher, None)
+        app.dependency_overrides.pop(get_personal_question_library, None)
+        jobs.clear()
+        get_question_authoring_progress_registry().clear()
+
+
+def test_cancel_preserve_rejects_statement_that_is_being_repaired(
+    tmp_path: Path,
+) -> None:
+    """The API must not preserve an obsolete snapshot while it is marked adjusting."""
+    from threading import Event
+
+    statement = QuestionAuthoringStatementPreview(
+        question_type="fill_blank",
+        stem_plain="函数 f(x)=x² 在 x=1 处的函数值为______。",
+        stem_latex=r"函数 $f(x)=x^2$ 在 $x=1$ 处的函数值为______。",
+        options=[],
+        estimated_difficulty=1,
+    )
+    entered = Event()
+    release = Event()
+
+    def runner(_report):
+        entered.set()
+        release.wait(2)
+        return {}
+
+    teacher = CurrentTeacher(teacher_id="teacher_adjusting", source="authenticated_session")
+    jobs = question_authoring_routes.get_question_authoring_job_registry()
+    progress = get_question_authoring_progress_registry()
+    jobs.clear()
+    progress.clear()
+    progress_id = "qap_adjusting"
+    progress.register(progress_id, owner_id=teacher.teacher_id)
+    progress.publish_statement(progress_id, statement)
+    progress.update(progress_id, "refining")
+    try:
+        started = jobs.start(
+            kind=question_authoring_routes.AUTHORING_JOB_KIND,
+            subject_id=progress_id,
+            owner_id=teacher.teacher_id,
+            runner=runner,
+        )
+        assert entered.wait(timeout=1)
+        cancelled = asyncio.run(
+            question_authoring_routes.cancel_question_authoring_job(
+                started.job_id,
+                QuestionAuthoringCancelCommand(preserve_statement=True),
+                teacher,
+            )
+        )
+        assert cancelled.status == "cancelled"
+        assert cancelled.result == {}
+        assert "没有可保留" in cancelled.message
+    finally:
+        release.set()
+        jobs.clear()
+        progress.clear()
 
 
 def test_background_authoring_retries_dict_shaped_agent_errors_without_exposing_them(

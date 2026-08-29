@@ -4,6 +4,7 @@ import json
 import shutil
 import sqlite3
 from collections import defaultdict
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
@@ -11,6 +12,7 @@ from uuid import uuid4
 from app.modules.exam_papers.schemas import (
     ExamPaperBreakdownItem,
     ExamPaperCreateCommand,
+    ExamPaperHistoryRevisionCommand,
     ExamPaperImageSnapshot,
     ExamPaperItemInput,
     ExamPaperItemView,
@@ -21,6 +23,9 @@ from app.modules.exam_papers.schemas import (
     ExamPaperSummary,
     ExamPaperUpdateCommand,
     ExamPaperView,
+    PaperBidirectionalSpecification,
+    PaperSpecificationForwardRow,
+    PaperSpecificationReverseRow,
 )
 from app.modules.question_bank import QuestionBank
 from app.modules.question_bank.schemas import QuestionDetail
@@ -28,6 +33,19 @@ from app.modules.question_bank.schemas import QuestionDetail
 
 class ExamPaperStudioError(ValueError):
     pass
+
+
+class ExamPaperStudioConflict(ExamPaperStudioError):
+    pass
+
+
+@dataclass(frozen=True)
+class ExamPaperSaveContext:
+    """Server-resolved facts used when saving a controlled Paper Agent draft."""
+
+    question_source: object
+    section_by_question: dict[str, tuple[str, str]] = field(default_factory=dict)
+    specification: PaperBidirectionalSpecification | None = None
 
 
 class ExamPaperStudio:
@@ -47,11 +65,18 @@ class ExamPaperStudio:
         self.asset_root.mkdir(parents=True, exist_ok=True)
         self._initialize()
 
-    def create(self, command: ExamPaperCreateCommand) -> ExamPaperView:
+    def create(
+        self,
+        command: ExamPaperCreateCommand,
+        *,
+        save_context: ExamPaperSaveContext | None = None,
+    ) -> ExamPaperView:
         self._validate_item_inputs(command.items)
         paper_id = f"ep_{uuid4().hex[:12]}"
         now = self._now()
         created_files: list[Path] = []
+        question_source = save_context.question_source if save_context else self.question_bank
+        section_by_question = save_context.section_by_question if save_context else {}
         try:
             items = [
                 self._snapshot_item(
@@ -59,6 +84,8 @@ class ExamPaperStudio:
                     position=index,
                     item_input=item_input,
                     created_files=created_files,
+                    question_source=question_source,
+                    section=section_by_question.get(item_input.question_id),
                 )
                 for index, item_input in enumerate(command.items, start=1)
             ]
@@ -69,12 +96,13 @@ class ExamPaperStudio:
                 duration_minutes=command.duration_minutes,
                 instructions=command.instructions.strip(),
                 items=items,
+                specification=save_context.specification if save_context else None,
                 created_at=now,
                 updated_at=now,
             )
             with self._connect() as connection:
-                self._insert_current(connection, paper)
-                self._insert_revision(connection, paper, command.teacher_id)
+                self._insert_current(connection, paper, command.teacher_id)
+                self._insert_revision(connection, paper, command.teacher_id, command.teacher_id)
         except Exception:
             for path in created_files:
                 path.unlink(missing_ok=True)
@@ -103,6 +131,8 @@ class ExamPaperStudio:
                             position=position,
                             item_input=item_input,
                             created_files=created_files,
+                            question_source=self.question_bank,
+                            section=None,
                         )
                     )
             updated = self._build_view(
@@ -112,12 +142,109 @@ class ExamPaperStudio:
                 duration_minutes=command.duration_minutes,
                 instructions=command.instructions.strip(),
                 items=items,
+                specification=None,
                 created_at=current.created_at,
                 updated_at=self._now(),
             )
             with self._connect() as connection:
                 self._update_current(connection, updated)
-                self._insert_revision(connection, updated, command.teacher_id)
+                self._insert_revision(connection, updated, command.teacher_id, command.teacher_id)
+        except Exception:
+            for path in created_files:
+                path.unlink(missing_ok=True)
+            raise
+        return updated
+
+    def revise_owned_history(
+        self,
+        paper_id: str,
+        command: ExamPaperHistoryRevisionCommand,
+        *,
+        owner_id: str,
+        added_question_source: object | None = None,
+    ) -> ExamPaperView:
+        """Creates a new owner-scoped revision from an existing saved snapshot.
+
+        Historical editing may reorder, remove, regroup and rescore snapshotted
+        questions. Newly added questions must be supplied by a server-resolved
+        source that has re-applied the current trust and owner gates.
+        """
+
+        current = self.get_owned(paper_id, owner_id=owner_id)
+        if current.lifecycle_state != "active":
+            raise ExamPaperStudioError("回收站中的试卷需要先恢复后再编辑")
+        if current.version != command.expected_version:
+            raise ExamPaperStudioConflict("试卷已产生更新版本，请重新打开后再编辑")
+        existing = {item.question.question_id: item for item in current.items}
+        new_ids = [item.question_id for item in command.items if item.question_id not in existing]
+        if new_ids and added_question_source is None:
+            raise ExamPaperStudioError("新增题目必须先通过服务端受控题库门禁")
+
+        created_files: list[Path] = []
+        try:
+            items: list[ExamPaperItemView] = []
+            for position, item in enumerate(command.items, start=1):
+                if item.question_id in existing:
+                    paper_item = existing[item.question_id].model_copy(
+                        update={
+                            "position": position,
+                            "section_id": item.section_id,
+                            "section_title": item.section_title.strip(),
+                            "score": item.score,
+                        }
+                    )
+                else:
+                    paper_item = self._snapshot_item(
+                        paper_id=paper_id,
+                        position=position,
+                        item_input=ExamPaperItemInput(
+                            question_id=item.question_id,
+                            score=item.score,
+                        ),
+                        created_files=created_files,
+                        question_source=added_question_source,
+                        section=None,
+                    ).model_copy(
+                        update={
+                            "section_id": item.section_id,
+                            "section_title": item.section_title.strip(),
+                        }
+                    )
+                items.append(paper_item)
+            updated = self._build_view(
+                paper_id=paper_id,
+                version=current.version + 1,
+                title=command.title.strip(),
+                duration_minutes=command.duration_minutes,
+                instructions=command.instructions.strip(),
+                items=items,
+                specification=self._specification_from_snapshot(items, current.specification),
+                created_at=current.created_at,
+                updated_at=self._now(),
+            )
+            with self._connect() as connection:
+                cursor = connection.execute(
+                """
+                UPDATE exam_papers SET version = ?, title = ?, duration_minutes = ?,
+                    total_score = ?, question_count = ?, raw_json = ?, updated_at = ?
+                WHERE exam_paper_id = ? AND owner_id = ? AND version = ?
+                """,
+                (
+                    updated.version,
+                    updated.title,
+                    updated.duration_minutes,
+                    updated.total_score,
+                    len(updated.items),
+                    updated.model_dump_json(),
+                    updated.updated_at,
+                    paper_id,
+                    owner_id,
+                    current.version,
+                ),
+            )
+                if cursor.rowcount != 1:
+                    raise ExamPaperStudioConflict("试卷已产生更新版本，请重新打开后再编辑")
+                self._insert_revision(connection, updated, owner_id, owner_id)
         except Exception:
             for path in created_files:
                 path.unlink(missing_ok=True)
@@ -131,6 +258,35 @@ class ExamPaperStudio:
             ).fetchone()
         if row is None:
             raise KeyError(paper_id)
+        return ExamPaperView.model_validate_json(row["raw_json"])
+
+    def get_owned(self, paper_id: str, *, owner_id: str) -> ExamPaperView:
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT raw_json FROM exam_papers WHERE exam_paper_id = ? AND owner_id = ?",
+                (paper_id, owner_id),
+            ).fetchone()
+        if row is None:
+            raise KeyError(paper_id)
+        return ExamPaperView.model_validate_json(row["raw_json"])
+
+    def get_owned_version(
+        self,
+        paper_id: str,
+        version: int,
+        *,
+        owner_id: str,
+    ) -> ExamPaperView:
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                SELECT raw_json FROM exam_paper_revisions
+                WHERE exam_paper_id = ? AND version = ? AND owner_id = ?
+                """,
+                (paper_id, version, owner_id),
+            ).fetchone()
+        if row is None:
+            raise KeyError(f"{paper_id}:v{version}")
         return ExamPaperView.model_validate_json(row["raw_json"])
 
     def list(self, *, limit: int = 30, lifecycle_state: str = "active") -> ExamPaperList:
@@ -150,6 +306,39 @@ class ExamPaperStudio:
             items=[ExamPaperSummary(**dict(row)) for row in rows], total=total
         )
 
+    def list_owned(
+        self,
+        *,
+        owner_id: str,
+        limit: int = 30,
+        lifecycle_state: str = "active",
+    ) -> ExamPaperList:
+        """Lists only papers belonging to the authenticated teacher."""
+
+        if lifecycle_state not in {"active", "trashed"}:
+            raise ExamPaperStudioError("不支持的试卷状态")
+        with self._connect() as connection:
+            total = connection.execute(
+                """
+                SELECT COUNT(*) FROM exam_papers
+                WHERE owner_id = ? AND lifecycle_state = ?
+                """,
+                (owner_id, lifecycle_state),
+            ).fetchone()[0]
+            rows = connection.execute(
+                """
+                SELECT exam_paper_id, title, status, version, duration_minutes,
+                       total_score, question_count, updated_at, lifecycle_state, trashed_at
+                FROM exam_papers
+                WHERE owner_id = ? AND lifecycle_state = ?
+                ORDER BY updated_at DESC LIMIT ?
+                """,
+                (owner_id, lifecycle_state, limit),
+            ).fetchall()
+        return ExamPaperList(
+            items=[ExamPaperSummary(**dict(row)) for row in rows], total=total
+        )
+
     def change_lifecycle(self, paper_id: str, command: ExamPaperLifecycleCommand) -> ExamPaperView:
         current = self.get(paper_id)
         target = "trashed" if command.action == "trash" else "active"
@@ -157,6 +346,45 @@ class ExamPaperStudio:
         updated = current.model_copy(update={"lifecycle_state": target, "trashed_at": now if target == "trashed" else None, "updated_at": now})
         with self._connect() as connection:
             connection.execute("UPDATE exam_papers SET lifecycle_state = ?, trashed_at = ?, raw_json = ?, updated_at = ? WHERE exam_paper_id = ?", (target, updated.trashed_at, updated.model_dump_json(), now, paper_id))
+        return updated
+
+    def change_owned_lifecycle(
+        self,
+        paper_id: str,
+        command: ExamPaperLifecycleCommand,
+        *,
+        owner_id: str,
+    ) -> ExamPaperView:
+        """Moves only the current teacher's paper between history and recycle bin."""
+
+        current = self.get_owned(paper_id, owner_id=owner_id)
+        target = "trashed" if command.action == "trash" else "active"
+        now = self._now()
+        updated = current.model_copy(
+            update={
+                "lifecycle_state": target,
+                "trashed_at": now if target == "trashed" else None,
+                "updated_at": now,
+            }
+        )
+        with self._connect() as connection:
+            cursor = connection.execute(
+                """
+                UPDATE exam_papers
+                SET lifecycle_state = ?, trashed_at = ?, raw_json = ?, updated_at = ?
+                WHERE exam_paper_id = ? AND owner_id = ?
+                """,
+                (
+                    target,
+                    updated.trashed_at,
+                    updated.model_dump_json(),
+                    now,
+                    paper_id,
+                    owner_id,
+                ),
+            )
+            if cursor.rowcount != 1:
+                raise KeyError(paper_id)
         return updated
 
     def asset_path(self, paper_id: str, asset_id: str) -> Path:
@@ -187,24 +415,34 @@ class ExamPaperStudio:
         position: int,
         item_input: ExamPaperItemInput,
         created_files: list[Path],
+        question_source,
+        section: tuple[str, str] | None,
     ) -> ExamPaperItemView:
         try:
-            detail = self.question_bank.get_question(item_input.question_id)
+            detail = question_source.get_question(item_input.question_id)
         except KeyError as exc:
             raise ExamPaperStudioError(f"题目不存在：{item_input.question_id}") from exc
-        if detail.verification_status != "passed":
+        if detail.verification_status not in {
+            "passed",
+            "math_verifier_passed",
+            "authoring_checks_passed_teacher_review_required",
+        }:
             raise ExamPaperStudioError(
                 f"题目 {item_input.question_id} 尚未通过独立数学验证，不能加入试卷"
             )
         if detail.status == "rejected" or detail.review_status == "rejected":
             raise ExamPaperStudioError(f"题目 {item_input.question_id} 已被拒绝，不能加入试卷")
         snapshot = self._snapshot_question(
-            paper_id=paper_id, detail=detail, created_files=created_files
+            paper_id=paper_id,
+            detail=detail,
+            created_files=created_files,
+            question_source=question_source,
         )
         return ExamPaperItemView(
             item_id=f"epi_{uuid4().hex[:16]}",
             position=position,
-            section_title=self._section_title(detail.question_type),
+            section_id=section[0] if section else None,
+            section_title=section[1] if section else self._section_title(detail.question_type),
             score=item_input.score,
             question=snapshot,
         )
@@ -215,6 +453,7 @@ class ExamPaperStudio:
         paper_id: str,
         detail: QuestionDetail,
         created_files: list[Path],
+        question_source,
     ) -> ExamPaperQuestionSnapshot:
         raw = detail.raw
         solution = (raw.get("solutions") or [{}])[0]
@@ -224,7 +463,7 @@ class ExamPaperStudio:
         for image in detail.images:
             if image.placement != "stem":
                 continue
-            source_path, _ = self.question_bank.image_path(detail.question_id, image.image_id)
+            source_path, _ = question_source.image_path(detail.question_id, image.image_id)
             asset_id = f"epa_{uuid4().hex}"
             target_path = paper_asset_dir / f"{asset_id}{source_path.suffix.lower()}"
             shutil.copyfile(source_path, target_path)
@@ -257,6 +496,12 @@ class ExamPaperStudio:
             solution_method=solution.get("method"),
             solution_steps=[str(item) for item in solution.get("steps_latex") or []],
             final_answer=solution.get("final_answer"),
+            solution_status=(
+                solution.get("solution_status")
+                if solution.get("solution_status") in {"ready", "needs_teacher_verification"}
+                else "ready"
+            ),
+            solution_issue=solution.get("solution_issue"),
             volume=detail.volume,
             chapter=detail.chapter,
             section=detail.section,
@@ -278,11 +523,15 @@ class ExamPaperStudio:
         duration_minutes: int,
         instructions: str,
         items: list[ExamPaperItemView],
+        specification: PaperBidirectionalSpecification | None,
         created_at: str,
         updated_at: str,
     ) -> ExamPaperView:
         warnings = ["试卷采用题目版本快照；题库后续修订不会自动改变本试卷。"]
-        pending_review = sum(item.question.review_status != "approved" for item in items)
+        pending_review = sum(
+            item.question.review_status not in {"approved", "owner_saved_complete"}
+            for item in items
+        )
         if pending_review:
             warnings.append(f"其中 {pending_review} 道题已通过数学验证，但仍待教师完成内容审核。")
         if any(item.question.images for item in items):
@@ -301,6 +550,7 @@ class ExamPaperStudio:
             difficulty_breakdown=self._breakdown(
                 (f"难度 {item.question.difficulty}", item.score) for item in items
             ),
+            specification=specification,
             warnings=warnings,
             created_at=created_at,
             updated_at=updated_at,
@@ -319,6 +569,67 @@ class ExamPaperStudio:
             )
             for label, scores in grouped.items()
         ]
+
+    @staticmethod
+    def _specification_from_snapshot(
+        items: list[ExamPaperItemView],
+        previous: PaperBidirectionalSpecification | None,
+    ) -> PaperBidirectionalSpecification:
+        source_kind_by_question = {
+            row.question_id: row.source_kind
+            for row in (previous.question_to_dimensions if previous else [])
+        }
+        forward = [
+            PaperSpecificationForwardRow(
+                position=item.position,
+                question_id=item.question.question_id,
+                section_title=item.section_title,
+                question_type=item.question.question_type,
+                chapter=item.question.chapter or "未分类",
+                knowledge_points=item.question.knowledge_point_ids or ["未标注"],
+                difficulty=item.question.difficulty,
+                score=item.score,
+                verification_status=item.question.verification_status,
+                review_status=item.question.review_status,
+                source_kind=source_kind_by_question.get(
+                    item.question.question_id,
+                    "public_question_bank",
+                ),
+            )
+            for item in items
+        ]
+        grouped: dict[tuple[str, str], list[ExamPaperItemView]] = defaultdict(list)
+        for item in items:
+            grouped[("section", item.section_title)].append(item)
+            grouped[("question_type", item.question.question_type)].append(item)
+            grouped[("difficulty", f"难度 {item.question.difficulty}")].append(item)
+            for point in item.question.knowledge_point_ids or ["未标注"]:
+                grouped[("knowledge_point", point)].append(item)
+        dimension_order = {"section": 0, "question_type": 1, "knowledge_point": 2, "difficulty": 3}
+        reverse = []
+        for (dimension, label), grouped_items in sorted(
+            grouped.items(),
+            key=lambda row: (
+                dimension_order[row[0][0]],
+                min(item.position for item in row[1]),
+                row[0][1],
+            ),
+        ):
+            ordered = sorted(grouped_items, key=lambda item: item.position)
+            reverse.append(
+                PaperSpecificationReverseRow(
+                    dimension=dimension,
+                    label=label,
+                    positions=[item.position for item in ordered],
+                    question_ids=[item.question.question_id for item in ordered],
+                    question_count=len(ordered),
+                    score=round(sum(item.score for item in ordered), 2),
+                )
+            )
+        return PaperBidirectionalSpecification(
+            question_to_dimensions=forward,
+            dimension_to_questions=reverse,
+        )
 
     @staticmethod
     def _validate_item_inputs(items: list[ExamPaperItemInput]) -> None:
@@ -351,6 +662,7 @@ class ExamPaperStudio:
                     duration_minutes INTEGER NOT NULL,
                     total_score REAL NOT NULL,
                     question_count INTEGER NOT NULL,
+                    owner_id TEXT NOT NULL DEFAULT 'owner_teacher',
                     raw_json TEXT NOT NULL,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL
@@ -361,6 +673,7 @@ class ExamPaperStudio:
                     exam_paper_id TEXT NOT NULL REFERENCES exam_papers(exam_paper_id),
                     version INTEGER NOT NULL,
                     editor_id TEXT NOT NULL,
+                    owner_id TEXT NOT NULL DEFAULT 'owner_teacher',
                     raw_json TEXT NOT NULL,
                     created_at TEXT NOT NULL,
                     UNIQUE(exam_paper_id, version)
@@ -374,15 +687,31 @@ class ExamPaperStudio:
                 connection.execute("ALTER TABLE exam_papers ADD COLUMN lifecycle_state TEXT NOT NULL DEFAULT 'active'")
             if "trashed_at" not in columns:
                 connection.execute("ALTER TABLE exam_papers ADD COLUMN trashed_at TEXT")
+            if "owner_id" not in columns:
+                connection.execute(
+                    "ALTER TABLE exam_papers ADD COLUMN owner_id TEXT NOT NULL DEFAULT 'owner_teacher'"
+                )
+            revision_columns = {
+                row["name"]
+                for row in connection.execute("PRAGMA table_info(exam_paper_revisions)")
+            }
+            if "owner_id" not in revision_columns:
+                connection.execute(
+                    "ALTER TABLE exam_paper_revisions ADD COLUMN owner_id TEXT NOT NULL DEFAULT 'owner_teacher'"
+                )
 
     @staticmethod
-    def _insert_current(connection: sqlite3.Connection, paper: ExamPaperView) -> None:
+    def _insert_current(
+        connection: sqlite3.Connection,
+        paper: ExamPaperView,
+        owner_id: str,
+    ) -> None:
         connection.execute(
             """
             INSERT INTO exam_papers
             (exam_paper_id, status, version, title, duration_minutes, total_score,
-             question_count, raw_json, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             question_count, owner_id, raw_json, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 paper.exam_paper_id,
@@ -392,6 +721,7 @@ class ExamPaperStudio:
                 paper.duration_minutes,
                 paper.total_score,
                 len(paper.items),
+                owner_id,
                 paper.model_dump_json(),
                 paper.created_at,
                 paper.updated_at,
@@ -420,18 +750,22 @@ class ExamPaperStudio:
 
     @staticmethod
     def _insert_revision(
-        connection: sqlite3.Connection, paper: ExamPaperView, editor_id: str
+        connection: sqlite3.Connection,
+        paper: ExamPaperView,
+        editor_id: str,
+        owner_id: str,
     ) -> None:
         connection.execute(
             """
             INSERT INTO exam_paper_revisions
-            (exam_paper_id, version, editor_id, raw_json, created_at)
-            VALUES (?, ?, ?, ?, ?)
+            (exam_paper_id, version, editor_id, owner_id, raw_json, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
             """,
             (
                 paper.exam_paper_id,
                 paper.version,
                 editor_id,
+                owner_id,
                 paper.model_dump_json(),
                 paper.updated_at,
             ),

@@ -29,8 +29,18 @@ import {
   type PersonalQuestionList,
   type PaperBlueprintDraft,
   type PaperBlueprintSelectionDraft,
+  type PaperPublicQuestionCandidateList,
+  type PaperDraftItemEdit,
+  type PaperEditableDraft,
+  type PaperExportArtifact,
+  type PaperHistoryItem,
+  type PaperHistoryList,
+  type PaperHistoryPaper,
+  type PaperHistoryRevisionRequest,
+  type PaperSavedVersion,
   type QuestionAuthoringAgentResult,
   type QuestionAuthoringJob,
+  type QuestionAuthoringProgress,
   type QuestionAuthoringBrief,
   type QuestionAuthoringGenerationOptions,
   type QuestionAuthoringProgressStage,
@@ -416,9 +426,24 @@ export class HttpTeacherWorkspace implements TeacherWorkspace {
     );
   }
 
+  listPaperPublicCandidates(
+    request: { query?: string; questionType?: "single_choice" | "multiple_choice" | "fill_blank" | "open_response"; limit?: number } = {},
+    signal?: AbortSignal,
+  ): Promise<PaperPublicQuestionCandidateList> {
+    const params = new URLSearchParams({ limit: String(request.limit ?? 50) });
+    if (request.query?.trim()) params.set("query", request.query.trim());
+    if (request.questionType) params.set("question_type", request.questionType);
+    return libraryJsonRequest(
+      `/api/v1/exam-papers/blueprints/public-candidates?${params.toString()}`,
+      { method: "GET", signal },
+      "无法读取公共题库候选。",
+    );
+  }
+
   selectPaperBlueprint(
     blueprint: PaperBlueprintDraft,
     selectedPrivateQuestionIds: string[],
+    selectedPublicQuestionIds: string[],
     signal?: AbortSignal,
   ): Promise<PaperBlueprintSelectionDraft> {
     return libraryJsonRequest(
@@ -437,12 +462,168 @@ export class HttpTeacherWorkspace implements TeacherWorkspace {
             knowledge_points: blueprint.knowledge_points,
             sections: blueprint.sections,
           },
+          selected_public_question_ids: selectedPublicQuestionIds,
           selected_private_question_ids: selectedPrivateQuestionIds,
         }),
         signal,
       },
       "无法完成蓝图确认与受控选题。",
     );
+  }
+
+  editPaperDraft(
+    blueprint: PaperBlueprintDraft,
+    selectedPrivateQuestionIds: string[],
+    selectedPublicQuestionIds: string[],
+    edits: PaperDraftItemEdit[],
+    signal?: AbortSignal,
+  ): Promise<PaperEditableDraft> {
+    return libraryJsonRequest(
+      "/api/v1/exam-papers/blueprints/edit-draft",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          selection_request: {
+            blueprint: {
+              title: blueprint.title,
+              grade_scope: blueprint.grade_scope,
+              teaching_usage: blueprint.teaching_usage,
+              duration_minutes: blueprint.duration_minutes,
+              target_score: blueprint.target_score,
+              difficulty_profile: blueprint.difficulty_profile,
+              knowledge_points: blueprint.knowledge_points,
+              sections: blueprint.sections,
+            },
+            selected_public_question_ids: selectedPublicQuestionIds,
+            selected_private_question_ids: selectedPrivateQuestionIds,
+          },
+          edits,
+        }),
+        signal,
+      },
+      "无法建立可编辑试卷草稿。",
+    );
+  }
+
+  savePaperVersion(
+    blueprint: PaperBlueprintDraft,
+    selectedPrivateQuestionIds: string[],
+    selectedPublicQuestionIds: string[],
+    edits: PaperDraftItemEdit[],
+    expectedDraftFingerprint: string,
+    signal?: AbortSignal,
+  ): Promise<PaperSavedVersion> {
+    return libraryJsonRequest(
+      "/api/v1/exam-papers/blueprints/save-version",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          draft_command: {
+            selection_request: {
+              blueprint: {
+                title: blueprint.title,
+                grade_scope: blueprint.grade_scope,
+                teaching_usage: blueprint.teaching_usage,
+                duration_minutes: blueprint.duration_minutes,
+                target_score: blueprint.target_score,
+                difficulty_profile: blueprint.difficulty_profile,
+                knowledge_points: blueprint.knowledge_points,
+                sections: blueprint.sections,
+              },
+              selected_public_question_ids: selectedPublicQuestionIds,
+              selected_private_question_ids: selectedPrivateQuestionIds,
+            },
+            edits,
+          },
+          expected_draft_fingerprint: expectedDraftFingerprint,
+        }),
+        signal,
+      },
+      "无法保存当前试卷版本。",
+    );
+  }
+
+  listPaperHistory(
+    lifecycleState: "active" | "trashed" = "active",
+    signal?: AbortSignal,
+  ): Promise<PaperHistoryList> {
+    const params = new URLSearchParams({ lifecycle_state: lifecycleState, limit: "50" });
+    return libraryJsonRequest(
+      `/api/v1/exam-papers?${params.toString()}`,
+      { method: "GET", signal },
+      "无法读取你的历史组卷。",
+    );
+  }
+
+  changePaperHistoryLifecycle(
+    paperId: string,
+    action: "trash" | "restore",
+    signal?: AbortSignal,
+  ): Promise<PaperHistoryItem> {
+    return libraryJsonRequest(
+      `/api/v1/exam-papers/${encodeURIComponent(paperId)}/lifecycle`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action }),
+        signal,
+      },
+      action === "trash" ? "无法删除这份历史组卷。" : "无法恢复这份历史组卷。",
+    );
+  }
+
+  getPaperHistoryPaper(paperId: string, signal?: AbortSignal): Promise<PaperHistoryPaper> {
+    return libraryJsonRequest(
+      `/api/v1/exam-papers/${encodeURIComponent(paperId)}`,
+      { method: "GET", signal },
+      "无法打开这份历史组卷。",
+    );
+  }
+
+  revisePaperHistoryPaper(
+    paperId: string,
+    request: PaperHistoryRevisionRequest,
+    signal?: AbortSignal,
+  ): Promise<PaperHistoryPaper> {
+    return libraryJsonRequest(
+      `/api/v1/exam-papers/${encodeURIComponent(paperId)}/history-revision`,
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(request),
+        signal,
+      },
+      "无法保存历史试卷的新版本。",
+    );
+  }
+
+  async exportPaperVersion(
+    paperId: string,
+    version: number,
+    format: "docx" | "pdf",
+    edition: "student" | "answer" | "blueprint",
+    signal?: AbortSignal,
+  ): Promise<PaperExportArtifact> {
+    try {
+      const params = new URLSearchParams({ format, edition });
+      const response = await fetch(apiUrl(
+        `/api/v1/exam-papers/${encodeURIComponent(paperId)}/versions/${version}/export?${params.toString()}`,
+      ), { headers: { Accept: format === "pdf" ? "application/pdf" : "application/vnd.openxmlformats-officedocument.wordprocessingml.document" }, signal });
+      if (!response.ok) throw await responseError(response);
+      const disposition = response.headers.get("Content-Disposition") ?? "";
+      const encodedName = disposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
+      const plainName = disposition.match(/filename="?([^";]+)"?/i)?.[1];
+      return {
+        blob: await response.blob(),
+        filename: encodedName ? decodeURIComponent(encodedName) : plainName ?? `exam-paper-v${version}-${edition}.${format}`,
+      };
+    } catch (cause) {
+      if (cause instanceof TeacherWorkspaceError) throw cause;
+      if (cause instanceof DOMException && cause.name === "AbortError") throw cause;
+      throw new TeacherWorkspaceError("NETWORK_ERROR", "无法导出这个已保存版本。");
+    }
   }
 
   async uploadQuestionMedia(
@@ -963,10 +1144,24 @@ export class HttpTeacherWorkspace implements TeacherWorkspace {
     );
   }
 
-  cancelQuestionAuthoringJob(jobId: string, signal?: AbortSignal): Promise<QuestionAuthoringJob> {
+  cancelQuestionAuthoringJob(
+    jobId: string,
+    preserveStatement = false,
+    signal?: AbortSignal,
+    context?: { requestText?: string; targetDifficulty?: number },
+  ): Promise<QuestionAuthoringJob> {
     return libraryJsonRequest(
       `/api/v1/agent/question-authoring/jobs/${encodeURIComponent(jobId)}/cancel`,
-      { method: "POST", signal },
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          preserve_statement: preserveStatement,
+          ...(context?.requestText ? { request_text: context.requestText } : {}),
+          ...(context?.targetDifficulty ? { target_difficulty: context.targetDifficulty } : {}),
+        }),
+        signal,
+      },
       "无法取消后台命题任务。",
     );
   }
@@ -974,7 +1169,7 @@ export class HttpTeacherWorkspace implements TeacherWorkspace {
   getQuestionAuthoringProgress(
     progressId: string,
     signal?: AbortSignal,
-  ): Promise<{ stage: QuestionAuthoringProgressStage }> {
+  ): Promise<QuestionAuthoringProgress> {
     return libraryJsonRequest(
       `/api/v1/agent/question-authoring/progress/${encodeURIComponent(progressId)}`,
       { method: "GET", signal },

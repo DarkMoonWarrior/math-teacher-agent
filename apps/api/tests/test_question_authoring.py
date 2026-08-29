@@ -17,6 +17,7 @@ from app.modules.question_authoring import (
     QuestionAuthoringContext,
     QuestionAuthoringError,
     QuestionAuthoringProviderError,
+    QuestionAuthoringStatementPreview,
     QuestionAuthoringUnavailableError,
     QuestionDesignBrief,
     QuestionDraftEditableContent,
@@ -391,6 +392,7 @@ def test_deepseek_provider_assembles_a_long_solution_from_bounded_sections() -> 
 def test_deepseek_provider_reviews_and_repairs_an_impossible_question_before_solution() -> None:
     calls: list[str] = []
     progress: list[str] = []
+    approved_statements: list[QuestionAuthoringStatementPreview] = []
     review_count = 0
 
     class FakeDeepSeekClient:
@@ -479,6 +481,7 @@ def test_deepseek_provider_reviews_and_repairs_an_impossible_question_before_sol
             curriculum=None,
             curriculum_options=(),
             on_progress=progress.append,
+            on_statement_approved=approved_statements.append,
         )
     )
 
@@ -486,6 +489,9 @@ def test_deepseek_provider_reviews_and_repairs_an_impossible_question_before_sol
     assert "BF₁=6" not in content.stem_plain
     assert content.answer_value == "B"
     assert content.solution_status == "ready"
+    assert len(approved_statements) == 1
+    assert approved_statements[0].stem_plain == content.stem_plain
+    assert approved_statements[0].options == content.options
     assert progress == [
         "composing",
         "reviewing",
@@ -586,6 +592,7 @@ def test_deepseek_provider_stops_before_solution_when_repaired_question_still_fa
 
 def test_deepseek_provider_repairs_and_reaudits_statement_when_full_solve_exposes_a_flaw() -> None:
     progress: list[str] = []
+    approved_statements: list[QuestionAuthoringStatementPreview] = []
     question_review_count = 0
     conclusion_count = 0
     completed_review_count = 0
@@ -684,12 +691,17 @@ def test_deepseek_provider_repairs_and_reaudits_statement_when_full_solve_expose
             curriculum=None,
             curriculum_options=(),
             on_progress=progress.append,
+            on_statement_approved=approved_statements.append,
         )
     )
 
     assert "x²-1=0" in content.stem_plain
     assert content.answer_value == "2"
     assert content.final_answer == "2"
+    assert [statement.stem_plain for statement in approved_statements] == [
+        "关于 x 的方程 x²+1=0 的实数根个数为______。",
+        "关于 x 的方程 x²-1=0 的实数根个数为______。",
+    ]
     assert progress == [
         "composing",
         "reviewing",

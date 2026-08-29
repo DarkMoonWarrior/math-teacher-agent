@@ -9,17 +9,21 @@ from fastapi.testclient import TestClient
 from PIL import Image
 
 from app.main import app
+from app.core.identity import CurrentTeacher, get_current_teacher
 from app.modules.exam_exports import ExamPaperDocumentRenderer
 from app.modules.exam_exports.math_text import teacher_readable_math
 from app.modules.exam_papers import (
     ExamPaperCreateCommand,
+    ExamPaperHistoryRevisionCommand,
     ExamPaperItemInput,
+    ExamPaperLifecycleCommand,
     ExamPaperStudio,
     ExamPaperStudioError,
     ExamPaperUpdateCommand,
 )
 from app.modules.question_bank.schemas import QuestionDetail, QuestionImage
 from app.routes import exam_papers as exam_paper_routes
+from app.modules.exam_papers.studio import ExamPaperStudioConflict
 
 
 def question_detail(
@@ -129,6 +133,167 @@ def test_studio_creates_versioned_paper_with_breakdown_and_warnings(tmp_path: Pa
     assert paper.difficulty_breakdown[0].score == 12
     assert any("1 道题" in warning and "待教师" in warning for warning in paper.warnings)
     assert studio.list().total == 1
+
+
+def test_paper_history_list_and_lifecycle_are_owner_scoped(tmp_path: Path) -> None:
+    studio, _ = make_studio(tmp_path)
+    paper_a = studio.create(create_command().model_copy(update={"teacher_id": "teacher-a"}))
+    paper_b = studio.create(
+        create_command().model_copy(
+            update={"title": "另一位教师的试卷", "teacher_id": "teacher-b"}
+        )
+    )
+
+    history_a = studio.list_owned(owner_id="teacher-a")
+    history_b = studio.list_owned(owner_id="teacher-b")
+
+    assert [item.exam_paper_id for item in history_a.items] == [paper_a.exam_paper_id]
+    assert [item.exam_paper_id for item in history_b.items] == [paper_b.exam_paper_id]
+    with pytest.raises(KeyError):
+        studio.change_owned_lifecycle(
+            paper_b.exam_paper_id,
+            ExamPaperLifecycleCommand(action="trash"),
+            owner_id="teacher-a",
+        )
+
+    studio.change_owned_lifecycle(
+        paper_a.exam_paper_id,
+        ExamPaperLifecycleCommand(action="trash"),
+        owner_id="teacher-a",
+    )
+    assert studio.list_owned(owner_id="teacher-a", lifecycle_state="active").total == 0
+    assert studio.list_owned(owner_id="teacher-a", lifecycle_state="trashed").total == 1
+
+
+def test_owner_can_edit_history_into_a_new_revision_without_overwriting_the_old_one(tmp_path: Path) -> None:
+    studio, _ = make_studio(tmp_path)
+    original = studio.create(create_command().model_copy(update={"teacher_id": "teacher-a"}))
+    command = ExamPaperHistoryRevisionCommand(
+        expected_version=1,
+        title="集合单元检测（修订）",
+        duration_minutes=50,
+        instructions="写出必要过程",
+        items=[{
+            "question_id": "q2",
+            "section_id": "open",
+            "section_title": "解答题",
+            "score": 10,
+        }],
+    )
+
+    with pytest.raises(KeyError):
+        studio.revise_owned_history(original.exam_paper_id, command, owner_id="teacher-b")
+
+    revised = studio.revise_owned_history(
+        original.exam_paper_id,
+        command,
+        owner_id="teacher-a",
+    )
+
+    assert revised.version == 2
+    assert revised.title.endswith("（修订）")
+    assert revised.total_score == 10
+    assert len(revised.items) == 1
+    assert revised.items[0].section_title == "解答题"
+    assert revised.specification is not None
+    assert revised.specification.question_to_dimensions[0].position == 1
+    preserved = studio.get_owned_version(
+        original.exam_paper_id,
+        1,
+        owner_id="teacher-a",
+    )
+    assert len(preserved.items) == 2
+    assert preserved.total_score == 12
+    with pytest.raises(ExamPaperStudioConflict, match="更新版本"):
+        studio.revise_owned_history(
+            original.exam_paper_id,
+            command,
+            owner_id="teacher-a",
+        )
+
+
+def test_owner_can_add_a_server_resolved_question_to_history_revision(tmp_path: Path) -> None:
+    studio, bank = make_studio(tmp_path)
+    bank.questions["q3"] = question_detail(
+        "q3", stem="函数 f(x)=x 的定义域是？"
+    )
+    original = studio.create(create_command().model_copy(update={"teacher_id": "teacher-a"}))
+    command = ExamPaperHistoryRevisionCommand(
+        expected_version=1,
+        title="集合单元检测（加题）",
+        duration_minutes=45,
+        instructions="写出必要过程",
+        target_total_score=17,
+        selected_public_question_ids=["q3"],
+        items=[
+            {"question_id": "q1", "section_id": "choice", "section_title": "选择题", "score": 5},
+            {"question_id": "q2", "section_id": "choice", "section_title": "选择题", "score": 7},
+            {"question_id": "q3", "section_id": "choice", "section_title": "选择题", "score": 5},
+        ],
+    )
+
+    revised = studio.revise_owned_history(
+        original.exam_paper_id,
+        command,
+        owner_id="teacher-a",
+        added_question_source=bank,
+    )
+
+    assert revised.version == 2
+    assert len(revised.items) == 3
+    assert revised.total_score == 17
+    assert revised.items[-1].question.question_id == "q3"
+
+
+def test_paper_history_http_never_lists_or_changes_another_owner(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    studio, _ = make_studio(tmp_path)
+    own = studio.create(create_command().model_copy(update={"teacher_id": "teacher-a"}))
+    other = studio.create(
+        create_command().model_copy(
+            update={"title": "不可见试卷", "teacher_id": "teacher-b"}
+        )
+    )
+    monkeypatch.setattr(exam_paper_routes, "get_exam_paper_studio", lambda: studio)
+    app.dependency_overrides[get_current_teacher] = lambda: CurrentTeacher(
+        teacher_id="teacher-a",
+        source="authenticated_session",
+    )
+    try:
+        client = TestClient(app)
+        listing = client.get("/api/v1/exam-papers")
+        forbidden_read = client.get(f"/api/v1/exam-papers/{other.exam_paper_id}")
+        forbidden_revision = client.put(
+            f"/api/v1/exam-papers/{other.exam_paper_id}/history-revision",
+            json={
+                "expected_version": 1,
+                "title": "不可越权修订",
+                "duration_minutes": 45,
+                "instructions": "",
+                "items": [{
+                    "question_id": "q1",
+                    "section_id": "single",
+                    "section_title": "选择题",
+                    "score": 5,
+                }],
+            },
+        )
+        forbidden_change = client.post(
+            f"/api/v1/exam-papers/{other.exam_paper_id}/lifecycle",
+            json={"action": "trash"},
+        )
+        own_change = client.post(
+            f"/api/v1/exam-papers/{own.exam_paper_id}/lifecycle",
+            json={"action": "trash"},
+        )
+    finally:
+        app.dependency_overrides.pop(get_current_teacher, None)
+
+    assert listing.status_code == 200
+    assert [item["exam_paper_id"] for item in listing.json()["items"]] == [own.exam_paper_id]
+    assert forbidden_read.status_code == 404
+    assert forbidden_revision.status_code == 404
+    assert forbidden_change.status_code == 404
+    assert own_change.status_code == 200
 
 
 def test_update_preserves_question_snapshot_when_source_changes(tmp_path: Path) -> None:
