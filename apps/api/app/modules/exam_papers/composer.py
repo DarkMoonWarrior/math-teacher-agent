@@ -209,6 +209,11 @@ class ExamPaperComposer:
             for _ in range(allocated[difficulty])
         ]
 
+    def difficulty_slots(self, count: int, profile: str) -> list[int]:
+        """Expose the deterministic target distribution for read-only audits."""
+
+        return self._difficulty_slots(count, profile)
+
     @staticmethod
     def allocate_scores(target_score: float, weights: list[int]) -> list[float]:
         target_units = round(target_score * 2)

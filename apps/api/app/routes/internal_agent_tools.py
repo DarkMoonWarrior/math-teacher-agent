@@ -730,6 +730,10 @@ async def create_question_draft(
                 body.progress_id,
                 stage,
             ),
+            on_statement_approved=lambda statement: get_question_authoring_progress_registry().publish_statement(
+                body.progress_id,
+                statement,
+            ),
         )
     except QuestionAuthoringClarificationRequired as exc:
         raise _GatewayHttpError(

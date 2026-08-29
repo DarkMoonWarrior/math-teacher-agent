@@ -16,6 +16,7 @@ from app.modules.exam_papers import (
     ExamPaperCreateCommand,
     ExamPaperEdition,
     ExamPaperExportFormat,
+    ExamPaperHistoryRevisionCommand,
     ExamPaperList,
     ExamPaperLifecycleCommand,
     ExamPaperProposal,
@@ -35,7 +36,23 @@ from app.modules.exam_papers import (
     PaperBlueprintSelectionCommand,
     PaperBlueprintSelectionDraft,
     PaperBlueprintSelectionError,
+    PaperPublicQuestionCandidateList,
+    PaperEditableDraft,
+    PaperEditableDraftCommand,
+    PaperEditableDrafting,
+    PaperEditableDraftingError,
+    PaperSavedVersion,
+    PaperVersionSaveCommand,
 )
+from app.modules.exam_papers.versioning import (
+    PaperResolvedQuestionSource,
+    PaperSavedExporting,
+    PaperSavedExportingError,
+    PaperVersioning,
+    PaperVersioningConflict,
+    PaperVersioningError,
+)
+from app.modules.exam_papers.studio import ExamPaperStudioConflict
 from app.routes.personal_question_library import get_personal_question_library
 from app.routes.questions import get_question_bank
 
@@ -74,6 +91,25 @@ def get_paper_blueprint_selection() -> PaperBlueprintSelection:
     )
 
 
+def get_paper_editable_drafting(
+    selection: PaperBlueprintSelection = Depends(get_paper_blueprint_selection),
+) -> PaperEditableDrafting:
+    return PaperEditableDrafting(selection=selection)
+
+
+def get_paper_versioning(
+    drafting: PaperEditableDrafting = Depends(get_paper_editable_drafting),
+) -> PaperVersioning:
+    return PaperVersioning(drafting=drafting, studio=get_exam_paper_studio())
+
+
+def get_paper_saved_exporting() -> PaperSavedExporting:
+    return PaperSavedExporting(
+        studio=get_exam_paper_studio(),
+        renderer=get_exam_paper_renderer(),
+    )
+
+
 @lru_cache
 def get_exam_paper_template_catalog() -> ExamPaperTemplateCatalog:
     return ExamPaperTemplateCatalog()
@@ -91,22 +127,43 @@ def get_exam_paper_renderer() -> ExamPaperDocumentRenderer:
 
 
 @router.get("", response_model=ExamPaperList)
-def list_exam_papers(limit: int = Query(default=30, ge=1, le=100), lifecycle_state: Literal["active", "trashed"] = Query(default="active")) -> ExamPaperList:
-    return get_exam_paper_studio().list(limit=limit, lifecycle_state=lifecycle_state)
+def list_exam_papers(
+    limit: int = Query(default=30, ge=1, le=100),
+    lifecycle_state: Literal["active", "trashed"] = Query(default="active"),
+    teacher: CurrentTeacher = Depends(get_current_teacher),
+) -> ExamPaperList:
+    return get_exam_paper_studio().list_owned(
+        owner_id=teacher.teacher_id,
+        limit=limit,
+        lifecycle_state=lifecycle_state,
+    )
 
 
 @router.post("/{paper_id}/lifecycle", response_model=ExamPaperView)
-def change_exam_paper_lifecycle(paper_id: str, command: ExamPaperLifecycleCommand) -> ExamPaperView:
+def change_exam_paper_lifecycle(
+    paper_id: str,
+    command: ExamPaperLifecycleCommand,
+    teacher: CurrentTeacher = Depends(get_current_teacher),
+) -> ExamPaperView:
     try:
-        return get_exam_paper_studio().change_lifecycle(paper_id, command)
+        return get_exam_paper_studio().change_owned_lifecycle(
+            paper_id,
+            command,
+            owner_id=teacher.teacher_id,
+        )
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="试卷不存在") from exc
 
 
 @router.post("", response_model=ExamPaperView, status_code=201)
-def create_exam_paper(command: ExamPaperCreateCommand) -> ExamPaperView:
+def create_exam_paper(
+    command: ExamPaperCreateCommand,
+    teacher: CurrentTeacher = Depends(get_current_teacher),
+) -> ExamPaperView:
     try:
-        return get_exam_paper_studio().create(command)
+        return get_exam_paper_studio().create(
+            command.model_copy(update={"teacher_id": teacher.teacher_id})
+        )
     except ExamPaperStudioError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
@@ -139,6 +196,50 @@ def select_paper_blueprint(
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
+@router.get("/blueprints/public-candidates", response_model=PaperPublicQuestionCandidateList)
+def list_paper_public_candidates(
+    query: str | None = Query(default=None, max_length=160),
+    question_type: str | None = Query(default=None, max_length=60),
+    limit: int = Query(default=50, ge=1, le=100),
+    teacher: CurrentTeacher = Depends(get_current_teacher),
+    selection: PaperBlueprintSelection = Depends(get_paper_blueprint_selection),
+) -> PaperPublicQuestionCandidateList:
+    # The browser receives only already-gated public candidates; it cannot
+    # supply an owner, visibility, review, or verification override.
+    return selection.list_public_candidates(
+        owner_id=teacher.teacher_id,
+        query=query,
+        question_type=question_type,
+        limit=limit,
+    )
+
+
+@router.post("/blueprints/edit-draft", response_model=PaperEditableDraft)
+def edit_paper_blueprint_draft(
+    command: PaperEditableDraftCommand,
+    teacher: CurrentTeacher = Depends(get_current_teacher),
+    drafting: PaperEditableDrafting = Depends(get_paper_editable_drafting),
+) -> PaperEditableDraft:
+    try:
+        return drafting.build(command, owner_id=teacher.teacher_id)
+    except (PaperBlueprintSelectionError, PaperEditableDraftingError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.post("/blueprints/save-version", response_model=PaperSavedVersion, status_code=201)
+def save_paper_blueprint_version(
+    command: PaperVersionSaveCommand,
+    teacher: CurrentTeacher = Depends(get_current_teacher),
+    versioning: PaperVersioning = Depends(get_paper_versioning),
+) -> PaperSavedVersion:
+    try:
+        return versioning.save(command, owner_id=teacher.teacher_id)
+    except PaperVersioningConflict as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except (PaperBlueprintSelectionError, PaperEditableDraftingError, PaperVersioningError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
 @router.get("/templates", response_model=ExamPaperTemplateList)
 def list_exam_paper_templates() -> ExamPaperTemplateList:
     return get_exam_paper_template_catalog().list()
@@ -155,22 +256,73 @@ def compose_exam_paper_template(
 
 
 @router.get("/{paper_id}", response_model=ExamPaperView)
-def get_exam_paper(paper_id: str) -> ExamPaperView:
+def get_exam_paper(
+    paper_id: str,
+    teacher: CurrentTeacher = Depends(get_current_teacher),
+) -> ExamPaperView:
     try:
-        return get_exam_paper_studio().get(paper_id)
+        return get_exam_paper_studio().get_owned(
+            paper_id,
+            owner_id=teacher.teacher_id,
+        )
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="试卷不存在") from exc
 
 
 @router.put("/{paper_id}", response_model=ExamPaperView)
 def update_exam_paper(
-    paper_id: str, command: ExamPaperUpdateCommand
+    paper_id: str,
+    command: ExamPaperUpdateCommand,
+    teacher: CurrentTeacher = Depends(get_current_teacher),
 ) -> ExamPaperView:
     try:
-        return get_exam_paper_studio().update(paper_id, command)
+        studio = get_exam_paper_studio()
+        studio.get_owned(paper_id, owner_id=teacher.teacher_id)
+        return studio.update(
+            paper_id,
+            command.model_copy(update={"teacher_id": teacher.teacher_id}),
+        )
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="试卷不存在") from exc
     except ExamPaperStudioError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.put("/{paper_id}/history-revision", response_model=ExamPaperView)
+def revise_exam_paper_history(
+    paper_id: str,
+    command: ExamPaperHistoryRevisionCommand,
+    teacher: CurrentTeacher = Depends(get_current_teacher),
+) -> ExamPaperView:
+    try:
+        resolved_items = []
+        source = None
+        if command.selected_public_question_ids or command.selected_private_question_ids:
+            selection = get_paper_blueprint_selection()
+            resolved_items = selection.resolve_explicit_candidates(
+                owner_id=teacher.teacher_id,
+                public_question_ids=command.selected_public_question_ids,
+                private_question_ids=command.selected_private_question_ids,
+            )
+            source = PaperResolvedQuestionSource(
+                selection=selection,
+                owner_id=teacher.teacher_id,
+                items=resolved_items,
+            )
+            source.validate_all()
+        return get_exam_paper_studio().revise_owned_history(
+            paper_id,
+            command,
+            owner_id=teacher.teacher_id,
+            added_question_source=source,
+        )
+    except ExamPaperStudioConflict as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="试卷不存在") from exc
+    except ExamPaperStudioError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except (PaperBlueprintSelectionError, PaperVersioningError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
@@ -179,14 +331,46 @@ def export_exam_paper(
     paper_id: str,
     format: ExamPaperExportFormat = Query(default="docx"),
     edition: ExamPaperEdition = Query(default="student"),
+    teacher: CurrentTeacher = Depends(get_current_teacher),
 ) -> FileResponse:
     try:
-        paper = get_exam_paper_studio().get(paper_id)
+        paper = get_exam_paper_studio().get_owned(
+            paper_id,
+            owner_id=teacher.teacher_id,
+        )
         rendered = get_exam_paper_renderer().render(paper, format, edition)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="试卷不存在") from exc
     except ExamPaperExportError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
+    return FileResponse(
+        path=rendered.path,
+        media_type=rendered.media_type,
+        filename=rendered.download_name,
+    )
+
+
+@router.get("/{paper_id}/versions/{version}/export")
+def export_saved_exam_paper_version(
+    paper_id: str,
+    version: int,
+    format: ExamPaperExportFormat = Query(default="docx"),
+    edition: ExamPaperEdition = Query(default="student"),
+    teacher: CurrentTeacher = Depends(get_current_teacher),
+    exporting: PaperSavedExporting = Depends(get_paper_saved_exporting),
+) -> FileResponse:
+    try:
+        rendered = exporting.export(
+            paper_id=paper_id,
+            version=version,
+            owner_id=teacher.teacher_id,
+            export_format=format,
+            edition=edition,
+        )
+    except PaperSavedExportingError as exc:
+        raise HTTPException(status_code=404, detail="试卷版本不存在或不属于当前教师") from exc
+    except ExamPaperExportError as exc:
+        raise HTTPException(status_code=500, detail="导出失败，请稍后重试") from exc
     return FileResponse(
         path=rendered.path,
         media_type=rendered.media_type,

@@ -29,3 +29,14 @@ class QuestionAuthoringAgentResponse(BaseModel):
     tool_request_id: str = ""
     tool_call_count: int = 0
     error: dict[str, Any] | None = None
+
+
+class QuestionAuthoringCancelCommand(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    preserve_statement: bool = False
+    # Sent only when the teacher chooses to keep an approved statement after
+    # stopping.  The server uses it as provenance for the owner-only staged
+    # draft; it never supplies an answer or solution.
+    request_text: str | None = Field(default=None, max_length=4000)
+    target_difficulty: int = Field(default=3, ge=1, le=5)

@@ -1,4 +1,8 @@
-from .domain import QuestionAuthoringAgentCommand, QuestionAuthoringAgentResponse
+from .domain import (
+    QuestionAuthoringAgentCommand,
+    QuestionAuthoringAgentResponse,
+    QuestionAuthoringCancelCommand,
+)
 from .pipeline import QuestionAuthoringAgentWorkflow
 from .progress import (
     QuestionAuthoringProgressRegistry,
@@ -10,6 +14,7 @@ from .progress import (
 __all__ = [
     "QuestionAuthoringAgentCommand",
     "QuestionAuthoringAgentResponse",
+    "QuestionAuthoringCancelCommand",
     "QuestionAuthoringAgentWorkflow",
     "QuestionAuthoringProgressRegistry",
     "QuestionAuthoringProgressSnapshot",

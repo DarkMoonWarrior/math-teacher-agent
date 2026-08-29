@@ -18,6 +18,7 @@ from app.modules.question_authoring.schemas import (
     GeneratedQuestionDraft,
     ProviderQuestionDraft,
     QuestionDesignBrief,
+    QuestionAuthoringStatementPreview,
     QuestionDraftCurriculum,
     QuestionDraftEditableContent,
     QuestionDraftOption,
@@ -59,6 +60,7 @@ class QuestionAuthoring:
         brief: QuestionDesignBrief,
         *,
         on_progress: Callable[[QuestionAuthoringProgressStage], None] | None = None,
+        on_statement_approved: Callable[[QuestionAuthoringStatementPreview], None] | None = None,
     ) -> GeneratedQuestionDraft:
         if brief.reference_question_id:
             raise QuestionAuthoringError(
@@ -79,6 +81,7 @@ class QuestionAuthoring:
                     curriculum=curriculum_guidance,
                     curriculum_options=curriculum_options,
                     on_progress=on_progress,
+                    on_statement_approved=on_statement_approved,
                 )
             )
         except QuestionAuthoringProviderError as exc:
@@ -144,6 +147,118 @@ class QuestionAuthoring:
             model=self.provider.model,
             prompt_revision=PROMPT_REVISION,
             warnings=warnings,
+            created_at=datetime.now(timezone.utc).isoformat(),
+        )
+
+    @classmethod
+    def preserve_approved_statement(
+        cls,
+        statement: QuestionAuthoringStatementPreview,
+        *,
+        request_text: str,
+        target_difficulty: int,
+    ) -> GeneratedQuestionDraft:
+        """Turn an independently approved statement into a safe, editable draft.
+
+        Stopping a run after statement review must not manufacture an answer or
+        solution.  We still persist the reviewed statement so the teacher can
+        save it privately, while every solution field is explicitly marked as
+        unavailable (``无``) and the trust contract makes the missing solution
+        visible to both the UI and paper composition gates.
+        """
+
+        if university_only_terms(statement.stem_plain):
+            raise QuestionAuthoringError("题面超出高中数学范围，不能保留")
+        normalized_request = request_text.strip() or "教师保留审核通过题面"
+        verification = QuestionDraftVerification(
+            status="teacher_review_required",
+            math_verifier_status="unsupported",
+            math_verifier_checked=False,
+            teacher_review_required=True,
+            verifier_version="statement-preservation-v1",
+            checks=[
+                QuestionDraftTrustCheck(
+                    code="solvability",
+                    status="inconclusive",
+                    capability="unsupported",
+                    evidence_source="none",
+                    summary="题面已通过独立审核；解析尚未生成，暂不能判断可解性",
+                    details=["停止发生在解析生成前，系统没有臆造答案或推导。"],
+                ),
+                QuestionDraftTrustCheck(
+                    code="answer_solution_consistency",
+                    status="not_applicable",
+                    capability="unsupported",
+                    evidence_source="none",
+                    summary="解析尚未生成，暂不适用答案一致性检查",
+                    details=["保存后可由教师补充解析，或重新生成解析。"],
+                ),
+                QuestionDraftTrustCheck(
+                    code="choice_answer_cardinality",
+                    status="not_applicable",
+                    capability="unsupported",
+                    evidence_source="none",
+                    summary="解析尚未生成，暂不适用答案选项数量检查",
+                    details=["题面和选项仍保留，答案字段显示为无。"],
+                ),
+                QuestionDraftTrustCheck(
+                    code="distractor_quality",
+                    status="inconclusive",
+                    capability="unsupported",
+                    evidence_source="none",
+                    summary="题面已审核；干扰项质量待解析和教师复核",
+                    details=["系统不会把未生成的解析当作干扰项质量证据。"],
+                ),
+                QuestionDraftTrustCheck(
+                    code="math_verifier",
+                    status="inconclusive",
+                    capability="unsupported",
+                    evidence_source="none",
+                    summary="解析尚未生成，未运行形式化数学验证",
+                    details=["MathVerifier 未运行，不冒充已验证。"],
+                ),
+                QuestionDraftTrustCheck(
+                    code="difficulty_disclosure",
+                    status="passed",
+                    capability="supported",
+                    evidence_source="model_estimate",
+                    summary="已披露题面阶段的预计难度",
+                    details=["难度仅作教师选题参考，不阻断保存。"],
+                ),
+            ],
+            details=[
+                "题面已经通过独立题面审核。",
+                "用户在解析完成前停止任务；解析与标准答案明确标记为无。",
+            ],
+        )
+        return GeneratedQuestionDraft(
+            draft_id=f"qad_{uuid4().hex[:16]}",
+            request_text=normalized_request,
+            question_type=statement.question_type,
+            stem_plain=statement.stem_plain.strip(),
+            stem_latex=statement.stem_latex.strip() if statement.stem_latex else None,
+            options=[option.model_copy(deep=True) for option in statement.options],
+            answer_value="无",
+            solution_method="无",
+            solution_steps=["无"],
+            solution_status="needs_teacher_verification",
+            solution_issue="解析未生成：用户在解析完成前停止任务。",
+            final_answer="无",
+            authoring_intent="审核通过的题面，解析待生成",
+            curriculum=None,
+            knowledge_points=[],
+            assessed_methods=[],
+            common_mistakes=[],
+            target_difficulty=target_difficulty,
+            estimated_difficulty=statement.estimated_difficulty,
+            verification=verification,
+            provider="statement-preservation",
+            model="statement-review",
+            prompt_revision="statement-preservation-v1",
+            warnings=[
+                "题面已通过独立审核，但解析和标准答案尚未生成，当前显示为无。",
+                "可以保存到个人题库或加入组卷；正式使用前请补充解析。",
+            ],
             created_at=datetime.now(timezone.utc).isoformat(),
         )
 

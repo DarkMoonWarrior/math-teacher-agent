@@ -7,6 +7,8 @@ from typing import Literal
 
 from pydantic import BaseModel
 
+from app.modules.question_authoring import QuestionAuthoringStatementPreview
+
 
 QuestionAuthoringProgressStage = Literal[
     "brief",
@@ -25,6 +27,9 @@ class QuestionAuthoringProgressSnapshot(BaseModel):
     progress_id: str
     stage: QuestionAuthoringProgressStage
     elapsed_seconds: int
+    statement: QuestionAuthoringStatementPreview | None = None
+    statement_revision: int = 0
+    statement_state: Literal["pending", "approved", "adjusting"] = "pending"
 
 
 @dataclass
@@ -33,6 +38,9 @@ class _ProgressEntry:
     stage: QuestionAuthoringProgressStage
     started_at: float
     updated_at: float
+    statement: QuestionAuthoringStatementPreview | None = None
+    statement_revision: int = 0
+    statement_state: Literal["pending", "approved", "adjusting"] = "pending"
 
 
 class QuestionAuthoringProgressRegistry:
@@ -70,6 +78,43 @@ class QuestionAuthoringProgressRegistry:
             if entry is None:
                 return False
             entry.stage = stage
+            if entry.statement is not None and stage in {"refining", "reauthoring"}:
+                entry.statement_state = "adjusting"
+            entry.updated_at = now
+            return True
+
+    def publish_statement(
+        self,
+        progress_id: str | None,
+        statement: QuestionAuthoringStatementPreview,
+    ) -> bool:
+        """Publish one owner-bound statement only after its independent review passes."""
+
+        if not progress_id:
+            return False
+        now = time.monotonic()
+        with self._lock:
+            entry = self._entries.get(progress_id)
+            if entry is None:
+                return False
+            if entry.statement != statement:
+                entry.statement_revision += 1
+            entry.statement = statement.model_copy(deep=True)
+            entry.statement_state = "approved"
+            entry.updated_at = now
+            return True
+
+    def discard_statement(self, progress_id: str | None) -> bool:
+        if not progress_id:
+            return False
+        now = time.monotonic()
+        with self._lock:
+            entry = self._entries.get(progress_id)
+            if entry is None:
+                return False
+            entry.statement = None
+            entry.statement_revision = 0
+            entry.statement_state = "pending"
             entry.updated_at = now
             return True
 
@@ -84,6 +129,9 @@ class QuestionAuthoringProgressRegistry:
                 progress_id=progress_id,
                 stage=entry.stage,
                 elapsed_seconds=max(0, int(now - entry.started_at)),
+                statement=(entry.statement.model_copy(deep=True) if entry.statement else None),
+                statement_revision=entry.statement_revision,
+                statement_state=entry.statement_state,
             )
 
     def clear(self) -> None:

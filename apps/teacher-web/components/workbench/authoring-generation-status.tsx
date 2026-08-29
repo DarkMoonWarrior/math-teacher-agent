@@ -61,7 +61,7 @@ export function AuthoringGenerationStatus({
       </ol>
       {onCancel && (
         <button className="authoring-progress__cancel" type="button" onClick={onCancel}>
-          取消本次命题
+          停止任务
         </button>
       )}
     </section>

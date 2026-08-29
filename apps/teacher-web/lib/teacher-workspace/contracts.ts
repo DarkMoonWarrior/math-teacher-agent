@@ -489,6 +489,22 @@ export type QuestionDraftOption = {
   text: string;
 };
 
+export type QuestionAuthoringStatementPreview = {
+  question_type: "single_choice" | "multiple_choice" | "fill_blank" | "open_response";
+  stem_plain: string;
+  stem_latex: string | null;
+  options: QuestionDraftOption[];
+  estimated_difficulty: number;
+};
+
+export type QuestionAuthoringProgress = {
+  stage: QuestionAuthoringProgressStage;
+  elapsed_seconds: number;
+  statement: QuestionAuthoringStatementPreview | null;
+  statement_revision: number;
+  statement_state: "pending" | "approved" | "adjusting";
+};
+
 export type QuestionDraftEditableContent = {
   question_type: "single_choice" | "multiple_choice" | "fill_blank" | "open_response";
   stem_plain: string;
@@ -530,8 +546,8 @@ export type GeneratedQuestionDraft = QuestionDraftEditableContent & {
     reviewed_by: string;
   } | null;
   pedagogy_source: "model_generated" | "teacher_edited";
-  solution_status: "ready" | "needs_teacher_verification";
-  solution_issue: string | null;
+  solution_status?: "ready" | "needs_teacher_verification";
+  solution_issue?: string | null;
   target_difficulty: number;
   estimated_difficulty: number;
   difficulty_source: "model_estimated";
@@ -578,7 +594,14 @@ export type QuestionAuthoringJob = {
   total: number;
   message: string;
   error: string;
-  result: { draft_id?: string; request_id?: string };
+  result: {
+    draft_id?: string;
+    request_id?: string;
+    statement?: QuestionAuthoringStatementPreview;
+    statement_revision?: number;
+    statement_preserved?: boolean;
+    solution_missing?: boolean;
+  };
   created_at: string;
   updated_at: string;
 };
@@ -728,6 +751,24 @@ export type PaperBlueprintDraft = {
 
 export type PaperSelectionOption = { key: string; text: string };
 
+export type PaperPublicQuestionCandidate = {
+  question_id: string;
+  question_type: string;
+  stem_plain: string;
+  options: PaperSelectionOption[];
+  difficulty: number;
+  chapter: string | null;
+  knowledge_points: string[];
+  source_document: string;
+};
+
+export type PaperPublicQuestionCandidateList = {
+  items: PaperPublicQuestionCandidate[];
+  total: number;
+  trust_statement: string;
+  side_effects: [];
+};
+
 export type PaperSelectionItem = {
   section_id: string;
   section_title: string;
@@ -750,6 +791,8 @@ export type PaperSelectionItem = {
   review_status: string;
   visibility: string;
   owner_scope: "public_catalog" | "current_owner_only";
+  solution_status?: "ready" | "needs_teacher_verification";
+  solution_issue?: string | null;
   source_preserved: true;
   copied: false;
   selection_reason: string;
@@ -767,6 +810,37 @@ export type PaperSelectionGap = {
   suggestions: string[];
 };
 
+export type PaperBlueprintCoverageAudit = {
+  status: "matched" | "needs_adjustment";
+  coverage_complete: boolean;
+  difficulty_status: "matched" | "deviated" | "insufficient_supply";
+  target_average_difficulty: number;
+  actual_average_difficulty: number | null;
+  average_difficulty_gap: number | null;
+  sections: Array<{
+    section_id: string;
+    section_title: string;
+    target_question_count: number;
+    actual_question_count: number;
+    target_score: number;
+    actual_score: number;
+    status: "met" | "short";
+  }>;
+  knowledge_points: Array<{
+    knowledge_point: string;
+    actual_question_count: number;
+    actual_score: number;
+    status: "covered" | "missing";
+  }>;
+  difficulty_bands: Array<{
+    difficulty: number;
+    target_question_count: number;
+    actual_question_count: number;
+    actual_score: number;
+  }>;
+  side_effects: [];
+};
+
 export type PaperBlueprintSelectionDraft = {
   status: "selection_draft";
   blueprint_confirmed: true;
@@ -780,6 +854,7 @@ export type PaperBlueprintSelectionDraft = {
   actual_score: number;
   items: PaperSelectionItem[];
   gaps: PaperSelectionGap[];
+  coverage_audit: PaperBlueprintCoverageAudit;
   similarity_exclusions: Array<{
     question_id: string;
     matched_question_id: string;
@@ -787,6 +862,7 @@ export type PaperBlueprintSelectionDraft = {
     confidence: number;
     reason: string;
   }>;
+  unselected_public_question_ids: string[];
   unselected_private_question_ids: string[];
   warnings: string[];
   trust_policy: PaperBlueprintDraft["trust_policy"];
@@ -794,13 +870,214 @@ export type PaperBlueprintSelectionDraft = {
   side_effects: [];
 };
 
+export type PaperDraftItemEdit = {
+  question_id: string;
+  position: number;
+  section_id: string;
+  score: number;
+};
+
+export type PaperDraftChange = {
+  question_id: string;
+  kind: "position" | "section" | "score";
+  before: string;
+  after: string;
+  description: string;
+};
+
+export type PaperEditableDraft = {
+  status: "editable_paper_draft";
+  editable: true;
+  saved: false;
+  version_created: false;
+  export_ready: false;
+  draft_fingerprint: string;
+  selection_complete: boolean;
+  draft_consistent: boolean;
+  score_status: "matched" | "mismatch";
+  blueprint: PaperBlueprintSelectionDraft["blueprint"];
+  target_question_count: number;
+  actual_question_count: number;
+  target_score: number;
+  actual_score: number;
+  items: PaperSelectionItem[];
+  gaps: PaperSelectionGap[];
+  coverage_audit: PaperBlueprintCoverageAudit;
+  change_log: PaperDraftChange[];
+  specification: {
+    question_to_dimensions: Array<{
+      position: number;
+      question_id: string;
+      section_title: string;
+      question_type: string;
+      chapter: string;
+      knowledge_points: string[];
+      difficulty: number;
+      score: number;
+      verification_status: string;
+      review_status: string;
+      source_kind: "public_question_bank" | "personal_question_library";
+    }>;
+    dimension_to_questions: Array<{
+      dimension: "section" | "question_type" | "knowledge_point" | "difficulty";
+      label: string;
+      positions: number[];
+      question_ids: string[];
+      question_count: number;
+      score: number;
+    }>;
+  };
+  warnings: string[];
+  trust_policy: PaperBlueprintDraft["trust_policy"];
+  auto_authoring_used: false;
+  side_effects: [];
+};
+
+export type PaperSavedVersion = {
+  status: "saved_paper_version";
+  saved: true;
+  version_created: true;
+  export_ready: true;
+  exam_paper_id: string;
+  version: number;
+  title: string;
+  question_count: number;
+  total_score: number;
+  draft_fingerprint: string;
+  specification: PaperEditableDraft["specification"];
+  available_exports: Array<{
+    edition: "student" | "answer" | "blueprint";
+    format: "docx" | "pdf";
+    label: string;
+  }>;
+  saved_at: string;
+  side_effects: ["created_exam_paper_version"];
+};
+
+export type PaperHistoryItem = {
+  exam_paper_id: string;
+  title: string;
+  status: string;
+  version: number;
+  duration_minutes: number;
+  total_score: number;
+  question_count: number;
+  updated_at: string;
+  lifecycle_state: "active" | "trashed";
+  trashed_at: string | null;
+};
+
+export type PaperHistoryList = {
+  items: PaperHistoryItem[];
+  total: number;
+};
+
+export type PaperHistoryPaperItem = {
+  item_id: string;
+  position: number;
+  section_id: string | null;
+  section_title: string;
+  score: number;
+  added_source_kind?: "public_question_bank" | "personal_question_library";
+  question: {
+    question_id: string;
+    question_type: string;
+    stem_plain: string;
+    stem_latex: string | null;
+    options: Array<{ key: string; text: string }>;
+    difficulty: number;
+    answer_value?: string | null;
+    solution_method?: string | null;
+    solution_steps?: string[];
+    final_answer?: string | null;
+    solution_status?: "ready" | "needs_teacher_verification";
+    solution_issue?: string | null;
+  };
+};
+
+export type PaperHistoryPaper = {
+  exam_paper_id: string;
+  status: "draft";
+  version: number;
+  title: string;
+  duration_minutes: number;
+  instructions: string;
+  total_score: number;
+  items: PaperHistoryPaperItem[];
+  updated_at: string;
+  lifecycle_state: "active" | "trashed";
+};
+
+export type PaperHistoryRevisionRequest = {
+  expected_version: number;
+  title: string;
+  duration_minutes: number;
+  instructions: string;
+  target_total_score?: number;
+  selected_public_question_ids?: string[];
+  selected_private_question_ids?: string[];
+  items: Array<{
+    question_id: string;
+    section_id: string | null;
+    section_title: string;
+    score: number;
+  }>;
+};
+
+export type PaperExportArtifact = {
+  blob: Blob;
+  filename: string;
+};
+
 export interface TeacherWorkspace {
   planPaperBlueprint(brief: string, signal?: AbortSignal): Promise<PaperBlueprintDraft>;
+  listPaperPublicCandidates(
+    request?: { query?: string; questionType?: PaperBlueprintQuestionType; limit?: number },
+    signal?: AbortSignal,
+  ): Promise<PaperPublicQuestionCandidateList>;
   selectPaperBlueprint(
     blueprint: PaperBlueprintDraft,
     selectedPrivateQuestionIds: string[],
+    selectedPublicQuestionIds: string[],
     signal?: AbortSignal,
   ): Promise<PaperBlueprintSelectionDraft>;
+  editPaperDraft(
+    blueprint: PaperBlueprintDraft,
+    selectedPrivateQuestionIds: string[],
+    selectedPublicQuestionIds: string[],
+    edits: PaperDraftItemEdit[],
+    signal?: AbortSignal,
+  ): Promise<PaperEditableDraft>;
+  savePaperVersion(
+    blueprint: PaperBlueprintDraft,
+    selectedPrivateQuestionIds: string[],
+    selectedPublicQuestionIds: string[],
+    edits: PaperDraftItemEdit[],
+    expectedDraftFingerprint: string,
+    signal?: AbortSignal,
+  ): Promise<PaperSavedVersion>;
+  listPaperHistory(
+    lifecycleState?: "active" | "trashed",
+    signal?: AbortSignal,
+  ): Promise<PaperHistoryList>;
+  changePaperHistoryLifecycle(
+    paperId: string,
+    action: "trash" | "restore",
+    signal?: AbortSignal,
+  ): Promise<PaperHistoryItem>;
+  getPaperHistoryPaper(paperId: string, signal?: AbortSignal): Promise<PaperHistoryPaper>;
+  revisePaperHistoryPaper(
+    paperId: string,
+    request: PaperHistoryRevisionRequest,
+    signal?: AbortSignal,
+  ): Promise<PaperHistoryPaper>;
+  exportPaperVersion(
+    paperId: string,
+    version: number,
+    format: "docx" | "pdf",
+    edition: "student" | "answer" | "blueprint",
+    signal?: AbortSignal,
+  ): Promise<PaperExportArtifact>;
 
   searchQuestions(
     request: SearchTaskRequest,
@@ -912,9 +1189,9 @@ export interface TeacherWorkspace {
 
   startQuestionAuthoringJob(request: QuestionAuthoringBrief, signal?: AbortSignal): Promise<QuestionAuthoringJob>;
   getQuestionAuthoringJob(jobId: string, signal?: AbortSignal): Promise<QuestionAuthoringJob>;
-  cancelQuestionAuthoringJob(jobId: string, signal?: AbortSignal): Promise<QuestionAuthoringJob>;
+  cancelQuestionAuthoringJob(jobId: string, preserveStatement?: boolean, signal?: AbortSignal, context?: { requestText?: string; targetDifficulty?: number }): Promise<QuestionAuthoringJob>;
   getLatestQuestionAuthoringJob(signal?: AbortSignal): Promise<QuestionAuthoringJob | null>;
-  getQuestionAuthoringProgress(progressId: string, signal?: AbortSignal): Promise<{ stage: QuestionAuthoringProgressStage }>;
+  getQuestionAuthoringProgress(progressId: string, signal?: AbortSignal): Promise<QuestionAuthoringProgress>;
 
   getPersonalAuthoringDraft(draftId: string, signal?: AbortSignal): Promise<PersonalAuthoringDraft>;
   listPersonalAuthoringDrafts(signal?: AbortSignal): Promise<PersonalAuthoringDraftList>;

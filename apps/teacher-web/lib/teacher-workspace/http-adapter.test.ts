@@ -11,6 +11,8 @@ import type {
   PersonalQuestion,
   PaperBlueprintDraft,
   PaperBlueprintSelectionDraft,
+  PaperEditableDraft,
+  PaperSavedVersion,
   QuestionInputBundle,
 } from "./contracts";
 import { HttpTeacherWorkspace } from "./http-adapter";
@@ -370,7 +372,31 @@ describe("HttpTeacherWorkspace", () => {
     expect(String(init.body)).not.toMatch(/owner|verification|visibility|save/i);
   });
 
-  it("confirms editable blueprint facts and explicit private ids without browser-owned trust facts", async () => {
+  it("reads the gated public paper catalog without owner or trust selectors", async () => {
+    const catalog = {
+      items: [{
+        question_id: "public_1", question_type: "single_choice", stem_plain: "函数题",
+        options: [{ key: "A", text: "0" }], difficulty: 2, chapter: "函数",
+        knowledge_points: ["函数"], source_document: "公共题库",
+      }],
+      total: 1,
+      trust_statement: "仅展示通过公共可见性、权利、数学验证、教师审核和在架门禁的题目",
+      side_effects: [],
+    };
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify(catalog), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await new HttpTeacherWorkspace().listPaperPublicCandidates({ query: "函数", questionType: "single_choice", limit: 20 });
+
+    const url = String(fetchMock.mock.calls[0]?.[0]);
+    expect(url).toBe("/api/v1/exam-papers/blueprints/public-candidates?limit=20&query=%E5%87%BD%E6%95%B0&question_type=single_choice");
+    expect(url).not.toMatch(/owner|verification|review|visibility/i);
+  });
+
+  it("confirms editable blueprint facts and explicit public/private ids without browser-owned trust facts", async () => {
     const blueprint: PaperBlueprintDraft = {
       status: "draft",
       editable: true,
@@ -417,7 +443,38 @@ describe("HttpTeacherWorkspace", () => {
       actual_score: 0,
       items: [],
       gaps: [],
+      coverage_audit: {
+        status: "needs_adjustment",
+        coverage_complete: false,
+        difficulty_status: "insufficient_supply",
+        target_average_difficulty: 3,
+        actual_average_difficulty: null,
+        average_difficulty_gap: null,
+        sections: [{
+          section_id: "single",
+          section_title: "单选题",
+          target_question_count: 2,
+          actual_question_count: 0,
+          target_score: 10,
+          actual_score: 0,
+          status: "short",
+        }],
+        knowledge_points: [{
+          knowledge_point: "函数",
+          actual_question_count: 0,
+          actual_score: 0,
+          status: "missing",
+        }],
+        difficulty_bands: [1, 2, 3, 4, 5].map((difficulty) => ({
+          difficulty,
+          target_question_count: difficulty === 2 || difficulty === 3 ? 1 : 0,
+          actual_question_count: 0,
+          actual_score: 0,
+        })),
+        side_effects: [],
+      },
       similarity_exclusions: [],
+      unselected_public_question_ids: [],
       unselected_private_question_ids: [],
       warnings: [],
       trust_policy: blueprint.trust_policy,
@@ -430,16 +487,236 @@ describe("HttpTeacherWorkspace", () => {
     }));
     vi.stubGlobal("fetch", fetchMock);
 
-    await new HttpTeacherWorkspace().selectPaperBlueprint(blueprint, ["pqq_1"]);
+    await new HttpTeacherWorkspace().selectPaperBlueprint(blueprint, ["pqq_1"], ["public_1"]);
 
     const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
     const body = JSON.parse(String(init.body));
     expect(url).toBe("/api/v1/exam-papers/blueprints/select");
+    expect(body.selected_public_question_ids).toEqual(["public_1"]);
     expect(body.selected_private_question_ids).toEqual(["pqq_1"]);
     expect(body.blueprint).toEqual(expect.objectContaining({ title: "函数测验", target_score: 10 }));
     expect(body.blueprint).not.toHaveProperty("trust_policy");
     expect(body).not.toHaveProperty("owner_id");
     expect(String(init.body)).not.toMatch(/verification_policy|visibility|save/i);
+  });
+
+  it("submits only controlled selection facts and paper layout edits for an editable draft", async () => {
+    const blueprint: PaperBlueprintDraft = {
+      status: "draft",
+      editable: true,
+      confirmed: false,
+      saved: false,
+      source_brief: "组一份函数测验",
+      title: "函数测验",
+      grade_scope: "高二",
+      teaching_usage: "专题测验",
+      duration_minutes: 30,
+      target_score: 10,
+      difficulty_profile: "balanced",
+      knowledge_points: ["函数"],
+      sections: [{ section_id: "single", title: "单选题", question_type: "single_choice", question_count: 1, target_score: 10 }],
+      assumptions: [],
+      trust_policy: {
+        verification_policy: "passed_only",
+        review_policy: "approved_only",
+        private_question_policy: "explicit_owner_selection_only",
+        auto_authoring_allowed: false,
+        preserves_source_and_rights: true,
+      },
+      side_effects: [],
+    };
+    const editableDraft = {
+      status: "editable_paper_draft",
+      editable: true,
+      saved: false,
+      version_created: false,
+      export_ready: false,
+      draft_fingerprint: "b".repeat(64),
+      selection_complete: false,
+      draft_consistent: false,
+      score_status: "mismatch",
+      blueprint: {
+        title: blueprint.title,
+        grade_scope: blueprint.grade_scope,
+        teaching_usage: blueprint.teaching_usage,
+        duration_minutes: blueprint.duration_minutes,
+        target_score: blueprint.target_score,
+        difficulty_profile: blueprint.difficulty_profile,
+        knowledge_points: blueprint.knowledge_points,
+        sections: blueprint.sections,
+      },
+      target_question_count: 1,
+      actual_question_count: 0,
+      target_score: 10,
+      actual_score: 0,
+      items: [],
+      gaps: [],
+      coverage_audit: {
+        status: "needs_adjustment",
+        coverage_complete: false,
+        difficulty_status: "insufficient_supply",
+        target_average_difficulty: 3,
+        actual_average_difficulty: null,
+        average_difficulty_gap: null,
+        sections: [],
+        knowledge_points: [],
+        difficulty_bands: [1, 2, 3, 4, 5].map((difficulty) => ({ difficulty, target_question_count: 0, actual_question_count: 0, actual_score: 0 })),
+        side_effects: [],
+      },
+      change_log: [],
+      specification: { question_to_dimensions: [], dimension_to_questions: [] },
+      warnings: [],
+      trust_policy: blueprint.trust_policy,
+      auto_authoring_used: false,
+      side_effects: [],
+    } satisfies PaperEditableDraft;
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify(editableDraft), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await new HttpTeacherWorkspace().editPaperDraft(blueprint, ["pqq_1"], ["public_1"], [{
+      question_id: "pqq_1",
+      position: 1,
+      section_id: "single",
+      score: 10,
+    }]);
+
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    const body = JSON.parse(String(init.body));
+    expect(url).toBe("/api/v1/exam-papers/blueprints/edit-draft");
+    expect(body.selection_request.selected_public_question_ids).toEqual(["public_1"]);
+    expect(body.selection_request.selected_private_question_ids).toEqual(["pqq_1"]);
+    expect(body.edits).toEqual([{ question_id: "pqq_1", position: 1, section_id: "single", score: 10 }]);
+    expect(body).not.toHaveProperty("owner_id");
+    expect(String(init.body)).not.toMatch(/verification_status|review_status|visibility|saved|version_created|export_ready/i);
+  });
+
+  it("saves an exact paper draft fingerprint without browser-owned owner or version facts", async () => {
+    const blueprint: PaperBlueprintDraft = {
+      status: "draft", editable: true, confirmed: false, saved: false, source_brief: "函数测验",
+      title: "函数测验", grade_scope: "高二", teaching_usage: "专题测验", duration_minutes: 30,
+      target_score: 10, difficulty_profile: "balanced", knowledge_points: ["函数"],
+      sections: [{ section_id: "single", title: "单选题", question_type: "single_choice", question_count: 1, target_score: 10 }],
+      assumptions: [],
+      trust_policy: { verification_policy: "passed_only", review_policy: "approved_only", private_question_policy: "explicit_owner_selection_only", auto_authoring_allowed: false, preserves_source_and_rights: true },
+      side_effects: [],
+    };
+    const saved = {
+      status: "saved_paper_version", saved: true, version_created: true, export_ready: true,
+      exam_paper_id: "paper-1", version: 1, title: "函数测验", question_count: 1, total_score: 10,
+      draft_fingerprint: "c".repeat(64),
+      specification: { question_to_dimensions: [], dimension_to_questions: [] },
+      available_exports: [
+        ["student", "docx"], ["student", "pdf"], ["answer", "docx"],
+        ["answer", "pdf"], ["blueprint", "docx"], ["blueprint", "pdf"],
+      ].map(([edition, format]) => ({ edition, format, label: `${edition}-${format}` })),
+      saved_at: "2026-08-29T00:00:00+00:00", side_effects: ["created_exam_paper_version"],
+    } as PaperSavedVersion;
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify(saved), {
+      status: 201,
+      headers: { "Content-Type": "application/json" },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await new HttpTeacherWorkspace().savePaperVersion(
+      blueprint,
+      ["pqq-1"],
+      ["public-1"],
+      [{ question_id: "pqq-1", position: 1, section_id: "single", score: 10 }],
+      "c".repeat(64),
+    );
+
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    const body = JSON.parse(String(init.body));
+    expect(url).toBe("/api/v1/exam-papers/blueprints/save-version");
+    expect(body.expected_draft_fingerprint).toBe("c".repeat(64));
+    expect(body.draft_command.selection_request.selected_public_question_ids).toEqual(["public-1"]);
+    expect(body.draft_command.selection_request.selected_private_question_ids).toEqual(["pqq-1"]);
+    expect(body).not.toHaveProperty("owner_id");
+    expect(body).not.toHaveProperty("version");
+    expect(JSON.stringify(body)).not.toMatch(/verification_status|review_status|visibility|export_ready/i);
+  });
+
+  it("downloads only a named immutable paper version", async () => {
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(new Blob(["paper"]), {
+      status: 200,
+      headers: {
+        "Content-Type": "application/pdf",
+        "Content-Disposition": "attachment; filename=exam-paper-v2-answer.pdf",
+      },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const artifact = await new HttpTeacherWorkspace().exportPaperVersion("paper/unsafe", 2, "pdf", "answer");
+
+    expect(String(fetchMock.mock.calls[0]?.[0])).toBe("/api/v1/exam-papers/paper%2Funsafe/versions/2/export?format=pdf&edition=answer");
+    expect(artifact.filename).toBe("exam-paper-v2-answer.pdf");
+    expect(await artifact.blob.text()).toBe("paper");
+  });
+
+  it("lists and manages only server-scoped paper history without sending an owner", async () => {
+    const history = {
+      items: [{
+        exam_paper_id: "paper-1", title: "函数测验", status: "draft", version: 1,
+        duration_minutes: 45, total_score: 100, question_count: 8,
+        updated_at: "2026-08-29T00:00:00+00:00", lifecycle_state: "active", trashed_at: null,
+      }],
+      total: 1,
+    };
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "POST") {
+        return new Response(JSON.stringify({ ...history.items[0], lifecycle_state: "trashed", trashed_at: history.items[0].updated_at }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      return new Response(JSON.stringify(history), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const workspace = new HttpTeacherWorkspace();
+
+    await expect(workspace.listPaperHistory("active")).resolves.toEqual(history);
+    await workspace.changePaperHistoryLifecycle("paper/unsafe", "trash");
+
+    expect(String(fetchMock.mock.calls[0]?.[0])).toBe("/api/v1/exam-papers?lifecycle_state=active&limit=50");
+    expect(String(fetchMock.mock.calls[1]?.[0])).toBe("/api/v1/exam-papers/paper%2Funsafe/lifecycle");
+    const lifecycleBody = JSON.parse(String((fetchMock.mock.calls[1]?.[1] as RequestInit).body));
+    expect(lifecycleBody).toEqual({ action: "trash" });
+    expect(JSON.stringify(lifecycleBody)).not.toMatch(/owner|teacher/i);
+  });
+
+  it("opens an owned saved paper and submits only editable revision facts", async () => {
+    const paper = {
+      exam_paper_id: "paper-1", status: "draft", version: 1, title: "函数测验",
+      duration_minutes: 45, instructions: "写出过程", total_score: 10,
+      items: [], updated_at: "2026-08-29T00:00:00+00:00", lifecycle_state: "active",
+    };
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify(paper), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    const workspace = new HttpTeacherWorkspace();
+    const revision = {
+      expected_version: 1,
+      title: "函数测验（修订）",
+      duration_minutes: 50,
+      instructions: "写出过程",
+      items: [{ question_id: "q1", section_id: "fill", section_title: "填空题", score: 10 }],
+    };
+
+    await workspace.getPaperHistoryPaper("paper/unsafe");
+    await workspace.revisePaperHistoryPaper("paper/unsafe", revision);
+
+    expect(String(fetchMock.mock.calls[0]?.[0])).toBe("/api/v1/exam-papers/paper%2Funsafe");
+    expect(String(fetchMock.mock.calls[1]?.[0])).toBe("/api/v1/exam-papers/paper%2Funsafe/history-revision");
+    expect(JSON.parse(String((fetchMock.mock.calls[1]?.[1] as RequestInit).body))).toEqual(revision);
+    expect(JSON.stringify(revision)).not.toMatch(/owner|teacher/i);
   });
 
   it("uploads a private question image without exposing owner or external consent", async () => {
@@ -925,7 +1202,7 @@ describe("HttpTeacherWorkspace", () => {
       requestText: "命一道高三导数填空题", questionType: "fill_blank",
       targetDifficulty: 5, teachingPurpose: "考试压轴", sessionId: "session_1",
     });
-    await workspace.cancelQuestionAuthoringJob(job.job_id);
+    await workspace.cancelQuestionAuthoringJob(job.job_id, true);
     await workspace.listPersonalAuthoringDrafts();
     await workspace.deletePersonalAuthoringHistory(staged.draft_id);
 
@@ -936,6 +1213,9 @@ describe("HttpTeacherWorkspace", () => {
       "/api/v1/personal-question-library/authoring-drafts/qad_1/history",
     ]);
     expect((fetchMock.mock.calls[1]?.[1] as RequestInit).method).toBe("POST");
+    expect(JSON.parse(String((fetchMock.mock.calls[1]?.[1] as RequestInit).body))).toEqual({
+      preserve_statement: true,
+    });
     expect((fetchMock.mock.calls[3]?.[1] as RequestInit).method).toBe("DELETE");
     expect(String((fetchMock.mock.calls[0]?.[1] as RequestInit).body)).not.toContain("owner_id");
   });

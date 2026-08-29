@@ -19,7 +19,7 @@ describe("AuthoringGenerationStatus", () => {
     expect(html).toContain("生成解析");
     expect(html).toContain("审核解析与答案");
     expect(html).toContain("重生成解析（按需）");
-    expect(html).toContain("取消本次命题");
+    expect(html).toContain("停止任务");
     expect(html).not.toContain("长题会先锁定完整题面与选项");
   });
 

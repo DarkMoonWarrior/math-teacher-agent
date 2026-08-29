@@ -19,6 +19,7 @@ from app.modules.question_authoring_agent import (
     QuestionAuthoringAgentCommand,
     QuestionAuthoringAgentResponse,
     QuestionAuthoringAgentWorkflow,
+    QuestionAuthoringCancelCommand,
     QuestionAuthoringProgressSnapshot,
     get_question_authoring_progress_registry,
 )
@@ -30,6 +31,32 @@ from app.routes.personal_question_library import get_personal_question_library
 
 router = APIRouter(prefix="/agent/question-authoring", tags=["question-authoring-agent"])
 AUTHORING_JOB_KIND = "question_authoring"
+
+
+def _find_staged_draft_for_statement(
+    library: PersonalQuestionLibrary,
+    *,
+    stem_plain: str,
+    owner_id: str,
+):
+    """Recover a just-completed draft when cancellation races its final write.
+
+    The job registry and the private-library database are separate stores. If a
+    worker commits the complete draft immediately before the cancel request,
+    the worker may be prevented from publishing its job result even though the
+    durable draft exists. Matching the reviewed stem lets cancellation remain
+    idempotent without ever fabricating a second draft.
+    """
+
+    try:
+        drafts = library.list_authoring_drafts(owner_id=owner_id, limit=200).items
+    except (AttributeError, KeyError):
+        return None
+    normalized_stem = stem_plain.strip()
+    for candidate in drafts:
+        if candidate.current.draft.stem_plain.strip() == normalized_stem:
+            return candidate
+    return None
 
 
 def _agent_error_message(error: object) -> str:
@@ -158,6 +185,12 @@ async def start_question_authoring_job(
                 message = str(exc)
                 if "超出高中数学范围" in message or "大学" in message:
                     raise RuntimeError(message) from exc
+                # The current statement is no longer the candidate being retried.
+                # Mark it as adjusting so the right-hand live preview cannot imply
+                # that an obsolete revision is still the approved deliverable.
+                get_question_authoring_progress_registry().update(
+                    progress_id, "reauthoring"
+                )
                 report(attempt, 0, "本轮未完成，正在自动重新命题")
                 time.sleep(min(2 ** min(attempt - 1, 4), 15))
                 continue
@@ -175,6 +208,9 @@ async def start_question_authoring_job(
             message = _agent_error_message(response.error)
             if "超出高中数学范围" in message or "大学" in message:
                 raise RuntimeError(message)
+            get_question_authoring_progress_registry().update(
+                progress_id, "reauthoring"
+            )
             report(attempt, 0, "候选题未通过闭环审核，正在重新出题")
             time.sleep(min(2 ** min(attempt - 1, 4), 15))
 
@@ -214,11 +250,85 @@ async def get_question_authoring_job(
 @router.post("/jobs/{job_id}/cancel", response_model=BackgroundJobView)
 async def cancel_question_authoring_job(
     job_id: str,
+    command: QuestionAuthoringCancelCommand | None = None,
     teacher: CurrentTeacher = Depends(get_current_teacher),
+    library: PersonalQuestionLibrary = Depends(get_personal_question_library),
 ) -> BackgroundJobView:
+    command = command or QuestionAuthoringCancelCommand()
     try:
-        return get_question_authoring_job_registry().cancel(
-            job_id, owner_id=teacher.teacher_id
+        jobs = get_question_authoring_job_registry()
+        current = jobs.get(job_id, owner_id=teacher.teacher_id)
+        result: dict = {}
+        message = "任务已停止，未保留题面"
+        if command.preserve_statement:
+            try:
+                progress = get_question_authoring_progress_registry().snapshot(
+                    current.subject_id,
+                    owner_id=teacher.teacher_id,
+                )
+            except KeyError:
+                progress = None
+            if (
+                progress is not None
+                and progress.statement is not None
+                and progress.statement_state == "approved"
+            ):
+                result = {
+                    "statement": progress.statement.model_dump(mode="json"),
+                    "statement_revision": progress.statement_revision,
+                    "statement_preserved": True,
+                }
+                # Persist an owner-only, unsaved authoring draft immediately.
+                # This keeps the reviewed statement available after the UI
+                # leaves the generation screen and gives the teacher the
+                # existing private-library save workflow.  Repeated cancel
+                # requests are idempotent through the job result.
+                existing_draft_id = current.result.get("draft_id")
+                if existing_draft_id:
+                    result["draft_id"] = existing_draft_id
+                    result["solution_missing"] = bool(current.result.get("solution_missing", True))
+                else:
+                    # Mark cancellation before writing the fallback draft. This
+                    # closes the normal worker commit window; the recovery path
+                    # below handles the one write that may already be in flight.
+                    jobs.cancel(
+                        job_id,
+                        owner_id=teacher.teacher_id,
+                        result=result,
+                        message="任务已停止，正在保留审核通过的题面",
+                    )
+                    # A worker may have committed its complete draft just before
+                    # the cancellation lock was acquired. Reuse that durable
+                    # draft instead of creating a second private history entry.
+                    recovered = _find_staged_draft_for_statement(
+                        library,
+                        stem_plain=progress.statement.stem_plain,
+                        owner_id=teacher.teacher_id,
+                    )
+                    if recovered is not None:
+                        result["draft_id"] = recovered.draft_id
+                        result["solution_missing"] = recovered.current.draft.solution_status != "ready"
+                    else:
+                        partial = QuestionAuthoring.preserve_approved_statement(
+                            progress.statement,
+                            request_text=command.request_text or "",
+                            target_difficulty=command.target_difficulty,
+                        )
+                        library.stage_generated_draft(partial, owner_id=teacher.teacher_id)
+                        result["draft_id"] = partial.draft_id
+                        result["solution_missing"] = True
+                message = "任务已停止，审核通过的题面已保留"
+            else:
+                message = "任务已停止；当前没有可保留的审核通过题面"
+        else:
+            get_question_authoring_progress_registry().discard_statement(
+                current.subject_id
+            )
+        return jobs.cancel(
+            job_id,
+            owner_id=teacher.teacher_id,
+            result=result,
+            message=message,
         )
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="命题任务不存在或已过期") from exc

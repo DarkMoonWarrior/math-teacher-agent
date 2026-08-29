@@ -14,6 +14,7 @@ from app.modules.model_operations import ModelRunRecorder, NullModelRunRecorder
 from app.modules.question_authoring.schemas import (
     ProviderQuestionDraft,
     ProviderQuestionSolution,
+    QuestionAuthoringStatementPreview,
     QuestionDesignBrief,
     QuestionDraftCurriculum,
     QuestionDraftOption,
@@ -100,10 +101,23 @@ class QuestionAuthoringContext:
         compare=False,
         repr=False,
     )
+    on_statement_approved: Callable[[QuestionAuthoringStatementPreview], None] | None = field(
+        default=None,
+        compare=False,
+        repr=False,
+    )
 
     def report_progress(self, stage: QuestionAuthoringProgressStage) -> None:
         if self.on_progress is not None:
             self.on_progress(stage)
+
+    def report_statement_approved(self, statement: _QuestionStatement) -> None:
+        if self.on_statement_approved is not None:
+            self.on_statement_approved(
+                QuestionAuthoringStatementPreview.model_validate(
+                    statement.model_dump(mode="json")
+                )
+            )
 
 
 class QuestionAuthoringProvider(Protocol):
@@ -302,6 +316,7 @@ class DeepSeekQuestionAuthoringProvider:
                 provider_input,
                 on_repair=lambda: context.report_progress("refining"),
             )
+            context.report_statement_approved(core)
             question_repair_count = 0
             solution_regeneration_count = 0
             solve_attempt = 0
@@ -335,6 +350,7 @@ class DeepSeekQuestionAuthoringProvider:
                             else f"post-solution-question-repair-{question_repair_count}"
                         ),
                     )
+                    context.report_statement_approved(core)
                     solution_regeneration_count = 0
                     continue
                 except _SolutionInvalidAfterReview as exc:
