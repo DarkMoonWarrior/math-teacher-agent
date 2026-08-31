@@ -1,10 +1,7 @@
 from __future__ import annotations
 
-from functools import lru_cache
-
 from fastapi import APIRouter, Depends, HTTPException
 
-from app.core.config import get_settings
 from app.core.identity import CurrentTeacher, get_current_teacher
 from app.modules.teacher_memory import (
     TeacherMemory,
@@ -13,14 +10,10 @@ from app.modules.teacher_memory import (
     TeacherMemoryError,
     TeacherMemoryProfile,
 )
+from app.modules.teacher_memory.dependencies import get_teacher_memory
 
 
 router = APIRouter(prefix="/teacher-memory", tags=["teacher-memory"])
-
-
-@lru_cache
-def get_teacher_memory() -> TeacherMemory:
-    return TeacherMemory(database_path=get_settings().teacher_memory_db)
 
 
 @router.get("/profile", response_model=TeacherMemoryProfile)

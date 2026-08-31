@@ -10,7 +10,7 @@ from app.modules.teacher_memory import (
     TeacherMemoryConflict,
     TeacherMemoryError,
 )
-from app.routes.teacher_memory import get_teacher_memory
+from app.modules.teacher_memory.dependencies import get_teacher_memory
 
 
 def teacher(teacher_id: str):
@@ -131,6 +131,60 @@ def test_teacher_memory_http_identity_is_server_owned(tmp_path: Path) -> None:
             other = client.get("/api/v1/teacher-memory/profile")
             assert other.status_code == 200
             assert other.json()["preferences"] == []
+    finally:
+        app.dependency_overrides.pop(get_current_teacher, None)
+        app.dependency_overrides.pop(get_teacher_memory, None)
+
+
+def test_owner_preferences_only_fill_missing_blueprint_fields(tmp_path: Path) -> None:
+    memory = TeacherMemory(database_path=tmp_path / "teacher-memory.sqlite3")
+    for key, value in (
+        ("default_grade", "高三"),
+        ("default_lesson_minutes", 50),
+        ("default_difficulty", 5),
+    ):
+        memory.apply(
+            TeacherMemoryCommand(operation="upsert", key=key, value=value),
+            owner_id="teacher-a",
+        )
+
+    app.dependency_overrides[get_teacher_memory] = lambda: memory
+    app.dependency_overrides[get_current_teacher] = teacher("teacher-a")
+    try:
+        with TestClient(app) as client:
+            lesson = client.post(
+                "/api/v1/lesson-plans/blueprints/plan",
+                json={"brief": "设计一节函数单调性专题复习课"},
+            )
+            assert lesson.status_code == 200
+            assert lesson.json()["grade_scope"] == "高三"
+            assert lesson.json()["duration_minutes"] == 50
+            assert [item["key"] for item in lesson.json()["applied_preferences"]] == [
+                "default_grade",
+                "default_lesson_minutes",
+            ]
+
+            paper = client.post(
+                "/api/v1/exam-papers/blueprints/plan",
+                json={"brief": "组一份函数阶段检测"},
+            )
+            assert paper.status_code == 200
+            assert paper.json()["grade_scope"] == "高三"
+            assert paper.json()["difficulty_profile"] == "challenge"
+            assert [item["key"] for item in paper.json()["applied_preferences"]] == [
+                "default_grade",
+                "default_difficulty",
+            ]
+
+            app.dependency_overrides[get_current_teacher] = teacher("teacher-b")
+            other = client.post(
+                "/api/v1/exam-papers/blueprints/plan",
+                json={"brief": "组一份函数阶段检测"},
+            )
+            assert other.status_code == 200
+            assert other.json()["grade_scope"] == "高中通用"
+            assert other.json()["difficulty_profile"] == "balanced"
+            assert other.json()["applied_preferences"] == []
     finally:
         app.dependency_overrides.pop(get_current_teacher, None)
         app.dependency_overrides.pop(get_teacher_memory, None)

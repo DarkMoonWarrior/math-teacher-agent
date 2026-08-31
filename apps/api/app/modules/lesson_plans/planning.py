@@ -11,6 +11,7 @@ from app.modules.lesson_plans.schemas import (
     LessonBlueprintPhase,
     LessonType,
 )
+from app.modules.teacher_memory import TeacherPlanningDefaults, TeacherPlanningPreference
 
 
 class LessonBlueprintPlanningError(ValueError):
@@ -77,13 +78,25 @@ class LessonBlueprintPlanning:
     ) -> None:
         self.curriculum_catalog = curriculum_catalog
 
-    def plan(self, command: LessonBlueprintBrief) -> LessonBlueprintDraft:
+    def plan(
+        self,
+        command: LessonBlueprintBrief,
+        *,
+        defaults: TeacherPlanningDefaults | None = None,
+    ) -> LessonBlueprintDraft:
         brief = " ".join(command.brief.strip().split())
         self._ensure_high_school_scope(brief)
         assumptions: list[str] = []
-        grade = self._grade(brief, assumptions)
+        applied_preferences: list[TeacherPlanningPreference] = []
+        planning_defaults = defaults or TeacherPlanningDefaults()
+        grade = self._grade(brief, assumptions, applied_preferences, planning_defaults)
         lesson_type, lesson_format = self._lesson_type(brief, assumptions)
-        duration = self._duration(brief, assumptions)
+        duration = self._duration(
+            brief,
+            assumptions,
+            applied_preferences,
+            planning_defaults,
+        )
         student_profile = self._student_profile(brief, assumptions)
         topic_query = self._topic_query(brief)
         candidates = self._curriculum_candidates(topic_query)
@@ -121,6 +134,7 @@ class LessonBlueprintPlanning:
             difficulties=difficulties,
             phases=phases,
             required_blocks=self.REQUIRED_BLOCKS,
+            applied_preferences=applied_preferences,
             assumptions=assumptions,
         )
 
@@ -134,10 +148,26 @@ class LessonBlueprintPlanning:
             raise LessonBlueprintPlanningError("M10 只支持中国普通高中数学教案。")
 
     @staticmethod
-    def _grade(brief: str, assumptions: list[str]) -> str:
+    def _grade(
+        brief: str,
+        assumptions: list[str],
+        applied_preferences: list[TeacherPlanningPreference],
+        defaults: TeacherPlanningDefaults,
+    ) -> str:
         match = re.search(r"高[一二三123]", brief)
         if match:
             return match.group(0).translate(str.maketrans("123", "一二三"))
+        preference = defaults.get("default_grade")
+        if (
+            preference
+            and isinstance(preference.value, str)
+            and preference.value in {"高一", "高二", "高三", "高中通用"}
+        ):
+            applied_preferences.append(preference)
+            assumptions.append(
+                f"未明确年级，已使用教师偏好“{preference.value}”；本次可直接修改覆盖。"
+            )
+            return preference.value
         assumptions.append("未明确年级，暂按高中通用范围规划。")
         return "高中通用"
 
@@ -158,12 +188,29 @@ class LessonBlueprintPlanning:
         return "new_lesson", "新授课"
 
     @staticmethod
-    def _duration(brief: str, assumptions: list[str]) -> int:
+    def _duration(
+        brief: str,
+        assumptions: list[str],
+        applied_preferences: list[TeacherPlanningPreference],
+        defaults: TeacherPlanningDefaults,
+    ) -> int:
         match = re.search(r"(?<!\d)(\d{2,3})\s*分钟", brief)
         if match:
             value = int(match.group(1))
             if 20 <= value <= 120:
                 return value
+        preference = defaults.get("default_lesson_minutes")
+        if (
+            preference
+            and isinstance(preference.value, int)
+            and not isinstance(preference.value, bool)
+            and 20 <= preference.value <= 120
+        ):
+            applied_preferences.append(preference)
+            assumptions.append(
+                f"未明确有效课时，已使用教师偏好“{preference.value} 分钟”；本次可直接修改覆盖。"
+            )
+            return preference.value
         assumptions.append("未明确有效课时，暂按 45 分钟规划。")
         return 45
 

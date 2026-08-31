@@ -4,6 +4,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from app.modules.teacher_memory import TeacherPlanningPreference
+
 from app.modules.question_bank.schemas import QuestionSummary
 
 
@@ -305,6 +307,10 @@ class PaperBlueprintDraft(BaseModel):
     difficulty_profile: ExamPaperDifficultyProfile
     knowledge_points: list[str] = Field(min_length=1, max_length=20)
     sections: list[PaperBlueprintSection] = Field(min_length=1, max_length=8)
+    applied_preferences: list[TeacherPlanningPreference] = Field(
+        default_factory=list,
+        max_length=3,
+    )
     assumptions: list[str] = Field(default_factory=list, max_length=20)
     trust_policy: PaperBlueprintTrustPolicy = Field(default_factory=PaperBlueprintTrustPolicy)
     side_effects: list[str] = Field(default_factory=list, max_length=0)

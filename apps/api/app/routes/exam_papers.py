@@ -9,6 +9,8 @@ from fastapi.responses import FileResponse
 from app.core.config import get_settings
 from app.core.identity import CurrentTeacher, get_current_teacher
 from app.modules.exam_exports import ExamPaperDocumentRenderer, ExamPaperExportError
+from app.modules.teacher_memory import TeacherMemory
+from app.modules.teacher_memory.dependencies import get_teacher_memory
 from app.modules.exam_papers import (
     ExamPaperComposer,
     ExamPaperComposeCommand,
@@ -177,9 +179,16 @@ def compose_exam_paper(command: ExamPaperComposeCommand) -> ExamPaperProposal:
 
 
 @router.post("/blueprints/plan", response_model=PaperBlueprintDraft)
-def plan_paper_blueprint(command: PaperBlueprintBrief) -> PaperBlueprintDraft:
+def plan_paper_blueprint(
+    command: PaperBlueprintBrief,
+    teacher: CurrentTeacher = Depends(get_current_teacher),
+    memory: TeacherMemory = Depends(get_teacher_memory),
+) -> PaperBlueprintDraft:
     try:
-        return get_paper_blueprint_planning().plan(command)
+        return get_paper_blueprint_planning().plan(
+            command,
+            defaults=memory.planning_defaults(owner_id=teacher.teacher_id),
+        )
     except PaperBlueprintPlanningError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 

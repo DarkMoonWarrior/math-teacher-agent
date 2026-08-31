@@ -33,6 +33,28 @@ class TeacherPreference(BaseModel):
     updated_at: str
 
 
+class TeacherPlanningPreference(BaseModel):
+    """One provenance-preserving preference that a planner may use as a default."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    key: TeacherPreferenceKey
+    label: str
+    value: TeacherPreferenceValue
+    source: TeacherPreferenceSource
+
+
+class TeacherPlanningDefaults(BaseModel):
+    """Allowlisted defaults exposed to planning modules without owner identity."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    preferences: list[TeacherPlanningPreference] = Field(default_factory=list)
+
+    def get(self, key: TeacherPreferenceKey) -> TeacherPlanningPreference | None:
+        return next((item for item in self.preferences if item.key == key), None)
+
+
 class TeacherMemoryProfile(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

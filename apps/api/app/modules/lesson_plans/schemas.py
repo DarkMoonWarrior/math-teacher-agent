@@ -4,6 +4,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from app.modules.teacher_memory import TeacherPlanningPreference
+
 
 LessonType = Literal["new_lesson", "review", "exercise"]
 LessonPlanBlock = Literal[
@@ -100,6 +102,10 @@ class LessonBlueprintDraft(BaseModel):
     difficulties: list[str] = Field(min_length=1, max_length=6)
     phases: list[LessonBlueprintPhase] = Field(min_length=3, max_length=8)
     required_blocks: list[LessonPlanBlock] = Field(min_length=7, max_length=7)
+    applied_preferences: list[TeacherPlanningPreference] = Field(
+        default_factory=list,
+        max_length=3,
+    )
     assumptions: list[str] = Field(default_factory=list, max_length=20)
     trust_policy: LessonBlueprintTrustPolicy = Field(
         default_factory=LessonBlueprintTrustPolicy

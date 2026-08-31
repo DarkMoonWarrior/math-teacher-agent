@@ -7,6 +7,7 @@ from app.modules.exam_papers.schemas import (
     PaperBlueprintDraft,
     PaperBlueprintSection,
 )
+from app.modules.teacher_memory import TeacherPlanningDefaults, TeacherPlanningPreference
 
 
 class PaperBlueprintPlanningError(ValueError):
@@ -48,15 +49,27 @@ class PaperBlueprintPlanning:
         "偏微分方程",
     )
 
-    def plan(self, command: PaperBlueprintBrief) -> PaperBlueprintDraft:
+    def plan(
+        self,
+        command: PaperBlueprintBrief,
+        *,
+        defaults: TeacherPlanningDefaults | None = None,
+    ) -> PaperBlueprintDraft:
         brief = " ".join(command.brief.strip().split())
         self._ensure_high_school_scope(brief)
         assumptions: list[str] = []
-        grade = self._grade(brief, assumptions)
+        applied_preferences: list[TeacherPlanningPreference] = []
+        planning_defaults = defaults or TeacherPlanningDefaults()
+        grade = self._grade(brief, assumptions, applied_preferences, planning_defaults)
         usage = self._usage(brief, assumptions)
         duration = self._duration(brief, usage, assumptions)
         target_score = self._target_score(brief, duration, assumptions)
-        difficulty = self._difficulty(brief, assumptions)
+        difficulty = self._difficulty(
+            brief,
+            assumptions,
+            applied_preferences,
+            planning_defaults,
+        )
         knowledge_points = self._knowledge_points(brief, assumptions)
         sections = self._sections(brief, duration, target_score)
         title = self._title(brief, grade, usage, knowledge_points)
@@ -70,6 +83,7 @@ class PaperBlueprintPlanning:
             difficulty_profile=difficulty,
             knowledge_points=knowledge_points,
             sections=sections,
+            applied_preferences=applied_preferences,
             assumptions=assumptions,
         )
 
@@ -83,10 +97,26 @@ class PaperBlueprintPlanning:
             raise PaperBlueprintPlanningError("M9 只支持中国普通高中数学组卷。")
 
     @staticmethod
-    def _grade(brief: str, assumptions: list[str]) -> str:
+    def _grade(
+        brief: str,
+        assumptions: list[str],
+        applied_preferences: list[TeacherPlanningPreference],
+        defaults: TeacherPlanningDefaults,
+    ) -> str:
         match = re.search(r"高[一二三123]", brief)
         if match:
             return match.group(0).translate(str.maketrans("123", "一二三"))
+        preference = defaults.get("default_grade")
+        if (
+            preference
+            and isinstance(preference.value, str)
+            and preference.value in {"高一", "高二", "高三", "高中通用"}
+        ):
+            applied_preferences.append(preference)
+            assumptions.append(
+                f"未明确年级，已使用教师偏好“{preference.value}”；本次可直接修改覆盖。"
+            )
+            return preference.value
         assumptions.append("未明确年级，暂按高中通用范围规划。")
         return "高中通用"
 
@@ -134,13 +164,42 @@ class PaperBlueprintPlanning:
         return default
 
     @staticmethod
-    def _difficulty(brief: str, assumptions: list[str]) -> str:
+    def _difficulty(
+        brief: str,
+        assumptions: list[str],
+        applied_preferences: list[TeacherPlanningPreference],
+        defaults: TeacherPlanningDefaults,
+    ) -> str:
         if any(marker in brief for marker in ("压轴", "偏难", "高难", "提升", "挑战")):
             return "challenge"
         if any(marker in brief for marker in ("基础", "巩固", "入门")):
             return "foundation"
         if any(marker in brief for marker in ("中等", "均衡", "常规")):
             return "balanced"
+        preference = defaults.get("default_difficulty")
+        if (
+            preference
+            and isinstance(preference.value, int)
+            and not isinstance(preference.value, bool)
+            and 1 <= preference.value <= 5
+        ):
+            profile = (
+                "foundation"
+                if preference.value <= 2
+                else "balanced"
+                if preference.value == 3
+                else "challenge"
+            )
+            profile_label = {
+                "foundation": "基础梯度",
+                "balanced": "均衡梯度",
+                "challenge": "挑战梯度",
+            }[profile]
+            applied_preferences.append(preference)
+            assumptions.append(
+                f"未明确难度结构，已使用教师偏好“{preference.value}/5（{profile_label}）”；本次可直接修改覆盖。"
+            )
+            return profile
         assumptions.append("未明确难度结构，暂按均衡梯度规划。")
         return "balanced"
 

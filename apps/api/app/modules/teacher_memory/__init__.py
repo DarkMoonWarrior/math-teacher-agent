@@ -6,6 +6,8 @@ from app.modules.teacher_memory.memory import (
 from app.modules.teacher_memory.schemas import (
     TeacherMemoryCommand,
     TeacherMemoryProfile,
+    TeacherPlanningDefaults,
+    TeacherPlanningPreference,
     TeacherPreference,
     TeacherPreferenceKey,
     TeacherPreferenceSource,
@@ -18,6 +20,8 @@ __all__ = [
     "TeacherMemoryConflict",
     "TeacherMemoryError",
     "TeacherMemoryProfile",
+    "TeacherPlanningDefaults",
+    "TeacherPlanningPreference",
     "TeacherPreference",
     "TeacherPreferenceKey",
     "TeacherPreferenceSource",

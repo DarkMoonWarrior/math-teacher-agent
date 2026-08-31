@@ -367,6 +367,7 @@ describe("HttpTeacherWorkspace", () => {
         { phase_id: "practice", title: "练习", minutes: 15, purpose: "反馈" },
       ],
       required_blocks: ["objectives", "key_points", "difficulties", "teaching_flow", "homework", "board_plan", "teacher_notes"],
+      applied_preferences: [],
       assumptions: [],
       trust_policy: {
         curriculum_source: "sealed_pep_a_baseline",
@@ -481,6 +482,7 @@ describe("HttpTeacherWorkspace", () => {
       difficulty_profile: "balanced",
       knowledge_points: ["函数"],
       sections: [{ section_id: "single", title: "单项选择题", question_type: "single_choice", question_count: 8, target_score: 100 }],
+      applied_preferences: [],
       assumptions: [],
       trust_policy: {
         verification_policy: "passed_only",
@@ -546,6 +548,7 @@ describe("HttpTeacherWorkspace", () => {
       difficulty_profile: "balanced",
       knowledge_points: ["函数"],
       sections: [{ section_id: "single", title: "单选题", question_type: "single_choice", question_count: 2, target_score: 10 }],
+      applied_preferences: [],
       assumptions: [],
       trust_policy: {
         verification_policy: "passed_only",
@@ -650,6 +653,7 @@ describe("HttpTeacherWorkspace", () => {
       difficulty_profile: "balanced",
       knowledge_points: ["函数"],
       sections: [{ section_id: "single", title: "单选题", question_type: "single_choice", question_count: 1, target_score: 10 }],
+      applied_preferences: [],
       assumptions: [],
       trust_policy: {
         verification_policy: "passed_only",
@@ -734,6 +738,7 @@ describe("HttpTeacherWorkspace", () => {
       title: "函数测验", grade_scope: "高二", teaching_usage: "专题测验", duration_minutes: 30,
       target_score: 10, difficulty_profile: "balanced", knowledge_points: ["函数"],
       sections: [{ section_id: "single", title: "单选题", question_type: "single_choice", question_count: 1, target_score: 10 }],
+      applied_preferences: [],
       assumptions: [],
       trust_policy: { verification_policy: "passed_only", review_policy: "approved_only", private_question_policy: "explicit_owner_selection_only", auto_authoring_allowed: false, preserves_source_and_rights: true },
       side_effects: [],

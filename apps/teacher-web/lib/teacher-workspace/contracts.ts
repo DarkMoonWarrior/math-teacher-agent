@@ -765,6 +765,7 @@ export type LessonBlueprintDraft = {
   required_blocks: Array<
     "objectives" | "key_points" | "difficulties" | "teaching_flow" | "homework" | "board_plan" | "teacher_notes"
   >;
+  applied_preferences: TeacherPlanningPreference[];
   assumptions: string[];
   trust_policy: {
     curriculum_source: "sealed_pep_a_baseline";
@@ -999,6 +1000,7 @@ export type PaperBlueprintDraft = {
   difficulty_profile: PaperBlueprintDifficulty;
   knowledge_points: string[];
   sections: PaperBlueprintSection[];
+  applied_preferences: TeacherPlanningPreference[];
   assumptions: string[];
   trust_policy: {
     verification_policy: "passed_only";
@@ -1108,7 +1110,7 @@ export type PaperBlueprintSelectionDraft = {
   editable: true;
   saved: false;
   selection_complete: boolean;
-  blueprint: Omit<PaperBlueprintDraft, "status" | "editable" | "confirmed" | "saved" | "source_brief" | "assumptions" | "trust_policy" | "side_effects">;
+  blueprint: Omit<PaperBlueprintDraft, "status" | "editable" | "confirmed" | "saved" | "source_brief" | "applied_preferences" | "assumptions" | "trust_policy" | "side_effects">;
   target_question_count: number;
   actual_question_count: number;
   target_score: number;
@@ -1310,6 +1312,8 @@ export type TeacherPreference = {
   };
   updated_at: string;
 };
+
+export type TeacherPlanningPreference = Omit<TeacherPreference, "updated_at">;
 
 export type TeacherMemoryProfile = {
   version: number;

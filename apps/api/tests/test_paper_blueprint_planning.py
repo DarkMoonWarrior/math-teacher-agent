@@ -6,6 +6,11 @@ from app.modules.exam_papers import (
     PaperBlueprintPlanning,
     PaperBlueprintPlanningError,
 )
+from app.modules.teacher_memory import (
+    TeacherPlanningDefaults,
+    TeacherPlanningPreference,
+    TeacherPreferenceSource,
+)
 
 
 def test_plans_explicit_high_school_midterm_without_side_effects() -> None:
@@ -47,6 +52,43 @@ def test_plans_visible_defaults_and_explicit_open_response_count() -> None:
     assert any("年级" in assumption for assumption in blueprint.assumptions)
     assert any("考试时间" in assumption for assumption in blueprint.assumptions)
     assert any("总分" in assumption for assumption in blueprint.assumptions)
+
+
+def test_teacher_defaults_map_to_paper_profile_without_overriding_explicit_brief() -> None:
+    defaults = TeacherPlanningDefaults(preferences=[
+        TeacherPlanningPreference(
+            key="default_grade",
+            label="默认年级",
+            value="高三",
+            source=TeacherPreferenceSource(),
+        ),
+        TeacherPlanningPreference(
+            key="default_difficulty",
+            label="默认难度",
+            value=5,
+            source=TeacherPreferenceSource(),
+        ),
+    ])
+    planning = PaperBlueprintPlanning()
+
+    defaulted = planning.plan(
+        PaperBlueprintBrief(brief="组一份函数阶段检测"),
+        defaults=defaults,
+    )
+    assert defaulted.grade_scope == "高三"
+    assert defaulted.difficulty_profile == "challenge"
+    assert [item.key for item in defaulted.applied_preferences] == [
+        "default_grade",
+        "default_difficulty",
+    ]
+
+    explicit = planning.plan(
+        PaperBlueprintBrief(brief="组一份高一函数基础巩固测验"),
+        defaults=defaults,
+    )
+    assert explicit.grade_scope == "高一"
+    assert explicit.difficulty_profile == "foundation"
+    assert explicit.applied_preferences == []
 
 
 def test_rejects_explicit_university_scope() -> None:

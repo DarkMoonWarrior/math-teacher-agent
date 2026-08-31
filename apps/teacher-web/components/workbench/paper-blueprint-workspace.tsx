@@ -21,6 +21,7 @@ import {
 } from "@/lib/teacher-workspace/contracts";
 import { teacherWorkspace } from "@/lib/teacher-workspace/http-adapter";
 import { EditableNumberInput } from "./editable-number-input";
+import { TeacherPreferenceNotice } from "./teacher-preference-notice";
 import { ArrowRightIcon, ArrowUpIcon, CheckIcon, CloseIcon, LockIcon, PaperIcon } from "./icons";
 import { ResizableSplitPane } from "./resizable-split-pane";
 import { WorkbenchNoticeDialog } from "./workbench-notice-dialog";
@@ -775,7 +776,23 @@ export function PaperBlueprintWorkspace({ initialBrief, onBriefChange, onOpenAut
     setSelection(null);
     setEditableDraft(null);
     setSavedVersion(null);
-    setBlueprint((current) => current ? { ...current, ...patch } : current);
+    setBlueprint((current) => {
+      if (!current) return current;
+      const overridden = new Set<string>();
+      if ("grade_scope" in patch) overridden.add("default_grade");
+      if ("difficulty_profile" in patch) overridden.add("default_difficulty");
+      const assumptionPrefixes = new Set<string>();
+      if (overridden.has("default_grade")) assumptionPrefixes.add("未明确年级");
+      if (overridden.has("default_difficulty")) assumptionPrefixes.add("未明确难度结构");
+      return {
+        ...current,
+        ...patch,
+        applied_preferences: current.applied_preferences.filter((item) => !overridden.has(item.key)),
+        assumptions: current.assumptions.filter(
+          (item) => !item.includes("教师偏好") || !Array.from(assumptionPrefixes).some((prefix) => item.startsWith(prefix)),
+        ),
+      };
+    });
   }
 
   function updateSection(index: number, patch: Partial<PaperBlueprintSection>) {
@@ -1051,6 +1068,8 @@ export function PaperBlueprintWorkspace({ initialBrief, onBriefChange, onOpenAut
                   <div><p>PAPER BLUEPRINT · DRAFT</p><h2>可编辑组卷蓝图</h2></div>
                   <ul aria-label="蓝图状态"><li>{selection ? "已确认" : "未确认"}</li><li>未保存</li><li>{selection ? "候选草案" : "未选题"}</li></ul>
                 </header>
+
+                <TeacherPreferenceNotice preferences={blueprint.applied_preferences} />
 
                 {blueprint.assumptions.length > 0 && <section className="paper-blueprint-assumptions"><strong>需要你核对的默认假设</strong><ul>{blueprint.assumptions.map((item) => <li key={item}>{item}</li>)}</ul></section>}
 

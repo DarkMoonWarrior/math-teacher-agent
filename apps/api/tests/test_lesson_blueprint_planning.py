@@ -7,6 +7,11 @@ from app.modules.lesson_plans import (
     LessonBlueprintPlanning,
     LessonBlueprintPlanningError,
 )
+from app.modules.teacher_memory import (
+    TeacherPlanningDefaults,
+    TeacherPlanningPreference,
+    TeacherPreferenceSource,
+)
 
 
 def _catalog() -> InMemoryCurriculumCatalog:
@@ -112,6 +117,45 @@ def test_plans_visible_defaults_for_underspecified_review_lesson() -> None:
     assert any("课时" in item for item in blueprint.assumptions)
     assert any("学情" in item for item in blueprint.assumptions)
     assert any("例题与练习数量" in item for item in blueprint.assumptions)
+
+
+def test_teacher_defaults_are_visible_and_explicit_brief_still_wins() -> None:
+    defaults = TeacherPlanningDefaults(preferences=[
+        TeacherPlanningPreference(
+            key="default_grade",
+            label="默认年级",
+            value="高三",
+            source=TeacherPreferenceSource(),
+        ),
+        TeacherPlanningPreference(
+            key="default_lesson_minutes",
+            label="默认课时",
+            value=50,
+            source=TeacherPreferenceSource(),
+        ),
+    ])
+    planning = LessonBlueprintPlanning(curriculum_catalog=_catalog())
+
+    defaulted = planning.plan(
+        LessonBlueprintBrief(brief="设计一节函数单调性专题复习课"),
+        defaults=defaults,
+    )
+    assert defaulted.grade_scope == "高三"
+    assert defaulted.duration_minutes == 50
+    assert [item.key for item in defaulted.applied_preferences] == [
+        "default_grade",
+        "default_lesson_minutes",
+    ]
+    assert all(item.source.confidence == 1 for item in defaulted.applied_preferences)
+    assert any("本次可直接修改覆盖" in item for item in defaulted.assumptions)
+
+    explicit = planning.plan(
+        LessonBlueprintBrief(brief="为高一函数单调性准备一节 30 分钟专题复习课"),
+        defaults=defaults,
+    )
+    assert explicit.grade_scope == "高一"
+    assert explicit.duration_minutes == 30
+    assert explicit.applied_preferences == []
 
 
 def test_rejects_explicit_university_scope() -> None:

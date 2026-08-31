@@ -17,6 +17,7 @@ import {
 } from "@/lib/teacher-workspace/contracts";
 import { teacherWorkspace } from "@/lib/teacher-workspace/http-adapter";
 import { EditableNumberInput } from "./editable-number-input";
+import { TeacherPreferenceNotice } from "./teacher-preference-notice";
 import { ArrowRightIcon, ArrowUpIcon, BookIcon, CloseIcon, LockIcon } from "./icons";
 import { ResizableSplitPane } from "./resizable-split-pane";
 
@@ -264,6 +265,21 @@ export function LessonBlueprintDraftView({
     });
   }
 
+  function overridePreference(
+    key: "default_grade" | "default_lesson_minutes",
+    patch: Partial<LessonBlueprintDraft>,
+  ) {
+    const assumptionPrefix = key === "default_grade" ? "未明确年级" : "未明确有效课时";
+    onChange({
+      ...draft,
+      ...patch,
+      applied_preferences: draft.applied_preferences.filter((item) => item.key !== key),
+      assumptions: draft.assumptions.filter(
+        (item) => !item.startsWith(assumptionPrefix) || !item.includes("教师偏好"),
+      ),
+    });
+  }
+
   return (
     <article className="lesson-blueprint-sheet">
       <header>
@@ -278,6 +294,8 @@ export function LessonBlueprintDraftView({
         </ul>
       </header>
 
+      <TeacherPreferenceNotice preferences={draft.applied_preferences} />
+
       {draft.assumptions.length > 0 && (
         <section className="lesson-blueprint-assumptions">
           <strong>需要教师核对的默认假设</strong>
@@ -290,7 +308,7 @@ export function LessonBlueprintDraftView({
           <input value={draft.title} onChange={(event) => onChange({ ...draft, title: event.target.value })} />
         </label>
         <label>年级范围
-          <input value={draft.grade_scope} onChange={(event) => onChange({ ...draft, grade_scope: event.target.value })} />
+          <input value={draft.grade_scope} onChange={(event) => overridePreference("default_grade", { grade_scope: event.target.value })} />
         </label>
         <label>课型
           <select value={draft.lesson_type} onChange={(event) => onChange({ ...draft, lesson_type: event.target.value as LessonBlueprintType })}>
@@ -301,7 +319,7 @@ export function LessonBlueprintDraftView({
           <input value={draft.lesson_format} onChange={(event) => onChange({ ...draft, lesson_format: event.target.value })} />
         </label>
         <label>课时（分钟）
-          <EditableNumberInput min={20} max={120} value={draft.duration_minutes} onValueChange={(duration_minutes) => onChange({ ...draft, duration_minutes })} />
+          <EditableNumberInput min={20} max={120} value={draft.duration_minutes} onValueChange={(duration_minutes) => overridePreference("default_lesson_minutes", { duration_minutes })} />
         </label>
         <label>计划题量
           <EditableNumberInput min={0} max={8} value={draft.question_count} onValueChange={(question_count) => onChange({ ...draft, question_count })} />

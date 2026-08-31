@@ -12,6 +12,8 @@ from app.modules.lesson_exports import (
     LessonPlanExportError,
     SavedLessonPlanDocumentRenderer,
 )
+from app.modules.teacher_memory import TeacherMemory
+from app.modules.teacher_memory.dependencies import get_teacher_memory
 from app.modules.lesson_plans import (
     LessonBlueprintBrief,
     LessonBlueprintDraft,
@@ -191,9 +193,16 @@ def generate_lesson_plan(command: LessonPlanGenerationRequest) -> LessonPlanView
 
 
 @router.post("/blueprints/plan", response_model=LessonBlueprintDraft)
-def plan_lesson_blueprint(command: LessonBlueprintBrief) -> LessonBlueprintDraft:
+def plan_lesson_blueprint(
+    command: LessonBlueprintBrief,
+    teacher: CurrentTeacher = Depends(get_current_teacher),
+    memory: TeacherMemory = Depends(get_teacher_memory),
+) -> LessonBlueprintDraft:
     try:
-        return get_lesson_blueprint_planning().plan(command)
+        return get_lesson_blueprint_planning().plan(
+            command,
+            defaults=memory.planning_defaults(owner_id=teacher.teacher_id),
+        )
     except LessonBlueprintPlanningError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 

@@ -9,6 +9,8 @@ from typing import Any
 from app.modules.teacher_memory.schemas import (
     TeacherMemoryCommand,
     TeacherMemoryProfile,
+    TeacherPlanningDefaults,
+    TeacherPlanningPreference,
     TeacherPreference,
     TeacherPreferenceKey,
     TeacherPreferenceSource,
@@ -51,6 +53,24 @@ class TeacherMemory:
     def profile(self, *, owner_id: str) -> TeacherMemoryProfile:
         with self._connect() as connection:
             return self._profile(connection, owner_id=owner_id)
+
+    def planning_defaults(self, *, owner_id: str) -> TeacherPlanningDefaults:
+        """Return only preferences that are safe to use as editable planning defaults."""
+
+        profile = self.profile(owner_id=owner_id)
+        allowed = {"default_grade", "default_difficulty", "default_lesson_minutes"}
+        return TeacherPlanningDefaults(
+            preferences=[
+                TeacherPlanningPreference(
+                    key=item.key,
+                    label=item.label,
+                    value=item.value,
+                    source=item.source,
+                )
+                for item in profile.preferences
+                if item.key in allowed
+            ]
+        )
 
     def apply(
         self,

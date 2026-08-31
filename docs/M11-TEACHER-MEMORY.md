@@ -18,10 +18,12 @@ content.
 
 ## Deep module interface
 
-`TeacherMemory` exposes two operations:
+`TeacherMemory` exposes three operations:
 
 1. `profile(owner_id)` returns the complete current profile.
 2. `apply(owner_id, command)` validates and applies one preference mutation.
+3. `planning_defaults(owner_id)` returns only allow-listed defaults, without owner
+   identity or task/private content, for product-owned planners.
 
 SQLite schema, value encoding, provenance creation and version checks stay behind
 this interface. HTTP routes adapt owner-scoped browser requests to these operations.
@@ -46,3 +48,17 @@ this interface. HTTP routes adapt owner-scoped browser requests to these operati
 - Every saved item shows source and confidence.
 - A second teacher cannot read or mutate the first teacher's profile.
 - Arbitrary text and unsupported keys are rejected at the module boundary.
+
+## Slice 2 acceptance
+
+- Lesson and Paper planning read defaults using the current server-owned teacher.
+- A brief that explicitly states grade, lesson duration or paper difficulty always
+  wins over memory.
+- Missing lesson grade/duration and missing paper grade/difficulty can use saved
+  allow-listed defaults; lesson duration is not reused as an exam duration.
+- Every value actually applied is returned with its source and confidence and is
+  shown in the editable blueprint.
+- Editing a field in the current blueprint removes its applied-default marker and
+  does not mutate the saved preference profile.
+- Preferences do not bypass high-school scope, source, rights, owner, review,
+  verification, selection, save or export gates.

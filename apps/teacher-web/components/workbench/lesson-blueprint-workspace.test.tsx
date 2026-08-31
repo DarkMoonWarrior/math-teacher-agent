@@ -45,6 +45,7 @@ function lessonBlueprintFixture(): LessonBlueprintDraft {
       { phase_id: "summary", title: "总结与作业", minutes: 5, purpose: "回扣目标" },
     ],
     required_blocks: ["objectives", "key_points", "difficulties", "teaching_flow", "homework", "board_plan", "teacher_notes"],
+    applied_preferences: [],
     assumptions: ["未明确例题与练习数量，暂按 3 道受控题目规划。"],
     trust_policy: {
       curriculum_source: "sealed_pep_a_baseline",
@@ -160,6 +161,24 @@ describe("LessonBlueprintWorkspace", () => {
     expect(html).toContain("本地可编辑草案");
     expect(html).toContain("确认蓝图并选择来源");
     expect(html).not.toContain("已保存");
+  });
+
+  it("shows preference provenance while keeping the blueprint locally editable", () => {
+    const draft = lessonBlueprintFixture();
+    draft.applied_preferences = [{
+      key: "default_grade",
+      label: "默认年级",
+      value: "高二",
+      source: { kind: "teacher_explicit", label: "教师明确设置", confidence: 1 },
+    }];
+    const html = renderToStaticMarkup(
+      <LessonBlueprintDraftView draft={draft} onChange={vi.fn()} onConfirm={vi.fn()} />,
+    );
+
+    expect(html).toContain("已应用教师偏好");
+    expect(html).toContain("仅补全未明确的字段");
+    expect(html).toContain("本次直接修改字段即可覆盖");
+    expect(html).toContain("教师明确设置 · 置信度 100%");
   });
 
   it("renders public, owner-only and private-resource choices only after confirmation", () => {
