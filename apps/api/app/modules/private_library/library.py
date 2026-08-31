@@ -66,8 +66,6 @@ class PrivateLibrary:
         filename: str,
         content: bytes,
     ) -> LibraryItemView:
-        if not command.rights_acknowledged:
-            raise PrivateLibraryError("必须确认资料来源与使用权声明")
         if not content:
             raise PrivateLibraryError("上传文件不能为空")
         if len(content) > self.MAX_FILE_BYTES:
@@ -469,9 +467,13 @@ class PrivateLibrary:
         return self.get(item_id, owner_id=owner_id), provider.name, result.warnings
 
     def propose_questions(
-        self, item_id: str, *, owner_id: str
+        self,
+        item_id: str,
+        *,
+        owner_id: str,
+        structured_questions: list[tuple[QuestionCandidateUpdate, list[str]]] | None = None,
     ) -> QuestionCandidateList:
-        """Create deterministic, editable candidates from teacher-confirmed text."""
+        """Create editable candidates from a confirmed source revision."""
         with self._connect() as connection:
             item = connection.execute(
                 "SELECT * FROM library_items WHERE library_item_id = ? AND owner_id = ?",
@@ -490,12 +492,31 @@ class PrivateLibrary:
             ).fetchall()
             if existing:
                 return self._candidate_list(item_id, item["version"], existing)
-            parts = self._split_questions(item["corrected_text"])
-            if len(parts) > self.MAX_CANDIDATES:
-                parts = parts[: self.MAX_CANDIDATES]
+            if structured_questions is not None:
+                if not structured_questions:
+                    raise PrivateLibraryError("大模型没有提取到可读题目，请先完善校对文本后重试")
+                candidate_payloads = structured_questions[: self.MAX_CANDIDATES]
+            else:
+                parts = self._split_questions(item["corrected_text"])
+                candidate_payloads = [
+                    (
+                        QuestionCandidateUpdate(
+                            question_type=parsed["question_type"],
+                            stem_plain=parsed["stem"],
+                            stem_latex=None,
+                            options=parsed["options"],
+                            answer_value=parsed["answer"],
+                            solution_method="资料解析待教师核对",
+                            solution_steps=parsed["solution_steps"],
+                            final_answer=parsed["answer"],
+                            difficulty=3,
+                        ),
+                        parsed["warnings"],
+                    )
+                    for parsed in (self._parse_candidate(part) for part in parts[: self.MAX_CANDIDATES])
+                ]
             now = self._now()
-            for position, part in enumerate(parts, start=1):
-                parsed = self._parse_candidate(part)
+            for position, (draft, warnings) in enumerate(candidate_payloads, start=1):
                 connection.execute(
                     """
                     INSERT INTO library_question_candidates (
@@ -505,15 +526,16 @@ class PrivateLibrary:
                         imported_question_id, curriculum_node_id, curriculum_name,
                         curriculum_volume, curriculum_chapter, curriculum_section,
                         editor_id, updated_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, 3, 'draft', ?, NULL,
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, NULL,
                               NULL, NULL, NULL, NULL, NULL, ?, ?)
                     """,
                     (
                         f"cand_{uuid4().hex[:16]}", item_id, item["version"], position,
-                        parsed["question_type"], parsed["stem"],
-                        json.dumps(parsed["options"], ensure_ascii=False), parsed["answer"],
-                        "资料解析待教师核对", json.dumps(parsed["solution_steps"], ensure_ascii=False),
-                        parsed["answer"], json.dumps(parsed["warnings"], ensure_ascii=False),
+                        draft.question_type, draft.stem_plain.strip(), draft.stem_latex,
+                        json.dumps([option.model_dump() for option in draft.options], ensure_ascii=False),
+                        draft.answer_value, draft.solution_method,
+                        json.dumps(draft.solution_steps, ensure_ascii=False), draft.final_answer,
+                        draft.difficulty, json.dumps(warnings, ensure_ascii=False),
                         owner_id, now,
                     ),
                 )

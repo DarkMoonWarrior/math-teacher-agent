@@ -11,7 +11,6 @@ import type {
   CurriculumSearchItem,
   LibraryItemDetail,
   LibraryItemSummary,
-  LibraryRightsBasis,
   LibraryTextRevision,
   PrivateLibraryQuestionCandidate,
   PrivateLibraryQuestionCandidateDraft,
@@ -19,6 +18,7 @@ import type {
 } from "@/lib/teacher-workspace/contracts";
 import { TeacherWorkspaceError } from "@/lib/teacher-workspace/contracts";
 import { teacherWorkspace } from "@/lib/teacher-workspace/http-adapter";
+import { MathText } from "../math-text";
 import {
   ArrowRightIcon,
   BookIcon,
@@ -33,31 +33,10 @@ import {
   SparkIcon,
   UploadIcon,
 } from "./icons";
+import { ResizableSplitPane } from "./resizable-split-pane";
 
 const MAX_FILE_BYTES = 50 * 1024 * 1024;
 const ALLOWED_EXTENSIONS = ["pdf", "docx", "png", "jpg", "jpeg", "webp"];
-
-const RIGHTS_OPTIONS: Array<{
-  value: LibraryRightsBasis;
-  label: string;
-  detail: string;
-}> = [
-  {
-    value: "private_teaching_only",
-    label: "仅私人教学",
-    detail: "不声明原创，不允许公开检索或改编。",
-  },
-  {
-    value: "original",
-    label: "本人原创",
-    detail: "由本人创作，仍先保留在私人空间。",
-  },
-  {
-    value: "licensed",
-    label: "已获授权",
-    detail: "已取得相应使用授权，请写明依据。",
-  },
-];
 
 function fileExtension(filename: string): string {
   return filename.split(".").pop()?.toLowerCase() ?? "";
@@ -94,10 +73,6 @@ function fileKindLabel(kind: LibraryItemSummary["file_kind"]): string {
   return "PDF";
 }
 
-function rightsLabel(basis: LibraryRightsBasis): string {
-  return RIGHTS_OPTIONS.find((option) => option.value === basis)?.label ?? basis;
-}
-
 function reviewState(item: LibraryItemSummary): {
   label: string;
   tone: "ready" | "pending" | "ocr";
@@ -109,6 +84,18 @@ function reviewState(item: LibraryItemSummary): {
     return { label: "等待 OCR", tone: "ocr" };
   }
   return { label: "等待校对", tone: "pending" };
+}
+
+export function privateLibraryRecognitionPreview(
+  draft: string,
+  running: boolean,
+  error: string,
+): { kind: "loading" | "error" | "empty" | "content"; text: string } {
+  if (running) return { kind: "loading", text: "大模型正在识别并整理原稿…" };
+  if (error) return { kind: "error", text: `识别失败：${error}` };
+  const text = draft.trim();
+  if (!text || text === "无") return { kind: "empty", text: "尚未生成大模型整理稿。" };
+  return { kind: "content", text };
 }
 
 const QUESTION_TYPE_OPTIONS: Array<{
@@ -135,6 +122,36 @@ function candidateDraft(
     final_answer: candidate.final_answer,
     difficulty: candidate.difficulty,
   };
+}
+
+export function PrivateLibraryQuestionPreview({
+  draft,
+}: {
+  draft: PrivateLibraryQuestionCandidateDraft;
+}) {
+  const stem = draft.stem_latex?.trim() || draft.stem_plain.trim();
+  return (
+    <section className="candidate-readable-preview" aria-label="可读题目预览">
+      <header>
+        <div><span>题面预览</span><small>数学公式已排版</small></div>
+        <strong>{QUESTION_TYPE_OPTIONS.find((item) => item.value === draft.question_type)?.label}</strong>
+      </header>
+      <div className="candidate-readable-preview__stem"><MathText text={stem || "题面为空"} /></div>
+      {draft.options.length > 0 && (
+        <ol className="candidate-readable-preview__options">
+          {draft.options.map((option) => (
+            <li key={option.key}><strong>{option.key}.</strong><MathText text={option.text || "未填写"} /></li>
+          ))}
+        </ol>
+      )}
+      <dl>
+        <div><dt>答案</dt><dd><MathText text={draft.answer_value?.trim() || "无"} /></dd></div>
+        <div><dt>解析</dt><dd>{draft.solution_steps.length > 0
+          ? draft.solution_steps.map((step, index) => <p key={index}><MathText text={step} /></p>)
+          : <span>无</span>}</dd></div>
+      </dl>
+    </section>
+  );
 }
 
 function CandidateEditor({
@@ -242,6 +259,8 @@ function CandidateEditor({
         </div>
         <p><LockIcon />private · 来源文本 v{candidate.source_version}</p>
       </header>
+
+      <PrivateLibraryQuestionPreview draft={draft} />
 
       <div className="candidate-fields">
         <label>
@@ -438,15 +457,12 @@ export function PrivateLibraryWorkspace() {
   const [loadError, setLoadError] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [title, setTitle] = useState("");
-  const [rightsBasis, setRightsBasis] = useState<LibraryRightsBasis>("private_teaching_only");
   const [rightsStatement, setRightsStatement] = useState("");
-  const [acknowledged, setAcknowledged] = useState(false);
   const [touched, setTouched] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [formError, setFormError] = useState("");
   const [announcement, setAnnouncement] = useState("");
   const [privateQuery, setPrivateQuery] = useState("");
-  const [privateSearchConsent, setPrivateSearchConsent] = useState(false);
   const [privateSearchBusy, setPrivateSearchBusy] = useState(false);
   const [privateSearchItems, setPrivateSearchItems] = useState<PrivateLibrarySearchItem[]>([]);
   const [privateSearchTotal, setPrivateSearchTotal] = useState<number | null>(null);
@@ -462,9 +478,9 @@ export function PrivateLibraryWorkspace() {
   const [correctedText, setCorrectedText] = useState("");
   const [reviewNote, setReviewNote] = useState("");
   const [savingReview, setSavingReview] = useState<"draft" | "confirm" | "">("");
-  const [ocrMode, setOcrMode] = useState<"local" | "external" | "">("");
+  const [ocrMode, setOcrMode] = useState<"external" | "">("");
   const [ocrProgress, setOcrProgress] = useState("");
-  const [externalConsent, setExternalConsent] = useState(false);
+  const [recognitionError, setRecognitionError] = useState("");
   const [detailMessage, setDetailMessage] = useState("");
   const inputRef = useRef<HTMLInputElement | null>(null);
   const detailRef = useRef<HTMLElement | null>(null);
@@ -491,12 +507,14 @@ export function PrivateLibraryWorkspace() {
       setRevisions([]);
       setCandidates([]);
       setDetailError("");
+      setRecognitionError("");
       return;
     }
     const controller = new AbortController();
     setDetailLoading(true);
     setCandidatesLoading(true);
     setDetailError("");
+    setRecognitionError("");
     setDetailMessage("");
     Promise.all([
       teacherWorkspace.getPrivateLibraryItem(selectedItemId, controller.signal),
@@ -523,13 +541,8 @@ export function PrivateLibraryWorkspace() {
   }, [selectedItemId]);
 
   const fileError = selectedFile ? validateFile(selectedFile) : "";
-  const statementError = rightsStatement.trim().length < 6
-    ? "请用至少 6 个字说明资料来源或使用依据。"
-    : "";
   const canUpload = Boolean(selectedFile)
     && !fileError
-    && !statementError
-    && acknowledged
     && !uploading;
 
   function chooseFile(event: ChangeEvent<HTMLInputElement>) {
@@ -553,7 +566,7 @@ export function PrivateLibraryWorkspace() {
       const uploaded = await teacherWorkspace.uploadPrivateLibrary({
         file: selectedFile,
         title: title.trim(),
-        rightsBasis,
+        rightsBasis: "private_teaching_only",
         rightsStatement: rightsStatement.trim(),
         rightsAcknowledged: true,
       });
@@ -561,7 +574,6 @@ export function PrivateLibraryWorkspace() {
       setSelectedFile(null);
       setTitle("");
       setRightsStatement("");
-      setAcknowledged(false);
       setTouched(false);
       if (inputRef.current) inputRef.current.value = "";
       setAnnouncement(`“${uploaded.title || uploaded.original_filename}”已加入私人资料库。`);
@@ -580,10 +592,6 @@ export function PrivateLibraryWorkspace() {
     event.preventDefault();
     const query = privateQuery.trim();
     if (!query || privateSearchBusy) return;
-    if (!privateSearchConsent) {
-      setPrivateSearchError("请先确认本次检索授权。每次查询都需要重新确认。");
-      return;
-    }
     setPrivateSearchBusy(true);
     setPrivateSearchError("");
     setPrivateSearchTotal(null);
@@ -596,7 +604,6 @@ export function PrivateLibraryWorkspace() {
       setPrivateSearchItems([]);
       setPrivateSearchError(cause instanceof Error ? cause.message : "本次私人检索没有完成。");
     } finally {
-      setPrivateSearchConsent(false);
       setPrivateSearchBusy(false);
     }
   }
@@ -640,28 +647,26 @@ export function PrivateLibraryWorkspace() {
     }
   }
 
-  async function runOCR(mode: "local" | "external") {
+  async function runOCR() {
     if (!detail || ocrMode || savingReview) return;
-    if (mode === "external" && !externalConsent) {
-      setDetailError("请先勾选本次外部 OCR 授权。该授权只对这一次操作有效。");
-      return;
-    }
-    setOcrMode(mode);
-    setOcrProgress(mode === "local" ? "正在准备本地识别" : "正在准备外部识别");
+    setOcrMode("external");
+    setOcrProgress("正在准备大模型识别");
+    setRecognitionError("");
     setDetailError("");
     setDetailMessage("");
     try {
       const result = await teacherWorkspace.processPrivateLibraryOCR(
         detail.library_item_id,
-        { mode, externalProcessingConsent: mode === "external" && externalConsent },
+        { mode: "external", externalProcessingConsent: true },
         { onProgress: setOcrProgress },
       );
       syncDetail(result.item);
       await refreshRevisions(result.item.library_item_id);
-      setDetailMessage(`${mode === "local" ? "本地" : "外部"} OCR 已生成可编辑草稿，请对照原文件逐项确认。`);
-      setExternalConsent(false);
+      setDetailMessage("大模型已生成可读校对稿，可继续修改或确认。");
     } catch (cause) {
-      setDetailError(cause instanceof Error ? cause.message : "OCR 没有生成可用草稿。");
+      const message = cause instanceof Error ? cause.message : "大模型没有生成可用草稿。";
+      setRecognitionError(message);
+      setDetailError(message);
     } finally {
       setOcrMode("");
       setOcrProgress("");
@@ -677,10 +682,11 @@ export function PrivateLibraryWorkspace() {
   async function prepareCandidates() {
     if (!detail || detail.text_review_status !== "confirmed" || candidatesLoading) return;
     setCandidatesLoading(true);
-    setCandidateMessage("");
+    setCandidateMessage(detail.file_kind === "pdf" ? "大模型正在逐题识别题面、答案和解析…" : "");
     try {
       const result = await teacherWorkspace.preparePrivateLibraryQuestionCandidates(
         detail.library_item_id,
+        { externalProcessingConsent: detail.file_kind === "pdf" },
       );
       setCandidates(result.items);
       setCandidateMessage(result.items.length
@@ -732,23 +738,42 @@ export function PrivateLibraryWorkspace() {
     ? correctedText !== detail.corrected_text || reviewNote !== detail.review_note
     : false;
   const actionsBusy = Boolean(savingReview || ocrMode);
+  const recognitionPreview = privateLibraryRecognitionPreview(
+    correctedText,
+    ocrMode === "external",
+    recognitionError,
+  );
 
   return (
     <main className="library-workspace">
-      <section className="library-intro">
+      <ResizableSplitPane
+        ariaLabel="调整资料上传与资料详情区域宽度"
+        className="library-workbench-split"
+        defaultPrimaryPercent={40}
+        disabled={uploading}
+        state={formError || privateSearchError || loadError || detailError
+          ? "error"
+          : uploading || privateSearchBusy || loading || detailLoading || actionsBusy
+            ? "loading"
+            : announcement || detailMessage || candidateMessage
+              ? "success"
+              : "default"}
+      >
+      <div className="library-workbench-pane library-workbench-pane--upload">
+        <section className="library-intro">
         <div>
           <p className="mode-status"><i className="is-ready" aria-hidden="true" />Private Library 已接入</p>
           <h1>我的资料，<br />我的工作流。</h1>
-          <p>上传讲义、试卷和题目图片。系统会保存来源与权利声明；内容不会自动进入公共题库，也不会用于模型训练。</p>
+          <p>上传讲义、试卷和题目图片。资料默认只保存在当前教师的私人工作区。</p>
         </div>
         <p className="privacy-promise"><LockIcon /><span>当前教师私人空间</span><small>不公开 · 不训练 · 不自动发布</small></p>
-      </section>
+        </section>
 
-      <form className="library-upload" onSubmit={upload} noValidate>
+        <form className="library-upload" onSubmit={upload} noValidate>
         <header>
           <div>
             <span>添加资料</span>
-            <h2>文件和来历，一起留下。</h2>
+            <h2>把教学资料放进私人工作区。</h2>
           </div>
           <span className="file-limit">PDF · DOCX · 图片 · 50 MB 内</span>
         </header>
@@ -791,52 +816,18 @@ export function PrivateLibraryWorkspace() {
             <small>不填写时使用原文件名。</small>
           </label>
 
-          <fieldset className="rights-basis">
-            <legend>权利依据</legend>
-            <div>
-              {RIGHTS_OPTIONS.map((option) => (
-                <label key={option.value}>
-                  <input
-                    checked={rightsBasis === option.value}
-                    name="rights-basis"
-                    onChange={() => setRightsBasis(option.value)}
-                    type="radio"
-                    value={option.value}
-                  />
-                  <span><strong>{option.label}</strong><small>{option.detail}</small></span>
-                </label>
-              ))}
-            </div>
-          </fieldset>
-
           <label className="library-field library-field--statement">
-            <span>来源或授权说明</span>
+            <span>来源说明 <small>可选</small></span>
             <textarea
-              aria-describedby="rights-statement-help"
-              aria-invalid={Boolean(touched && statementError)}
-              aria-required="true"
-              maxLength={2000}
-              onBlur={() => setTouched(true)}
               onChange={(event) => setRightsStatement(event.target.value)}
-              placeholder="例如：来自本人 2026 学年校本讲义，仅用于本人的课堂备课。"
+              placeholder="可填写资料来源，也可以留空。"
               rows={3}
               value={rightsStatement}
             />
-            <small id="rights-statement-help" className={touched && statementError ? "is-error" : ""}>
-              {touched && statementError ? statementError : "这段说明会随资料保留，不能被 Agent 擦除。"}
-            </small>
           </label>
         </div>
 
         <footer className="library-upload__actions">
-          <label className="rights-confirmation">
-            <input
-              checked={acknowledged}
-              onChange={(event) => setAcknowledged(event.target.checked)}
-              type="checkbox"
-            />
-            <span>我确认上述来源说明真实，并同意仅存入当前私人工作区。</span>
-          </label>
           <button disabled={!canUpload} type="submit">
             {uploading ? <span className="button-loader" aria-hidden="true" /> : <UploadIcon />}
             <span>{uploading ? "正在保存" : "存入私人资料"}</span>
@@ -847,15 +838,17 @@ export function PrivateLibraryWorkspace() {
           {formError && <p className="is-error" role="alert">{formError}</p>}
         </div>
         <p className="library-announcement" aria-live="polite">{announcement}</p>
-      </form>
+        </form>
+      </div>
 
-      <section className="library-private-search">
+      <div className="library-workbench-pane library-workbench-pane--results">
+        <section className="library-private-search">
         <header>
           <div>
             <span>私人检索 Agent</span>
             <h2>从你确认过的资料里，找一段证据。</h2>
           </div>
-          <p><LockIcon />只读 · 本次授权 · 有界片段</p>
+          <p><LockIcon />只读 · 仅检索当前教师资料</p>
         </header>
         <form onSubmit={searchPrivateContent}>
           <label>
@@ -874,14 +867,6 @@ export function PrivateLibraryWorkspace() {
               </button>
             </div>
           </label>
-          <label className="library-private-search__consent">
-            <input
-              checked={privateSearchConsent}
-              onChange={(event) => setPrivateSearchConsent(event.target.checked)}
-              type="checkbox"
-            />
-            <span>我同意仅为本次查询，将匹配标题、片段、来源版本与权利状态交给已配置的 Agent；不发送原文件、路径或整份正文。</span>
-          </label>
         </form>
         <div className="library-private-search__results" ref={privateSearchResultRef} aria-live="polite">
           {privateSearchError ? <p className="is-error" role="alert">{privateSearchError}</p> : null}
@@ -896,16 +881,16 @@ export function PrivateLibraryWorkspace() {
                   <li key={item.library_item_id}>
                     <header><strong>{item.title}</strong><span><LockIcon />private</span></header>
                     <p>{item.excerpt}</p>
-                    <footer><span>确认文本 v{item.source_version}</span><span>{rightsLabel(item.rights_basis)}</span></footer>
+                    <footer><span>确认文本 v{item.source_version}</span><span>私人资料</span></footer>
                   </li>
                 ))}
               </ol>
             </>
           ) : null}
         </div>
-      </section>
+        </section>
 
-      <section className="library-shelf" aria-busy={loading}>
+        <section className="library-shelf" aria-busy={loading}>
         <header>
           <div>
             <span>私人资料</span>
@@ -953,7 +938,7 @@ export function PrivateLibraryWorkspace() {
                     <span className={`library-state library-state--${state.tone}`}>
                       {state.tone === "ready" ? <CheckIcon /> : <ClockIcon />}{state.label}
                     </span>
-                    <span><LockIcon />{rightsLabel(item.rights_basis)} · 私有</span>
+                    <span><LockIcon />仅当前教师可见</span>
                     <button onClick={() => setSelectedItemId(item.library_item_id)} type="button">
                       打开校对 <ArrowRightIcon />
                     </button>
@@ -963,15 +948,14 @@ export function PrivateLibraryWorkspace() {
             })}
           </ol>
         )}
-      </section>
+        </section>
 
       {selectedItemId && (
         <section className="library-review" ref={detailRef} aria-busy={detailLoading}>
           <header className="library-review__header">
             <div>
-              <span>提取与 OCR 校对</span>
+              <span>大模型识别与校对</span>
               <h2>{detail?.title || detail?.original_filename || "正在打开资料"}</h2>
-              <p><LockIcon />原文件、识别文本和修订记录仅属于当前教师。</p>
             </div>
             <button
               aria-label="关闭资料校对"
@@ -989,63 +973,33 @@ export function PrivateLibraryWorkspace() {
             </div>
           ) : detail ? (
             <>
-              <div className="library-review__meta">
-                <span>{fileKindLabel(detail.file_kind)}</span>
-                <span>{formatBytes(detail.size_bytes)}</span>
-                {detail.page_count && <span>{detail.page_count} 页</span>}
-                <span>文本 v{detail.version}</span>
-                <span><LockIcon />{rightsLabel(detail.rights_basis)}</span>
-              </div>
-
-              {detail.warnings.length > 0 && (
-                <aside className="library-warning-list" aria-label="识别与校对提示">
-                  <ClockIcon />
-                  <div>
-                    <strong>识别提示</strong>
-                    <ul>{detail.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>
-                  </div>
-                </aside>
-              )}
-
               <div className="library-ocr-console">
                 <div>
-                  <p className="library-eyebrow">需要重新识别？</p>
-                  <h3>先本地，必要时再外部。</h3>
-                  <p>OCR 只生成草稿，不会把资料送入题库，也不会替你确认数学内容。</p>
+                  <p className="library-eyebrow">资料识别</p>
+                  <h3>使用大模型整理原稿。</h3>
+                  <p>识别完成后，右侧直接展示排版后的可读稿。</p>
                 </div>
                 <div className="library-ocr-actions">
                   <button
-                    disabled={actionsBusy || detail.file_kind !== "pdf"}
-                    onClick={() => void runOCR("local")}
+                    disabled={actionsBusy}
+                    onClick={() => void runOCR()}
                     type="button"
                   >
-                    {ocrMode === "local" ? <span className="button-loader" /> : <SparkIcon />}
-                    {ocrMode === "local" ? "本地识别中" : "本地数学 OCR"}
-                  </button>
-                  <small>{detail.file_kind === "pdf" ? "文件不离开本机。" : "本地 OCR 当前只支持 PDF。"}</small>
-                  <label className="library-external-consent">
-                    <input
-                      checked={externalConsent}
-                      disabled={actionsBusy}
-                      onChange={(event) => setExternalConsent(event.target.checked)}
-                      type="checkbox"
-                    />
-                    <span>仅本次同意将当前文件发送给已配置的外部 OCR 服务。</span>
-                  </label>
-                  <button
-                    className="is-secondary"
-                    disabled={actionsBusy || !externalConsent}
-                    onClick={() => void runOCR("external")}
-                    type="button"
-                  >
-                    {ocrMode === "external" ? <span className="button-loader" /> : <ArrowRightIcon />}
-                    {ocrMode === "external" ? "外部识别中" : "使用外部 OCR"}
+                    {ocrMode === "external" ? <span className="button-loader" /> : <SparkIcon />}
+                    {ocrMode === "external" ? "大模型识别中" : "使用大模型识别"}
                   </button>
                 </div>
                 {ocrProgress && <p className="library-ocr-progress" aria-live="polite"><ClockIcon />{ocrProgress}</p>}
               </div>
 
-              <div className="library-review__comparison">
+              <ResizableSplitPane
+                ariaLabel="调整原稿与大模型整理稿宽度"
+                className="library-review-comparison-split"
+                defaultPrimaryPercent={50}
+                maxPrimaryPercent={70}
+                minPrimaryPercent={30}
+                state={recognitionError ? "error" : ocrMode ? "loading" : recognitionPreview.kind === "content" ? "success" : "default"}
+              >
                 <article className="library-source">
                   <header><span>01</span><div><h3>原始文件</h3><p>始终保留，用于逐页核对。</p></div></header>
                   <div className="library-source__preview">
@@ -1063,25 +1017,31 @@ export function PrivateLibraryWorkspace() {
                       </div>
                     )}
                   </div>
-                  <details className="library-extracted-text">
-                    <summary>查看首次提取文本</summary>
-                    <pre>{detail.extracted_text || "未提取到嵌入文本，可运行 OCR 或手动录入。"}</pre>
-                  </details>
-                </article>
-
-                <article className="library-editor">
-                  <header><span>02</span><div><h3>教师校对稿</h3><p>OCR 结果未经确认；你可以直接修订。</p></div></header>
-                  <label>
-                    <span>可编辑文本</span>
+                  <label className="library-editable-latex-draft">
+                    <span>可编辑的中文 + LaTeX 校对稿</span>
                     <textarea
-                      aria-label="私人资料校对文本"
+                      aria-label="可编辑的中文和 LaTeX 校对稿"
                       disabled={actionsBusy}
-                      onChange={(event) => setCorrectedText(event.target.value)}
-                      placeholder="在这里录入或校对题目、公式与解析…"
+                      onChange={(event) => {
+                        setCorrectedText(event.target.value);
+                        setRecognitionError("");
+                      }}
+                      placeholder="大模型识别后可在这里继续修改中文、公式、题目与解析…"
                       spellCheck={false}
                       value={correctedText}
                     />
                   </label>
+                </article>
+
+                <article className="library-editor">
+                  <header><span>02</span><div><h3>大模型整理稿</h3><p>中文与数学公式已排版，可直接阅读。</p></div></header>
+                  <div className="library-readable-review" data-state={recognitionPreview.kind} aria-label="大模型识别整理后的可读校对稿">
+                    {recognitionPreview.kind === "content"
+                      ? <MathText text={recognitionPreview.text} />
+                      : <p className="library-readable-review__state" role={recognitionPreview.kind === "error" ? "alert" : "status"}>
+                          {recognitionPreview.text}
+                        </p>}
+                  </div>
                   <label className="library-review-note">
                     <span>本次修订说明 <small>可选</small></span>
                     <input
@@ -1107,7 +1067,7 @@ export function PrivateLibraryWorkspace() {
                     >{savingReview === "confirm" ? <span className="button-loader" /> : <CheckIcon />}确认本版文本</button>
                   </div>
                 </article>
-              </div>
+              </ResizableSplitPane>
 
               {(detailError || detailMessage) && (
                 <p className={`library-detail-message${detailError ? " is-error" : ""}`} role={detailError ? "alert" : "status"}>
@@ -1128,16 +1088,20 @@ export function PrivateLibraryWorkspace() {
                     <button disabled type="button">等待教师确认</button>
                   </div>
                 ) : candidatesLoading ? (
-                  <div className="candidate-gate"><span className="button-loader" /><p>正在读取当前文本版本的候选题…</p></div>
+                  <div className="candidate-gate"><span className="button-loader" /><p>{detail.file_kind === "pdf" ? "大模型正在从确认文本中逐题提取并整理数学格式…" : "正在读取当前文本版本的候选题…"}</p></div>
                 ) : candidates.length === 0 ? (
                   <div className="candidate-gate candidate-gate--ready">
                     <SparkIcon />
                     <div>
                       <strong>文本 v{detail.version} 已确认，可以开始拆题</strong>
-                      <p>{reviewChanged ? "校对区还有未保存修改，请先确认或撤回修改。" : "系统先按题号生成可编辑候选，不会自动写入任何题库。"}</p>
+                      <p>{reviewChanged
+                        ? "校对区还有未保存修改，请先确认或撤回修改。"
+                        : detail.file_kind === "pdf"
+                          ? "大模型将提取题干、选项、答案与解析，并生成可读数学题卡；不会自动写入题库。"
+                          : "系统先按题号生成可编辑候选，不会自动写入任何题库。"}</p>
                     </div>
                     <button disabled={reviewChanged} onClick={() => void prepareCandidates()} type="button">
-                      <PlusIcon />生成拆题候选
+                      <PlusIcon />{detail.file_kind === "pdf" ? "大模型提取题目" : "生成拆题候选"}
                     </button>
                   </div>
                 ) : (
@@ -1178,6 +1142,8 @@ export function PrivateLibraryWorkspace() {
           ) : null}
         </section>
       )}
+      </div>
+      </ResizableSplitPane>
     </main>
   );
 }

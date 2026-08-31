@@ -298,14 +298,14 @@ export function QuestionMediaComposer({
               <label>
                 <span>识别方式</span>
                 <select value={recognitionMode} onChange={(event) => { setRecognitionMode(event.target.value as "local" | "external"); setExternalConsent(false); }} disabled={busy || disabled}>
-                  <option value="local">本地数学 OCR · 图片不离开设备</option>
-                  <option value="external">DeepSeek Vision / 外部 OCR · 需本次同意</option>
+                  <option value="local">本地图片识别</option>
+                  <option value="external">大模型视觉识别</option>
                 </select>
               </label>
               {recognitionMode === "external" && (
                 <label className="question-recognition__consent">
                   <input type="checkbox" checked={externalConsent} onChange={(event) => setExternalConsent(event.target.checked)} />
-                  <span>我同意仅将这张图片发送给已配置的 DeepSeek Vision 或外部 OCR；本次有效，不改变私人归属。</span>
+                  <span>允许大模型识别这张图片；不改变题目的私人归属。</span>
                 </label>
               )}
               <button type="button" disabled={busy || disabled || (recognitionMode === "external" && !externalConsent)} onClick={() => void recognize()}>

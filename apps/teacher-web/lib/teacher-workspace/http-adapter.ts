@@ -27,6 +27,15 @@ import {
   type PersonalQuestionCollectionList,
   type PersonalQuestionExport,
   type PersonalQuestionList,
+  type LessonBlueprintDraft,
+  type ConfirmedLessonBlueprint,
+  type LessonSourceDraft,
+  type LessonSourceOptions,
+  type LessonEditableDraft,
+  type LessonDraftBlock,
+  type LessonSavedVersion,
+  type LessonVersionHistoryItem,
+  type LessonVersionHistoryList,
   type PaperBlueprintDraft,
   type PaperBlueprintSelectionDraft,
   type PaperPublicQuestionCandidateList,
@@ -413,6 +422,191 @@ async function readSolveStream(
 }
 
 export class HttpTeacherWorkspace implements TeacherWorkspace {
+  planLessonBlueprint(brief: string, signal?: AbortSignal): Promise<LessonBlueprintDraft> {
+    return libraryJsonRequest(
+      "/api/v1/lesson-plans/blueprints/plan",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ brief }),
+        signal,
+      },
+      "无法整理教案蓝图。",
+    );
+  }
+
+  listLessonSourceOptions(
+    blueprint: LessonBlueprintDraft,
+    signal?: AbortSignal,
+  ): Promise<LessonSourceOptions> {
+    return libraryJsonRequest(
+      "/api/v1/lesson-plans/blueprints/source-options",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ blueprint }),
+        signal,
+      },
+      "无法读取受控教案来源。",
+    );
+  }
+
+  selectLessonSources(
+    blueprint: ConfirmedLessonBlueprint,
+    selectedPublicQuestionIds: string[],
+    selectedPrivateQuestionIds: string[],
+    selectedPrivateResourceIds: string[],
+    signal?: AbortSignal,
+  ): Promise<LessonSourceDraft> {
+    return libraryJsonRequest(
+      "/api/v1/lesson-plans/blueprints/select-sources",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          blueprint,
+          selected_public_question_ids: selectedPublicQuestionIds,
+          selected_private_question_ids: selectedPrivateQuestionIds,
+          selected_private_resource_ids: selectedPrivateResourceIds,
+        }),
+        signal,
+      },
+      "无法确认教案来源。",
+    );
+  }
+
+  buildLessonDraft(
+    sourceDraft: LessonSourceDraft,
+    signal?: AbortSignal,
+  ): Promise<LessonEditableDraft> {
+    return libraryJsonRequest(
+      "/api/v1/lesson-plans/blueprints/build-draft",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ source_draft: sourceDraft }),
+        signal,
+      },
+      "无法生成完整教案草稿。",
+    );
+  }
+
+  rewriteLessonDraftBlock(
+    draft: LessonEditableDraft,
+    targetBlock: LessonDraftBlock,
+    instruction: string,
+    signal?: AbortSignal,
+  ): Promise<LessonEditableDraft> {
+    return libraryJsonRequest(
+      "/api/v1/lesson-plans/blueprints/rewrite-block",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          draft,
+          target_block: targetBlock,
+          instruction,
+          expected_draft_revision: draft.draft_revision,
+        }),
+        signal,
+      },
+      "无法完成教案内容块的定向重写。",
+    );
+  }
+
+  saveLessonVersion(
+    draft: LessonEditableDraft,
+    lessonPlanId: string | null = null,
+    signal?: AbortSignal,
+  ): Promise<LessonSavedVersion> {
+    return libraryJsonRequest(
+      "/api/v1/lesson-plans/versions/save",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ draft, lesson_plan_id: lessonPlanId, confirmed: true }),
+        signal,
+      },
+      "无法保存教案版本。",
+    );
+  }
+
+  listLessonVersionHistory(
+    lifecycleState: "active" | "trashed" = "active",
+    signal?: AbortSignal,
+  ): Promise<LessonVersionHistoryList> {
+    return libraryJsonRequest(
+      `/api/v1/lesson-plans/versions/history?lifecycle_state=${lifecycleState}`,
+      { method: "GET", signal },
+      "无法读取教案历史。",
+    );
+  }
+
+  getLessonVersion(
+    lessonPlanId: string,
+    version?: number,
+    signal?: AbortSignal,
+  ): Promise<LessonSavedVersion> {
+    const query = version ? `?version=${version}` : "";
+    return libraryJsonRequest(
+      `/api/v1/lesson-plans/versions/${lessonPlanId}${query}`,
+      { method: "GET", signal },
+      "无法打开教案版本。",
+    );
+  }
+
+  changeLessonVersionLifecycle(
+    lessonPlanId: string,
+    action: "trash" | "restore",
+    signal?: AbortSignal,
+  ): Promise<LessonVersionHistoryItem> {
+    return libraryJsonRequest(
+      `/api/v1/lesson-plans/versions/${lessonPlanId}/lifecycle`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action }),
+        signal,
+      },
+      action === "trash" ? "无法移入教案回收站。" : "无法恢复教案。",
+    );
+  }
+
+  async exportLessonVersion(
+    lessonPlanId: string,
+    version: number,
+    format: "docx" | "pdf",
+    signal?: AbortSignal,
+  ): Promise<PaperExportArtifact> {
+    try {
+      const params = new URLSearchParams({ version: String(version), format });
+      const response = await fetch(apiUrl(
+        `/api/v1/lesson-plans/versions/${encodeURIComponent(lessonPlanId)}/export?${params.toString()}`,
+      ), {
+        headers: {
+          Accept: format === "pdf"
+            ? "application/pdf"
+            : "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        },
+        signal,
+      });
+      if (!response.ok) throw await responseError(response);
+      const disposition = response.headers.get("Content-Disposition") ?? "";
+      const encodedName = disposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
+      const plainName = disposition.match(/filename="?([^";]+)"?/i)?.[1];
+      return {
+        blob: await response.blob(),
+        filename: encodedName
+          ? decodeURIComponent(encodedName)
+          : plainName ?? `lesson-plan-v${version}.${format}`,
+      };
+    } catch (cause) {
+      if (cause instanceof TeacherWorkspaceError) throw cause;
+      if (cause instanceof DOMException && cause.name === "AbortError") throw cause;
+      throw new TeacherWorkspaceError("NETWORK_ERROR", "无法导出这个已保存教案版本。");
+    }
+  }
+
   planPaperBlueprint(brief: string, signal?: AbortSignal): Promise<PaperBlueprintDraft> {
     return libraryJsonRequest(
       "/api/v1/exam-papers/blueprints/plan",
@@ -907,7 +1101,7 @@ export class HttpTeacherWorkspace implements TeacherWorkspace {
       : `/api/v1/library/${encodedId}/local-math-ocr/jobs`;
     if (signal?.aborted) throw abortError();
     try {
-      onProgress?.(isExternal ? "正在准备外部 OCR" : "正在准备本地数学 OCR");
+      onProgress?.(isExternal ? "正在准备大模型识别" : "正在准备识别");
       const startResponse = await fetch(apiUrl(endpoint), {
         method: "POST",
         headers: isExternal
@@ -967,11 +1161,19 @@ export class HttpTeacherWorkspace implements TeacherWorkspace {
 
   preparePrivateLibraryQuestionCandidates(
     itemId: string,
+    request: { externalProcessingConsent: boolean },
     signal?: AbortSignal,
   ): Promise<PrivateLibraryQuestionCandidateList> {
     return libraryJsonRequest(
       `/api/v1/library/${encodeURIComponent(itemId)}/question-candidates`,
-      { method: "POST", signal },
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          external_processing_consent: request.externalProcessingConsent,
+        }),
+        signal,
+      },
       "无法从确认文本生成拆题候选。",
     );
   }

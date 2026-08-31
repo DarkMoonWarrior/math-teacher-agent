@@ -19,11 +19,13 @@ from app.modules.private_library import (
     LibraryOCRResult,
     LibraryAIRepairCommand,
     LibraryAIRepairResult,
+    LibraryQuestionExtractionCommand,
     LibraryItemList,
     LibraryItemView,
     LibraryStats,
     LibraryTextReviewCommand,
     LibraryTextRevisionList,
+    DeepSeekResourceOCRProvider,
     OCRProviderError,
     OpenAIResourceOCRProvider,
     LocalMathOCRProvider,
@@ -64,10 +66,20 @@ def get_library_question_bank() -> QuestionBank:
     return QuestionBank(settings.question_bank_db, settings.question_media_dir)
 
 
-def get_library_ocr_provider() -> OpenAIResourceOCRProvider:
+def get_library_ocr_provider() -> DeepSeekResourceOCRProvider | OpenAIResourceOCRProvider:
     settings = get_settings()
+    if settings.deepseek_api_key:
+        return DeepSeekResourceOCRProvider(
+            api_key=settings.deepseek_api_key,
+            model=settings.deepseek_vision_model,
+            base_url=settings.deepseek_base_url,
+            timeout_seconds=settings.deepseek_timeout_seconds,
+            recorder=get_model_operations_registry(),
+        )
     if not settings.openai_api_key:
-        raise RuntimeError("尚未配置 OCR 服务；可先人工转录，或配置 MATH_AI_OPENAI_API_KEY")
+        raise RuntimeError(
+            "尚未配置题目识别服务；请配置 MATH_AI_DEEPSEEK_API_KEY"
+        )
     return OpenAIResourceOCRProvider(
         api_key=settings.openai_api_key,
         model=settings.openai_model,
@@ -88,7 +100,19 @@ def get_library_text_renderer() -> LibraryTextRenderer:
 def get_library_ai_repair_client() -> DeepSeekJsonClient:
     settings = get_settings()
     if not settings.deepseek_api_key:
-        raise RuntimeError("尚未配置 DeepSeek API Key")
+        raise RuntimeError("尚未配置大模型识别服务")
+    return DeepSeekJsonClient(
+        api_key=settings.deepseek_api_key,
+        model=settings.deepseek_model,
+        base_url=settings.deepseek_base_url,
+        timeout_seconds=settings.deepseek_timeout_seconds,
+    )
+
+
+def get_library_question_extraction_client() -> DeepSeekJsonClient:
+    settings = get_settings()
+    if not settings.deepseek_api_key:
+        raise RuntimeError("尚未配置大模型题目提取服务")
     return DeepSeekJsonClient(
         api_key=settings.deepseek_api_key,
         model=settings.deepseek_model,
@@ -124,6 +148,138 @@ def _split_latex_repair_draft(text: str, *, max_chars: int = 7000) -> list[str]:
     return chunks
 
 
+def _question_extraction_schema() -> dict:
+    nullable_string = {"anyOf": [{"type": "string"}, {"type": "null"}]}
+    return {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {
+            "questions": {
+                "type": "array",
+                "maxItems": 100,
+                "items": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "properties": {
+                        "question_type": {
+                            "type": "string",
+                            "enum": [
+                                "single_choice",
+                                "multiple_choice",
+                                "fill_blank",
+                                "open_response",
+                            ],
+                        },
+                        "stem_plain": {"type": "string"},
+                        "stem_latex": nullable_string,
+                        "options": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "additionalProperties": False,
+                                "properties": {
+                                    "key": {"type": "string"},
+                                    "text": {"type": "string"},
+                                },
+                                "required": ["key", "text"],
+                            },
+                        },
+                        "answer_value": nullable_string,
+                        "solution_method": {"type": "string"},
+                        "solution_steps": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                        },
+                        "final_answer": nullable_string,
+                        "difficulty": {"type": "integer", "minimum": 1, "maximum": 5},
+                        "warnings": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                        },
+                    },
+                    "required": [
+                        "question_type",
+                        "stem_plain",
+                        "stem_latex",
+                        "options",
+                        "answer_value",
+                        "solution_method",
+                        "solution_steps",
+                        "final_answer",
+                        "difficulty",
+                        "warnings",
+                    ],
+                },
+            }
+        },
+        "required": ["questions"],
+    }
+
+
+def _extract_questions_with_deepseek(
+    text: str, *, client: DeepSeekJsonClient
+) -> list[tuple[QuestionCandidateUpdate, list[str]]]:
+    extracted: list[tuple[QuestionCandidateUpdate, list[str]]] = []
+    seen: set[str] = set()
+    chunks = _split_latex_repair_draft(text, max_chars=7000)
+    for index, chunk in enumerate(chunks, start=1):
+        raw = client.request(
+            instructions=(
+                "你是高中数学 PDF 逐题提取助手。只依据教师已确认的 PDF 转录文本，按原顺序逐题提取"
+                "题干、选项、答案和解析；删除页眉、页脚、目录、题型说明与无关正文。"
+                "不得补造原文没有的条件、答案或解析。stem_plain 必须是正常可读的中文题面，"
+                "不能包含 JSON、OCR 占位符或私用区乱码；stem_latex 保留完整中文并把数学表达式写在"
+                " $...$ 或 $$...$$ 中。原文没有答案或解析时使用 null 或空数组，并在 warnings 说明。"
+            ),
+            input_text=json.dumps(
+                {
+                    "chunk_position": f"{index}/{len(chunks)}",
+                    "confirmed_pdf_text": chunk,
+                },
+                ensure_ascii=False,
+            ),
+            action="私人 PDF 逐题提取",
+            output_schema=_question_extraction_schema(),
+            max_tokens=8192,
+        )
+        content = json.loads(raw["output"][0]["content"][0]["text"])
+        questions = content.get("questions")
+        if not isinstance(questions, list):
+            raise ValueError("questions 不是数组")
+        for raw_question in questions:
+            if not isinstance(raw_question, dict):
+                raise ValueError("题目条目不是对象")
+            value = dict(raw_question)
+            warning_values = value.pop("warnings", [])
+            if not isinstance(warning_values, list):
+                raise ValueError("warnings 不是数组")
+            warnings = [
+                str(item).strip() for item in warning_values if str(item).strip()
+            ]
+            draft = QuestionCandidateUpdate.model_validate(value)
+            stem = draft.stem_plain.strip()
+            if re.search(r"[\ue000-\uf8ff�□■]", stem):
+                raise ValueError("题面仍包含 PDF 私有字体或缺失映射字符")
+            key = re.sub(r"\s+", "", stem)
+            if key in seen:
+                continue
+            seen.add(key)
+            extracted.append(
+                (
+                    draft,
+                    list(
+                        dict.fromkeys(
+                            [
+                                *warnings,
+                                "大模型仅完成逐题结构化；题面、答案和解析仍需教师逐项核对。",
+                            ]
+                        )
+                    ),
+                )
+            )
+    return extracted
+
+
 @router.get("", response_model=LibraryItemList)
 def list_library_items(
     limit: int = Query(default=50, ge=1, le=100),
@@ -151,9 +307,9 @@ def library_stats(
 async def upload_library_item(
     file: UploadFile = File(...),
     title: str = Form("", max_length=300),
-    rights_basis: RightsBasis = Form(...),
-    rights_statement: str = Form(..., min_length=6, max_length=2000),
-    rights_acknowledged: bool = Form(...),
+    rights_basis: RightsBasis = Form("private_teaching_only"),
+    rights_statement: str = Form(""),
+    rights_acknowledged: bool = Form(True),
     current_teacher: CurrentTeacher = Depends(get_current_teacher),
 ) -> LibraryItemView:
     try:
@@ -340,7 +496,8 @@ def start_library_ocr_job(
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
     def runner(progress):
-        progress(0, 1, "正在调用已配置的外部 OCR")
+        provider_label = "大模型视觉识别" if provider.name == "deepseek" else "大模型识别"
+        progress(0, 1, f"正在调用{provider_label}")
         item, provider_name, warnings = get_private_library().apply_ocr(
             item_id,
             provider=provider,
@@ -348,7 +505,7 @@ def start_library_ocr_job(
             owner_id=current_teacher.teacher_id,
             teacher_id=current_teacher.teacher_id,
         )
-        progress(1, 1, "OCR 草稿已生成，等待教师校对")
+        progress(1, 1, "可读题目草稿已生成，等待教师校对")
         return LibraryOCRResult(
             item=item,
             provider=provider_name,
@@ -371,16 +528,16 @@ def start_library_ai_repair_job(
 ) -> BackgroundJobView:
     # Validate consent and item synchronously so invalid jobs never enter the queue.
     if not command.external_processing_consent:
-        raise HTTPException(status_code=422, detail="使用 DeepSeek 修复前必须明确同意发送当前校对草稿")
+        raise HTTPException(status_code=422, detail="使用大模型修复前必须允许处理当前校对草稿")
     try:
         get_private_library().get(item_id, owner_id=current_teacher.teacher_id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="私人资料不存在") from exc
 
     def runner(progress):
-        progress(0, 1, "正在调用 DeepSeek 修复 LaTeX 草稿")
+        progress(0, 1, "正在调用大模型修复 LaTeX 草稿")
         result = repair_library_latex(item_id, command, current_teacher)
-        progress(1, 1, "DeepSeek 草稿修复完成")
+        progress(1, 1, "大模型草稿修复完成")
         return result.model_dump(mode="json")
 
     return _background_jobs.start(
@@ -411,7 +568,7 @@ def repair_library_latex(
     if not command.external_processing_consent:
         raise HTTPException(
             status_code=422,
-            detail="使用 DeepSeek 修复前必须明确同意发送当前校对草稿；原 PDF 不会发送",
+            detail="使用大模型修复前必须允许处理当前校对草稿；原 PDF 不会发送",
         )
     try:
         item = get_private_library().get(
@@ -474,7 +631,7 @@ def repair_library_latex(
         ValueError,
         json.JSONDecodeError,
     ) as exc:
-        raise HTTPException(status_code=503, detail=f"DeepSeek LaTeX 修复失败：{exc}") from exc
+        raise HTTPException(status_code=503, detail=f"大模型 LaTeX 修复失败：{exc}") from exc
     return LibraryAIRepairResult(
         repaired_text=repaired,
         provider="deepseek",
@@ -531,16 +688,50 @@ def list_question_candidates(
 @router.post("/{item_id}/question-candidates", response_model=QuestionCandidateList)
 def propose_question_candidates(
     item_id: str,
+    command: LibraryQuestionExtractionCommand | None = None,
     current_teacher: CurrentTeacher = Depends(get_current_teacher),
 ) -> QuestionCandidateList:
     try:
-        return get_private_library().propose_questions(
+        library = get_private_library()
+        existing = library.list_question_candidates(
             item_id, owner_id=current_teacher.teacher_id
+        )
+        if existing.items:
+            return existing
+        item = library.get(item_id, owner_id=current_teacher.teacher_id)
+        if item.text_review_status != "confirmed":
+            raise PrivateLibraryError("只有教师已确认的文本才能生成拆题候选")
+        if item.file_kind != "pdf":
+            return library.propose_questions(
+                item_id, owner_id=current_teacher.teacher_id
+            )
+        command = command or LibraryQuestionExtractionCommand()
+        if not command.external_processing_consent:
+            raise PrivateLibraryError(
+                "使用大模型提取 PDF 题目之前，必须允许处理已确认的校对文本"
+            )
+        structured = _extract_questions_with_deepseek(
+            item.corrected_text,
+            client=get_library_question_extraction_client(),
+        )
+        return library.propose_questions(
+            item_id,
+            owner_id=current_teacher.teacher_id,
+            structured_questions=structured,
         )
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="私人资料不存在") from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     except PrivateLibraryError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except (
+        DeepSeekClientError,
+        TypeError,
+        ValueError,
+        json.JSONDecodeError,
+    ) as exc:
+        raise HTTPException(status_code=503, detail=f"大模型 PDF 题目提取失败：{exc}") from exc
 
 
 @router.patch(

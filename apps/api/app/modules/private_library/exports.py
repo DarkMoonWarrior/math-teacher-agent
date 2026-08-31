@@ -34,7 +34,7 @@ class LibraryTextRenderer:
 
     def render(self, item: LibraryItemView, export_format: Literal["docx", "pdf"]) -> RenderedLibraryText:
         if item.extraction_status == "needs_ocr":
-            raise LibraryExportError("当前文本包含 PDF 私有字体乱码，请先运行本地数学 OCR 或完成人工转录后再导出")
+            raise LibraryExportError("当前文本包含 PDF 私有字体乱码，请先运行大模型识别或完成人工转录后再导出")
         text = item.corrected_text.strip()
         if not text:
             raise LibraryExportError("尚无可导出的校对文本，请先运行 OCR 或保存校对稿")

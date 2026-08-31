@@ -51,10 +51,14 @@ import { PrivateLibraryWorkspace } from "./private-library-workspace";
 import { QuestionMediaComposer } from "./question-media-composer";
 import { PersonalQuestionAuthoringWorkspace } from "./personal-question-authoring-workspace";
 import { PaperBlueprintWorkspace } from "./paper-blueprint-workspace";
+import { LessonBlueprintWorkspace } from "./lesson-blueprint-workspace";
+import { ResizableSplitPane } from "./resizable-split-pane";
 
 type Phase = "idle" | "running" | "success" | "error" | "cancelled";
 type FlipDirection = "next" | "previous";
 type CapabilityId = "search" | "solve" | "library" | "lesson" | "paper";
+type RunnableCapabilityId = "search" | "solve";
+type PersistentWorkspaceId = "authoring" | "library" | "lesson" | "paper";
 
 type SearchTaskRecord = {
   id: string;
@@ -316,14 +320,14 @@ const CAPABILITIES: Record<CapabilityId, CapabilityDefinition> = {
   lesson: {
     id: "lesson",
     label: "教案",
-    ready: false,
-    status: "Lesson Agent · 运行时待接入",
+    ready: true,
+    status: "Lesson Agent · 教案蓝图规划已接入",
     title: ["把一节课，", "整理成可修改的教案。"],
     intro: "从课题、学情和课时出发，组织教学目标、重难点、课堂活动与板书。所有生成内容先是草案，由教师决定是否采用。",
     inputLabel: "描述教案需求",
     placeholder: "例如：为高二椭圆第一课时准备一份 45 分钟新授课教案",
-    actionLabel: "运行时待接入",
-    stageLabel: "教案工作流预览",
+    actionLabel: "整理教案蓝图",
+    stageLabel: "教案蓝图规划",
     stageTitle: "从教学目标，到课堂节奏",
     examples: [
       {
@@ -558,15 +562,22 @@ export function TeacherWorkbench() {
     source: QuestionAuthoringEntrySource;
     brief: string;
   } | null>(null);
+  const [authoringActive, setAuthoringActive] = useState(false);
+  const [workspaceResetVersions, setWorkspaceResetVersions] = useState<Record<PersistentWorkspaceId, number>>({
+    authoring: 0,
+    library: 0,
+    lesson: 0,
+    paper: 0,
+  });
   const [previewPage, setPreviewPage] = useState(0);
   const [questionPage, setQuestionPage] = useState(0);
   const [solvePage, setSolvePage] = useState(0);
   const [turning, setTurning] = useState(false);
   const [flipDirection, setFlipDirection] = useState<FlipDirection>("next");
   const sessionRef = useRef("");
-  const abortRef = useRef<AbortController | null>(null);
+  const abortRefs = useRef<Record<RunnableCapabilityId, AbortController | null>>({ search: null, solve: null });
   const turnTimerRef = useRef<number | null>(null);
-  const requestSequenceRef = useRef(0);
+  const requestSequenceRefs = useRef<Record<RunnableCapabilityId, number>>({ search: 0, solve: 0 });
   const resultRegionRef = useRef<HTMLElement | null>(null);
   const taskInputRef = useRef<HTMLTextAreaElement | null>(null);
   const historyTriggerRef = useRef<HTMLButtonElement | null>(null);
@@ -580,8 +591,9 @@ export function TeacherWorkbench() {
   const searchVisible = capability === "search";
   const solveVisible = capability === "solve";
   const libraryVisible = capability === "library";
+  const lessonVisible = capability === "lesson";
   const paperVisible = capability === "paper";
-  const authoringVisible = authoringEntry !== null;
+  const authoringVisible = authoringActive;
   const runnable = searchVisible || solveVisible;
   const error = runnable ? errors[capability as "search" | "solve"] : null;
   const running = runnable && phase === "running";
@@ -669,7 +681,8 @@ export function TeacherWorkbench() {
   useEffect(() => {
     return () => {
       if (turnTimerRef.current !== null) window.clearTimeout(turnTimerRef.current);
-      abortRef.current?.abort();
+      abortRefs.current.search?.abort();
+      abortRefs.current.solve?.abort();
     };
   }, []);
 
@@ -737,18 +750,19 @@ export function TeacherWorkbench() {
   async function runTask(event?: FormEvent<HTMLFormElement>) {
     event?.preventDefault();
     if (!runnable) return;
+    const target = capability as RunnableCapabilityId;
     const trimmed = query.trim();
     setTouched(true);
     if (!queryValid || running) return;
 
     if (!sessionRef.current) sessionRef.current = createSessionId();
-    const requestSequence = ++requestSequenceRef.current;
+    const requestSequence = ++requestSequenceRefs.current[target];
     const controller = new AbortController();
-    abortRef.current = controller;
-    setPhase("running");
+    abortRefs.current[target] = controller;
+    setPhase("running", target);
     if (searchVisible) setSearchProgress("connecting");
     else setSolveProgress("connecting");
-    setError(null);
+    setError(null, target);
     setQuestionPage(0);
     setSolvePage(0);
     scrollToResultRegion();
@@ -760,13 +774,13 @@ export function TeacherWorkbench() {
           {
             signal: controller.signal,
             onProgress: (progress) => {
-              if (requestSequence === requestSequenceRef.current) {
+              if (requestSequence === requestSequenceRefs.current[target]) {
                 setSearchProgress(progress.stage);
               }
             },
           },
         );
-        if (requestSequence !== requestSequenceRef.current) return;
+        if (requestSequence !== requestSequenceRefs.current[target]) return;
         setResult(nextResult);
         setHistory((current) => [
           {
@@ -790,13 +804,13 @@ export function TeacherWorkbench() {
           {
             signal: controller.signal,
             onProgress: (progress) => {
-              if (requestSequence === requestSequenceRef.current) {
+              if (requestSequence === requestSequenceRefs.current[target]) {
                 setSolveProgress(progress.stage);
               }
             },
           },
         );
-        if (requestSequence !== requestSequenceRef.current) return;
+        if (requestSequence !== requestSequenceRefs.current[target]) return;
         setSolveResult(nextResult);
         setHistory((current) => [
           {
@@ -808,21 +822,21 @@ export function TeacherWorkbench() {
           ...current.filter((item) => item.id !== nextResult.run_id).slice(0, 7),
         ]);
       }
-      setPhase("success");
+      setPhase("success", target);
       scrollToResultRegion();
     } catch (cause) {
-      if (requestSequence !== requestSequenceRef.current) return;
+      if (requestSequence !== requestSequenceRefs.current[target]) return;
       if (cause instanceof DOMException && cause.name === "AbortError") {
-        setPhase("cancelled");
+        setPhase("cancelled", target);
         return;
       }
       const nextError = cause instanceof TeacherWorkspaceError
         ? { code: cause.code, message: cause.message, requestId: cause.requestId }
         : { code: "UNKNOWN_ERROR", message: "任务未完成。请检查服务状态后重试。", requestId: "" };
-      setError(nextError);
-      setPhase("error");
+      setError(nextError, target);
+      setPhase("error", target);
     } finally {
-      if (requestSequence === requestSequenceRef.current) abortRef.current = null;
+      if (requestSequence === requestSequenceRefs.current[target]) abortRefs.current[target] = null;
     }
   }
 
@@ -836,22 +850,16 @@ export function TeacherWorkbench() {
   function selectCapability(nextCapability: CapabilityId) {
     if (turning) return;
     if (nextCapability === capability) {
-      setAuthoringEntry(null);
+      setAuthoringActive(false);
       setNewTaskOpen(false);
       return;
-    }
-    if (running) {
-      requestSequenceRef.current += 1;
-      abortRef.current?.abort();
-      abortRef.current = null;
-      setPhase("cancelled");
     }
 
     const currentIndex = CAPABILITY_ORDER.indexOf(capability);
     const nextIndex = CAPABILITY_ORDER.indexOf(nextCapability);
     setFlipDirection(nextIndex > currentIndex ? "next" : "previous");
     setTurning(true);
-    setAuthoringEntry(null);
+    setAuthoringActive(false);
     setNewTaskOpen(false);
     setTouched(false);
     if (turnTimerRef.current !== null) window.clearTimeout(turnTimerRef.current);
@@ -864,18 +872,32 @@ export function TeacherWorkbench() {
 
   function resetTask() {
     if (authoringVisible) {
-      setAuthoringEntry(null);
+      setWorkspaceResetVersions((current) => ({ ...current, authoring: current.authoring + 1 }));
+      setAuthoringEntry({ source: "new_task", brief: "" });
       setNewTaskOpen(false);
-      window.setTimeout(returnToComposer, 0);
       return;
     }
     if (libraryVisible) {
-      selectCapability("search");
+      setWorkspaceResetVersions((current) => ({ ...current, library: current.library + 1 }));
+      setNewTaskOpen(false);
       return;
     }
-    requestSequenceRef.current += 1;
-    abortRef.current?.abort();
-    abortRef.current = null;
+    if (lessonVisible) {
+      setDrafts((current) => ({ ...current, lesson: "" }));
+      setWorkspaceResetVersions((current) => ({ ...current, lesson: current.lesson + 1 }));
+      setNewTaskOpen(false);
+      return;
+    }
+    if (paperVisible) {
+      setDrafts((current) => ({ ...current, paper: "" }));
+      setWorkspaceResetVersions((current) => ({ ...current, paper: current.paper + 1 }));
+      setNewTaskOpen(false);
+      return;
+    }
+    const target = capability as RunnableCapabilityId;
+    requestSequenceRefs.current[target] += 1;
+    abortRefs.current[target]?.abort();
+    abortRefs.current[target] = null;
     setDrafts((current) => ({ ...current, [capability]: "" }));
     setTouched(false);
     setPreviewPage(0);
@@ -897,16 +919,18 @@ export function TeacherWorkbench() {
   }
 
   function openAuthoring(source: QuestionAuthoringEntrySource, brief = "") {
-    if (running || turning) return;
+    if (turning) return;
     setNewTaskOpen(false);
-    setAuthoringEntry({ source, brief: brief.trim() });
+    setAuthoringEntry((current) => current ?? { source, brief: brief.trim() });
+    setAuthoringActive(true);
     window.requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "auto" }));
   }
 
   function openTask(task: TaskRecord) {
-    requestSequenceRef.current += 1;
-    abortRef.current?.abort();
-    abortRef.current = null;
+    requestSequenceRefs.current[task.capability] += 1;
+    abortRefs.current[task.capability]?.abort();
+    abortRefs.current[task.capability] = null;
+    setAuthoringActive(false);
     setCapability(task.capability);
     setDrafts((current) => ({ ...current, [task.capability]: task.query }));
     if (task.capability === "search") {
@@ -983,7 +1007,7 @@ export function TeacherWorkbench() {
                     aria-label="命题，已接入"
                     aria-pressed={authoringVisible}
                     className={authoringVisible ? "is-active" : ""}
-                    disabled={turning || running}
+                    disabled={turning}
                     key={id}
                     onClick={() => openAuthoring("new_task")}
                     type="button"
@@ -1034,20 +1058,41 @@ export function TeacherWorkbench() {
         </div>
       </header>
 
-      {authoringEntry ? (
-        <PersonalQuestionAuthoringWorkspace
-          initialBrief={authoringEntry.brief}
+      <div data-workspace-view="authoring" hidden={!authoringVisible}>
+        {authoringEntry && (
+          <PersonalQuestionAuthoringWorkspace
+            initialBrief={authoringEntry.brief}
+            key={`authoring-${workspaceResetVersions.authoring}`}
+          />
+        )}
+      </div>
+      <div data-workspace-view="library" hidden={!libraryVisible}>
+        <PrivateLibraryWorkspace key={`library-${workspaceResetVersions.library}`} />
+      </div>
+      <div data-workspace-view="lesson" hidden={!lessonVisible}>
+        <LessonBlueprintWorkspace
+          initialBrief={drafts.lesson}
+          key={`lesson-${workspaceResetVersions.lesson}`}
+          onBriefChange={(brief) => setDrafts((current) => ({ ...current, lesson: brief }))}
         />
-      ) : libraryVisible ? (
-        <PrivateLibraryWorkspace />
-      ) : paperVisible ? (
+      </div>
+      <div data-workspace-view="paper" hidden={!paperVisible}>
         <PaperBlueprintWorkspace
           initialBrief={drafts.paper}
+          key={`paper-${workspaceResetVersions.paper}`}
           onBriefChange={(brief) => setDrafts((current) => ({ ...current, paper: brief }))}
           onOpenAuthoring={(brief) => openAuthoring("paper", brief)}
         />
-      ) : (
-      <main className="marquee-workspace">
+      </div>
+      <div data-workspace-view="search-solve" hidden={authoringVisible || libraryVisible || lessonVisible || paperVisible}>
+      <main className="marquee-workspace marquee-workspace--split">
+        <ResizableSplitPane
+          ariaLabel={`调整${definition.label}要求与结果区域宽度`}
+          className="search-solve-split"
+          defaultPrimaryPercent={40}
+          disabled={running}
+          state={phase === "error" ? "error" : running ? "loading" : phase === "success" ? "success" : "default"}
+        >
         <section className="task-pane">
           <div className="task-pane__intro">
             <p className="mode-status"><i className={definition.ready ? "is-ready" : ""} aria-hidden="true" />{definition.status}</p>
@@ -1105,7 +1150,7 @@ export function TeacherWorkbench() {
                   {validationMessage || (runnable ? "Ctrl ↵ 运行" : "可以先整理需求；该 Agent 尚未接入运行时。")}
                 </span>
                 {running ? (
-                  <button className="cancel-button" type="button" onClick={() => abortRef.current?.abort()}>
+                  <button className="cancel-button" type="button" onClick={() => abortRefs.current[capability as RunnableCapabilityId]?.abort()}>
                     <CloseIcon /><span>取消</span>
                   </button>
                 ) : (
@@ -1233,8 +1278,9 @@ export function TeacherWorkbench() {
             <SolveResultBrief result={solveResult} />
           )}
         </section>
+        </ResizableSplitPane>
       </main>
-      )}
+      </div>
 
       <footer className="inline-footer">
         <span>备课伙伴</span>

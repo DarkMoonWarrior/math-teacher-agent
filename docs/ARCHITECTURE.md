@@ -97,9 +97,11 @@ apps/web (legacy/reference Next.js UI, :3000)
 - Selection seam: `PaperBlueprintSelection.select` 只在教师确认后调用受控题库能力。公共题经过范围、权利、verification、review、active 与相似度门禁；私题只允许当前 owner 明确选择，且保持 owner/visibility/revision 不变。供给不足返回真实缺口，不调用辅助命题。
 - Audit/edit seam: `PaperBlueprintCoverage.audit` 用确定性规则核对分区和配分，并归纳教师所选题目的实际知识范围与难度；后两者是非阻断分析。`PaperEditableDrafting.build` 在服务器重新执行选题后，只接受完整的题号/分区/分值布局编辑并生成草稿指纹、修改记录和双向细目表。两者都无业务写入。
 - Version seam: `PaperVersioning.save` 是第五切片的唯一持久化入口。Teacher Web 对所有保存请求先提供取消/确认二次选择；它从 current-teacher context 获得 owner，重新解析公共题和当前 owner 私题的精确 current revision，重新构建草稿并核对浏览器持有的 `draft_fingerprint`、题目完整性和可信状态。题量、题型/分区、配分、总分、知识范围和难度按实际状态写入版本与细目表，但不阻止教师确认保存；无题、题目不完整、越权、可信状态变化或过期指纹仍 fail closed。成功时调用 `ExamPaperStudio` 建立 append-only 不可变版本；失败没有版本副作用。
+- Lesson version seam: `LessonVersioning` 是 M10 第五切片唯一持久化 Interface。保存、历史读取和回收/恢复的 owner 只取 current-teacher context；保存前重新构建来源草案，核对教材、公共题、当前 owner 私题/资料及精确 revision，并再次执行完整性、课时对应和高中范围检查。每次成功保存追加不可变快照，编辑历史教案产生新版本，不覆盖旧版本；跨 owner 读取/生命周期操作按不存在处理，保存不把 `draft_requires_teacher_review` 升级为已验证。
+- Lesson export seam: `LessonSavedExporting.export` 只接受 current-teacher owner 的精确 `lesson_plan_id + version + format`，读取 `LessonVersioning` 的不可变快照并复核草稿指纹；`SavedLessonPlanDocumentRenderer` 是 DOCX/PDF Adapter，完整渲染目标、流程、题面/选项/答案/解析、评价与来源摘要。导出不读取页面草稿、来源最新 revision 或其他 owner 内容，也不改变业务状态。
 - Export seam: `PaperSavedExporting.export` 只接受当前 owner 的精确 `paper_id + version + kind + format`，读取保存时的题目快照与双向细目表，不读取页面草稿或题库最新 revision。它复用 `ExamPaperDocumentRenderer` 生成学生卷、答案卷和双向细目表的 DOCX/PDF，不改变任何业务状态。
 - Ownership: 浏览器和 Agent 均不能提交 owner、版本号生成规则、可信结论或保存结论；跨 owner 的版本与导出统一不可见。保存试卷不会复制、发布或改变 PersonalQuestionLibrary 内容。
-- Current completion boundary: 六条实现切片、28 场景固定 synthetic evaluation、工程回归、权限/仓库卫生和真实浏览器/PDF 回归已通过；当前等待形成可回滚提交和项目所有者阶段确认，因此不能进入 M10。
+- Current completion boundary: M9 已形成可回滚提交并于 2026-08-30 获得项目所有者进入 M10 的确认。M10 六条实现切片、28 场景固定 synthetic evaluation、工程回归、权限/仓库卫生和 DOCX/PDF 视觉检查现已通过；当前等待形成新的可回滚提交和项目所有者阶段确认，因此不能进入 M11。
 
 ### Teacher Agent Runtime module
 

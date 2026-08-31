@@ -9,6 +9,10 @@ import type {
   GeneratedQuestionDraft,
   PersonalAuthoringDraft,
   PersonalQuestion,
+  ConfirmedLessonBlueprint,
+  LessonBlueprintDraft,
+  LessonEditableDraft,
+  LessonSourceDraft,
   PaperBlueprintDraft,
   PaperBlueprintSelectionDraft,
   PaperEditableDraft,
@@ -331,6 +335,137 @@ afterEach(() => {
 });
 
 describe("HttpTeacherWorkspace", () => {
+  it("plans a lesson blueprint without submitting owner, trust facts, or persistence commands", async () => {
+    const blueprint: LessonBlueprintDraft = {
+      status: "lesson_blueprint_draft",
+      editable: true,
+      confirmed: false,
+      saved: false,
+      source_brief: "为高二椭圆准备一节 45 分钟新授课",
+      title: "高二椭圆新授课教案",
+      grade_scope: "高二",
+      lesson_type: "new_lesson",
+      lesson_format: "新授课",
+      duration_minutes: 45,
+      student_profile: "基础中等，需要支架",
+      focus: "椭圆定义与标准方程",
+      question_count: 3,
+      curriculum_query: "椭圆",
+      selected_curriculum_node_id: "ellipse",
+      curriculum_candidates: [{
+        node_id: "ellipse", node_type: "section", name: "椭圆", volume: "选择性必修第一册",
+        chapter: "圆锥曲线的方程", section: "椭圆", description: "椭圆的定义与方程",
+        competencies: ["数学抽象"], common_errors: ["忽略焦点位置"],
+        catalog_status: "draft_for_teacher_review", reviewed_by: "pending_owner_teacher", match_score: 1,
+      }],
+      objectives: ["理解椭圆定义"],
+      key_points: ["椭圆定义"],
+      difficulties: ["建系与化简"],
+      phases: [
+        { phase_id: "intro", title: "导入", minutes: 5, purpose: "唤起经验" },
+        { phase_id: "build", title: "建构", minutes: 25, purpose: "形成定义" },
+        { phase_id: "practice", title: "练习", minutes: 15, purpose: "反馈" },
+      ],
+      required_blocks: ["objectives", "key_points", "difficulties", "teaching_flow", "homework", "board_plan", "teacher_notes"],
+      assumptions: [],
+      trust_policy: {
+        curriculum_source: "sealed_pep_a_baseline",
+        question_policy: "not_selected_during_planning",
+        private_resource_policy: "explicit_owner_selection_only",
+        ai_content_status: "draft_requires_teacher_review",
+        auto_save_allowed: false,
+        preserves_source_traceability: true,
+      },
+      side_effects: [],
+    };
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify(blueprint), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(new HttpTeacherWorkspace().planLessonBlueprint(blueprint.source_brief)).resolves.toEqual(blueprint);
+
+    const url = fetchMock.mock.calls[0]?.[0];
+    const init = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    expect(url).toBe("/api/v1/lesson-plans/blueprints/plan");
+    expect(init).toEqual(expect.objectContaining({ method: "POST" }));
+    expect(JSON.parse(String(init.body))).toEqual({ brief: blueprint.source_brief });
+    expect(String(init.body)).not.toMatch(/owner|visibility|auto_save|teacher_id/i);
+  });
+
+  it("confirms and selects lesson sources without browser-owned identity or trust selectors", async () => {
+    const draft = {
+      status: "lesson_blueprint_draft",
+      confirmed: false,
+      source_brief: "高二椭圆新授课",
+      selected_curriculum_node_id: "ellipse",
+    } as LessonBlueprintDraft;
+    const confirmed = {
+      ...draft,
+      status: "lesson_blueprint_confirmed",
+      confirmed: true,
+    } as ConfirmedLessonBlueprint;
+    const sourceDraft = {
+      status: "lesson_source_draft", blueprint: confirmed, editable: true, saved: false,
+      selection_complete: true, curriculum: null, questions: [], private_resources: [], gaps: [],
+      warnings: [], trust_policy: {}, side_effects: [],
+    } as LessonSourceDraft;
+    const lessonDraft = {
+      status: "lesson_editable_draft", draft_revision: 1, source_draft: sourceDraft,
+      editable: true, saved: false, locked_blocks: [], rewrite_history: [], side_effects: [],
+    } as unknown as LessonEditableDraft;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, _init?: RequestInit) => {
+      const url = String(input);
+      const payload = url.endsWith("source-options")
+        ? { status: "lesson_source_options", blueprint: confirmed, public_questions: [], private_questions: [], private_resources: [], trust_statement: "", side_effects: [] }
+        : url.endsWith("build-draft") || url.endsWith("rewrite-block")
+          ? lessonDraft
+          : sourceDraft;
+      return new Response(JSON.stringify(payload), { status: 200, headers: { "Content-Type": "application/json" } });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await new HttpTeacherWorkspace().listLessonSourceOptions(draft);
+    await new HttpTeacherWorkspace().selectLessonSources(
+      confirmed,
+      ["public-1"],
+      ["private-1"],
+      ["resource-1"],
+    );
+    await new HttpTeacherWorkspace().buildLessonDraft(sourceDraft);
+    await new HttpTeacherWorkspace().rewriteLessonDraftBlock(
+      lessonDraft,
+      "homework",
+      "增加分层迁移任务",
+    );
+
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/v1/lesson-plans/blueprints/source-options");
+    expect(JSON.parse(String((fetchMock.mock.calls[0]?.[1] as RequestInit).body))).toEqual({ blueprint: draft });
+    expect(fetchMock.mock.calls[1]?.[0]).toBe("/api/v1/lesson-plans/blueprints/select-sources");
+    const selectionBody = JSON.parse(String((fetchMock.mock.calls[1]?.[1] as RequestInit).body));
+    expect(selectionBody).toEqual({
+      blueprint: confirmed,
+      selected_public_question_ids: ["public-1"],
+      selected_private_question_ids: ["private-1"],
+      selected_private_resource_ids: ["resource-1"],
+    });
+    expect(JSON.stringify(selectionBody)).not.toMatch(/teacher_id|owner_id|visibility|file_path/i);
+    expect(fetchMock.mock.calls[2]?.[0]).toBe("/api/v1/lesson-plans/blueprints/build-draft");
+    const draftingBody = JSON.parse(String((fetchMock.mock.calls[2]?.[1] as RequestInit).body));
+    expect(draftingBody).toEqual({ source_draft: sourceDraft });
+    expect(JSON.stringify(draftingBody)).not.toMatch(/teacher_id|owner_id|visibility|file_path|auto_save/i);
+    expect(fetchMock.mock.calls[3]?.[0]).toBe("/api/v1/lesson-plans/blueprints/rewrite-block");
+    const rewriteBody = JSON.parse(String((fetchMock.mock.calls[3]?.[1] as RequestInit).body));
+    expect(rewriteBody).toEqual({
+      draft: lessonDraft,
+      target_block: "homework",
+      instruction: "增加分层迁移任务",
+      expected_draft_revision: 1,
+    });
+    expect(JSON.stringify(rewriteBody)).not.toMatch(/teacher_id|owner_id|visibility|file_path|auto_save/i);
+  });
+
   it("plans a paper blueprint without submitting owner, trust facts, or persistence commands", async () => {
     const blueprint: PaperBlueprintDraft = {
       status: "draft",
@@ -654,6 +789,26 @@ describe("HttpTeacherWorkspace", () => {
     expect(String(fetchMock.mock.calls[0]?.[0])).toBe("/api/v1/exam-papers/paper%2Funsafe/versions/2/export?format=pdf&edition=answer");
     expect(artifact.filename).toBe("exam-paper-v2-answer.pdf");
     expect(await artifact.blob.text()).toBe("paper");
+  });
+
+  it("downloads only an exact immutable lesson version without an owner selector", async () => {
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(new Blob(["lesson"]), {
+      status: 200,
+      headers: {
+        "Content-Type": "application/pdf",
+        "Content-Disposition": "attachment; filename=lesson-plan-v3.pdf",
+      },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const artifact = await new HttpTeacherWorkspace().exportLessonVersion("lesson/unsafe", 3, "pdf");
+
+    expect(String(fetchMock.mock.calls[0]?.[0])).toBe(
+      "/api/v1/lesson-plans/versions/lesson%2Funsafe/export?version=3&format=pdf",
+    );
+    expect(String(fetchMock.mock.calls[0]?.[0])).not.toContain("owner");
+    expect(artifact.filename).toBe("lesson-plan-v3.pdf");
+    expect(await artifact.blob.text()).toBe("lesson");
   });
 
   it("lists and manages only server-scoped paper history without sending an owner", async () => {
@@ -1003,7 +1158,7 @@ describe("HttpTeacherWorkspace", () => {
       "/api/v1/library/lib_1/local-math-ocr/jobs",
       "/api/v1/library/jobs/job_local",
     ]);
-    expect(progress).toEqual(["正在准备本地数学 OCR", "正在识别", "识别完成"]);
+    expect(progress).toEqual(["正在准备识别", "正在识别", "识别完成"]);
   });
 
   it("sends per-action consent and no private actor metadata to external OCR", async () => {
@@ -1098,7 +1253,9 @@ describe("HttpTeacherWorkspace", () => {
     };
 
     await workspace.listPrivateLibraryQuestionCandidates("lib_1");
-    await workspace.preparePrivateLibraryQuestionCandidates("lib_1");
+    await workspace.preparePrivateLibraryQuestionCandidates("lib_1", {
+      externalProcessingConsent: true,
+    });
     await workspace.updatePrivateLibraryQuestionCandidate("lib_1", "cand_1", draft);
     await workspace.searchCurriculum("函数");
     await workspace.mapPrivateLibraryQuestionCandidateCurriculum("lib_1", "cand_1", "kp_function");
@@ -1114,6 +1271,9 @@ describe("HttpTeacherWorkspace", () => {
       "/api/v1/library/lib_1/question-candidates/cand_1/import",
     ]);
     expect((calls[1]?.[1] as RequestInit).method).toBe("POST");
+    expect(JSON.parse(String((calls[1]?.[1] as RequestInit).body))).toEqual({
+      external_processing_consent: true,
+    });
     expect(JSON.parse(String((calls[2]?.[1] as RequestInit).body))).toEqual(draft);
     expect(JSON.parse(String((calls[4]?.[1] as RequestInit).body))).toEqual({ node_id: "kp_function" });
     expect(String((calls[2]?.[1] as RequestInit).body)).not.toContain("owner_id");

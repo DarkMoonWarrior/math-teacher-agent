@@ -1,5 +1,5 @@
 {
-  "scanned_at": "2026-08-24T16:30:00+08:00",
+  "scanned_at": "2026-08-30T09:02:14+08:00",
   "project_root": "D:\\math-teacher-agent",
   "framework": "Next.js 16 App Router with React 19 and TypeScript",
   "target_route": "/",
@@ -22,6 +22,7 @@
   },
   "constraints": [
     "Chinese high-school mathematics teachers only",
+    "Search, Solve, and Private Library share the reusable resizable Workbench split used by the later teacher modules and stack below 68rem",
     "Search, Solve, Private Library, and owner-only Question Authoring are usable teacher workflows on this page",
     "source, rights, and verification statuses must remain explicit",
     "private and public data boundaries are not changed by this redesign"

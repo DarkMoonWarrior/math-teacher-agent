@@ -1,6 +1,6 @@
 # 当前开发边界
 
-更新日期：2026-08-29
+更新日期：2026-08-30
 状态：当前 source of truth；历史 PDF 和旧 Prompt 保留为决策证据，但不再决定当前阶段编号。
 
 ## 1. 产品定位与唯一目标用户
@@ -50,37 +50,39 @@
 
 辅助命制题使用独立 `PersonalQuestionLibrary` 模块和 owner-isolated storage namespace，不以公共 `QuestionBank` 的一个可变 visibility 字段作为唯一隔离手段。该模块没有 publish/share 接口；后台运营/内容管理员没有内容查看和管理接口。详细规则见 [`M8-PRIVATE-QUESTION-AUTHORING.md`](M8-PRIVATE-QUESTION-AUTHORING.md)。
 
-## 4. 当前阶段：M9 Paper Agent 进行中
+## 4. 当前阶段：M10 Lesson Agent Gate 已通过，等待阶段确认
 
-M0-M8 已完成；M8 的固定评测、Gate E 与 Gate P 于 2026-08-28 通过。项目所有者于 2026-08-28 明确确认进入 M9。当前只开发 Paper Agent；M10 Lesson、M11 Memory 和后续阶段仍未获准启动。
+M0-M9 已完成。M10 六条实现切片、28 场景固定评测、工程回归与 Gate E/Gate P 连续性已经通过；当前只允许完成可回滚提交、项目所有者验收或修复 M10 blocker。项目所有者尚未明确确认进入 M11，因此 M11 Memory 和后续阶段仍未获准启动。
 
 M8 已建立独立 `PersonalQuestionLibrary` 深模块、本地 owner-isolated SQLite namespace、身份绑定的个人题库/分类、结构化生成、六项可信检查、私有命题工作区、append-only revision、显式保存、完整 owner 管理接口及 Teacher Web 入口。教师只需描述命题意图；教材知识点、细分知识点、考查方法和易错点由 Agent 在生成后归纳。provider 先生成不含答案的题面与选项，再独立审核；题面错误进入完善、复审和重新解析，解析错误保留题面并重生成解析。标准答案只从完整解析推导并接受最终一致性审核。正常命题只有题面、选项、可读解析和答案闭环一致后才能完成交付。题面首次或重新审核通过时，owner-scoped 进度 seam 会发布版本化实时题面，右侧可先展示题面并继续显示解析生成状态；题面进入完善时同步标记为调整中。命题限定普通高中数学，明确大学专属术语经受控重写后仍越界才终止。后台任务独立于页面生命周期并可恢复；owner 可显式停止并选择保留或放弃最新已通过题面；保留的停止快照可写入当前 owner 的私题库，但答案和解析必须显式为“无”、标注缺少解析，并允许教师主动加入组卷，公共题库和其他 owner 不可见。模型只能选择受控 Curriculum 节点；浏览器不能提交 owner、隐私状态或可信证据；Agent 没有保存、管理、发布、共享或删除权限。
 
 M9 的固定范围、切片顺序和验收见 [`M9-PAPER-AGENT.md`](M9-PAPER-AGENT.md)。六条纵向切片的实现已经接通：`PaperBlueprintPlanning` 将自然语言整理为可编辑、未确认、未保存的蓝图；教师明确确认后，`PaperBlueprintSelection` 才从通过验证、审核、权利、owner 与相似度门禁的现成题中建立未保存候选草案。教师可分别明确选择公共题和当前 owner 私题；显式选择不再被蓝图软知识范围或难度目标误过滤，未显式选择的公共候选仍按范围匹配，所有候选继续执行高中范围、题型容量、重复和相似度硬门禁。`PaperBlueprintCoverage` 以确定性规则对照分区题量/配分，并在选题完成后自动归纳实际知识范围和 1–5 级难度；所有蓝图偏差只作分析提示。`PaperEditableDrafting` 在服务器重新执行受控选题后，只应用题号、顺序、分区和配分编辑，返回修改记录及双向细目表；`PaperVersioning` 在教师显式保存并完成二次确认后重新解析精确题目 revision、重建草稿并检查指纹及题目可信/完整性门禁，即使题量、分区、配分或总分未达到蓝图也保存当前精确 owner-scoped 不可变版本；`PaperSavedExporting` 只从当前 owner 的指定已保存版本输出学生卷、答案卷和双向细目表 DOCX/PDF。历史组卷列表、单卷读取、导出、移入回收站、恢复和历史快照再编辑全部由服务器 current-teacher identity 限定 owner，浏览器不能传入或覆盖 owner，跨用户访问统一按不存在处理；历史编辑可以重排、删减、重新分区和配分当前快照中的题目，也可以加入经服务端重新通过公共题库/当前 owner 私题门禁的明确候选，保存时建立新版本并重算总分与双向细目表，旧版本不可变保留。供给不足仍如实呈现，不自动命题；蓝图、候选和编辑草稿仍无写入，保存与导出也不能改变私题 owner、visibility 或可信状态。
 
+M10 的固定范围、深模块 Interface 和六条切片顺序见 [`M10-LESSON-AGENT.md`](M10-LESSON-AGENT.md)。六条纵向切片已接入：蓝图规划、受控来源、完整正文与逐块编辑均在保存前重新核验高中范围、当前 owner、精确 revision、权利、可信状态、题目事实、结构、时间和目标对应关系。`LessonVersioning` 是唯一持久化 Interface；只有教师确认可调用，owner 只取登录上下文，历史版本 append-only，编辑旧版本建立新版本，active/recycle 列表仅本人可见且跨 owner 按不存在处理。`LessonSavedExporting` 只导出当前 owner 的指定不可变版本 DOCX/PDF。保存与导出均不升级 AI 内容的待复核状态。浏览器不能提交 owner、路径、权利或可信结论；旧 `LessonPlanStudio` 的立即写入 REST 流程不得作为新 M10 Interface 直接暴露。
+
 本阶段允许：
 
-- 建立自然语言到可编辑 `PaperBlueprint` 的深模块与 FastAPI 产品接口；
-- 在 `apps/teacher-web` 接入蓝图规划、可见默认假设、本地编辑、私题明确选择与候选/缺口展示；
-- 在教师确认蓝图后复用既有题库检索、难度排序、配分与相似度能力，并通过独立深模块完成覆盖/难度对照、显式版本快照和精确版本导出；
-- 使用项目自建 synthetic 需求和题目验证蓝图、选题、权利、验证、相似度、覆盖、难度和导出语义。
+- 维护自然语言到可编辑 `LessonBlueprint`、受控来源和完整未保存正文的产品接口；
+- 在 `apps/teacher-web` 保持蓝图、来源、完整正文及可信状态可见且可核对；
+- 维护 M10 已完成 Interface、固定评测与 Gate 证据，修复当前里程碑 blocker；
+- 使用项目自建 synthetic 课堂要求、教材基线、题目和私人资料元数据验证范围、来源、owner、结构、编辑、版本和导出语义。
 
 本阶段禁止：
 
-- 在蓝图确认前查题或选题，或在候选草案阶段生成题目、保存蓝图或建立试卷；
-- 为满足题量自动命题、自动保存私题或自动加入试卷；
-- 让 Agent、模型或浏览器选择 owner、rights、verification、visibility 或发布状态；
-- 复制私题、改变私题 owner/visibility，或让其他 owner、管理员、公共 Search 和训练流程读取私题；
-- 把模型判断、排版成功或教师确认蓝图冒充 MathVerifier 验证或正式试卷保存；
-- 提前开发 M10 Lesson、M11 Memory、账号、支付、多租户、教研组、学校后台或学生功能。
+- 在蓝图确认前查题、读取私人资料、生成教案正文或写入存储；
+- 自动遍历教师私题库/资料库、替教师选择私人来源，或让浏览器提交 owner、路径、rights、verification、visibility 和发布状态；
+- 把封存教材基线、模型组织文本、排版成功或教师保存冒充 MathVerifier、教材审定或教师审核通过；
+- 为凑内容伪造题目、教材出处、私人资料引用或来源可信状态；
+- 原样暴露旧的浏览器 `teacher_id` + 立即落库 lesson REST 流程，或复制第二套教案业务逻辑；
+- 提前开发 M11 Memory、账号、支付、多租户、教研组、学校后台或学生功能。
 
-## 5. M9 当前 Gate
+## 5. M10 当前 Gate
 
-M9 尚未完成。六条实现切片已经验收蓝图规划、显式确认、受控选题、权利/验证/审核、重复/相似、私题 owner/visibility、真实缺口、覆盖/难度对照、可编辑试卷、双向细目表、显式不可变版本和当前 owner 精确版本六种导出。28 场景固定 synthetic evaluation 的 15 类违规为 0；FastAPI、Teacher Web、Agent、legacy Web、权限/仓库卫生以及真实浏览器/PDF 视觉回归均已通过。当前只剩形成可回滚提交并由项目所有者确认阶段转换；完成前不得宣称 M9 完成或开始 M10。评测与 Gate 证据见 [`M9-PAPER-AGENT-EVALUATION.md`](M9-PAPER-AGENT-EVALUATION.md) 和 [`M9-GATE-REVIEW.md`](M9-GATE-REVIEW.md)。
+M10 六条切片和完整 Gate 已通过：无副作用蓝图、高中范围、真实教材基线、可见默认假设、确认后来源候选、私有来源 owner 隔离、精确 revision、真实缺口、完整闭环正文、逐块编辑/锁定、显式不可变版本、仅本人历史、编辑历史另存新版本、回收/恢复，以及指定已保存版本 DOCX/PDF 导出。28 场景固定评测 15 类违规为 0；完整工程回归和文档视觉检查通过。该结论不自动授权启动 M11。
 
 ## 6. 下一阶段启动条件
 
-只有 M9 全部功能、可信、隐私/权利和工程 Gate 通过、变更形成可回滚提交并由项目所有者再次确认后，才进入 M10 Lesson Agent。
+只有 M10 六条切片、固定评测、功能/可信/隐私权利/工程 Gate 全部通过，变更形成可回滚提交并由项目所有者再次确认后，才进入 M11 Teacher Memory。
 
 后续顺序以 [`ROADMAP.md`](ROADMAP.md) 为准：Solve → Private Library → 多模态图片解题 → 私有辅助命题 → Paper → Lesson → Memory → Beta 准备 → Beta 验证 → 商业基础 → Teacher Pro → 教研组 → 学校。
 

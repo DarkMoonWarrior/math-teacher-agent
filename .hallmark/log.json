@@ -1,5 +1,17 @@
 [
   {
+    "date": "2026-08-30",
+    "scope": "core-workbench-layout-consistency",
+    "macrostructure": "Workbench",
+    "theme": "studied-DNA",
+    "theme_axes": "warm-paper / Chinese editorial serif / vermilion-mineral-teal",
+    "vibe": "quiet dual-pane teacher workbench",
+    "enrichment": "none",
+    "nav": "N1b capability navigation",
+    "footer": "Ft2 Inline single line",
+    "brief": "Unify Search, Solve, Private Library and Question Authoring with the accessible resizable left-task/right-result workspace while preserving owner-only, generation and trust boundaries."
+  },
+  {
     "date": "2026-08-26",
     "scope": "M8 authoring workflow refinement",
     "macrostructure": "Authoring Ledger",

@@ -1,5 +1,6 @@
 from app.modules.private_library.library import PrivateLibrary, PrivateLibraryError
 from app.modules.private_library.providers import (
+    DeepSeekResourceOCRProvider,
     OCRProviderError,
     OCRTextResult,
     OpenAIResourceOCRProvider,
@@ -18,6 +19,7 @@ from app.modules.private_library.schemas import (
     LibraryOCRResult,
     LibraryAIRepairCommand,
     LibraryAIRepairResult,
+    LibraryQuestionExtractionCommand,
     LibraryItemList,
     LibraryItemSummary,
     LibraryItemView,
@@ -43,6 +45,7 @@ __all__ = [
     "LibraryOCRResult",
     "LibraryAIRepairCommand",
     "LibraryAIRepairResult",
+    "LibraryQuestionExtractionCommand",
     "LibraryItemList",
     "LibraryItemSummary",
     "LibraryItemView",
@@ -52,6 +55,7 @@ __all__ = [
     "LibraryTextReviewCommand",
     "LibraryTextRevisionList",
     "LibraryTextRevisionView",
+    "DeepSeekResourceOCRProvider",
     "OCRProviderError",
     "OCRTextResult",
     "OpenAIResourceOCRProvider",
