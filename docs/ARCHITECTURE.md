@@ -101,7 +101,8 @@ apps/web (legacy/reference Next.js UI, :3000)
 - Lesson export seam: `LessonSavedExporting.export` 只接受 current-teacher owner 的精确 `lesson_plan_id + version + format`，读取 `LessonVersioning` 的不可变快照并复核草稿指纹；`SavedLessonPlanDocumentRenderer` 是 DOCX/PDF Adapter，完整渲染目标、流程、题面/选项/答案/解析、评价与来源摘要。导出不读取页面草稿、来源最新 revision 或其他 owner 内容，也不改变业务状态。
 - Export seam: `PaperSavedExporting.export` 只接受当前 owner 的精确 `paper_id + version + kind + format`，读取保存时的题目快照与双向细目表，不读取页面草稿或题库最新 revision。它复用 `ExamPaperDocumentRenderer` 生成学生卷、答案卷和双向细目表的 DOCX/PDF，不改变任何业务状态。
 - Ownership: 浏览器和 Agent 均不能提交 owner、版本号生成规则、可信结论或保存结论；跨 owner 的版本与导出统一不可见。保存试卷不会复制、发布或改变 PersonalQuestionLibrary 内容。
-- Current completion boundary: M9 已形成可回滚提交并于 2026-08-30 获得项目所有者进入 M10 的确认。M10 六条实现切片、28 场景固定 synthetic evaluation、工程回归、权限/仓库卫生和 DOCX/PDF 视觉检查现已通过；当前等待形成新的可回滚提交和项目所有者阶段确认，因此不能进入 M11。
+- Teacher Memory seam: `TeacherMemory.profile(owner_id)` 与 `TeacherMemory.apply(owner_id, command)` 是 M11 的产品 Interface。SQLite、值编码、版本冲突、来源和置信度生成都隐藏在模块内部；公开路由只从 current-teacher context 绑定 owner。当前首个切片只接受 allow-listed 结构化显式偏好，固定 `teacher_explicit + confidence 1.0`，拒绝任务正文、私人资料正文和浏览器提供的 owner/source/confidence；自动学习默认关闭。
+- Current completion boundary: M10 已形成可回滚提交 `9997fc8` 并于 2026-08-31 获得项目所有者进入 M11 的确认。M11 是唯一活动里程碑；其首个显式偏好切片已接入，但偏好应用、可解释推断、反馈闭环和完整 Gate 尚未完成，因此不能进入 M12。
 
 ### Teacher Agent Runtime module
 

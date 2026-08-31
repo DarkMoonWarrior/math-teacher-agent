@@ -89,6 +89,9 @@ class Settings(BaseSettings):
     model_operations_db: Path = Field(
         default=PROJECT_ROOT / "data" / "runtime" / "model-operations-v1.sqlite3"
     )
+    teacher_memory_db: Path = Field(
+        default=PROJECT_ROOT / "data" / "private-runtime" / "teacher-memory.sqlite3"
+    )
     lesson_export_dir: Path = Field(default=PROJECT_ROOT / "output")
     cjk_font_regular: Path | None = None
     cjk_font_bold: Path | None = None

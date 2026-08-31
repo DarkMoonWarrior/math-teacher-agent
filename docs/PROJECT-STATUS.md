@@ -39,12 +39,14 @@
 | 私有辅助命题 | 可用；M8 Gate E/Gate P 已通过 | 独立 `PersonalQuestionLibrary` 与结构化 `QuestionAuthoring` 已实现。题面、解析和解析所得答案在内部判责返工直至闭环；选择题选项独立，高中范围终检生效。命题在 owner-scoped 后台继续运行、可跨页面恢复；题面独立审核通过后立即作为版本化实时快照展示，解析继续后台生成，题面返工时同步标记调整中。正常完成必须交付完整题面、解析和解析所得答案；owner 主动停止时可选择保留最新已通过题面，保存为当前 owner 的私题并明确标注“缺少解析”，答案和解析显示“无”，也可主动用于组卷，但不会进入公共题库或其他 owner 的视图。完整结果只暂存为 owner 草稿，显式保存后才成为完整私题；Agent 无管理写权限。26 场景固定评测 12 类违规为 0。 |
 | Paper | 可用；M9 已完成 | 新 UI 将自然语言整理为可编辑 PaperBlueprint；教师确认后才从通过范围、验证、审核、权利、owner 和相似度门禁的公共题/明确选择私题中建立未保存候选草案。系统在选题后自动归纳实际知识点和难度并写入双向细目表。题量、分区、配分、总分或分析偏差均可见，但不禁用保存；保存前统一提供取消/确认提示，确认后保存当前精确 owner-scoped 不可变版本。无题、题目不完整、越权、可信状态变化或过期指纹仍 fail closed。导出只读取当前 owner 指定版本。28 场景固定评测 15 类违规为 0，Gate E/Gate P 连续性通过。 |
 | Lesson | 可用；M10 Gate 已通过 | 蓝图、受控来源、完整正文和九类内容块编辑已接入。`LessonVersioning` 只接受教师显式确认，保存前重验当前 owner 与精确来源，把正文追加为仅本人可见的不可变版本；历史可打开编辑后另存新版本，可移入回收站和恢复。`LessonSavedExporting` 只从指定不可变版本导出完整教师教案 DOCX/PDF。保存与导出均不升级 `draft_requires_teacher_review`。28 场景固定评测 15 类违规为 0。 |
-| Teacher Memory | 未开始 | 等真实教师验证后再定义。 |
+| Teacher Memory | 进行中（M11 切片 1） | `TeacherMemory.profile/apply` 深模块、owner-scoped SQLite、显式结构化偏好、来源/置信度、删除和自动学习开关已接入；任意任务正文与私人资料正文不进入记忆。 |
 | 账号/多租户/支付 | 未开始 | 当前教师/管理员模式不是认证或授权系统。 |
 | 商业公共题库 | 未开始填充 | `data/commercial-approved` 保持为空；只允许通过完整门禁的内容进入。 |
 
 ## 2026-08-31 验证快照
 
+- M10 已形成可回滚提交 `9997fc8`，项目所有者明确要求按原路线继续开发，M11 成为唯一活动里程碑。
+- M11 第一条纵向切片：新增 `TeacherMemory.profile/apply` 深模块、`/api/v1/teacher-memory/profile` owner-scoped 路由和全局“教师偏好”面板。当前只允许年级、难度、课时、解析详略和常用题型五类结构化显式偏好；source/confidence 由服务端固定为教师明确设置/1.0，浏览器不能提交 owner、来源或置信度，自动学习默认关闭。FastAPI 447 项、Teacher Web 18 个文件 89 项、Agent 10 个文件 42 项测试全部通过，Teacher Web、Agent 与 legacy Web 类型检查/生产构建通过；真实桌面与 375px 页面保存回读、来源展示、零横向溢出和零控制台告警通过。完整 M11 Gate 尚未执行。
 - M10 第六条纵向切片：新增 `LessonSavedExporting.export` 深模块与精确版本下载接口。服务端只从 current-teacher owner 的指定 `lesson_plan_id + version` 读取不可变快照，校验版本 ID 与草稿指纹后交给 `SavedLessonPlanDocumentRenderer`；导出不读取页面临时状态、来源最新 revision 或后续教案版本。教师教案 DOCX/PDF 包含目标与证据、重难点、完整教学流程、题面/选项/答案/解析、评价、作业、板书、备注和精确来源摘要。Teacher Web 只对已保存版本展示 DOCX/PDF 下载，浏览器不提交 owner。
 - M10 固定评测与 Gate：28 个项目自建 synthetic 场景覆盖蓝图/范围、来源、owner/IDOR、完整正文、题目事实、目标对应、逐块编辑、不可变版本、生命周期、精确导出和 Agent 权限，15 类违规均为 0。FastAPI 435 项、Teacher Web 16 个文件 82 项、Agent 10 个文件 42 项全部通过；Teacher Web、Agent 与 legacy Web 类型检查/生产构建通过。精确版本 DOCX 5 页、PDF 4 页逐页检查，无裁切、重叠、乱码或后续版本串入。M10 Gate E/Gate P 连续性通过；M11 仍等待可回滚提交与项目所有者明确确认。
 

@@ -32,6 +32,7 @@ from app.routes.solve_agent import (
     solve_agent_error_handler,
 )
 from app.routes.solutions import router as solutions_router
+from app.routes.teacher_memory import router as teacher_memory_router
 
 
 settings = get_settings()
@@ -69,5 +70,6 @@ app.include_router(private_library_agent_router, prefix="/api/v1")
 app.include_router(question_capture_router, prefix="/api/v1")
 app.include_router(personal_question_library_router, prefix="/api/v1")
 app.include_router(question_authoring_router, prefix="/api/v1")
+app.include_router(teacher_memory_router, prefix="/api/v1")
 # Internal-only Agent Tool Gateway（不进入公开 API 文档，M2M token 保护）
 app.include_router(internal_agent_tools_router)

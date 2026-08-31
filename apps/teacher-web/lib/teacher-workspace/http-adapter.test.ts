@@ -1852,4 +1852,46 @@ describe("HttpTeacherWorkspace", () => {
     });
     expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith("/run_solve_live/stream"))).toBe(false);
   });
+
+  it("reads and updates the owner-scoped teacher memory profile", async () => {
+    const profile = {
+      version: 1,
+      auto_learning_enabled: false,
+      preferences: [{
+        key: "default_grade",
+        label: "默认年级",
+        value: "高二",
+        source: { kind: "teacher_explicit", label: "教师明确设置", confidence: 1 },
+        updated_at: "2026-08-31T00:00:00Z",
+      }],
+      privacy_note: "仅保存结构化教学偏好。",
+    } as const;
+    const fetchMock = vi.fn((_input: RequestInfo | URL, _init?: RequestInit) => Promise.resolve(new Response(JSON.stringify(profile), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    })));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const workspace = new HttpTeacherWorkspace();
+    await expect(workspace.getTeacherMemoryProfile()).resolves.toEqual(profile);
+    await expect(workspace.updateTeacherMemoryProfile({
+      operation: "upsert",
+      key: "default_grade",
+      value: "高二",
+      expected_version: 0,
+    })).resolves.toEqual(profile);
+
+    expect(String(fetchMock.mock.calls[0]?.[0])).toBe("/api/v1/teacher-memory/profile");
+    expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({ method: "GET" });
+    const update = fetchMock.mock.calls[1]?.[1] as RequestInit;
+    expect(update.method).toBe("POST");
+    expect(JSON.parse(String(update.body))).toEqual({
+      operation: "upsert",
+      key: "default_grade",
+      value: "高二",
+      expected_version: 0,
+    });
+    expect(String(update.body)).not.toContain("owner");
+    expect(String(update.body)).not.toContain("confidence");
+  });
 });

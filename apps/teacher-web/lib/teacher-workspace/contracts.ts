@@ -1290,7 +1290,48 @@ export type PaperExportArtifact = {
   filename: string;
 };
 
+export type TeacherPreferenceKey =
+  | "default_grade"
+  | "default_difficulty"
+  | "default_lesson_minutes"
+  | "solution_detail_level"
+  | "preferred_question_types";
+
+export type TeacherPreferenceValue = string | number | string[];
+
+export type TeacherPreference = {
+  key: TeacherPreferenceKey;
+  label: string;
+  value: TeacherPreferenceValue;
+  source: {
+    kind: "teacher_explicit";
+    label: string;
+    confidence: number;
+  };
+  updated_at: string;
+};
+
+export type TeacherMemoryProfile = {
+  version: number;
+  auto_learning_enabled: boolean;
+  preferences: TeacherPreference[];
+  privacy_note: string;
+};
+
+export type TeacherMemoryCommand = {
+  operation: "upsert" | "remove" | "set_auto_learning";
+  key?: TeacherPreferenceKey;
+  value?: TeacherPreferenceValue;
+  enabled?: boolean;
+  expected_version: number;
+};
+
 export interface TeacherWorkspace {
+  getTeacherMemoryProfile(signal?: AbortSignal): Promise<TeacherMemoryProfile>;
+  updateTeacherMemoryProfile(
+    command: TeacherMemoryCommand,
+    signal?: AbortSignal,
+  ): Promise<TeacherMemoryProfile>;
   planLessonBlueprint(brief: string, signal?: AbortSignal): Promise<LessonBlueprintDraft>;
   listLessonSourceOptions(
     blueprint: LessonBlueprintDraft,

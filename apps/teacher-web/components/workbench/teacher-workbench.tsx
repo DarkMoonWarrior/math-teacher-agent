@@ -53,6 +53,7 @@ import { PersonalQuestionAuthoringWorkspace } from "./personal-question-authorin
 import { PaperBlueprintWorkspace } from "./paper-blueprint-workspace";
 import { LessonBlueprintWorkspace } from "./lesson-blueprint-workspace";
 import { ResizableSplitPane } from "./resizable-split-pane";
+import { TeacherMemoryPanel } from "./teacher-memory-panel";
 
 type Phase = "idle" | "running" | "success" | "error" | "cancelled";
 type FlipDirection = "next" | "previous";
@@ -558,6 +559,7 @@ export function TeacherWorkbench() {
   const [touched, setTouched] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [newTaskOpen, setNewTaskOpen] = useState(false);
+  const [teacherMemoryOpen, setTeacherMemoryOpen] = useState(false);
   const [authoringEntry, setAuthoringEntry] = useState<{
     source: QuestionAuthoringEntrySource;
     brief: string;
@@ -1051,12 +1053,15 @@ export function TeacherWorkbench() {
                 <div className="new-task-popover" role="menu">
                   <button role="menuitem" type="button" onClick={resetTask}><PlusIcon /><span><strong>清空当前任务</strong><small>保留当前 Agent</small></span></button>
                   <button role="menuitem" type="button" onClick={() => openAuthoring("new_task")}><SparkIcon /><span><strong>辅助命题</strong><small>生成草稿 · 仅自己可见</small></span></button>
+                  <button role="menuitem" type="button" onClick={() => { setNewTaskOpen(false); setTeacherMemoryOpen(true); }}><BookIcon /><span><strong>教师偏好</strong><small>可查看、修改与删除</small></span></button>
                 </div>
               )}
             </div>
           </div>
         </div>
       </header>
+
+      <TeacherMemoryPanel open={teacherMemoryOpen} onClose={() => setTeacherMemoryOpen(false)} />
 
       <div data-workspace-view="authoring" hidden={!authoringVisible}>
         {authoringEntry && (

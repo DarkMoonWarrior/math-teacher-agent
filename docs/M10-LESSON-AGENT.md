@@ -1,7 +1,7 @@
 # M10 Lesson Agent 固定范围与切片顺序
 
 更新日期：2026-08-31
-状态：六条纵向切片、固定评测和完成 Gate 已通过；等待可回滚提交与项目所有者确认后再进入 M11。
+状态：已完成。六条纵向切片、固定评测和完成 Gate 已通过；回滚点为 `9997fc8`，项目所有者于 2026-08-31 确认进入 M11。
 
 ## 1. 唯一目标
 
@@ -108,4 +108,4 @@ revision 递增以及结构、时间、目标对应和高中范围复检。Teach
 
 ## 5. 当前验收事实
 
-六条切片均已建立。`LessonSavedExporting` 和 `SavedLessonPlanDocumentRenderer` 已把当前 owner 的指定不可变版本导出为完整教师教案 DOCX/PDF；浏览器请求不含 owner，导出不读取页面临时状态，也不会漂移到来源或教案的后续版本。固定评测 28 个 synthetic 场景、15 类违规为 0；FastAPI 435 项、Teacher Web 82 项、Agent 42 项及两套 Web 生产构建均通过，DOCX/PDF 已逐页检查。当前只等待可回滚提交和所有者阶段确认，不得自行启动 M11。
+六条切片均已建立。`LessonSavedExporting` 和 `SavedLessonPlanDocumentRenderer` 已把当前 owner 的指定不可变版本导出为完整教师教案 DOCX/PDF；浏览器请求不含 owner，导出不读取页面临时状态，也不会漂移到来源或教案的后续版本。固定评测 28 个 synthetic 场景、15 类违规为 0；FastAPI、Teacher Web、Agent 及两套 Web 生产构建均通过，DOCX/PDF 已逐页检查。变更已进入回滚点 `9997fc8`，所有者已确认阶段转换。

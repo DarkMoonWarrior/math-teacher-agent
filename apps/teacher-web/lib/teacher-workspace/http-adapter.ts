@@ -67,6 +67,8 @@ import {
   type SolveTaskProgressStage,
   type SolveTaskRequest,
   type SolveTaskResult,
+  type TeacherMemoryCommand,
+  type TeacherMemoryProfile,
 } from "./contracts";
 
 const SEARCH_STREAM_ENDPOINT = "/api/v1/agent/search/stream";
@@ -422,6 +424,30 @@ async function readSolveStream(
 }
 
 export class HttpTeacherWorkspace implements TeacherWorkspace {
+  getTeacherMemoryProfile(signal?: AbortSignal): Promise<TeacherMemoryProfile> {
+    return libraryJsonRequest(
+      "/api/v1/teacher-memory/profile",
+      { method: "GET", signal },
+      "无法读取教师偏好。",
+    );
+  }
+
+  updateTeacherMemoryProfile(
+    command: TeacherMemoryCommand,
+    signal?: AbortSignal,
+  ): Promise<TeacherMemoryProfile> {
+    return libraryJsonRequest(
+      "/api/v1/teacher-memory/profile",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(command),
+        signal,
+      },
+      "无法更新教师偏好。",
+    );
+  }
+
   planLessonBlueprint(brief: string, signal?: AbortSignal): Promise<LessonBlueprintDraft> {
     return libraryJsonRequest(
       "/api/v1/lesson-plans/blueprints/plan",
