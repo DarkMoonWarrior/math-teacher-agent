@@ -1371,7 +1371,30 @@ export type TeacherMemoryCommand = {
   expected_version: number;
 };
 
+export const PRODUCT_CAPABILITIES = [
+  "search",
+  "solve",
+  "library",
+  "authoring",
+  "lesson",
+  "paper",
+  "teacher_memory",
+] as const;
+
+export type ProductCapability = typeof PRODUCT_CAPABILITIES[number];
+
+export type BetaSessionStatus = {
+  mode: "local_development" | "closed_beta";
+  authenticated: boolean;
+  display_label: string;
+  expires_at: string | null;
+  capabilities: ProductCapability[];
+};
+
 export interface TeacherWorkspace {
+  getBetaSession(signal?: AbortSignal): Promise<BetaSessionStatus>;
+  startBetaSession(accessCode: string, signal?: AbortSignal): Promise<BetaSessionStatus>;
+  endBetaSession(signal?: AbortSignal): Promise<BetaSessionStatus>;
   getTeacherMemoryProfile(signal?: AbortSignal): Promise<TeacherMemoryProfile>;
   updateTeacherMemoryProfile(
     command: TeacherMemoryCommand,

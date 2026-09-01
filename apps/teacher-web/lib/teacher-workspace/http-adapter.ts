@@ -1,6 +1,7 @@
 import {
   TeacherWorkspace,
   TeacherWorkspaceError,
+  type BetaSessionStatus,
   type LibraryItemDetail,
   type LibraryItemSummary,
   type LibraryTextRevisionList,
@@ -130,6 +131,11 @@ type LibraryBackgroundJob = {
 
 function detailMessage(detail: unknown): string | undefined {
   if (typeof detail === "string") return detail;
+  if (detail && typeof detail === "object" && !Array.isArray(detail)) {
+    return "message" in detail && typeof detail.message === "string"
+      ? detail.message
+      : undefined;
+  }
   if (!Array.isArray(detail)) return undefined;
   const messages = detail
     .map((item) => {
@@ -141,6 +147,11 @@ function detailMessage(detail: unknown): string | undefined {
     })
     .filter(Boolean);
   return messages.length ? messages.join("；") : undefined;
+}
+
+function detailCode(detail: unknown): string | undefined {
+  if (!detail || typeof detail !== "object" || Array.isArray(detail)) return undefined;
+  return "code" in detail && typeof detail.code === "string" ? detail.code : undefined;
 }
 
 type TaskStreamEvent = {
@@ -178,7 +189,7 @@ async function responseError(response: Response): Promise<TeacherWorkspaceError>
     // Fall through to the stable HTTP error below.
   }
   return new TeacherWorkspaceError(
-    payload.error?.code ?? `HTTP_${response.status}`,
+    payload.error?.code ?? detailCode(payload.detail) ?? `HTTP_${response.status}`,
     payload.error?.message ?? detailMessage(payload.detail) ?? `任务未完成（HTTP ${response.status}）。`,
     payload.error?.request_id ?? "",
   );
@@ -203,6 +214,7 @@ async function libraryJsonRequest<T>(
   try {
     const response = await fetch(apiUrl(path), {
       ...init,
+      credentials: "include",
       headers: {
         Accept: "application/json",
         ...init.headers,
@@ -424,6 +436,35 @@ async function readSolveStream(
 }
 
 export class HttpTeacherWorkspace implements TeacherWorkspace {
+  getBetaSession(signal?: AbortSignal): Promise<BetaSessionStatus> {
+    return libraryJsonRequest(
+      "/api/v1/beta-session",
+      { method: "GET", signal },
+      "无法确认封闭测试访问状态。",
+    );
+  }
+
+  startBetaSession(accessCode: string, signal?: AbortSignal): Promise<BetaSessionStatus> {
+    return libraryJsonRequest(
+      "/api/v1/beta-session",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ access_code: accessCode }),
+        signal,
+      },
+      "暂时无法进入封闭测试。",
+    );
+  }
+
+  endBetaSession(signal?: AbortSignal): Promise<BetaSessionStatus> {
+    return libraryJsonRequest(
+      "/api/v1/beta-session",
+      { method: "DELETE", signal },
+      "暂时无法退出封闭测试。",
+    );
+  }
+
   getTeacherMemoryProfile(signal?: AbortSignal): Promise<TeacherMemoryProfile> {
     return libraryJsonRequest(
       "/api/v1/teacher-memory/profile",
@@ -1774,6 +1815,7 @@ export class HttpTeacherWorkspace implements TeacherWorkspace {
     try {
       const response = await fetch(apiUrl(SEARCH_STREAM_ENDPOINT), {
         method: "POST",
+        credentials: "include",
         headers: {
           Accept: "text/event-stream",
           "Content-Type": "application/json",
@@ -1792,7 +1834,7 @@ export class HttpTeacherWorkspace implements TeacherWorkspace {
         try {
           const snapshot = await fetch(
             apiUrl(`/api/v1/agent/search/${encodeURIComponent(context.runId)}/stream`),
-            { headers: { Accept: "text/event-stream" }, signal },
+            { credentials: "include", headers: { Accept: "text/event-stream" }, signal },
           );
           return await readSearchStream(snapshot, context, signal);
         } catch (recoveryCause) {
@@ -1848,6 +1890,7 @@ export class HttpTeacherWorkspace implements TeacherWorkspace {
     try {
       const response = await fetch(apiUrl(SOLVE_STREAM_ENDPOINT), {
         method: "POST",
+        credentials: "include",
         headers: {
           Accept: "text/event-stream",
           "Content-Type": "application/json",
@@ -1874,7 +1917,7 @@ export class HttpTeacherWorkspace implements TeacherWorkspace {
         try {
           const snapshot = await fetch(
             apiUrl(`/api/v1/agent/solve/${encodeURIComponent(context.runId)}/stream`),
-            { headers: { Accept: "text/event-stream" }, signal },
+            { credentials: "include", headers: { Accept: "text/event-stream" }, signal },
           );
           return await readSolveStream(snapshot, context, signal);
         } catch (recoveryCause) {

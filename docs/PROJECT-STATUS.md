@@ -1,6 +1,6 @@
 # 项目当前状态
 
-更新日期：2026-08-31
+更新日期：2026-09-01
 分支基线：`codex/lesson-agent-v1`
 
 ## 状态说明
@@ -20,8 +20,8 @@
 - **M8 私有辅助命题：已完成；26 场景固定评测 12 类违规为 0，完整工程回归与 Gate E/Gate P 于 2026-08-28 通过，所有者已确认进入 M9。**
 - **M9 Paper Agent：已完成；六条实现切片、28 场景固定评测、完整工程回归、权限/仓库卫生和 Gate P 连续性检查已通过；可回滚变更已合并到 `main`，所有者于 2026-08-30 确认进入 M10。**
 - **M10 Lesson Agent：已完成；六条切片、28 场景固定评测、完整工程回归与 Gate E/Gate P 连续性已通过，所有者已确认进入 M11。**
-- **M11 Teacher Memory：五条切片与完整 Gate 已通过，等待形成回滚点和项目所有者阶段确认；M12 未开始。**
-- M12-M13：Closed Beta 准备与数据验证，均未开始。
+- **M11 Teacher Memory：五条切片与完整 Gate 已通过；回滚点为 `5614fc0`，项目所有者已确认进入 M12。**
+- **M12 Closed Beta Readiness：进行中；会话身份、能力快照、隐私安全运行状态和备份恢复四条切片已接入。** M13 数据验证尚未开始。
 - M14-M17：商业基础、Teacher Pro、教研组和学校，均未开始。
 
 最新版顺序见 [`ROADMAP.md`](ROADMAP.md)，量化验证和发布门禁见 [`PRODUCT-GATES.md`](PRODUCT-GATES.md)。历史 PDF 的核心原则继续生效，但其中的 Prompt 编号和“当前下一步”不再代表项目现状。
@@ -39,13 +39,19 @@
 | 私有辅助命题 | 可用；M8 Gate E/Gate P 已通过 | 独立 `PersonalQuestionLibrary` 与结构化 `QuestionAuthoring` 已实现。题面、解析和解析所得答案在内部判责返工直至闭环；选择题选项独立，高中范围终检生效。命题在 owner-scoped 后台继续运行、可跨页面恢复；题面独立审核通过后立即作为版本化实时快照展示，解析继续后台生成，题面返工时同步标记调整中。正常完成必须交付完整题面、解析和解析所得答案；owner 主动停止时可选择保留最新已通过题面，保存为当前 owner 的私题并明确标注“缺少解析”，答案和解析显示“无”，也可主动用于组卷，但不会进入公共题库或其他 owner 的视图。完整结果只暂存为 owner 草稿，显式保存后才成为完整私题；Agent 无管理写权限。26 场景固定评测 12 类违规为 0。 |
 | Paper | 可用；M9 已完成 | 新 UI 将自然语言整理为可编辑 PaperBlueprint；教师确认后才从通过范围、验证、审核、权利、owner 和相似度门禁的公共题/明确选择私题中建立未保存候选草案。系统在选题后自动归纳实际知识点和难度并写入双向细目表。题量、分区、配分、总分或分析偏差均可见，但不禁用保存；保存前统一提供取消/确认提示，确认后保存当前精确 owner-scoped 不可变版本。无题、题目不完整、越权、可信状态变化或过期指纹仍 fail closed。导出只读取当前 owner 指定版本。28 场景固定评测 15 类违规为 0，Gate E/Gate P 连续性通过。 |
 | Lesson | 可用；M10 Gate 已通过 | 蓝图、受控来源、完整正文和九类内容块编辑已接入。`LessonVersioning` 只接受教师显式确认，保存前重验当前 owner 与精确来源，把正文追加为仅本人可见的不可变版本；历史可打开编辑后另存新版本，可移入回收站和恢复。`LessonSavedExporting` 只从指定不可变版本导出完整教师教案 DOCX/PDF。保存与导出均不升级 `draft_requires_teacher_review`。28 场景固定评测 15 类违规为 0。 |
-| Teacher Memory | M11 Gate 已通过；等待阶段确认 | `TeacherMemory.profile/apply/planning_defaults` 深模块已闭环显式结构化偏好、透明缺省、可解释提议、接受/拒绝/修正反馈、结构化历史、JSON 导出和固定口令彻底删除。任意任务正文与私人资料正文不进入记忆；Agent 无记忆写入、导出或删除权限。 |
-| 账号/多租户/支付 | 未开始 | 当前教师/管理员模式不是认证或授权系统。 |
+| Teacher Memory | M11 已完成 | `TeacherMemory.profile/apply/planning_defaults` 深模块已闭环显式结构化偏好、透明缺省、可解释提议、接受/拒绝/修正反馈、结构化历史、JSON 导出和固定口令彻底删除。任意任务正文与私人资料正文不进入记忆；Agent 无记忆写入、导出或删除权限。 |
+| Closed Beta 准入、运行与恢复 | M12 切片 1–4 可用 | `BetaAccess.issue/resolve/revoke` 以私有访问码换取可过期、可撤销的 opaque HttpOnly 会话并在签发时冻结七类能力快照；服务端仅存令牌哈希。启用 Beta 时无有效会话 fail closed，未开放能力由 FastAPI 统一返回 403，Teacher Web 同步禁用入口且不挂载工作区，并把当前用户、教师偏好和退出统一收进右上角“设置 / 用户”。`PrivacySafeOperations` 只记录请求编号、能力、结果、状态码、稳定错误类别与耗时；`ReadinessProbe` 只返回无秘密的 API/Beta/Agent 稳定状态。`BetaBackupRecovery` 以显式私有目的地、在线 SQLite 快照、清单/逐文件校验和与隔离临时恢复演练保护 owner 数据，且不备份可撤销会话。它们不是生产账号、RBAC、完整审计/容灾平台、内容 analytics 或多租户系统。 |
+| 多租户/支付 | 未开始 | M12 不建设组织、角色、学生、支付或生产账号管理。 |
 | 商业公共题库 | 未开始填充 | `data/commercial-approved` 保持为空；只允许通过完整门禁的内容进入。 |
 
 ## 2026-09-01 验证快照
 
-- M11 第五条纵向切片与完整 Gate：偏好 profile 新增结构化反馈历史和保留说明；当前教师可下载本人完整可检查 JSON。彻底删除必须输入固定口令“删除全部教师记忆”，只清除当前 owner 的显式偏好、观察、提议与反馈，关闭自动学习，并通过单调递增 profile version 阻止删除前陈旧页面覆盖。26 个项目自建 synthetic 场景覆盖偏好、规划优先级、推断、反馈、导出、删除、owner/IDOR 与 Agent 权限，12 类违规均为 0。FastAPI 459 项、Teacher Web 19 个文件 96 项、Agent 10 个文件 42 项测试全部通过；Teacher Web、Agent 与 legacy Web 类型检查/生产构建通过。真实偏好抽屉验证 JSON 导出、删除禁用态、内部滚动、零横向溢出和零控制台 warning/error；未输入完整口令或执行真实删除。M11 功能 Gate 已通过，仍需形成可回滚提交并由项目所有者明确确认后才可进入 M12。
+- M11 已形成回滚提交 `5614fc0`，项目所有者明确要求按原路线继续，M12 成为唯一活动里程碑。
+- M12 第一条纵向切片：新增 `BetaAccess.issue/resolve/revoke` 深模块、`/api/v1/beta-session` Cookie 适配路由和 fail-closed current-teacher 解析。访问码来自私有环境名单，不写 Git 或浏览器持久存储；会话令牌只以 SHA-256 哈希写入独立 SQLite，支持到期和服务端撤销。状态接口不返回 owner/teacher ID。Teacher Web 增加封闭测试访问页、显示标签与退出入口，流式 Search/Solve 和命题 Next 代理均保留会话 Cookie。不同访问码 owner 隔离、无效访问码、过期、撤销和本地开发兼容已测试。FastAPI 463 项、Teacher Web 20 个文件 99 项测试通过，Teacher Web 类型检查与生产构建通过。完整 M12 Gate 尚未执行。
+- M12 第二条纵向切片：封闭测试名单只可分配 `search/solve/library/authoring/lesson/paper/teacher_memory` 七类能力，签发时把 allow-list 冻结到会话，名单后续变化不会提升既有会话权限；旧切片 1 会话库自动增加能力列且既有会话安全默认为无能力。FastAPI 在进入业务路由前统一执行能力依赖并返回结构化 `403 CAPABILITY_UNAVAILABLE`，原有 owner、权利、来源、审核、验证和运行时门禁保持不变。Teacher Web 从同一会话状态读取能力，禁用未开放导航/新任务入口、不挂载不可用的持久工作区，并保留服务端解释。FastAPI 464 项、Teacher Web 20 个文件 101 项测试、类型检查与生产构建通过；完整 M12 Gate 尚未执行。
+- M12 第三条纵向切片：新增 `PrivacySafeOperations` 与 `ReadinessProbe` 深模块。统一 ASGI 中间件在完整响应结束后记录请求编号、allow-list 能力、方法、结果、状态码、稳定错误类别和耗时，并附加 opaque `X-Request-Id`；接口没有 header、query、正文、owner、资源 ID 或异常消息参数。公开 `/ready` 只返回 API、Beta session store/roster 与必要 Agent runtime/model 的稳定状态码，依赖故障不回显 URL、名单、秘密或原始异常。该切片完成时 FastAPI 468 项通过；真实本地 `/ready` 返回 200 且 API/Beta/Agent 三组件均 ready。
+- M12 第四条纵向切片：新增 `BetaBackupRecovery.inventory/create_backup/verify_backup/restore_drill` 深模块与 operator CLI。固定清单覆盖题库/媒体、私人资料、题目采集、个人题库、PDF 导入、教案、试卷及 Teacher Memory 的持久化 owner 数据，明确排除可撤销 Beta 会话、可重建索引和生成导出。目的地必须由 operator 明确确认为加密私有卷或等效受保护挂载点；SQLite 使用在线 backup API，目录遍历拒绝软链接/联接。备份在 staging 完成清单 SHA-256、逐文件大小/哈希和精确文件集验证后原子发布；恢复演练只复制清单内文件到临时目录，重新校验并执行 SQLite integrity check，绝不覆盖在线数据。FastAPI 474 项通过；真实 inventory 只输出 13 个稳定 store ID/类型/状态/文件数，不含路径、owner、文件名或正文。切片 5 与完整 M12 Gate 尚未执行。
+- M11 第五条纵向切片与完整 Gate：偏好 profile 新增结构化反馈历史和保留说明；当前教师可下载本人完整可检查 JSON。彻底删除必须输入固定口令“删除全部教师记忆”，只清除当前 owner 的显式偏好、观察、提议与反馈，关闭自动学习，并通过单调递增 profile version 阻止删除前陈旧页面覆盖。26 个项目自建 synthetic 场景覆盖偏好、规划优先级、推断、反馈、导出、删除、owner/IDOR 与 Agent 权限，12 类违规均为 0。FastAPI 459 项、Teacher Web 19 个文件 96 项、Agent 10 个文件 42 项测试全部通过；Teacher Web、Agent 与 legacy Web 类型检查/生产构建通过。真实偏好抽屉验证 JSON 导出、删除禁用态、内部滚动、零横向溢出和零控制台 warning/error；未输入完整口令或执行真实删除。随后已形成 `5614fc0` 回滚点并获准进入 M12。
 - M11 第四条纵向切片：偏好面板为每条 owner-scoped 提议提供“采用建议 / 不采用 / 修正后采用”。接受使用服务端提议值，修正仍执行同键 allow-list 校验，两者都因教师明确确认而保存为 `teacher_explicit`、置信度 1.0，并可进入 `planning_defaults`；拒绝不创建偏好，只保存结构化反馈摘要。拒绝后的同值、同证据类别至少需要 3 个新的不同保存版本证据才会重新提议，重复版本仍幂等。另一个 owner 无法处理该提议，过期 profile version 仍冲突失败。FastAPI 455 项、Teacher Web 19 个文件 94 项测试、Teacher Web 类型检查和生产构建通过；生命周期、固定评测与完整 M11 Gate 尚未执行。
 
 ## 2026-08-31 验证快照
@@ -138,7 +144,7 @@
 - Closed Beta 指标事件、Week-4 留存、任务采用率、严重数学错误率和单位成本尚未进入真实教师统计阶段。
 - 当前身份 adapter 仍是本地固定教师，不代表生产认证、商业多租户或云端隔离已经完成。
 - M7 已完成；只有结果中的 `visual_context.image_used=true` 才能描述为“原图参与本次推理”。固定评测和 Gate E 证据见 `M7-MULTIMODAL-SOLVE-EVALUATION.md` 与 `M7-GATE-REVIEW.md`。
-- M9、M10 已完成并获确认。M11 五条切片与完整 Gate 已通过，证据见 `M11-TEACHER-MEMORY-EVALUATION.md` 和 `M11-GATE-REVIEW.md`；M12 及后续阶段仍等待 M11 回滚点与项目所有者明确阶段转换确认。
+- M9、M10、M11 已完成并获确认，M11 回滚点为 `5614fc0`。M12 会话身份、能力快照、隐私安全运行状态和备份恢复四条切片已接入；删除演练和完整 Gate 尚未完成，M13 仍未开始。
 
 ## 历史能力与新产品的关系
 

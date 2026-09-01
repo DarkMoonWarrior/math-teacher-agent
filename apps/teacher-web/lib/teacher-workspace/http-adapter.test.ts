@@ -335,6 +335,53 @@ afterEach(() => {
 });
 
 describe("HttpTeacherWorkspace", () => {
+  it("uses an HttpOnly-cookie session contract without persisting access codes in the adapter", async () => {
+    const session = {
+      mode: "closed_beta" as const,
+      authenticated: true,
+      display_label: "测试教师甲",
+      expires_at: "2026-09-01T12:00:00Z",
+      capabilities: ["search", "teacher_memory"] as const,
+    };
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify(session), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    const workspace = new HttpTeacherWorkspace();
+
+    await expect(workspace.startBetaSession("invite-once")).resolves.toEqual(session);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/v1/beta-session",
+      expect.objectContaining({
+        method: "POST",
+        credentials: "include",
+        body: JSON.stringify({ access_code: "invite-once" }),
+      }),
+    );
+  });
+
+  it("preserves a capability denial code and its teacher-facing explanation", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+      detail: {
+        code: "CAPABILITY_UNAVAILABLE",
+        capability: "paper",
+        message: "当前封闭测试尚未开放组卷。",
+      },
+    }), {
+      status: 403,
+      headers: { "Content-Type": "application/json" },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    const workspace = new HttpTeacherWorkspace();
+
+    await expect(workspace.listPaperHistory("active")).rejects.toMatchObject({
+      code: "CAPABILITY_UNAVAILABLE",
+      message: "当前封闭测试尚未开放组卷。",
+    });
+  });
+
   it("plans a lesson blueprint without submitting owner, trust facts, or persistence commands", async () => {
     const blueprint: LessonBlueprintDraft = {
       status: "lesson_blueprint_draft",

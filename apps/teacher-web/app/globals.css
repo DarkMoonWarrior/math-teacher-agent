@@ -1,11 +1,11 @@
-/* Hallmark · pre-emit critique: P5 H5 E5 S5 R5 V4
+/* Hallmark · pre-emit critique: P5 H5 E5 S5 R5 V5
  * Hallmark · genre: atmospheric · tone: quiet scholarly Agent studio · palette anchor: vermilion
  * Hallmark · macrostructure: Workbench · theme: studied-DNA (source: user screenshot + Gemini/OpenAI/Anthropic references)
  * Hallmark · capability: six teacher modules · shared task/result split + owner-only authoring and library boundaries
  * Hallmark · variation knob: separate module canvases → consistent draggable dual-pane workbenches
- * Hallmark · nav: N1b capability navigation · footer: Ft2 inline
+ * Hallmark · nav: N1b capability navigation + compact account utility · footer: Ft2 inline
  * enrichment: existing mathematical paper atlas · motion: restrained workspace and menu reveal
- * audience: Chinese high-school math teachers · primary use: generate, review and explicitly save owner-only private questions
+ * audience: Chinese high-school math teachers · primary use: generate, review, manage preferences and explicitly save owner-only work
  * contrast: pass (40–41) · slop: pass (42–45) · honest: pass (46) · chrome: pass (47)
  * tokens: pass (48) · responsive/mobile: pass (34, 49–57) · icons: pass (30) · reduced-motion: pass
  */
@@ -241,6 +241,12 @@ svg { flex: 0 0 auto; }
 
 .capability-tabs button.is-active { color: var(--color-ink); }
 .capability-tabs button.is-active::after { background: var(--color-vermilion); transform: scaleX(1); }
+.capability-tabs button:disabled,
+.brand-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.38;
+}
+.capability-tabs button:disabled i { background: transparent; border-color: var(--color-rule-strong); }
 .capability-tabs button svg { height: 1rem; width: 1rem; }
 
 .capability-tabs button i,
@@ -1381,7 +1387,7 @@ svg { flex: 0 0 auto; }
   .capability-tabs button svg { display: none; }
   .capability-tabs button::after { bottom: -0.375rem; left: var(--space-2xs); right: var(--space-2xs); }
   .capability-tabs button i { height: 0.32rem; width: 0.32rem; }
-  .nav-actions { gap: 0; }
+  .nav-actions { gap: var(--space-2xs); }
 
   .new-task-button {
     border-radius: 50%;
@@ -1392,6 +1398,15 @@ svg { flex: 0 0 auto; }
   }
 
   .new-task-button span { display: none; }
+  .account-settings-button {
+    border: 0;
+    height: 2.75rem;
+    justify-content: center;
+    padding: var(--space-2xs);
+    width: 2.75rem;
+  }
+  .account-settings-button__label,
+  .account-settings-button > svg { display: none; }
   .marquee-workspace { padding: 6.75rem var(--space-md) var(--space-2xl); }
   .task-pane { gap: var(--space-lg); }
   .task-pane__intro { gap: var(--space-md); }
@@ -1471,6 +1486,65 @@ svg { flex: 0 0 auto; }
   .capability-tabs { justify-self: start; }
 }
 
+.beta-access {
+  align-items: center;
+  background: var(--color-canvas, #f6efe3);
+  display: flex;
+  justify-content: center;
+  min-height: 100dvh;
+  padding: clamp(1.25rem, 5vw, 4rem);
+}
+
+.beta-access--loading {
+  color: var(--color-ink-muted, #6d6259);
+  font-size: 1rem;
+}
+
+.beta-access__card {
+  background: var(--color-paper, #fffaf1);
+  border: 1px solid var(--color-line, #d8cbb9);
+  box-shadow: 1.25rem 1.25rem 0 rgb(29 79 72 / 8%);
+  max-width: 34rem;
+  padding: clamp(2rem, 6vw, 4.5rem);
+  width: 100%;
+}
+
+.beta-access__eyebrow {
+  color: var(--color-teal, #075e56);
+  font-size: .76rem;
+  font-weight: 800;
+  letter-spacing: .14em;
+}
+
+.beta-access__card h1 {
+  font-family: var(--font-display, serif);
+  font-size: clamp(2.4rem, 8vw, 4.4rem);
+  font-weight: 400;
+  line-height: .98;
+  margin: 1rem 0 1.25rem;
+}
+
+.beta-access__card form { display: grid; gap: .75rem; margin-top: 2rem; }
+.beta-access__card label { font-weight: 750; }
+.beta-access__card input {
+  background: transparent;
+  border: 1px solid var(--color-line-strong, #aa9b89);
+  font: inherit;
+  min-height: 3.5rem;
+  padding: .8rem 1rem;
+}
+.beta-access__card button {
+  background: var(--color-ink, #21160f);
+  border: 0;
+  color: #fffaf1;
+  cursor: pointer;
+  font: inherit;
+  min-height: 3.25rem;
+  padding: .75rem 1.25rem;
+}
+.beta-access__card button:disabled { cursor: wait; opacity: .55; }
+.beta-access__error { color: var(--color-danger, #a72515); margin: 0; }
+
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
 
@@ -1492,6 +1566,42 @@ svg { flex: 0 0 auto; }
 
 /* M8 · owner-only Question Authoring · Authoring Ledger */
 .new-task-menu { position: relative; }
+.account-settings { position: relative; }
+.account-settings-button {
+  align-items: center;
+  background: transparent;
+  border: 0.0625rem solid var(--color-rule-strong);
+  border-radius: var(--radius-pill);
+  display: flex;
+  gap: var(--space-xs);
+  min-height: 2.75rem;
+  padding: var(--space-2xs) var(--space-sm) var(--space-2xs) var(--space-2xs);
+  transition: background-color var(--duration-micro) var(--ease-out);
+}
+.account-avatar {
+  align-items: center;
+  background: var(--color-teal-soft);
+  border: 0.0625rem solid color-mix(in srgb, var(--color-teal) 32%, var(--color-rule));
+  border-radius: 50%;
+  color: var(--color-teal);
+  display: inline-flex;
+  flex: 0 0 auto;
+  font-family: var(--font-wordmark);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  height: 2.125rem;
+  justify-content: center;
+  line-height: 1;
+  width: 2.125rem;
+}
+.account-settings-button__label {
+  font-size: var(--text-sm);
+  font-weight: 700;
+  max-width: 8rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.account-settings-button > svg { color: var(--color-muted); height: 1rem; width: 1rem; }
 .new-task-popover {
   animation: authoring-popover-in var(--duration-short) var(--ease-out) both;
   background: var(--color-paper);
@@ -1525,6 +1635,70 @@ svg { flex: 0 0 auto; }
 .new-task-popover span { display: grid; gap: 0.125rem; min-width: 0; }
 .new-task-popover strong { font-size: var(--text-sm); }
 .new-task-popover small { color: var(--color-muted); font-size: var(--text-xs); }
+
+.account-settings-popover {
+  animation: authoring-popover-in var(--duration-short) var(--ease-out) both;
+  background: var(--color-paper);
+  border: 0.0625rem solid var(--color-rule-strong);
+  box-shadow: 0 1.5rem 3.5rem -2rem var(--color-shadow);
+  display: grid;
+  min-width: 19rem;
+  padding: var(--space-xs);
+  position: absolute;
+  right: 0;
+  top: calc(100% + var(--space-xs));
+  z-index: var(--z-drawer);
+}
+.account-settings-popover > header {
+  align-items: baseline;
+  border-bottom: 0.0625rem solid var(--color-rule);
+  display: flex;
+  justify-content: space-between;
+  padding: var(--space-xs) var(--space-sm) var(--space-sm);
+}
+.account-settings-popover > header span {
+  color: var(--color-teal);
+  font-size: var(--text-xs);
+  font-weight: 800;
+  letter-spacing: 0.12em;
+}
+.account-settings-popover > header strong { font-family: var(--font-display); font-size: var(--text-md); font-weight: 500; }
+.account-settings-profile {
+  align-items: center;
+  border-bottom: 0.0625rem solid var(--color-rule);
+  display: grid;
+  gap: var(--space-sm);
+  grid-template-columns: auto minmax(0, 1fr);
+  padding: var(--space-md) var(--space-sm);
+}
+.account-settings-profile > div,
+.account-settings-popover > button span { display: grid; gap: 0.125rem; min-width: 0; }
+.account-settings-profile strong,
+.account-settings-popover > button strong { font-size: var(--text-sm); }
+.account-settings-profile small,
+.account-settings-popover > button small { color: var(--color-muted); font-size: var(--text-xs); }
+.account-settings-popover > button {
+  align-items: center;
+  background: transparent;
+  display: grid;
+  gap: var(--space-sm);
+  grid-template-columns: auto minmax(0, 1fr);
+  min-height: 3.75rem;
+  padding: var(--space-sm);
+  text-align: left;
+  width: 100%;
+}
+.account-settings-popover > button + button { border-top: 0.0625rem solid var(--color-rule); }
+.account-settings-popover > button svg { color: var(--color-vermilion); height: 1.1rem; width: 1.1rem; }
+.account-settings-popover > button.account-settings-signout:not(:disabled) strong,
+.account-settings-popover > button.account-settings-signout:not(:disabled) svg { color: var(--color-error); }
+.account-settings-error {
+  background: var(--color-error-soft);
+  color: var(--color-error);
+  font-size: var(--text-xs);
+  margin: var(--space-xs) 0 0;
+  padding: var(--space-sm);
+}
 
 .teacher-memory-backdrop {
   background: color-mix(in srgb, var(--color-ink) 28%, transparent);
@@ -2314,10 +2488,6 @@ svg { flex: 0 0 auto; }
 .authoring-masthead > div > p svg { height: 1rem; width: 1rem; }
 .authoring-masthead h1 { font-size: clamp(2.75rem, 4.5vw, 4.75rem); font-weight: 500; letter-spacing: -0.075em; line-height: 0.98; max-width: 9ch; min-width: 0; overflow-wrap: anywhere; }
 .authoring-masthead > div > span { color: var(--color-muted); max-width: 62ch; }
-.authoring-masthead > aside { border-top: 0.125rem solid var(--color-teal); display: grid; gap: 0.2rem; justify-self: start; max-width: none; padding-top: var(--space-sm); width: 100%; }
-.authoring-masthead > aside svg { color: var(--color-teal); height: 1.25rem; margin-bottom: var(--space-xs); width: 1.25rem; }
-.authoring-masthead > aside strong { font-family: var(--font-display); font-size: var(--text-lg); font-weight: 500; }
-.authoring-masthead > aside span { color: var(--color-muted); font-size: var(--text-xs); }
 
 .authoring-sections {
   border-bottom: 0.0625rem solid var(--color-rule);
@@ -2770,8 +2940,10 @@ svg { flex: 0 0 auto; }
 
 @media (hover: hover) and (pointer: fine) {
   .new-task-popover > button:hover,
+  .account-settings-popover > button:hover:not(:disabled),
   .authoring-sections button:hover,
   .personal-question-list li > button:hover { background: var(--color-paper-soft); }
+  .account-settings-button:hover { background: var(--color-paper-soft); }
   .paper-authoring-entry > button:hover,
   .authoring-submit button:hover:not(:disabled),
   .authoring-save__button:hover:not(:disabled) { background: var(--color-ink-soft); }
@@ -2930,7 +3102,8 @@ svg { flex: 0 0 auto; }
 }
 
 @media (max-width: 40rem) {
-  .new-task-popover { min-width: min(17rem, calc(100vw - 2rem)); position: fixed; right: var(--space-md); top: calc(var(--workspace-top-mobile) - 4.6rem); }
+  .new-task-popover,
+  .account-settings-popover { min-width: min(19rem, calc(100vw - 2rem)); position: fixed; right: var(--space-md); top: calc(var(--workspace-top-mobile) - 4.6rem); }
   .paper-authoring-entry,
   .authoring-brief > header,
   .authoring-draft > header,

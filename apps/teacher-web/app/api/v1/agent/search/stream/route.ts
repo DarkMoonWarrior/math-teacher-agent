@@ -24,14 +24,19 @@ function gatewayError(message: string): NextResponse {
 }
 
 export async function POST(request: Request): Promise<Response> {
+  const headers = new Headers({
+    Accept: "text/event-stream",
+    "Content-Type": request.headers.get("content-type") ?? "application/json",
+  });
+  for (const name of ["authorization", "cookie", "x-request-id"]) {
+    const value = request.headers.get(name);
+    if (value) headers.set(name, value);
+  }
   let upstream: Response;
   try {
     upstream = await fetch(searchStreamUrl(), {
       method: "POST",
-      headers: {
-        Accept: "text/event-stream",
-        "Content-Type": request.headers.get("content-type") ?? "application/json",
-      },
+      headers,
       body: await request.text(),
       cache: "no-store",
       signal: request.signal,
@@ -40,19 +45,19 @@ export async function POST(request: Request): Promise<Response> {
     return gatewayError("无法连接业务服务。请确认 FastAPI 已启动。");
   }
 
-  const headers = new Headers();
-  headers.set(
+  const responseHeaders = new Headers();
+  responseHeaders.set(
     "Content-Type",
     upstream.headers.get("content-type") ?? "application/octet-stream",
   );
-  headers.set("Cache-Control", "no-cache, no-transform");
-  headers.set("X-Accel-Buffering", "no");
+  responseHeaders.set("Cache-Control", "no-cache, no-transform");
+  responseHeaders.set("X-Accel-Buffering", "no");
 
   const requestId = upstream.headers.get("x-request-id");
-  if (requestId) headers.set("X-Request-ID", requestId);
+  if (requestId) responseHeaders.set("X-Request-ID", requestId);
 
   return new Response(upstream.body, {
     status: upstream.status,
-    headers,
+    headers: responseHeaders,
   });
 }

@@ -1,5 +1,17 @@
 [
   {
+    "date": "2026-09-01",
+    "scope": "top-account-settings",
+    "macrostructure": "Workbench",
+    "theme": "studied-DNA",
+    "theme_axes": "warm-paper / Chinese editorial serif / vermilion-mineral-teal",
+    "vibe": "quiet account utility beside one primary task action",
+    "enrichment": "none",
+    "nav": "N1b capability navigation with account settings",
+    "footer": "Ft2 Inline single line",
+    "brief": "Move the active teacher identity from a detached corner chip into a compact top-right Settings menu, group user information, teacher preferences and sign out together, and keep New Task as the sole primary header action."
+  },
+  {
     "date": "2026-08-30",
     "scope": "core-workbench-layout-consistency",
     "macrostructure": "Workbench",

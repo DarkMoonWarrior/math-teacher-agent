@@ -1,10 +1,13 @@
 from __future__ import annotations
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import get_settings
+from app.core.identity import require_any_beta_capability, require_beta_capability
+from app.modules.beta_operations import PrivacySafeOperations, PrivacySafeOperationsMiddleware
 from app.routes.curriculum import router as curriculum_router
+from app.routes.beta_session import router as beta_session_router
 from app.routes.exam_papers import router as exam_papers_router
 from app.routes.internal_agent_tools import (
     _GatewayHttpError,
@@ -21,6 +24,7 @@ from app.routes.private_library_agent import router as private_library_agent_rou
 from app.routes.personal_question_library import router as personal_question_library_router
 from app.routes.question_capture import router as question_capture_router
 from app.routes.question_authoring import router as question_authoring_router
+from app.routes.readiness import router as readiness_router
 from app.routes.search_agent import (
     _SearchAgentHttpError,
     router as search_agent_router,
@@ -48,6 +52,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(
+    PrivacySafeOperationsMiddleware,
+    operations=PrivacySafeOperations(),
+)
 
 
 @app.get("/health", tags=["system"])
@@ -55,21 +63,75 @@ def health() -> dict[str, str]:
     return {"status": "ok", "environment": settings.environment}
 
 
+app.include_router(readiness_router)
+
+
 app.include_router(curriculum_router, prefix="/api/v1")
-app.include_router(imports_router, prefix="/api/v1")
+app.include_router(beta_session_router, prefix="/api/v1")
+app.include_router(
+    imports_router,
+    prefix="/api/v1",
+    dependencies=[Depends(require_beta_capability("library"))],
+)
 app.include_router(questions_router, prefix="/api/v1")
 app.include_router(question_similarity_router, prefix="/api/v1")
-app.include_router(lesson_plans_router, prefix="/api/v1")
-app.include_router(exam_papers_router, prefix="/api/v1")
-app.include_router(solutions_router, prefix="/api/v1")
-app.include_router(library_router, prefix="/api/v1")
+app.include_router(
+    lesson_plans_router,
+    prefix="/api/v1",
+    dependencies=[Depends(require_beta_capability("lesson"))],
+)
+app.include_router(
+    exam_papers_router,
+    prefix="/api/v1",
+    dependencies=[Depends(require_beta_capability("paper"))],
+)
+app.include_router(
+    solutions_router,
+    prefix="/api/v1",
+    dependencies=[Depends(require_beta_capability("solve"))],
+)
+app.include_router(
+    library_router,
+    prefix="/api/v1",
+    dependencies=[Depends(require_beta_capability("library"))],
+)
 app.include_router(model_operations_router, prefix="/api/v1")
-app.include_router(search_agent_router, prefix="/api/v1")
-app.include_router(solve_agent_router, prefix="/api/v1")
-app.include_router(private_library_agent_router, prefix="/api/v1")
-app.include_router(question_capture_router, prefix="/api/v1")
-app.include_router(personal_question_library_router, prefix="/api/v1")
-app.include_router(question_authoring_router, prefix="/api/v1")
-app.include_router(teacher_memory_router, prefix="/api/v1")
+app.include_router(
+    search_agent_router,
+    prefix="/api/v1",
+    dependencies=[Depends(require_beta_capability("search"))],
+)
+app.include_router(
+    solve_agent_router,
+    prefix="/api/v1",
+    dependencies=[Depends(require_beta_capability("solve"))],
+)
+app.include_router(
+    private_library_agent_router,
+    prefix="/api/v1",
+    dependencies=[Depends(require_beta_capability("library"))],
+)
+app.include_router(
+    question_capture_router,
+    prefix="/api/v1",
+    dependencies=[Depends(require_beta_capability("solve"))],
+)
+app.include_router(
+    personal_question_library_router,
+    prefix="/api/v1",
+    dependencies=[
+        Depends(require_any_beta_capability("authoring", "lesson", "paper"))
+    ],
+)
+app.include_router(
+    question_authoring_router,
+    prefix="/api/v1",
+    dependencies=[Depends(require_beta_capability("authoring"))],
+)
+app.include_router(
+    teacher_memory_router,
+    prefix="/api/v1",
+    dependencies=[Depends(require_beta_capability("teacher_memory"))],
+)
 # Internal-only Agent Tool Gateway（不进入公开 API 文档，M2M token 保护）
 app.include_router(internal_agent_tools_router)

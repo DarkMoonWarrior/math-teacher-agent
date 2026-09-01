@@ -22,7 +22,7 @@ describe("Search stream route", () => {
     vi.stubGlobal("fetch", upstreamFetch);
     const request = new Request("http://teacher.local/api/v1/agent/search/stream", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", Cookie: "math_beta_session=opaque" },
       body: JSON.stringify({ query: "找椭圆题", session_id: "tch_1" }),
     });
 
@@ -38,6 +38,9 @@ describe("Search stream route", () => {
       }),
     );
     expect(response.status).toBe(200);
+    const upstreamCall = upstreamFetch.mock.calls[0] as unknown as [string, RequestInit];
+    const upstreamHeaders = upstreamCall[1].headers as Headers;
+    expect(upstreamHeaders.get("cookie")).toBe("math_beta_session=opaque");
     expect(response.headers.get("content-type")).toBe("text/event-stream; charset=utf-8");
     expect(response.headers.get("cache-control")).toBe("no-cache, no-transform");
     expect(response.headers.get("x-accel-buffering")).toBe("no");

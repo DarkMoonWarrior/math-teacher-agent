@@ -987,11 +987,6 @@ export function PersonalQuestionAuthoringWorkspace({
           <h1>命一道自己的题。</h1>
           <span>生成结果只进入当前教师的私有命题工作区；不会混入真实检索结果，也不会自动保存。</span>
         </div>
-        <aside>
-          <LockIcon />
-          <strong>仅自己可见</strong>
-          <span>无公开、共享、商用或训练路径</span>
-        </aside>
       </header>
 
       <nav className="authoring-sections" aria-label="辅助命题工作区">
