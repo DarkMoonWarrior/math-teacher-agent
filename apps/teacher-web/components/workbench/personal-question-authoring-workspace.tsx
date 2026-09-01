@@ -81,6 +81,19 @@ function preservedDraftNotice(solutionMissing: boolean) {
     : "任务已停止；后台已完成的完整题目已保留为未保存私有草稿，可继续编辑后保存。";
 }
 
+type AuthoringResultRevealTarget = Pick<Element, "scrollIntoView">;
+type AuthoringResultRevealScheduler = (callback: FrameRequestCallback) => number;
+
+export function revealAuthoringResult(
+  target: AuthoringResultRevealTarget | null,
+  schedule: AuthoringResultRevealScheduler = window.requestAnimationFrame,
+) {
+  if (!target) return null;
+  return schedule(() => {
+    target.scrollIntoView({ behavior: "smooth", block: "start", inline: "nearest" });
+  });
+}
+
 function errorMessage(cause: unknown) {
   if (cause instanceof TeacherWorkspaceError) return cause.message;
   if (cause instanceof DOMException && cause.name === "AbortError") return "本次操作已取消。";
@@ -228,6 +241,7 @@ export function PersonalQuestionAuthoringWorkspace({
   const [stopDialogOpen, setStopDialogOpen] = useState(false);
   const feedbackReturnFocusRef = useRef<HTMLElement | null>(null);
   const stopDialogRef = useRef<HTMLElement | null>(null);
+  const resultPaneRef = useRef<HTMLDivElement | null>(null);
   const generationStartedAtRef = useRef(0);
   const sessionRef = useRef(`authoring_${Date.now().toString(36)}`);
 
@@ -511,6 +525,7 @@ export function PersonalQuestionAuthoringWorkspace({
         sessionId: sessionRef.current,
       });
       setAuthoringJob(job);
+      revealAuthoringResult(resultPaneRef.current);
     } catch (cause) {
       setError(errorMessage(cause));
       setBusy(null);
@@ -959,16 +974,19 @@ export function PersonalQuestionAuthoringWorkspace({
 
   return (
     <main className="authoring-workspace">
+      <ResizableSplitPane
+        ariaLabel="调整命题要求与题目结果区域宽度"
+        className="authoring-compose-split authoring-workbench-split"
+        defaultPrimaryPercent={40}
+        disabled={busy === "generating"}
+        state={error ? "error" : busy ? "loading" : draft || previewMode === "preserved" ? "success" : "default"}
+      >
+      <div className="authoring-control-pane">
       <header className="authoring-masthead">
         <div>
           <h1>命一道自己的题。</h1>
           <span>生成结果只进入当前教师的私有命题工作区；不会混入真实检索结果，也不会自动保存。</span>
         </div>
-        <aside>
-          <LockIcon />
-          <strong>仅自己可见</strong>
-          <span>无公开、共享、商用或训练路径</span>
-        </aside>
       </header>
 
       <nav className="authoring-sections" aria-label="辅助命题工作区">
@@ -1027,11 +1045,6 @@ export function PersonalQuestionAuthoringWorkspace({
       )}
 
       {section === "compose" && (
-        <ResizableSplitPane
-          ariaLabel="调整命题要求与题目结果区域宽度"
-          className="authoring-compose-split"
-          defaultPrimaryPercent={40}
-        >
           <section className="authoring-brief">
             <header><div><span>先写命题意图</span><h2>告诉我要出一道什么题</h2></div></header>
             <form onSubmit={generateDraft}>
@@ -1071,8 +1084,12 @@ export function PersonalQuestionAuthoringWorkspace({
               {busy === "generating" && <AuthoringGenerationStatus elapsedSeconds={generationElapsed} onCancel={authoringJob ? () => setStopDialogOpen(true) : undefined} stage={generationStage} />}
             </form>
           </section>
+      )}
+      </div>
 
-          {busy === "generating" || previewMode === "preserved" ? (
+      <div className="authoring-result-pane" ref={resultPaneRef}>
+      {section === "compose" && (
+          busy === "generating" || previewMode === "preserved" ? (
             <AuthoringLivePreview
               mode={previewMode === "preserved" ? "preserved" : "active"}
               onDiscard={previewMode === "preserved" ? () => void discardPreservedStatement() : undefined}
@@ -1154,8 +1171,7 @@ export function PersonalQuestionAuthoringWorkspace({
               <h2>题目与解析会在这里展开。</h2>
               <span>请在左侧填写命题要求并生成私有草稿。</span>
             </section>
-          )}
-        </ResizableSplitPane>
+          )
       )}
 
       {section === "history" && (
@@ -1235,6 +1251,8 @@ export function PersonalQuestionAuthoringWorkspace({
           </div>
         </section>
       )}
+      </div>
+      </ResizableSplitPane>
       <WorkbenchNoticeDialog
         actionLabel="删除历史"
         busy={busy === "managing" && Boolean(historyDeleteTarget)}

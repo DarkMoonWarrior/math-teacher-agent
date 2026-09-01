@@ -16,9 +16,9 @@ QuestionType = Literal["single_choice", "multiple_choice", "fill_blank", "open_r
 
 class LibraryIngestCommand(BaseModel):
     title: str = Field(default="", max_length=300)
-    rights_basis: RightsBasis
-    rights_statement: str = Field(min_length=6, max_length=2000)
-    rights_acknowledged: bool
+    rights_basis: RightsBasis = "private_teaching_only"
+    rights_statement: str = ""
+    rights_acknowledged: bool = True
     owner_id: str = Field(default="owner_teacher", min_length=1, max_length=120)
 
 
@@ -33,7 +33,7 @@ class LibraryTextReviewCommand(BaseModel):
 class LibraryOCRCommand(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    external_processing_consent: bool
+    external_processing_consent: bool = True
 
 
 class LibraryOCRResult(BaseModel):
@@ -55,6 +55,12 @@ class LibraryAIRepairResult(BaseModel):
     provider: str
     model: str
     warnings: list[str] = Field(default_factory=list)
+
+
+class LibraryQuestionExtractionCommand(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    external_processing_consent: bool = True
 
 
 class LibraryLifecycleCommand(BaseModel):

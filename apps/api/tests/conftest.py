@@ -37,3 +37,9 @@ os.environ["MATH_AI_DEEPSEEK_API_KEY"] = ""
 os.environ["MATH_AI_LESSON_PLAN_PROVIDER"] = "local"
 os.environ["MATH_AI_QUESTION_VARIANT_PROVIDER"] = "local"
 os.environ["MATH_AI_SOLUTION_PROVIDER"] = "local"
+
+# A developer may run the local app in Closed Beta mode. The general API suite
+# exercises the local-development adapter unless an individual test explicitly
+# overrides Settings to cover Closed Beta behavior.
+os.environ["MATH_AI_BETA_ACCESS_ENABLED"] = "false"
+os.environ["MATH_AI_BETA_ACCESS_ROSTER_JSON"] = "{}"

@@ -55,7 +55,9 @@ apps/web (legacy/reference Next.js UI, :3000)
 - Seam: `PrivateLibrary` 业务接口与版本化 internal Tool gateway；Agent 只看到产品拥有的结构化结果。
 - First slice: `inspect_private_library` 没有 model-supplied owner 参数，只返回本地 current owner 的聚合数量、处理状态和文件类型；`content_included=false`。
 - Trust: 标题、文件名、正文、原文件、路径和 owner 标识均不进入第一条 Tool 输出；Agent 不能据此声称已读取资料内容。
-- Current identity: `app/core/identity.py` 是服务端 current-teacher seam；Public 路由不接受浏览器提供的 owner/reviewer，详情、文件、OCR、revision、后台任务和候选访问均通过跨 owner 自动测试。当前 local adapter 固定返回 `owner_teacher`，不是生产认证；真实会话身份在 M12 实现。
+- Current identity: `app/core/identity.py` 是服务端 current-teacher seam；Public 路由不接受浏览器提供的 owner/reviewer，详情、文件、OCR、revision、后台任务和候选访问均通过跨 owner 自动测试。M12 `BetaAccess.issue/resolve/revoke` 在启用时把 opaque HttpOnly Cookie 解析为 current teacher，并返回签发时冻结的 allow-list 能力快照；无有效会话 fail closed，未开放模块由集中式能力依赖在业务路由前拒绝。访问码、令牌生成/哈希、能力快照、到期和撤销均隐藏在模块内部。只有显式禁用 Beta 时才固定返回本地 `owner_teacher` 与全部能力。这仍是 Closed Beta 准入，不是生产认证、授权平台或多租户系统。
+- Operational seam: M12 `PrivacySafeOperations` 独占运行事件 schema 与结果分类，公开接口只接受请求编号、allow-list 能力、方法、结果、状态码、稳定错误类别和耗时；ASGI 中间件只负责测量完整响应并适配为结构化日志。`ReadinessProbe` 独占 API、Beta session store/roster 与必要 Agent runtime/model 的就绪判定，路由只把稳定结果映射为 200/503。两条 seam 都不接收或返回 headers、query、正文、owner、资源 ID、访问秘密、URL 或原始异常消息。
+- Recovery seam: M12 `BetaBackupRecovery.inventory/create_backup/verify_backup/restore_drill` 独占持久化 owner store 清单、SQLite 在线快照、目录文件复制、manifest/逐文件 SHA-256、原子发布和临时恢复演练。`PrivateBackupDestination` 要求 operator 显式确认加密私有卷或等效保护；浏览器和 Agent 没有对应路由。可撤销 Beta session DB 被固定排除，避免恢复旧会话；恢复演练只在新临时目录重建清单文件并执行 SQLite integrity check，不写在线目标。
 - Third slice: `TeacherWorkspace` 隐藏 OCR 后台任务细节；新 Teacher Web 对照原文件、首次提取文本、可编辑校对稿和 revision。本地 PDF OCR 优先，外部 OCR 每次单独同意，任何 OCR 结果仍为待教师校对草稿。
 - Fourth slice: 拆题候选绑定教师确认的当前文本版本；浏览器可编辑题目内容但不能提交 owner/editor。教材映射只接受 `node_id`，FastAPI 从受控 Curriculum 补全教材路径。QuestionBank 导入固定为 owner 私有、待审核、待数学验证，并保存资料/版本/候选 provenance。
 - Current retrieval seam: 浏览器逐次明确同意后，FastAPI 为当前教师、查询和数量签发短时单次许可；Harness 只能调用固定 `search_private_library` Tool，`PrivateLibrary` 只从 active + confirmed 资源返回有界匹配片段和来源版本/权利状态。owner、原文件、路径与整份正文不越过 seam。
@@ -97,9 +99,12 @@ apps/web (legacy/reference Next.js UI, :3000)
 - Selection seam: `PaperBlueprintSelection.select` 只在教师确认后调用受控题库能力。公共题经过范围、权利、verification、review、active 与相似度门禁；私题只允许当前 owner 明确选择，且保持 owner/visibility/revision 不变。供给不足返回真实缺口，不调用辅助命题。
 - Audit/edit seam: `PaperBlueprintCoverage.audit` 用确定性规则核对分区和配分，并归纳教师所选题目的实际知识范围与难度；后两者是非阻断分析。`PaperEditableDrafting.build` 在服务器重新执行选题后，只接受完整的题号/分区/分值布局编辑并生成草稿指纹、修改记录和双向细目表。两者都无业务写入。
 - Version seam: `PaperVersioning.save` 是第五切片的唯一持久化入口。Teacher Web 对所有保存请求先提供取消/确认二次选择；它从 current-teacher context 获得 owner，重新解析公共题和当前 owner 私题的精确 current revision，重新构建草稿并核对浏览器持有的 `draft_fingerprint`、题目完整性和可信状态。题量、题型/分区、配分、总分、知识范围和难度按实际状态写入版本与细目表，但不阻止教师确认保存；无题、题目不完整、越权、可信状态变化或过期指纹仍 fail closed。成功时调用 `ExamPaperStudio` 建立 append-only 不可变版本；失败没有版本副作用。
+- Lesson version seam: `LessonVersioning` 是 M10 第五切片唯一持久化 Interface。保存、历史读取和回收/恢复的 owner 只取 current-teacher context；保存前重新构建来源草案，核对教材、公共题、当前 owner 私题/资料及精确 revision，并再次执行完整性、课时对应和高中范围检查。每次成功保存追加不可变快照，编辑历史教案产生新版本，不覆盖旧版本；跨 owner 读取/生命周期操作按不存在处理，保存不把 `draft_requires_teacher_review` 升级为已验证。
+- Lesson export seam: `LessonSavedExporting.export` 只接受 current-teacher owner 的精确 `lesson_plan_id + version + format`，读取 `LessonVersioning` 的不可变快照并复核草稿指纹；`SavedLessonPlanDocumentRenderer` 是 DOCX/PDF Adapter，完整渲染目标、流程、题面/选项/答案/解析、评价与来源摘要。导出不读取页面草稿、来源最新 revision 或其他 owner 内容，也不改变业务状态。
 - Export seam: `PaperSavedExporting.export` 只接受当前 owner 的精确 `paper_id + version + kind + format`，读取保存时的题目快照与双向细目表，不读取页面草稿或题库最新 revision。它复用 `ExamPaperDocumentRenderer` 生成学生卷、答案卷和双向细目表的 DOCX/PDF，不改变任何业务状态。
 - Ownership: 浏览器和 Agent 均不能提交 owner、版本号生成规则、可信结论或保存结论；跨 owner 的版本与导出统一不可见。保存试卷不会复制、发布或改变 PersonalQuestionLibrary 内容。
-- Current completion boundary: 六条实现切片、28 场景固定 synthetic evaluation、工程回归、权限/仓库卫生和真实浏览器/PDF 回归已通过；当前等待形成可回滚提交和项目所有者阶段确认，因此不能进入 M10。
+- Teacher Memory seam: `TeacherMemory.profile/apply/planning_defaults` 是 M11 的产品 Interface。SQLite、值编码、版本冲突、来源和置信度生成都隐藏在模块内部；公开路由只从 current-teacher context 绑定 owner。模块只接受 allow-listed 结构化偏好，显式值固定 `teacher_explicit + confidence 1.0`，自动学习只从已确认保存版本形成可解释提议且永不自动晋升；反馈、导出和删除均不接收浏览器 owner，也不保存任务或私人资料正文。
+- Current completion boundary: M11 已形成可回滚提交 `5614fc0` 并于 2026-09-01 获得项目所有者进入 M12 的确认。M12 是唯一活动里程碑；Beta 会话身份、能力快照、隐私安全运行状态和备份恢复四条切片已接入，删除演练和完整 Gate 尚未完成，因此不能进入 M13。
 
 ### Teacher Agent Runtime module
 

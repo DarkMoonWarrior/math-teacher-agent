@@ -18,6 +18,7 @@ import {
   type SearchTaskResult,
   type SolveTaskProgressStage,
   type SolveTaskResult,
+  type ProductCapability,
   TeacherWorkspaceError,
 } from "@/lib/teacher-workspace/contracts";
 import { teacherWorkspace } from "@/lib/teacher-workspace/http-adapter";
@@ -44,6 +45,8 @@ import {
   PaperIcon,
   PlusIcon,
   SearchIcon,
+  SettingsIcon,
+  SignOutIcon,
   SparkIcon,
 } from "./icons";
 import { SolvePaper, SolveResultBrief } from "./solve-paper";
@@ -51,10 +54,20 @@ import { PrivateLibraryWorkspace } from "./private-library-workspace";
 import { QuestionMediaComposer } from "./question-media-composer";
 import { PersonalQuestionAuthoringWorkspace } from "./personal-question-authoring-workspace";
 import { PaperBlueprintWorkspace } from "./paper-blueprint-workspace";
+import { LessonBlueprintWorkspace } from "./lesson-blueprint-workspace";
+import { ResizableSplitPane } from "./resizable-split-pane";
+import { TeacherMemoryPanel } from "./teacher-memory-panel";
+import {
+  type BetaSessionContextValue,
+  useBetaCapabilities,
+  useBetaSession,
+} from "./beta-access-gate";
 
 type Phase = "idle" | "running" | "success" | "error" | "cancelled";
 type FlipDirection = "next" | "previous";
 type CapabilityId = "search" | "solve" | "library" | "lesson" | "paper";
+type RunnableCapabilityId = "search" | "solve";
+type PersistentWorkspaceId = "authoring" | "library" | "lesson" | "paper";
 
 type SearchTaskRecord = {
   id: string;
@@ -107,7 +120,6 @@ type CapabilityDefinition = {
   id: CapabilityId;
   label: string;
   ready: boolean;
-  status: string;
   title: [string, string];
   intro: string;
   inputLabel: string;
@@ -121,6 +133,16 @@ type CapabilityDefinition = {
 
 const CAPABILITY_ORDER: CapabilityId[] = ["search", "solve", "library", "lesson", "paper"];
 const WORKBENCH_NAV_ORDER: Array<CapabilityId | "authoring"> = ["search", "solve", "library", "authoring", "lesson", "paper"];
+
+export function getWorkspaceVisibility(capability: CapabilityId, authoringActive: boolean) {
+  return {
+    authoring: authoringActive,
+    lesson: !authoringActive && capability === "lesson",
+    library: !authoringActive && capability === "library",
+    paper: !authoringActive && capability === "paper",
+    searchSolve: !authoringActive && (capability === "search" || capability === "solve"),
+  };
+}
 
 const SEARCH_PROGRESS: Record<SearchTaskProgressStage, SearchProgressDefinition> = {
   connecting: {
@@ -195,7 +217,6 @@ const CAPABILITIES: Record<CapabilityId, CapabilityDefinition> = {
     id: "search",
     label: "搜题",
     ready: true,
-    status: "Search Agent 已接入",
     title: ["把要找的题，", "直接说出来。"],
     intro: "写下年级、知识点、难度、题量和课堂用途。它负责理解与查找，来源和验证状态会随结果一起返回。",
     inputLabel: "描述搜题需求",
@@ -245,7 +266,6 @@ const CAPABILITIES: Record<CapabilityId, CapabilityDefinition> = {
     id: "solve",
     label: "解题",
     ready: true,
-    status: "Solve Agent 已接入",
     title: ["把一道题，", "讲到可以上课。"],
     intro: "输入完整题目，系统优先查找已有可信解析；需要模型生成时会明确标记教师复核，并单独展示 MathVerifier 能力、范围和证据。",
     inputLabel: "输入完整数学题目",
@@ -295,7 +315,6 @@ const CAPABILITIES: Record<CapabilityId, CapabilityDefinition> = {
     id: "library",
     label: "资料库",
     ready: true,
-    status: "Private Library 已接入",
     title: ["我的资料，", "我的工作流。"],
     intro: "上传 PDF、DOCX 和题目图片；来源、权利与私人边界会随资料一起保留。",
     inputLabel: "选择私人教学资料",
@@ -316,14 +335,13 @@ const CAPABILITIES: Record<CapabilityId, CapabilityDefinition> = {
   lesson: {
     id: "lesson",
     label: "教案",
-    ready: false,
-    status: "Lesson Agent · 运行时待接入",
+    ready: true,
     title: ["把一节课，", "整理成可修改的教案。"],
     intro: "从课题、学情和课时出发，组织教学目标、重难点、课堂活动与板书。所有生成内容先是草案，由教师决定是否采用。",
     inputLabel: "描述教案需求",
     placeholder: "例如：为高二椭圆第一课时准备一份 45 分钟新授课教案",
-    actionLabel: "运行时待接入",
-    stageLabel: "教案工作流预览",
+    actionLabel: "整理教案蓝图",
+    stageLabel: "教案蓝图规划",
     stageTitle: "从教学目标，到课堂节奏",
     examples: [
       {
@@ -367,7 +385,6 @@ const CAPABILITIES: Record<CapabilityId, CapabilityDefinition> = {
     id: "paper",
     label: "组卷",
     ready: true,
-    status: "Paper Agent · 蓝图规划已接入",
     title: ["把教学目标，", "排成一份有依据的试卷。"],
     intro: "先确定范围、题量、题型、难度和考试时间，再形成试卷草案与双向细目表。题目来源和验证状态不会被隐藏。",
     inputLabel: "描述组卷需求",
@@ -524,7 +541,68 @@ function PreviewPaper({ capability, page }: { capability: CapabilityId; page: nu
   );
 }
 
+export function AccountSettingsPopover({
+  error,
+  onOpenTeacherPreferences,
+  onSignOut,
+  session,
+  teacherPreferencesAvailable,
+}: {
+  error: string;
+  onOpenTeacherPreferences: () => void;
+  onSignOut: () => void;
+  session: BetaSessionContextValue;
+  teacherPreferencesAvailable: boolean;
+}) {
+  const avatarLabel = session.displayLabel.trim().slice(0, 1) || "教";
+  const sessionLabel = session.mode === "closed_beta" ? "封闭测试用户" : "本地开发用户";
+
+  return (
+    <div className="account-settings-popover" id="account-settings-menu" role="menu" aria-label="设置中的用户项目">
+      <header>
+        <span>设置</span>
+        <strong>用户</strong>
+      </header>
+      <section className="account-settings-profile" aria-label="当前用户信息">
+        <span className="account-avatar" aria-hidden="true">{avatarLabel}</span>
+        <div>
+          <strong>{session.displayLabel}</strong>
+          <small>{sessionLabel}</small>
+        </div>
+      </section>
+      <button
+        disabled={!teacherPreferencesAvailable}
+        onClick={onOpenTeacherPreferences}
+        role="menuitem"
+        type="button"
+      >
+        <BookIcon />
+        <span>
+          <strong>教师偏好</strong>
+          <small>{teacherPreferencesAvailable ? "查看、修改与删除偏好" : "本轮测试暂未开放"}</small>
+        </span>
+      </button>
+      <button
+        className="account-settings-signout"
+        disabled={!session.canSignOut || session.busy}
+        onClick={onSignOut}
+        role="menuitem"
+        type="button"
+      >
+        <SignOutIcon />
+        <span>
+          <strong>{session.busy ? "正在退出…" : "退出登录"}</strong>
+          <small>{session.canSignOut ? "结束当前测试会话" : "本地开发模式无需退出"}</small>
+        </span>
+      </button>
+      {error ? <p className="account-settings-error" role="alert">{error}</p> : null}
+    </div>
+  );
+}
+
 export function TeacherWorkbench() {
+  const betaCapabilities = useBetaCapabilities();
+  const betaSession = useBetaSession();
   const [capability, setCapability] = useState<CapabilityId>("search");
   const [drafts, setDrafts] = useState<Record<CapabilityId, string>>({
     search: "",
@@ -554,35 +632,50 @@ export function TeacherWorkbench() {
   const [touched, setTouched] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [newTaskOpen, setNewTaskOpen] = useState(false);
+  const [accountSettingsOpen, setAccountSettingsOpen] = useState(false);
+  const [accountError, setAccountError] = useState("");
+  const [teacherMemoryOpen, setTeacherMemoryOpen] = useState(false);
   const [authoringEntry, setAuthoringEntry] = useState<{
     source: QuestionAuthoringEntrySource;
     brief: string;
   } | null>(null);
+  const [authoringActive, setAuthoringActive] = useState(false);
+  const [workspaceResetVersions, setWorkspaceResetVersions] = useState<Record<PersistentWorkspaceId, number>>({
+    authoring: 0,
+    library: 0,
+    lesson: 0,
+    paper: 0,
+  });
   const [previewPage, setPreviewPage] = useState(0);
   const [questionPage, setQuestionPage] = useState(0);
   const [solvePage, setSolvePage] = useState(0);
   const [turning, setTurning] = useState(false);
   const [flipDirection, setFlipDirection] = useState<FlipDirection>("next");
   const sessionRef = useRef("");
-  const abortRef = useRef<AbortController | null>(null);
+  const abortRefs = useRef<Record<RunnableCapabilityId, AbortController | null>>({ search: null, solve: null });
   const turnTimerRef = useRef<number | null>(null);
-  const requestSequenceRef = useRef(0);
+  const requestSequenceRefs = useRef<Record<RunnableCapabilityId, number>>({ search: 0, solve: 0 });
   const resultRegionRef = useRef<HTMLElement | null>(null);
   const taskInputRef = useRef<HTMLTextAreaElement | null>(null);
   const historyTriggerRef = useRef<HTMLButtonElement | null>(null);
   const historyDrawerRef = useRef<HTMLElement | null>(null);
   const historyCloseRef = useRef<HTMLButtonElement | null>(null);
   const newTaskMenuRef = useRef<HTMLDivElement | null>(null);
+  const accountSettingsRef = useRef<HTMLDivElement | null>(null);
 
   const definition = CAPABILITIES[capability];
   const query = drafts[capability];
   const phase = phases[capability];
-  const searchVisible = capability === "search";
-  const solveVisible = capability === "solve";
-  const libraryVisible = capability === "library";
-  const paperVisible = capability === "paper";
-  const authoringVisible = authoringEntry !== null;
-  const runnable = searchVisible || solveVisible;
+  const workspaceVisibility = getWorkspaceVisibility(capability, authoringActive);
+  const authoringVisible = workspaceVisibility.authoring;
+  const searchVisible = workspaceVisibility.searchSolve && capability === "search";
+  const solveVisible = workspaceVisibility.searchSolve && capability === "solve";
+  const libraryVisible = workspaceVisibility.library;
+  const lessonVisible = workspaceVisibility.lesson;
+  const paperVisible = workspaceVisibility.paper;
+  const activeProductCapability: ProductCapability = authoringVisible ? "authoring" : capability;
+  const capabilityAvailable = betaCapabilities.has(activeProductCapability);
+  const runnable = capabilityAvailable && (searchVisible || solveVisible);
   const error = runnable ? errors[capability as "search" | "solve"] : null;
   const running = runnable && phase === "running";
   const trimmedQuery = query.trim();
@@ -595,11 +688,11 @@ export function TeacherWorkbench() {
   const captureReady = !questionBundle || (
     captureConfirmed && (!captureRequiresVisual || visualProcessingConsent)
   );
-  const queryValid = searchVisible
+  const queryValid = capabilityAvailable && (searchVisible
     ? Boolean(trimmedQuery)
     : solveVisible
       ? trimmedQuery.length >= 5 && captureReady
-      : false;
+      : false);
   const validationMessage = runnable && touched && !queryValid
     ? searchVisible
       ? "先写下要找什么题。"
@@ -614,7 +707,9 @@ export function TeacherWorkbench() {
   const showingSearchResult = searchVisible && phase === "success" && Boolean(result?.results.length);
   const showingEmptySearchResult = searchVisible && phase === "success" && result?.results.length === 0;
   const showingSolveResult = solveVisible && phase === "success" && Boolean(solveResult?.solution);
-  const pageCount = showingSolveResult
+  const pageCount = !capabilityAvailable
+    ? 1
+    : showingSolveResult
     ? 3
     : showingSearchResult && result
     ? result.results.length
@@ -629,6 +724,24 @@ export function TeacherWorkbench() {
     : searchProgress === "recovering"
       ? [...SEARCH_PROGRESS_STEPS, "恢复同一次运行"]
       : SEARCH_PROGRESS_STEPS;
+
+  useEffect(() => {
+    if (authoringActive && !betaCapabilities.has("authoring")) {
+      setAuthoringActive(false);
+    }
+    if ((!authoringActive && betaCapabilities.has(capability)) || (authoringActive && betaCapabilities.has("authoring"))) {
+      return;
+    }
+    const next = WORKBENCH_NAV_ORDER.find((item) => betaCapabilities.has(item));
+    if (!next) return;
+    if (next === "authoring") {
+      setAuthoringEntry((current) => current ?? { source: "new_task", brief: "" });
+      setAuthoringActive(true);
+      return;
+    }
+    setCapability(next);
+    setAuthoringActive(false);
+  }, [authoringActive, betaCapabilities, capability]);
 
   function setPhase(nextPhase: Phase, target: CapabilityId = capability) {
     setPhases((current) => ({ ...current, [target]: nextPhase }));
@@ -669,7 +782,8 @@ export function TeacherWorkbench() {
   useEffect(() => {
     return () => {
       if (turnTimerRef.current !== null) window.clearTimeout(turnTimerRef.current);
-      abortRef.current?.abort();
+      abortRefs.current.search?.abort();
+      abortRefs.current.solve?.abort();
     };
   }, []);
 
@@ -734,21 +848,39 @@ export function TeacherWorkbench() {
     };
   }, [newTaskOpen]);
 
+  useEffect(() => {
+    if (!accountSettingsOpen) return;
+    function closeSettings(event: MouseEvent | globalThis.KeyboardEvent) {
+      if (event instanceof globalThis.KeyboardEvent) {
+        if (event.key === "Escape") setAccountSettingsOpen(false);
+        return;
+      }
+      if (!accountSettingsRef.current?.contains(event.target as Node)) setAccountSettingsOpen(false);
+    }
+    window.addEventListener("mousedown", closeSettings);
+    window.addEventListener("keydown", closeSettings);
+    return () => {
+      window.removeEventListener("mousedown", closeSettings);
+      window.removeEventListener("keydown", closeSettings);
+    };
+  }, [accountSettingsOpen]);
+
   async function runTask(event?: FormEvent<HTMLFormElement>) {
     event?.preventDefault();
     if (!runnable) return;
+    const target = capability as RunnableCapabilityId;
     const trimmed = query.trim();
     setTouched(true);
     if (!queryValid || running) return;
 
     if (!sessionRef.current) sessionRef.current = createSessionId();
-    const requestSequence = ++requestSequenceRef.current;
+    const requestSequence = ++requestSequenceRefs.current[target];
     const controller = new AbortController();
-    abortRef.current = controller;
-    setPhase("running");
+    abortRefs.current[target] = controller;
+    setPhase("running", target);
     if (searchVisible) setSearchProgress("connecting");
     else setSolveProgress("connecting");
-    setError(null);
+    setError(null, target);
     setQuestionPage(0);
     setSolvePage(0);
     scrollToResultRegion();
@@ -760,13 +892,13 @@ export function TeacherWorkbench() {
           {
             signal: controller.signal,
             onProgress: (progress) => {
-              if (requestSequence === requestSequenceRef.current) {
+              if (requestSequence === requestSequenceRefs.current[target]) {
                 setSearchProgress(progress.stage);
               }
             },
           },
         );
-        if (requestSequence !== requestSequenceRef.current) return;
+        if (requestSequence !== requestSequenceRefs.current[target]) return;
         setResult(nextResult);
         setHistory((current) => [
           {
@@ -790,13 +922,13 @@ export function TeacherWorkbench() {
           {
             signal: controller.signal,
             onProgress: (progress) => {
-              if (requestSequence === requestSequenceRef.current) {
+              if (requestSequence === requestSequenceRefs.current[target]) {
                 setSolveProgress(progress.stage);
               }
             },
           },
         );
-        if (requestSequence !== requestSequenceRef.current) return;
+        if (requestSequence !== requestSequenceRefs.current[target]) return;
         setSolveResult(nextResult);
         setHistory((current) => [
           {
@@ -808,21 +940,21 @@ export function TeacherWorkbench() {
           ...current.filter((item) => item.id !== nextResult.run_id).slice(0, 7),
         ]);
       }
-      setPhase("success");
+      setPhase("success", target);
       scrollToResultRegion();
     } catch (cause) {
-      if (requestSequence !== requestSequenceRef.current) return;
+      if (requestSequence !== requestSequenceRefs.current[target]) return;
       if (cause instanceof DOMException && cause.name === "AbortError") {
-        setPhase("cancelled");
+        setPhase("cancelled", target);
         return;
       }
       const nextError = cause instanceof TeacherWorkspaceError
         ? { code: cause.code, message: cause.message, requestId: cause.requestId }
         : { code: "UNKNOWN_ERROR", message: "任务未完成。请检查服务状态后重试。", requestId: "" };
-      setError(nextError);
-      setPhase("error");
+      setError(nextError, target);
+      setPhase("error", target);
     } finally {
-      if (requestSequence === requestSequenceRef.current) abortRef.current = null;
+      if (requestSequence === requestSequenceRefs.current[target]) abortRefs.current[target] = null;
     }
   }
 
@@ -834,25 +966,21 @@ export function TeacherWorkbench() {
   }
 
   function selectCapability(nextCapability: CapabilityId) {
-    if (turning) return;
+    if (turning || !betaCapabilities.has(nextCapability)) return;
     if (nextCapability === capability) {
-      setAuthoringEntry(null);
+      setAuthoringActive(false);
       setNewTaskOpen(false);
+      setAccountSettingsOpen(false);
       return;
-    }
-    if (running) {
-      requestSequenceRef.current += 1;
-      abortRef.current?.abort();
-      abortRef.current = null;
-      setPhase("cancelled");
     }
 
     const currentIndex = CAPABILITY_ORDER.indexOf(capability);
     const nextIndex = CAPABILITY_ORDER.indexOf(nextCapability);
     setFlipDirection(nextIndex > currentIndex ? "next" : "previous");
     setTurning(true);
-    setAuthoringEntry(null);
+    setAuthoringActive(false);
     setNewTaskOpen(false);
+    setAccountSettingsOpen(false);
     setTouched(false);
     if (turnTimerRef.current !== null) window.clearTimeout(turnTimerRef.current);
     turnTimerRef.current = window.setTimeout(() => {
@@ -864,18 +992,32 @@ export function TeacherWorkbench() {
 
   function resetTask() {
     if (authoringVisible) {
-      setAuthoringEntry(null);
+      setWorkspaceResetVersions((current) => ({ ...current, authoring: current.authoring + 1 }));
+      setAuthoringEntry({ source: "new_task", brief: "" });
       setNewTaskOpen(false);
-      window.setTimeout(returnToComposer, 0);
       return;
     }
     if (libraryVisible) {
-      selectCapability("search");
+      setWorkspaceResetVersions((current) => ({ ...current, library: current.library + 1 }));
+      setNewTaskOpen(false);
       return;
     }
-    requestSequenceRef.current += 1;
-    abortRef.current?.abort();
-    abortRef.current = null;
+    if (lessonVisible) {
+      setDrafts((current) => ({ ...current, lesson: "" }));
+      setWorkspaceResetVersions((current) => ({ ...current, lesson: current.lesson + 1 }));
+      setNewTaskOpen(false);
+      return;
+    }
+    if (paperVisible) {
+      setDrafts((current) => ({ ...current, paper: "" }));
+      setWorkspaceResetVersions((current) => ({ ...current, paper: current.paper + 1 }));
+      setNewTaskOpen(false);
+      return;
+    }
+    const target = capability as RunnableCapabilityId;
+    requestSequenceRefs.current[target] += 1;
+    abortRefs.current[target]?.abort();
+    abortRefs.current[target] = null;
     setDrafts((current) => ({ ...current, [capability]: "" }));
     setTouched(false);
     setPreviewPage(0);
@@ -897,16 +1039,30 @@ export function TeacherWorkbench() {
   }
 
   function openAuthoring(source: QuestionAuthoringEntrySource, brief = "") {
-    if (running || turning) return;
+    if (turning || !betaCapabilities.has("authoring")) return;
     setNewTaskOpen(false);
-    setAuthoringEntry({ source, brief: brief.trim() });
+    setAccountSettingsOpen(false);
+    setAuthoringEntry((current) => current ?? { source, brief: brief.trim() });
+    setAuthoringActive(true);
     window.requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "auto" }));
   }
 
+  async function signOut() {
+    setAccountError("");
+    try {
+      await betaSession.signOut();
+      setAccountSettingsOpen(false);
+    } catch {
+      setAccountError("退出未完成，请检查网络后重试。");
+    }
+  }
+
   function openTask(task: TaskRecord) {
-    requestSequenceRef.current += 1;
-    abortRef.current?.abort();
-    abortRef.current = null;
+    if (!betaCapabilities.has(task.capability)) return;
+    requestSequenceRefs.current[task.capability] += 1;
+    abortRefs.current[task.capability]?.abort();
+    abortRefs.current[task.capability] = null;
+    setAuthoringActive(false);
     setCapability(task.capability);
     setDrafts((current) => ({ ...current, [task.capability]: task.query }));
     if (task.capability === "search") {
@@ -925,7 +1081,7 @@ export function TeacherWorkbench() {
   }
 
   function continueToSolve(item: SearchQuestion) {
-    if (turning || running) return;
+    if (turning || running || !betaCapabilities.has("solve")) return;
     setDrafts((current) => ({ ...current, solve: item.stem || item.stem_preview }));
     setSolveResult(null);
     setQuestionBundle(null);
@@ -954,7 +1110,9 @@ export function TeacherWorkbench() {
     }, 440);
   }
 
-  const stageTitle = searchVisible && phase === "success" && result
+  const stageTitle = !capabilityAvailable
+    ? `当前封闭测试尚未开放${definition.label}`
+    : searchVisible && phase === "success" && result
     ? `${result.returned_count} 道题已整理成册`
     : solveVisible && phase === "success" && solveResult?.solution
       ? "解析、课堂提示与可信证据已整理"
@@ -970,7 +1128,7 @@ export function TeacherWorkbench() {
     <div className="workbench-shell" data-capability={capability}>
       <header className="app-nav">
         <div className="app-nav__inner">
-          <button className="brand-button" type="button" onClick={() => selectCapability("search")} aria-label="返回搜题">
+          <button className="brand-button" type="button" disabled={!betaCapabilities.has("search")} onClick={() => selectCapability("search")} aria-label="返回搜题">
             <span className="brand-mark">数</span>
             <span className="brand-name">备课伙伴</span>
           </button>
@@ -978,12 +1136,13 @@ export function TeacherWorkbench() {
           <nav className="capability-tabs" aria-label="Agent 能力">
             {WORKBENCH_NAV_ORDER.map((id) => {
               if (id === "authoring") {
+                const available = betaCapabilities.has("authoring");
                 return (
                   <button
-                    aria-label="命题，已接入"
+                    aria-label={available ? "命题，已开放" : "命题，封闭测试暂未开放"}
                     aria-pressed={authoringVisible}
                     className={authoringVisible ? "is-active" : ""}
-                    disabled={turning || running}
+                    disabled={turning || !available}
                     key={id}
                     onClick={() => openAuthoring("new_task")}
                     type="button"
@@ -995,12 +1154,13 @@ export function TeacherWorkbench() {
                 );
               }
               const item = CAPABILITIES[id];
+              const available = betaCapabilities.has(id);
               return (
                 <button
-                  aria-label={`${item.label}${item.ready ? "，已接入" : "，运行时待接入"}`}
+                  aria-label={`${item.label}${available ? "，已开放" : "，封闭测试暂未开放"}`}
                   aria-pressed={!authoringVisible && capability === id}
                   className={!authoringVisible && capability === id ? "is-active" : ""}
-                  disabled={turning}
+                  disabled={turning || !available}
                   key={id}
                   onClick={() => selectCapability(id)}
                   type="button"
@@ -1019,45 +1179,100 @@ export function TeacherWorkbench() {
               {history.length > 0 && <span>{history.length}</span>}
             </button>
             <div className="new-task-menu" ref={newTaskMenuRef}>
-              <button className="new-task-button" type="button" onClick={() => setNewTaskOpen((current) => !current)} aria-expanded={newTaskOpen} aria-haspopup="menu" aria-label="新任务菜单">
+              <button className="new-task-button" type="button" onClick={() => { setAccountSettingsOpen(false); setNewTaskOpen((current) => !current); }} aria-expanded={newTaskOpen} aria-haspopup="menu" aria-label="新任务菜单">
                 <PlusIcon />
                 <span>新任务</span>
               </button>
               {newTaskOpen && (
                 <div className="new-task-popover" role="menu">
                   <button role="menuitem" type="button" onClick={resetTask}><PlusIcon /><span><strong>清空当前任务</strong><small>保留当前 Agent</small></span></button>
-                  <button role="menuitem" type="button" onClick={() => openAuthoring("new_task")}><SparkIcon /><span><strong>辅助命题</strong><small>生成草稿 · 仅自己可见</small></span></button>
+                  <button role="menuitem" type="button" disabled={!betaCapabilities.has("authoring")} onClick={() => openAuthoring("new_task")}><SparkIcon /><span><strong>辅助命题</strong><small>{betaCapabilities.has("authoring") ? "生成草稿 · 仅自己可见" : "本轮测试暂未开放"}</small></span></button>
                 </div>
               )}
+            </div>
+            <div className="account-settings" ref={accountSettingsRef}>
+              <button
+                aria-controls="account-settings-menu"
+                aria-expanded={accountSettingsOpen}
+                aria-haspopup="menu"
+                aria-label={`打开设置，当前用户 ${betaSession.displayLabel}`}
+                className="account-settings-button"
+                onClick={() => {
+                  setNewTaskOpen(false);
+                  setAccountError("");
+                  setAccountSettingsOpen((current) => !current);
+                }}
+                type="button"
+              >
+                <span className="account-avatar" aria-hidden="true">{betaSession.displayLabel.trim().slice(0, 1) || "教"}</span>
+                <span className="account-settings-button__label">{betaSession.displayLabel}</span>
+                <SettingsIcon />
+              </button>
+              {accountSettingsOpen ? (
+                <AccountSettingsPopover
+                  error={accountError}
+                  onOpenTeacherPreferences={() => {
+                    setAccountSettingsOpen(false);
+                    setTeacherMemoryOpen(true);
+                  }}
+                  onSignOut={() => { void signOut(); }}
+                  session={betaSession}
+                  teacherPreferencesAvailable={betaCapabilities.has("teacher_memory")}
+                />
+              ) : null}
             </div>
           </div>
         </div>
       </header>
 
-      {authoringEntry ? (
-        <PersonalQuestionAuthoringWorkspace
-          initialBrief={authoringEntry.brief}
+      {betaCapabilities.has("teacher_memory") && (
+        <TeacherMemoryPanel open={teacherMemoryOpen} onClose={() => setTeacherMemoryOpen(false)} />
+      )}
+
+      {betaCapabilities.has("authoring") && <div data-workspace-view="authoring" hidden={!authoringVisible}>
+        {authoringEntry && (
+          <PersonalQuestionAuthoringWorkspace
+            initialBrief={authoringEntry.brief}
+            key={`authoring-${workspaceResetVersions.authoring}`}
+          />
+        )}
+      </div>}
+      {betaCapabilities.has("library") && <div data-workspace-view="library" hidden={!libraryVisible}>
+        <PrivateLibraryWorkspace key={`library-${workspaceResetVersions.library}`} />
+      </div>}
+      {betaCapabilities.has("lesson") && <div data-workspace-view="lesson" hidden={!lessonVisible}>
+        <LessonBlueprintWorkspace
+          initialBrief={drafts.lesson}
+          key={`lesson-${workspaceResetVersions.lesson}`}
+          onBriefChange={(brief) => setDrafts((current) => ({ ...current, lesson: brief }))}
         />
-      ) : libraryVisible ? (
-        <PrivateLibraryWorkspace />
-      ) : paperVisible ? (
+      </div>}
+      {betaCapabilities.has("paper") && <div data-workspace-view="paper" hidden={!paperVisible}>
         <PaperBlueprintWorkspace
           initialBrief={drafts.paper}
+          key={`paper-${workspaceResetVersions.paper}`}
           onBriefChange={(brief) => setDrafts((current) => ({ ...current, paper: brief }))}
           onOpenAuthoring={(brief) => openAuthoring("paper", brief)}
         />
-      ) : (
-      <main className="marquee-workspace">
+      </div>}
+      <div data-workspace-view="search-solve" hidden={authoringVisible || libraryVisible || lessonVisible || paperVisible}>
+      <main className="marquee-workspace marquee-workspace--split">
+        <ResizableSplitPane
+          ariaLabel={`调整${definition.label}要求与结果区域宽度`}
+          className="search-solve-split"
+          defaultPrimaryPercent={40}
+          disabled={running}
+          state={phase === "error" ? "error" : running ? "loading" : phase === "success" ? "success" : "default"}
+        >
         <section className="task-pane">
           <div className="task-pane__intro">
-            <p className="mode-status"><i className={definition.ready ? "is-ready" : ""} aria-hidden="true" />{definition.status}</p>
             <h1>{definition.title[0]}<br />{definition.title[1]}</h1>
             <p className="intro-copy">{definition.intro}</p>
           </div>
 
           <form className="task-composer" onSubmit={runTask}>
             <label htmlFor="teacher-task">{definition.inputLabel}</label>
-            {solveVisible && (
+            {solveVisible && capabilityAvailable && (
               <QuestionMediaComposer
                 bundle={questionBundle}
                 disabled={running}
@@ -1096,6 +1311,7 @@ export function TeacherWorkbench() {
                 }}
                 onKeyDown={handleComposerKeyDown}
                 placeholder={definition.placeholder}
+                disabled={!capabilityAvailable}
                 readOnly={running || Boolean(questionBundle && captureConfirmed)}
                 rows={4}
                 value={query}
@@ -1105,7 +1321,7 @@ export function TeacherWorkbench() {
                   {validationMessage || (runnable ? "Ctrl ↵ 运行" : "可以先整理需求；该 Agent 尚未接入运行时。")}
                 </span>
                 {running ? (
-                  <button className="cancel-button" type="button" onClick={() => abortRef.current?.abort()}>
+                  <button className="cancel-button" type="button" onClick={() => abortRefs.current[capability as RunnableCapabilityId]?.abort()}>
                     <CloseIcon /><span>取消</span>
                   </button>
                 ) : (
@@ -1121,7 +1337,7 @@ export function TeacherWorkbench() {
             <p>从一个具体任务开始</p>
             <div>
               {definition.examples.map((example) => (
-                <button key={example.query} type="button" disabled={running} onClick={() => updateQuery(example.query)}>
+                <button key={example.query} type="button" disabled={running || !capabilityAvailable} onClick={() => updateQuery(example.query)}>
                   <span>{example.label}</span>
                   <small>{example.detail}</small>
                   <ArrowRightIcon />
@@ -1148,7 +1364,14 @@ export function TeacherWorkbench() {
             <div className="paper-shadow paper-shadow--back" aria-hidden="true" />
             <div className="paper-shadow paper-shadow--middle" aria-hidden="true" />
             <div className={`paper-leaf${turning ? ` is-turning is-turning--${flipDirection}` : ""}`}>
-              {(!runnable || phase === "idle") && <PreviewPaper capability={capability} page={previewPage} />}
+              {!capabilityAvailable && (
+                <section className="message-paper" role="status">
+                  <ClockIcon /><p>当前封闭测试暂未开放</p>
+                  <h2>{definition.label}暂不可用。</h2>
+                  <span>开放范围由本次邀请决定；其他已开放模块仍可正常使用。</span>
+                </section>
+              )}
+              {capabilityAvailable && (!runnable || phase === "idle") && <PreviewPaper capability={capability} page={previewPage} />}
               {running && (
                 <section className="process-paper">
                   <span className="orbit-loader" aria-hidden="true"><i /><i /><i /></span>
@@ -1199,7 +1422,7 @@ export function TeacherWorkbench() {
                   {result.suggestions[0] && (
                     <button type="button" onClick={() => updateQuery(result.suggestions[0])}>采用放宽建议 <ArrowRightIcon /></button>
                   )}
-                  <button className="authoring-entry-link" type="button" onClick={() => openAuthoring("search", result.raw_query || query)}>根据当前条件辅助命题 <SparkIcon /></button>
+                  {betaCapabilities.has("authoring") && <button className="authoring-entry-link" type="button" onClick={() => openAuthoring("search", result.raw_query || query)}>根据当前条件辅助命题 <SparkIcon /></button>}
                 </section>
               )}
               {solveVisible && phase === "success" && solveResult?.solution && (
@@ -1224,17 +1447,18 @@ export function TeacherWorkbench() {
                   <MathText text={result.assistant_explanation} />
                 </details>
               )}
-              <button className="result-authoring-entry" type="button" onClick={() => openAuthoring("search", result.raw_query || query)}>
+              {betaCapabilities.has("authoring") && <button className="result-authoring-entry" type="button" onClick={() => openAuthoring("search", result.raw_query || query)}>
                 <span>这些题不合适</span><strong>根据当前条件辅助命题</strong><SparkIcon />
-              </button>
+              </button>}
             </section>
           )}
           {solveVisible && phase === "success" && solveResult?.solution && (
             <SolveResultBrief result={solveResult} />
           )}
         </section>
+        </ResizableSplitPane>
       </main>
-      )}
+      </div>
 
       <footer className="inline-footer">
         <span>备课伙伴</span>

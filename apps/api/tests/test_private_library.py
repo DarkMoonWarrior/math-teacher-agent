@@ -1,3 +1,4 @@
+import json
 from io import BytesIO
 from pathlib import Path
 
@@ -11,8 +12,11 @@ from app.core.identity import CurrentTeacher, get_current_teacher
 from app.main import app
 from app.modules.background_jobs import BackgroundJobRegistry
 from app.modules.private_library import (
+    DeepSeekResourceOCRProvider,
     LibraryIngestCommand,
     LibraryLifecycleCommand,
+    LibraryOCRCommand,
+    LibraryQuestionExtractionCommand,
     LibraryOCRCommand,
     LibraryTextReviewCommand,
     OCRTextResult,
@@ -26,6 +30,7 @@ from app.modules.private_library import (
 )
 from app.modules.question_bank import QuestionBank
 from app.modules.private_library.exports import LibraryExportError, LibraryTextRenderer
+from app.routes import library as library_routes
 
 
 def make_library(tmp_path: Path) -> PrivateLibrary:
@@ -205,7 +210,7 @@ def test_unreadable_font_text_cannot_be_exported_before_ocr(tmp_path: Path) -> N
         content=png_bytes(),
     )
 
-    with pytest.raises(LibraryExportError, match="OCR"):
+    with pytest.raises(LibraryExportError, match="大模型识别"):
         LibraryTextRenderer(tmp_path / "output").render(unreadable, "docx")
 
 
@@ -543,18 +548,15 @@ def test_image_waits_for_ocr_then_can_be_manually_confirmed(tmp_path: Path) -> N
     assert "正方体" in reviewed.corrected_text
 
 
-def test_rights_acknowledgement_and_duplicate_gate(tmp_path: Path) -> None:
+def test_upload_does_not_require_rights_acknowledgement_but_keeps_duplicate_gate(tmp_path: Path) -> None:
     library = make_library(tmp_path)
     content = docx_bytes("集合与常用逻辑用语")
 
-    with pytest.raises(PrivateLibraryError, match="必须确认"):
-        library.ingest(
-            ingest_command(rights_acknowledged=False),
-            filename="sets.docx",
-            content=content,
-        )
-
-    first = library.ingest(ingest_command(), filename="sets.docx", content=content)
+    first = library.ingest(
+        ingest_command(rights_acknowledged=False),
+        filename="sets.docx",
+        content=content,
+    )
     with pytest.raises(PrivateLibraryError, match=first.library_item_id):
         library.ingest(ingest_command(), filename="copy.docx", content=content)
 
@@ -630,7 +632,7 @@ def test_library_ai_repair_requires_explicit_consent() -> None:
     )
 
     assert response.status_code == 422
-    assert "DeepSeek" in response.json()["detail"]
+    assert "大模型" in response.json()["detail"]
 
 
 def test_library_ai_repair_returns_editable_latex_without_saving(
@@ -672,6 +674,115 @@ def test_library_ai_repair_returns_editable_latex_without_saving(
     ).corrected_text == item.corrected_text
 
 
+def test_pdf_question_candidates_are_structured_by_deepseek_into_readable_math(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    library = make_library(tmp_path)
+    uploaded = library.ingest(
+        ingest_command(title="函数专题 PDF", rights_basis="original"),
+        filename="functions.pdf",
+        content=pdf_bytes("source"),
+    )
+    confirmed = library.review(
+        uploaded.library_item_id,
+        LibraryTextReviewCommand(
+            corrected_text=(
+                "【第 1 页】\n1. 已知函数 f(x)=x2，若 f(2)=4，求函数解析式。\n"
+                "答案：f(x)=x^2\n解析：由题意整理可得。"
+            ),
+            confirm=True,
+        ),
+        owner_id="owner_teacher",
+        reviewer_id="owner_teacher",
+    )
+    captured: dict[str, object] = {}
+
+    class FakeDeepSeekClient:
+        def request(self, **kwargs):
+            captured.update(kwargs)
+            return {
+                "output": [
+                    {
+                        "content": [
+                            {
+                                "text": (
+                                    '{"questions":[{'
+                                    '"question_type":"open_response",'
+                                    '"stem_plain":"已知函数 f(x)=x²，若 f(2)=4，求函数解析式。",'
+                                    '"stem_latex":"已知函数 $f(x)=x^2$，若 $f(2)=4$，求函数解析式。",'
+                                    '"options":[],"answer_value":"$f(x)=x^2$",'
+                                    '"solution_method":"代入并确定解析式",'
+                                    '"solution_steps":["由 $f(2)=4$ 确定系数。"],'
+                                    '"final_answer":"$f(x)=x^2$","difficulty":2,'
+                                    '"warnings":[]}]}'
+                                )
+                            }
+                        ]
+                    }
+                ]
+            }
+
+    monkeypatch.setattr("app.routes.library.get_private_library", lambda: library)
+    monkeypatch.setattr(
+        "app.routes.library.get_library_question_extraction_client",
+        lambda: FakeDeepSeekClient(),
+        raising=False,
+    )
+
+    response = TestClient(app).post(
+        f"/api/v1/library/{confirmed.library_item_id}/question-candidates",
+        json={"external_processing_consent": True},
+    )
+
+    assert response.status_code == 200
+    candidate = response.json()["items"][0]
+    assert "逐题" in str(captured["instructions"])
+    assert json.loads(str(captured["input_text"]))["confirmed_pdf_text"] == confirmed.corrected_text
+    assert candidate["stem_plain"] == "已知函数 f(x)=x²，若 f(2)=4，求函数解析式。"
+    assert candidate["stem_latex"] == "已知函数 $f(x)=x^2$，若 $f(2)=4$，求函数解析式。"
+    assert candidate["solution_steps"] == ["由 $f(2)=4$ 确定系数。"]
+
+
+def test_pdf_question_extraction_requires_per_run_deepseek_consent(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    library = make_library(tmp_path)
+    uploaded = library.ingest(
+        ingest_command(title="函数专题 PDF", rights_basis="original"),
+        filename="functions.pdf",
+        content=pdf_bytes("source"),
+    )
+    confirmed = library.review(
+        uploaded.library_item_id,
+        LibraryTextReviewCommand(
+            corrected_text="1. 已知函数 $f(x)=x^2$，求 $f(2)$。",
+            confirm=True,
+        ),
+        owner_id="owner_teacher",
+        reviewer_id="owner_teacher",
+    )
+    called = False
+
+    def forbidden_client():
+        nonlocal called
+        called = True
+        raise AssertionError("未授权时不应创建 DeepSeek 客户端")
+
+    monkeypatch.setattr("app.routes.library.get_private_library", lambda: library)
+    monkeypatch.setattr(
+        "app.routes.library.get_library_question_extraction_client", forbidden_client
+    )
+
+    response = TestClient(app).post(
+        f"/api/v1/library/{confirmed.library_item_id}/question-candidates",
+        json={"external_processing_consent": False},
+    )
+
+    assert response.status_code == 422
+    assert "大模型" in response.json()["detail"]
+    assert called is False
+
+
 def test_long_latex_repair_draft_splits_on_page_boundaries() -> None:
     from app.routes.library import _split_latex_repair_draft
 
@@ -683,7 +794,7 @@ def test_long_latex_repair_draft_splits_on_page_boundaries() -> None:
     assert all(len(chunk) <= 5000 for chunk in chunks)
 
 
-def test_http_rejects_short_rights_statement(
+def test_http_upload_uses_private_defaults_and_accepts_unbounded_optional_source_note(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     library = make_library(tmp_path)
@@ -693,15 +804,18 @@ def test_http_rejects_short_rights_statement(
     response = client.post(
         "/api/v1/library",
         files={"file": ("lesson.docx", docx_bytes("函数"), "application/octet-stream")},
-        data={
-            "rights_basis": "private_teaching_only",
-            "rights_statement": "太短",
-            "rights_acknowledged": "true",
-        },
+        data={"rights_statement": "来源" * 2_000},
     )
 
-    assert response.status_code == 422
-    assert library.stats(owner_id="owner_teacher").total == 0
+    assert response.status_code == 201
+    assert response.json()["rights_basis"] == "private_teaching_only"
+    stored = library.get(response.json()["library_item_id"], owner_id="owner_teacher")
+    assert stored.rights_statement == "来源" * 2_000
+
+
+def test_model_recognition_commands_do_not_require_checkbox_payloads() -> None:
+    assert LibraryOCRCommand().external_processing_consent is True
+    assert LibraryQuestionExtractionCommand().external_processing_consent is True
 
 
 def confirmed_question_resource(library: PrivateLibrary):
@@ -979,6 +1093,215 @@ def test_openai_ocr_extracts_docx_embedded_images_as_vision_inputs() -> None:
     assert len(inputs) == 1
     assert inputs[0]["type"] == "input_image"
     assert inputs[0]["image_url"].startswith("data:image/png;base64,")
+
+
+def test_library_external_ocr_prefers_configured_deepseek_vision(monkeypatch) -> None:
+    class Settings:
+        deepseek_api_key = "test-deepseek"
+        deepseek_vision_model = "deepseek-v4-flash-vision-exp"
+        deepseek_base_url = "https://api.deepseek.com"
+        deepseek_timeout_seconds = 37
+        openai_api_key = ""
+        openai_model = "unused"
+        openai_timeout_seconds = 1
+
+    monkeypatch.setattr(library_routes, "get_settings", lambda: Settings())
+    monkeypatch.setattr(library_routes, "get_model_operations_registry", lambda: None)
+
+    provider = library_routes.get_library_ocr_provider()
+
+    assert provider.name == "deepseek"
+    assert provider.model == "deepseek-v4-flash-vision-exp"
+
+
+def test_deepseek_library_ocr_returns_readable_chinese_and_latex(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    image_path = tmp_path / "question.png"
+    image_path.write_bytes(png_bytes())
+    captured: dict[str, object] = {}
+
+    class Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self):
+            content = {
+                "text": "1. 已知函数 $f(x)=x^2$，求 $f(2)$。\n答案：$4$。",
+                "warnings": [],
+            }
+            return json.dumps(
+                {"choices": [{"message": {"content": json.dumps(content, ensure_ascii=False)}}]},
+                ensure_ascii=False,
+            ).encode()
+
+    def fake_urlopen(request, timeout):
+        captured["url"] = request.full_url
+        captured["payload"] = json.loads(request.data.decode())
+        captured["timeout"] = timeout
+        return Response()
+
+    monkeypatch.setattr(
+        "app.modules.private_library.providers.urlopen", fake_urlopen
+    )
+    result = DeepSeekResourceOCRProvider(
+        api_key="test-secret",
+        model="deepseek-v4-flash-vision-exp",
+        timeout_seconds=29,
+    ).extract(
+        path=image_path,
+        mime_type="image/png",
+        filename="question.png",
+        teacher_id="owner_teacher",
+    )
+
+    payload = captured["payload"]
+    assert isinstance(payload, dict)
+    assert captured["url"] == "https://api.deepseek.com/chat/completions"
+    assert captured["timeout"] == 29
+    assert payload["model"] == "deepseek-v4-flash-vision-exp"
+    image_block = payload["messages"][1]["content"][1]
+    assert image_block["type"] == "image_url"
+    assert image_block["image_url"]["url"].startswith("data:image/png;base64,")
+    assert "owner_teacher" not in json.dumps(payload, ensure_ascii=False)
+    assert "已知函数 $f(x)=x^2$" in result.text
+    assert "大模型已生成中文 + LaTeX 校对稿" in result.warnings[-1]
+
+
+def test_deepseek_library_ocr_preserves_unescaped_latex_backslashes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    image_path = tmp_path / "question.png"
+    image_path.write_bytes(png_bytes())
+
+    class Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self):
+            content = (
+                r'{"text":"已知 $f(x)=\frac{x}{2}$，且 $x\in\mathbb{R}$。",'
+                r'"warnings":[]}'
+            )
+            return json.dumps(
+                {"choices": [{"message": {"content": content}}]},
+                ensure_ascii=False,
+            ).encode()
+
+    monkeypatch.setattr(
+        "app.modules.private_library.providers.urlopen",
+        lambda _request, timeout: Response(),
+    )
+
+    result = DeepSeekResourceOCRProvider(
+        api_key="test-secret",
+        model="deepseek-v4-flash-vision-exp",
+    ).extract(
+        path=image_path,
+        mime_type="image/png",
+        filename="question.png",
+        teacher_id="owner_teacher",
+    )
+
+    assert r"$f(x)=\frac{x}{2}$" in result.text
+    assert r"$x\in\mathbb{R}$" in result.text
+
+
+def test_deepseek_library_ocr_accepts_literal_newlines_in_model_json(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    image_path = tmp_path / "question.png"
+    image_path.write_bytes(png_bytes())
+
+    class Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self):
+            content = '{"text":"第一题\n解析：$x=1$。","warnings":[]}'
+            return json.dumps(
+                {"choices": [{"message": {"content": content}}]},
+                ensure_ascii=False,
+            ).encode()
+
+    monkeypatch.setattr(
+        "app.modules.private_library.providers.urlopen",
+        lambda _request, timeout: Response(),
+    )
+
+    result = DeepSeekResourceOCRProvider(api_key="test-secret").extract(
+        path=image_path,
+        mime_type="image/png",
+        filename="question.png",
+        teacher_id="owner_teacher",
+    )
+
+    assert "第一题\n解析：$x=1$。" in result.text
+
+
+def test_deepseek_library_ocr_recovers_text_from_damaged_json_envelope(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    image_path = tmp_path / "question.png"
+    image_path.write_bytes(png_bytes())
+
+    class Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self):
+            content = (
+                '{"text":"题干称"函数"满足：\n$f(x)=\\frac{x}{2}$。",'
+                '"warnings":[]}'
+            )
+            return json.dumps(
+                {"choices": [{"message": {"content": content}}]},
+                ensure_ascii=False,
+            ).encode()
+
+    monkeypatch.setattr(
+        "app.modules.private_library.providers.urlopen",
+        lambda _request, timeout: Response(),
+    )
+
+    result = DeepSeekResourceOCRProvider(api_key="test-secret").extract(
+        path=image_path,
+        mime_type="image/png",
+        filename="question.png",
+        teacher_id="owner_teacher",
+    )
+
+    assert '题干称"函数"满足：' in result.text
+    assert r"$f(x)=\frac{x}{2}$" in result.text
+    assert any("格式" in warning for warning in result.warnings)
+
+
+def test_deepseek_library_ocr_renders_pdf_pages_for_vision(tmp_path: Path) -> None:
+    path = tmp_path / "questions.pdf"
+    content = pdf_bytes("question page")
+    path.write_bytes(content)
+
+    pages = DeepSeekResourceOCRProvider._page_images(
+        content,
+        path=path,
+        mime_type="application/pdf",
+    )
+
+    assert len(pages) == 1
+    assert pages[0][0] == "image/jpeg"
+    assert pages[0][1].startswith(b"\xff\xd8")
 
 
 def test_question_candidate_http_flow(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

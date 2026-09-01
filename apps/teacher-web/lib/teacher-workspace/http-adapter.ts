@@ -1,6 +1,7 @@
 import {
   TeacherWorkspace,
   TeacherWorkspaceError,
+  type BetaSessionStatus,
   type LibraryItemDetail,
   type LibraryItemSummary,
   type LibraryTextRevisionList,
@@ -27,6 +28,15 @@ import {
   type PersonalQuestionCollectionList,
   type PersonalQuestionExport,
   type PersonalQuestionList,
+  type LessonBlueprintDraft,
+  type ConfirmedLessonBlueprint,
+  type LessonSourceDraft,
+  type LessonSourceOptions,
+  type LessonEditableDraft,
+  type LessonDraftBlock,
+  type LessonSavedVersion,
+  type LessonVersionHistoryItem,
+  type LessonVersionHistoryList,
   type PaperBlueprintDraft,
   type PaperBlueprintSelectionDraft,
   type PaperPublicQuestionCandidateList,
@@ -58,6 +68,8 @@ import {
   type SolveTaskProgressStage,
   type SolveTaskRequest,
   type SolveTaskResult,
+  type TeacherMemoryCommand,
+  type TeacherMemoryProfile,
 } from "./contracts";
 
 const SEARCH_STREAM_ENDPOINT = "/api/v1/agent/search/stream";
@@ -119,6 +131,11 @@ type LibraryBackgroundJob = {
 
 function detailMessage(detail: unknown): string | undefined {
   if (typeof detail === "string") return detail;
+  if (detail && typeof detail === "object" && !Array.isArray(detail)) {
+    return "message" in detail && typeof detail.message === "string"
+      ? detail.message
+      : undefined;
+  }
   if (!Array.isArray(detail)) return undefined;
   const messages = detail
     .map((item) => {
@@ -130,6 +147,11 @@ function detailMessage(detail: unknown): string | undefined {
     })
     .filter(Boolean);
   return messages.length ? messages.join("；") : undefined;
+}
+
+function detailCode(detail: unknown): string | undefined {
+  if (!detail || typeof detail !== "object" || Array.isArray(detail)) return undefined;
+  return "code" in detail && typeof detail.code === "string" ? detail.code : undefined;
 }
 
 type TaskStreamEvent = {
@@ -167,7 +189,7 @@ async function responseError(response: Response): Promise<TeacherWorkspaceError>
     // Fall through to the stable HTTP error below.
   }
   return new TeacherWorkspaceError(
-    payload.error?.code ?? `HTTP_${response.status}`,
+    payload.error?.code ?? detailCode(payload.detail) ?? `HTTP_${response.status}`,
     payload.error?.message ?? detailMessage(payload.detail) ?? `任务未完成（HTTP ${response.status}）。`,
     payload.error?.request_id ?? "",
   );
@@ -192,6 +214,7 @@ async function libraryJsonRequest<T>(
   try {
     const response = await fetch(apiUrl(path), {
       ...init,
+      credentials: "include",
       headers: {
         Accept: "application/json",
         ...init.headers,
@@ -413,6 +436,267 @@ async function readSolveStream(
 }
 
 export class HttpTeacherWorkspace implements TeacherWorkspace {
+  getBetaSession(signal?: AbortSignal): Promise<BetaSessionStatus> {
+    return libraryJsonRequest(
+      "/api/v1/beta-session",
+      { method: "GET", signal },
+      "无法确认封闭测试访问状态。",
+    );
+  }
+
+  startBetaSession(accessCode: string, signal?: AbortSignal): Promise<BetaSessionStatus> {
+    return libraryJsonRequest(
+      "/api/v1/beta-session",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ access_code: accessCode }),
+        signal,
+      },
+      "暂时无法进入封闭测试。",
+    );
+  }
+
+  endBetaSession(signal?: AbortSignal): Promise<BetaSessionStatus> {
+    return libraryJsonRequest(
+      "/api/v1/beta-session",
+      { method: "DELETE", signal },
+      "暂时无法退出封闭测试。",
+    );
+  }
+
+  getTeacherMemoryProfile(signal?: AbortSignal): Promise<TeacherMemoryProfile> {
+    return libraryJsonRequest(
+      "/api/v1/teacher-memory/profile",
+      { method: "GET", signal },
+      "无法读取教师偏好。",
+    );
+  }
+
+  updateTeacherMemoryProfile(
+    command: TeacherMemoryCommand,
+    signal?: AbortSignal,
+  ): Promise<TeacherMemoryProfile> {
+    return libraryJsonRequest(
+      "/api/v1/teacher-memory/profile",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(command),
+        signal,
+      },
+      "无法更新教师偏好。",
+    );
+  }
+
+  async exportTeacherMemory(signal?: AbortSignal): Promise<PaperExportArtifact> {
+    try {
+      const response = await fetch(apiUrl("/api/v1/teacher-memory/export"), {
+        headers: { Accept: "application/json" },
+        signal,
+      });
+      if (!response.ok) throw await responseError(response);
+      const disposition = response.headers.get("Content-Disposition") ?? "";
+      const encodedName = disposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
+      const plainName = disposition.match(/filename="?([^";]+)"?/i)?.[1];
+      return {
+        blob: await response.blob(),
+        filename: encodedName
+          ? decodeURIComponent(encodedName)
+          : plainName ?? "teacher-memory.json",
+      };
+    } catch (cause) {
+      if (cause instanceof TeacherWorkspaceError) throw cause;
+      if (cause instanceof DOMException && cause.name === "AbortError") throw cause;
+      throw new TeacherWorkspaceError("NETWORK_ERROR", "无法导出教师记忆。");
+    }
+  }
+
+  planLessonBlueprint(brief: string, signal?: AbortSignal): Promise<LessonBlueprintDraft> {
+    return libraryJsonRequest(
+      "/api/v1/lesson-plans/blueprints/plan",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ brief }),
+        signal,
+      },
+      "无法整理教案蓝图。",
+    );
+  }
+
+  listLessonSourceOptions(
+    blueprint: LessonBlueprintDraft,
+    signal?: AbortSignal,
+  ): Promise<LessonSourceOptions> {
+    return libraryJsonRequest(
+      "/api/v1/lesson-plans/blueprints/source-options",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ blueprint }),
+        signal,
+      },
+      "无法读取受控教案来源。",
+    );
+  }
+
+  selectLessonSources(
+    blueprint: ConfirmedLessonBlueprint,
+    selectedPublicQuestionIds: string[],
+    selectedPrivateQuestionIds: string[],
+    selectedPrivateResourceIds: string[],
+    signal?: AbortSignal,
+  ): Promise<LessonSourceDraft> {
+    return libraryJsonRequest(
+      "/api/v1/lesson-plans/blueprints/select-sources",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          blueprint,
+          selected_public_question_ids: selectedPublicQuestionIds,
+          selected_private_question_ids: selectedPrivateQuestionIds,
+          selected_private_resource_ids: selectedPrivateResourceIds,
+        }),
+        signal,
+      },
+      "无法确认教案来源。",
+    );
+  }
+
+  buildLessonDraft(
+    sourceDraft: LessonSourceDraft,
+    signal?: AbortSignal,
+  ): Promise<LessonEditableDraft> {
+    return libraryJsonRequest(
+      "/api/v1/lesson-plans/blueprints/build-draft",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ source_draft: sourceDraft }),
+        signal,
+      },
+      "无法生成完整教案草稿。",
+    );
+  }
+
+  rewriteLessonDraftBlock(
+    draft: LessonEditableDraft,
+    targetBlock: LessonDraftBlock,
+    instruction: string,
+    signal?: AbortSignal,
+  ): Promise<LessonEditableDraft> {
+    return libraryJsonRequest(
+      "/api/v1/lesson-plans/blueprints/rewrite-block",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          draft,
+          target_block: targetBlock,
+          instruction,
+          expected_draft_revision: draft.draft_revision,
+        }),
+        signal,
+      },
+      "无法完成教案内容块的定向重写。",
+    );
+  }
+
+  saveLessonVersion(
+    draft: LessonEditableDraft,
+    lessonPlanId: string | null = null,
+    signal?: AbortSignal,
+  ): Promise<LessonSavedVersion> {
+    return libraryJsonRequest(
+      "/api/v1/lesson-plans/versions/save",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ draft, lesson_plan_id: lessonPlanId, confirmed: true }),
+        signal,
+      },
+      "无法保存教案版本。",
+    );
+  }
+
+  listLessonVersionHistory(
+    lifecycleState: "active" | "trashed" = "active",
+    signal?: AbortSignal,
+  ): Promise<LessonVersionHistoryList> {
+    return libraryJsonRequest(
+      `/api/v1/lesson-plans/versions/history?lifecycle_state=${lifecycleState}`,
+      { method: "GET", signal },
+      "无法读取教案历史。",
+    );
+  }
+
+  getLessonVersion(
+    lessonPlanId: string,
+    version?: number,
+    signal?: AbortSignal,
+  ): Promise<LessonSavedVersion> {
+    const query = version ? `?version=${version}` : "";
+    return libraryJsonRequest(
+      `/api/v1/lesson-plans/versions/${lessonPlanId}${query}`,
+      { method: "GET", signal },
+      "无法打开教案版本。",
+    );
+  }
+
+  changeLessonVersionLifecycle(
+    lessonPlanId: string,
+    action: "trash" | "restore",
+    signal?: AbortSignal,
+  ): Promise<LessonVersionHistoryItem> {
+    return libraryJsonRequest(
+      `/api/v1/lesson-plans/versions/${lessonPlanId}/lifecycle`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action }),
+        signal,
+      },
+      action === "trash" ? "无法移入教案回收站。" : "无法恢复教案。",
+    );
+  }
+
+  async exportLessonVersion(
+    lessonPlanId: string,
+    version: number,
+    format: "docx" | "pdf",
+    signal?: AbortSignal,
+  ): Promise<PaperExportArtifact> {
+    try {
+      const params = new URLSearchParams({ version: String(version), format });
+      const response = await fetch(apiUrl(
+        `/api/v1/lesson-plans/versions/${encodeURIComponent(lessonPlanId)}/export?${params.toString()}`,
+      ), {
+        headers: {
+          Accept: format === "pdf"
+            ? "application/pdf"
+            : "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        },
+        signal,
+      });
+      if (!response.ok) throw await responseError(response);
+      const disposition = response.headers.get("Content-Disposition") ?? "";
+      const encodedName = disposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
+      const plainName = disposition.match(/filename="?([^";]+)"?/i)?.[1];
+      return {
+        blob: await response.blob(),
+        filename: encodedName
+          ? decodeURIComponent(encodedName)
+          : plainName ?? `lesson-plan-v${version}.${format}`,
+      };
+    } catch (cause) {
+      if (cause instanceof TeacherWorkspaceError) throw cause;
+      if (cause instanceof DOMException && cause.name === "AbortError") throw cause;
+      throw new TeacherWorkspaceError("NETWORK_ERROR", "无法导出这个已保存教案版本。");
+    }
+  }
+
   planPaperBlueprint(brief: string, signal?: AbortSignal): Promise<PaperBlueprintDraft> {
     return libraryJsonRequest(
       "/api/v1/exam-papers/blueprints/plan",
@@ -907,7 +1191,7 @@ export class HttpTeacherWorkspace implements TeacherWorkspace {
       : `/api/v1/library/${encodedId}/local-math-ocr/jobs`;
     if (signal?.aborted) throw abortError();
     try {
-      onProgress?.(isExternal ? "正在准备外部 OCR" : "正在准备本地数学 OCR");
+      onProgress?.(isExternal ? "正在准备大模型识别" : "正在准备识别");
       const startResponse = await fetch(apiUrl(endpoint), {
         method: "POST",
         headers: isExternal
@@ -967,11 +1251,19 @@ export class HttpTeacherWorkspace implements TeacherWorkspace {
 
   preparePrivateLibraryQuestionCandidates(
     itemId: string,
+    request: { externalProcessingConsent: boolean },
     signal?: AbortSignal,
   ): Promise<PrivateLibraryQuestionCandidateList> {
     return libraryJsonRequest(
       `/api/v1/library/${encodeURIComponent(itemId)}/question-candidates`,
-      { method: "POST", signal },
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          external_processing_consent: request.externalProcessingConsent,
+        }),
+        signal,
+      },
       "无法从确认文本生成拆题候选。",
     );
   }
@@ -1523,6 +1815,7 @@ export class HttpTeacherWorkspace implements TeacherWorkspace {
     try {
       const response = await fetch(apiUrl(SEARCH_STREAM_ENDPOINT), {
         method: "POST",
+        credentials: "include",
         headers: {
           Accept: "text/event-stream",
           "Content-Type": "application/json",
@@ -1541,7 +1834,7 @@ export class HttpTeacherWorkspace implements TeacherWorkspace {
         try {
           const snapshot = await fetch(
             apiUrl(`/api/v1/agent/search/${encodeURIComponent(context.runId)}/stream`),
-            { headers: { Accept: "text/event-stream" }, signal },
+            { credentials: "include", headers: { Accept: "text/event-stream" }, signal },
           );
           return await readSearchStream(snapshot, context, signal);
         } catch (recoveryCause) {
@@ -1597,6 +1890,7 @@ export class HttpTeacherWorkspace implements TeacherWorkspace {
     try {
       const response = await fetch(apiUrl(SOLVE_STREAM_ENDPOINT), {
         method: "POST",
+        credentials: "include",
         headers: {
           Accept: "text/event-stream",
           "Content-Type": "application/json",
@@ -1623,7 +1917,7 @@ export class HttpTeacherWorkspace implements TeacherWorkspace {
         try {
           const snapshot = await fetch(
             apiUrl(`/api/v1/agent/solve/${encodeURIComponent(context.runId)}/stream`),
-            { headers: { Accept: "text/event-stream" }, signal },
+            { credentials: "include", headers: { Accept: "text/event-stream" }, signal },
           );
           return await readSolveStream(snapshot, context, signal);
         } catch (recoveryCause) {

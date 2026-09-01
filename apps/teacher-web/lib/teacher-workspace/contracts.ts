@@ -400,6 +400,10 @@ export type PrivateLibraryQuestionCandidateList = {
   items: PrivateLibraryQuestionCandidate[];
 };
 
+export type PrivateLibraryQuestionExtractionRequest = {
+  externalProcessingConsent: boolean;
+};
+
 export type PrivateLibraryQuestionCandidateDraft = Pick<
   PrivateLibraryQuestionCandidate,
   | "question_type"
@@ -713,6 +717,264 @@ export type PersonalQuestionExport = {
   filename: string;
 };
 
+export type LessonBlueprintType = "new_lesson" | "review" | "exercise";
+
+export type LessonBlueprintCurriculumCandidate = {
+  node_id: string;
+  node_type: "section" | "knowledge_point";
+  name: string;
+  volume: string;
+  chapter: string | null;
+  section: string | null;
+  description: string;
+  competencies: string[];
+  common_errors: string[];
+  catalog_status: string;
+  reviewed_by: string;
+  match_score: number;
+};
+
+export type LessonBlueprintPhase = {
+  phase_id: string;
+  title: string;
+  minutes: number;
+  purpose: string;
+};
+
+export type LessonBlueprintDraft = {
+  status: "lesson_blueprint_draft";
+  editable: true;
+  confirmed: false;
+  saved: false;
+  source_brief: string;
+  title: string;
+  grade_scope: string;
+  lesson_type: LessonBlueprintType;
+  lesson_format: string;
+  duration_minutes: number;
+  student_profile: string;
+  focus: string;
+  question_count: number;
+  curriculum_query: string;
+  selected_curriculum_node_id: string | null;
+  curriculum_candidates: LessonBlueprintCurriculumCandidate[];
+  objectives: string[];
+  key_points: string[];
+  difficulties: string[];
+  phases: LessonBlueprintPhase[];
+  required_blocks: Array<
+    "objectives" | "key_points" | "difficulties" | "teaching_flow" | "homework" | "board_plan" | "teacher_notes"
+  >;
+  applied_preferences: TeacherPlanningPreference[];
+  assumptions: string[];
+  trust_policy: {
+    curriculum_source: "sealed_pep_a_baseline";
+    question_policy: "not_selected_during_planning";
+    private_resource_policy: "explicit_owner_selection_only";
+    ai_content_status: "draft_requires_teacher_review";
+    auto_save_allowed: false;
+    preserves_source_traceability: true;
+  };
+  side_effects: [];
+};
+
+export type ConfirmedLessonBlueprint = Omit<LessonBlueprintDraft, "status" | "confirmed"> & {
+  status: "lesson_blueprint_confirmed";
+  confirmed: true;
+};
+
+export type LessonSourceQuestionCandidate = {
+  question_id: string;
+  source_kind: "public_question_bank" | "personal_question_library";
+  name: string;
+  question_type: string;
+  stem_plain: string;
+  options: Array<{ key: string; text: string }>;
+  difficulty: number;
+  chapter: string | null;
+  knowledge_points: string[];
+  source_document: string;
+  source_revision: number;
+  rights_basis: string;
+  verification_status: string;
+  review_status: string;
+  owner_scope: "public_catalog" | "current_owner_only";
+};
+
+export type LessonSourceResourceCandidate = {
+  library_item_id: string;
+  title: string;
+  file_kind: "pdf" | "docx" | "image";
+  source_version: number;
+  rights_basis: "original" | "licensed" | "private_teaching_only";
+  text_review_status: "confirmed";
+  corrected_char_count: number;
+  owner_scope: "current_owner_only";
+};
+
+export type LessonSourceOptions = {
+  status: "lesson_source_options";
+  blueprint: ConfirmedLessonBlueprint;
+  public_questions: LessonSourceQuestionCandidate[];
+  private_questions: LessonSourceQuestionCandidate[];
+  private_resources: LessonSourceResourceCandidate[];
+  trust_statement: string;
+  side_effects: [];
+};
+
+export type LessonSourceDraft = {
+  status: "lesson_source_draft";
+  editable: true;
+  saved: false;
+  selection_complete: boolean;
+  blueprint: ConfirmedLessonBlueprint;
+  curriculum: LessonBlueprintCurriculumCandidate | null;
+  questions: LessonSourceQuestionCandidate[];
+  private_resources: Array<LessonSourceResourceCandidate & {
+    content_excerpt: string;
+    rights_statement: string;
+  }>;
+  gaps: Array<{
+    source_kind: "curriculum" | "question";
+    required_count: number;
+    selected_count: number;
+    missing_count: number;
+    reason: string;
+  }>;
+  warnings: string[];
+  trust_policy: Record<string, string | boolean>;
+  side_effects: [];
+};
+
+export type LessonEditableDraft = {
+  status: "lesson_editable_draft";
+  content_status: "draft_requires_teacher_review";
+  editable: true;
+  saved: false;
+  draft_revision: number;
+  title: string;
+  source_draft: LessonSourceDraft;
+  objectives: Array<{
+    objective_id: string;
+    text: string;
+    observable_evidence: string;
+  }>;
+  key_points: string[];
+  difficulties: string[];
+  teaching_flow: Array<{
+    phase_id: string;
+    title: string;
+    minutes: number;
+    purpose: string;
+    teacher_activity: string;
+    student_activity: string;
+    assessment: string;
+    objective_ids: string[];
+    question_ids: string[];
+    resource_ids: string[];
+  }>;
+  questions: Array<{
+    question_id: string;
+    source_kind: "public_question_bank" | "personal_question_library";
+    source_revision: number;
+    rights_basis: string;
+    verification_status: string;
+    review_status: string;
+    owner_scope: "public_catalog" | "current_owner_only";
+    phase_id: string;
+    usage: string;
+    stem_plain: string;
+    options: Array<{ key: string; text: string }>;
+    answer_value: string;
+    solution_steps: string[];
+    final_answer: string;
+  }>;
+  assessments: Array<{
+    assessment_id: string;
+    title: string;
+    method: string;
+    success_criteria: string;
+    objective_ids: string[];
+  }>;
+  homework: string[];
+  board_plan: string[];
+  teacher_notes: string[];
+  locked_blocks: LessonDraftBlock[];
+  rewrite_history: Array<{
+    draft_revision: number;
+    target_block: LessonDraftBlock;
+    instruction: string;
+    provider: string;
+    model: string;
+  }>;
+  source_manifest: Array<{
+    source_kind: "curriculum" | "public_question" | "private_question" | "private_resource";
+    source_id: string;
+    source_revision: string;
+    rights_basis: string;
+    verification_status: string;
+    owner_scope: "sealed_catalog" | "public_catalog" | "current_owner_only";
+  }>;
+  integrity: {
+    required_blocks_complete: true;
+    time_total_matches: true;
+    objective_activity_alignment: true;
+    objective_assessment_alignment: true;
+    questions_complete: true;
+    high_school_scope: true;
+    source_traceability_complete: true;
+  };
+  generation: Record<string, string | boolean>;
+  side_effects: [];
+};
+
+export type LessonDraftBlock =
+  | "objectives"
+  | "key_points"
+  | "difficulties"
+  | "teaching_flow"
+  | "questions"
+  | "assessments"
+  | "homework"
+  | "board_plan"
+  | "teacher_notes";
+
+export type LessonSavedVersion = {
+  status: "saved_lesson_version";
+  saved: true;
+  lesson_plan_id: string;
+  version: number;
+  title: string;
+  content_status: "draft_requires_teacher_review";
+  owner_scope: "current_owner_only";
+  lifecycle_state: "active" | "trashed";
+  draft_fingerprint: string;
+  draft: LessonEditableDraft;
+  created_at: string;
+  saved_at: string;
+  available_exports: Array<{
+    format: "docx" | "pdf";
+    label: string;
+  }>;
+  side_effects: ["created_lesson_plan_version"];
+};
+
+export type LessonVersionHistoryItem = {
+  lesson_plan_id: string;
+  title: string;
+  version: number;
+  duration_minutes: number;
+  lesson_type: LessonBlueprintType;
+  updated_at: string;
+  lifecycle_state: "active" | "trashed";
+  trashed_at: string | null;
+};
+
+export type LessonVersionHistoryList = {
+  items: LessonVersionHistoryItem[];
+  total: number;
+};
+
 export type PaperBlueprintDifficulty = "foundation" | "balanced" | "challenge";
 export type PaperBlueprintQuestionType = "single_choice" | "multiple_choice" | "fill_blank" | "open_response";
 
@@ -738,6 +1000,7 @@ export type PaperBlueprintDraft = {
   difficulty_profile: PaperBlueprintDifficulty;
   knowledge_points: string[];
   sections: PaperBlueprintSection[];
+  applied_preferences: TeacherPlanningPreference[];
   assumptions: string[];
   trust_policy: {
     verification_policy: "passed_only";
@@ -847,7 +1110,7 @@ export type PaperBlueprintSelectionDraft = {
   editable: true;
   saved: false;
   selection_complete: boolean;
-  blueprint: Omit<PaperBlueprintDraft, "status" | "editable" | "confirmed" | "saved" | "source_brief" | "assumptions" | "trust_policy" | "side_effects">;
+  blueprint: Omit<PaperBlueprintDraft, "status" | "editable" | "confirmed" | "saved" | "source_brief" | "applied_preferences" | "assumptions" | "trust_policy" | "side_effects">;
   target_question_count: number;
   actual_question_count: number;
   target_score: number;
@@ -1029,7 +1292,162 @@ export type PaperExportArtifact = {
   filename: string;
 };
 
+export type TeacherPreferenceKey =
+  | "default_grade"
+  | "default_difficulty"
+  | "default_lesson_minutes"
+  | "solution_detail_level"
+  | "preferred_question_types";
+
+export type TeacherPreferenceValue = string | number | string[];
+
+export type TeacherPreference = {
+  key: TeacherPreferenceKey;
+  label: string;
+  value: TeacherPreferenceValue;
+  source: {
+    kind: "teacher_explicit";
+    label: string;
+    confidence: number;
+  };
+  updated_at: string;
+};
+
+export type TeacherPlanningPreference = Omit<TeacherPreference, "updated_at">;
+
+export type TeacherPreferenceProposal = {
+  proposal_id: string;
+  key: TeacherPreferenceKey;
+  label: string;
+  value: TeacherPreferenceValue;
+  status: "pending_teacher_review";
+  confidence: number;
+  evidence: {
+    category: "confirmed_lesson_version" | "confirmed_paper_version";
+    label: string;
+    occurrence_count: number;
+  };
+  created_at: string;
+  updated_at: string;
+};
+
+export type TeacherPreferenceFeedback = {
+  feedback_id: string;
+  proposal_id: string;
+  key: TeacherPreferenceKey;
+  label: string;
+  proposed_value: TeacherPreferenceValue;
+  resolved_value: TeacherPreferenceValue | null;
+  action: "accept" | "reject" | "correct";
+  confidence: number;
+  evidence: TeacherPreferenceProposal["evidence"];
+  created_at: string;
+};
+
+export type TeacherMemoryProfile = {
+  version: number;
+  auto_learning_enabled: boolean;
+  preferences: TeacherPreference[];
+  proposals: TeacherPreferenceProposal[];
+  feedback: TeacherPreferenceFeedback[];
+  privacy_note: string;
+  retention_note: string;
+};
+
+export type TeacherMemoryCommand = {
+  operation:
+    | "upsert"
+    | "remove"
+    | "set_auto_learning"
+    | "accept_proposal"
+    | "reject_proposal"
+    | "correct_proposal"
+    | "delete_all";
+  key?: TeacherPreferenceKey;
+  value?: TeacherPreferenceValue;
+  enabled?: boolean;
+  proposal_id?: string;
+  confirmation?: string;
+  expected_version: number;
+};
+
+export const PRODUCT_CAPABILITIES = [
+  "search",
+  "solve",
+  "library",
+  "authoring",
+  "lesson",
+  "paper",
+  "teacher_memory",
+] as const;
+
+export type ProductCapability = typeof PRODUCT_CAPABILITIES[number];
+
+export type BetaSessionStatus = {
+  mode: "local_development" | "closed_beta";
+  authenticated: boolean;
+  display_label: string;
+  expires_at: string | null;
+  capabilities: ProductCapability[];
+};
+
 export interface TeacherWorkspace {
+  getBetaSession(signal?: AbortSignal): Promise<BetaSessionStatus>;
+  startBetaSession(accessCode: string, signal?: AbortSignal): Promise<BetaSessionStatus>;
+  endBetaSession(signal?: AbortSignal): Promise<BetaSessionStatus>;
+  getTeacherMemoryProfile(signal?: AbortSignal): Promise<TeacherMemoryProfile>;
+  updateTeacherMemoryProfile(
+    command: TeacherMemoryCommand,
+    signal?: AbortSignal,
+  ): Promise<TeacherMemoryProfile>;
+  exportTeacherMemory(signal?: AbortSignal): Promise<PaperExportArtifact>;
+  planLessonBlueprint(brief: string, signal?: AbortSignal): Promise<LessonBlueprintDraft>;
+  listLessonSourceOptions(
+    blueprint: LessonBlueprintDraft,
+    signal?: AbortSignal,
+  ): Promise<LessonSourceOptions>;
+  selectLessonSources(
+    blueprint: ConfirmedLessonBlueprint,
+    selectedPublicQuestionIds: string[],
+    selectedPrivateQuestionIds: string[],
+    selectedPrivateResourceIds: string[],
+    signal?: AbortSignal,
+  ): Promise<LessonSourceDraft>;
+  buildLessonDraft(
+    sourceDraft: LessonSourceDraft,
+    signal?: AbortSignal,
+  ): Promise<LessonEditableDraft>;
+  rewriteLessonDraftBlock(
+    draft: LessonEditableDraft,
+    targetBlock: LessonDraftBlock,
+    instruction: string,
+    signal?: AbortSignal,
+  ): Promise<LessonEditableDraft>;
+  saveLessonVersion(
+    draft: LessonEditableDraft,
+    lessonPlanId?: string | null,
+    signal?: AbortSignal,
+  ): Promise<LessonSavedVersion>;
+  listLessonVersionHistory(
+    lifecycleState?: "active" | "trashed",
+    signal?: AbortSignal,
+  ): Promise<LessonVersionHistoryList>;
+  getLessonVersion(
+    lessonPlanId: string,
+    version?: number,
+    signal?: AbortSignal,
+  ): Promise<LessonSavedVersion>;
+  changeLessonVersionLifecycle(
+    lessonPlanId: string,
+    action: "trash" | "restore",
+    signal?: AbortSignal,
+  ): Promise<LessonVersionHistoryItem>;
+  exportLessonVersion(
+    lessonPlanId: string,
+    version: number,
+    format: "docx" | "pdf",
+    signal?: AbortSignal,
+  ): Promise<PaperExportArtifact>;
   planPaperBlueprint(brief: string, signal?: AbortSignal): Promise<PaperBlueprintDraft>;
   listPaperPublicCandidates(
     request?: { query?: string; questionType?: PaperBlueprintQuestionType; limit?: number },
@@ -1154,6 +1572,7 @@ export interface TeacherWorkspace {
 
   preparePrivateLibraryQuestionCandidates(
     itemId: string,
+    request: PrivateLibraryQuestionExtractionRequest,
     signal?: AbortSignal,
   ): Promise<PrivateLibraryQuestionCandidateList>;
 

@@ -14,7 +14,7 @@ describe("PaperBlueprintWorkspace", () => {
       />,
     );
 
-    expect(html).toContain("Paper Agent · 蓝图规划与受控选题已接入");
+    expect(html).not.toContain("Paper Agent · 蓝图规划与受控选题已接入");
     expect(html).toContain("经你确认后，只从通过门禁的公共题和你明确选择的私题中建立候选清单");
     expect(html).toContain("当前没有题目，也没有产生任何保存或权限变更");
     expect(html).toContain("辅助命题是独立私有工作流，不会自动加入当前蓝图");

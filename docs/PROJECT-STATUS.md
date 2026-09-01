@@ -1,7 +1,7 @@
 # 项目当前状态
 
-更新日期：2026-08-29
-分支基线：`codex/teacher-workbench-v1`
+更新日期：2026-09-01
+分支基线：`codex/lesson-agent-v1`
 
 ## 状态说明
 
@@ -18,9 +18,10 @@
 - M6 Private Library Agent：已完成；六条纵向切片、12 场景固定评测与完整 Gate E 于 2026-08-22 严格通过。
 - **M7 多模态题目采集与图片解题：已完成；15 场景固定评测 9 类违规为 0，Gate E 于 2026-08-24 通过。**
 - **M8 私有辅助命题：已完成；26 场景固定评测 12 类违规为 0，完整工程回归与 Gate E/Gate P 于 2026-08-28 通过，所有者已确认进入 M9。**
-- **M9 Paper Agent：进行中；六条实现切片、28 场景固定评测、完整工程回归、权限/仓库卫生和 Gate P 连续性检查已通过；当前等待可回滚提交与项目所有者阶段确认。**
-- M10-M11：Lesson、Memory 均未开始。
-- M12-M13：Closed Beta 准备与数据验证，均未开始。
+- **M9 Paper Agent：已完成；六条实现切片、28 场景固定评测、完整工程回归、权限/仓库卫生和 Gate P 连续性检查已通过；可回滚变更已合并到 `main`，所有者于 2026-08-30 确认进入 M10。**
+- **M10 Lesson Agent：已完成；六条切片、28 场景固定评测、完整工程回归与 Gate E/Gate P 连续性已通过，所有者已确认进入 M11。**
+- **M11 Teacher Memory：五条切片与完整 Gate 已通过；回滚点为 `5614fc0`，项目所有者已确认进入 M12。**
+- **M12 Closed Beta Readiness：进行中；会话身份、能力快照、隐私安全运行状态和备份恢复四条切片已接入。** M13 数据验证尚未开始。
 - M14-M17：商业基础、Teacher Pro、教研组和学校，均未开始。
 
 最新版顺序见 [`ROADMAP.md`](ROADMAP.md)，量化验证和发布门禁见 [`PRODUCT-GATES.md`](PRODUCT-GATES.md)。历史 PDF 的核心原则继续生效，但其中的 Prompt 编号和“当前下一步”不再代表项目现状。
@@ -36,11 +37,41 @@
 | Private Library Agent | 可用（M6 已完成） | 成熟 PrivateLibrary/PDF/Curriculum/QuestionBank 模块继续复用；owner-scoped 聚合、同源上传/列表、提取/OCR/校对、拆题编辑、可信教材映射和逐次授权的私人检索已接入。检索许可短时、单次、绑定当前教师与查询，只返回确认文本的有界片段；候选导入仍固定为 owner 私有、待审核、待数学验证。固定评测与 Gate E 已通过。 |
 | 多模态图片解题 | 可用；M7 Gate E 已通过 | Solve 可上传、粘贴或拍摄单题图片并校对题面；教师确认后，canonical 题面和精确 media/OCR revision 通过短时一次性许可接入 Solve。只有图形依赖题在逐次同意后读取受控原图；Agent 不获得路径或字节，结果展示实际视觉 provider/model/revision，且不冒充 MathVerifier。15 场景固定评测和完整 Gate E 已通过。 |
 | 私有辅助命题 | 可用；M8 Gate E/Gate P 已通过 | 独立 `PersonalQuestionLibrary` 与结构化 `QuestionAuthoring` 已实现。题面、解析和解析所得答案在内部判责返工直至闭环；选择题选项独立，高中范围终检生效。命题在 owner-scoped 后台继续运行、可跨页面恢复；题面独立审核通过后立即作为版本化实时快照展示，解析继续后台生成，题面返工时同步标记调整中。正常完成必须交付完整题面、解析和解析所得答案；owner 主动停止时可选择保留最新已通过题面，保存为当前 owner 的私题并明确标注“缺少解析”，答案和解析显示“无”，也可主动用于组卷，但不会进入公共题库或其他 owner 的视图。完整结果只暂存为 owner 草稿，显式保存后才成为完整私题；Agent 无管理写权限。26 场景固定评测 12 类违规为 0。 |
-| Paper | 进行中（M9 工作树 Gate 已通过） | 新 UI 将自然语言整理为可编辑 PaperBlueprint；教师确认后才从通过范围、验证、审核、权利、owner 和相似度门禁的公共题/明确选择私题中建立未保存候选草案。系统在选题后自动归纳实际知识点和难度并写入双向细目表。题量、分区、配分、总分或分析偏差均可见，但不禁用保存；保存前统一提供取消/确认提示，确认后保存当前精确 owner-scoped 不可变版本。无题、题目不完整、越权、可信状态变化或过期指纹仍 fail closed。导出只读取当前 owner 指定版本。28 场景固定评测 15 类违规为 0，工作树 Gate E/Gate P 连续性检查通过，待可回滚提交和所有者确认。 |
-| Lesson | 界面预览 + 后端已有 | 新 UI 可整理教案需求，但按钮明确禁用；旧 lesson_plans 模块不是 Lesson Agent 完成证明。 |
-| Teacher Memory | 未开始 | 等真实教师验证后再定义。 |
-| 账号/多租户/支付 | 未开始 | 当前教师/管理员模式不是认证或授权系统。 |
+| Paper | 可用；M9 已完成 | 新 UI 将自然语言整理为可编辑 PaperBlueprint；教师确认后才从通过范围、验证、审核、权利、owner 和相似度门禁的公共题/明确选择私题中建立未保存候选草案。系统在选题后自动归纳实际知识点和难度并写入双向细目表。题量、分区、配分、总分或分析偏差均可见，但不禁用保存；保存前统一提供取消/确认提示，确认后保存当前精确 owner-scoped 不可变版本。无题、题目不完整、越权、可信状态变化或过期指纹仍 fail closed。导出只读取当前 owner 指定版本。28 场景固定评测 15 类违规为 0，Gate E/Gate P 连续性通过。 |
+| Lesson | 可用；M10 Gate 已通过 | 蓝图、受控来源、完整正文和九类内容块编辑已接入。`LessonVersioning` 只接受教师显式确认，保存前重验当前 owner 与精确来源，把正文追加为仅本人可见的不可变版本；历史可打开编辑后另存新版本，可移入回收站和恢复。`LessonSavedExporting` 只从指定不可变版本导出完整教师教案 DOCX/PDF。保存与导出均不升级 `draft_requires_teacher_review`。28 场景固定评测 15 类违规为 0。 |
+| Teacher Memory | M11 已完成 | `TeacherMemory.profile/apply/planning_defaults` 深模块已闭环显式结构化偏好、透明缺省、可解释提议、接受/拒绝/修正反馈、结构化历史、JSON 导出和固定口令彻底删除。任意任务正文与私人资料正文不进入记忆；Agent 无记忆写入、导出或删除权限。 |
+| Closed Beta 准入、运行与恢复 | M12 切片 1–4 可用 | `BetaAccess.issue/resolve/revoke` 以私有访问码换取可过期、可撤销的 opaque HttpOnly 会话并在签发时冻结七类能力快照；服务端仅存令牌哈希。启用 Beta 时无有效会话 fail closed，未开放能力由 FastAPI 统一返回 403，Teacher Web 同步禁用入口且不挂载工作区，并把当前用户、教师偏好和退出统一收进右上角“设置 / 用户”。`PrivacySafeOperations` 只记录请求编号、能力、结果、状态码、稳定错误类别与耗时；`ReadinessProbe` 只返回无秘密的 API/Beta/Agent 稳定状态。`BetaBackupRecovery` 以显式私有目的地、在线 SQLite 快照、清单/逐文件校验和与隔离临时恢复演练保护 owner 数据，且不备份可撤销会话。它们不是生产账号、RBAC、完整审计/容灾平台、内容 analytics 或多租户系统。 |
+| 多租户/支付 | 未开始 | M12 不建设组织、角色、学生、支付或生产账号管理。 |
 | 商业公共题库 | 未开始填充 | `data/commercial-approved` 保持为空；只允许通过完整门禁的内容进入。 |
+
+## 2026-09-01 验证快照
+
+- M11 已形成回滚提交 `5614fc0`，项目所有者明确要求按原路线继续，M12 成为唯一活动里程碑。
+- M12 第一条纵向切片：新增 `BetaAccess.issue/resolve/revoke` 深模块、`/api/v1/beta-session` Cookie 适配路由和 fail-closed current-teacher 解析。访问码来自私有环境名单，不写 Git 或浏览器持久存储；会话令牌只以 SHA-256 哈希写入独立 SQLite，支持到期和服务端撤销。状态接口不返回 owner/teacher ID。Teacher Web 增加封闭测试访问页、显示标签与退出入口，流式 Search/Solve 和命题 Next 代理均保留会话 Cookie。不同访问码 owner 隔离、无效访问码、过期、撤销和本地开发兼容已测试。FastAPI 463 项、Teacher Web 20 个文件 99 项测试通过，Teacher Web 类型检查与生产构建通过。完整 M12 Gate 尚未执行。
+- M12 第二条纵向切片：封闭测试名单只可分配 `search/solve/library/authoring/lesson/paper/teacher_memory` 七类能力，签发时把 allow-list 冻结到会话，名单后续变化不会提升既有会话权限；旧切片 1 会话库自动增加能力列且既有会话安全默认为无能力。FastAPI 在进入业务路由前统一执行能力依赖并返回结构化 `403 CAPABILITY_UNAVAILABLE`，原有 owner、权利、来源、审核、验证和运行时门禁保持不变。Teacher Web 从同一会话状态读取能力，禁用未开放导航/新任务入口、不挂载不可用的持久工作区，并保留服务端解释。FastAPI 464 项、Teacher Web 20 个文件 101 项测试、类型检查与生产构建通过；完整 M12 Gate 尚未执行。
+- M12 第三条纵向切片：新增 `PrivacySafeOperations` 与 `ReadinessProbe` 深模块。统一 ASGI 中间件在完整响应结束后记录请求编号、allow-list 能力、方法、结果、状态码、稳定错误类别和耗时，并附加 opaque `X-Request-Id`；接口没有 header、query、正文、owner、资源 ID 或异常消息参数。公开 `/ready` 只返回 API、Beta session store/roster 与必要 Agent runtime/model 的稳定状态码，依赖故障不回显 URL、名单、秘密或原始异常。该切片完成时 FastAPI 468 项通过；真实本地 `/ready` 返回 200 且 API/Beta/Agent 三组件均 ready。
+- M12 第四条纵向切片：新增 `BetaBackupRecovery.inventory/create_backup/verify_backup/restore_drill` 深模块与 operator CLI。固定清单覆盖题库/媒体、私人资料、题目采集、个人题库、PDF 导入、教案、试卷及 Teacher Memory 的持久化 owner 数据，明确排除可撤销 Beta 会话、可重建索引和生成导出。目的地必须由 operator 明确确认为加密私有卷或等效受保护挂载点；SQLite 使用在线 backup API，目录遍历拒绝软链接/联接。备份在 staging 完成清单 SHA-256、逐文件大小/哈希和精确文件集验证后原子发布；恢复演练只复制清单内文件到临时目录，重新校验并执行 SQLite integrity check，绝不覆盖在线数据。FastAPI 474 项通过；真实 inventory 只输出 13 个稳定 store ID/类型/状态/文件数，不含路径、owner、文件名或正文。切片 5 与完整 M12 Gate 尚未执行。
+- M11 第五条纵向切片与完整 Gate：偏好 profile 新增结构化反馈历史和保留说明；当前教师可下载本人完整可检查 JSON。彻底删除必须输入固定口令“删除全部教师记忆”，只清除当前 owner 的显式偏好、观察、提议与反馈，关闭自动学习，并通过单调递增 profile version 阻止删除前陈旧页面覆盖。26 个项目自建 synthetic 场景覆盖偏好、规划优先级、推断、反馈、导出、删除、owner/IDOR 与 Agent 权限，12 类违规均为 0。FastAPI 459 项、Teacher Web 19 个文件 96 项、Agent 10 个文件 42 项测试全部通过；Teacher Web、Agent 与 legacy Web 类型检查/生产构建通过。真实偏好抽屉验证 JSON 导出、删除禁用态、内部滚动、零横向溢出和零控制台 warning/error；未输入完整口令或执行真实删除。随后已形成 `5614fc0` 回滚点并获准进入 M12。
+- M11 第四条纵向切片：偏好面板为每条 owner-scoped 提议提供“采用建议 / 不采用 / 修正后采用”。接受使用服务端提议值，修正仍执行同键 allow-list 校验，两者都因教师明确确认而保存为 `teacher_explicit`、置信度 1.0，并可进入 `planning_defaults`；拒绝不创建偏好，只保存结构化反馈摘要。拒绝后的同值、同证据类别至少需要 3 个新的不同保存版本证据才会重新提议，重复版本仍幂等。另一个 owner 无法处理该提议，过期 profile version 仍冲突失败。FastAPI 455 项、Teacher Web 19 个文件 94 项测试、Teacher Web 类型检查和生产构建通过；生命周期、固定评测与完整 M11 Gate 尚未执行。
+
+## 2026-08-31 验证快照
+
+- M10 已形成可回滚提交 `9997fc8`，项目所有者明确要求按原路线继续开发，M11 成为唯一活动里程碑。
+- M11 第一条纵向切片：新增 `TeacherMemory.profile/apply` 深模块、`/api/v1/teacher-memory/profile` owner-scoped 路由和全局“教师偏好”面板。当前只允许年级、难度、课时、解析详略和常用题型五类结构化显式偏好；source/confidence 由服务端固定为教师明确设置/1.0，浏览器不能提交 owner、来源或置信度，自动学习默认关闭。FastAPI 447 项、Teacher Web 18 个文件 89 项、Agent 10 个文件 42 项测试全部通过，Teacher Web、Agent 与 legacy Web 类型检查/生产构建通过；真实桌面与 375px 页面保存回读、来源展示、零横向溢出和零控制台告警通过。完整 M11 Gate 尚未执行。
+- M11 第二条纵向切片：新增 `TeacherMemory.planning_defaults` 只读视图，由 Lesson/Paper 蓝图路由依据 current-teacher 在服务端读取。仅在 brief 未明确时应用 Lesson 年级/课时与 Paper 年级/难度；显式 brief 始终覆盖，Lesson 课时不会误作考试时长。蓝图返回实际应用项、服务端来源和置信度，Teacher Web 显示“已应用教师偏好”，当次直接编辑字段会移除对应标记且不回写偏好。owner 隔离、任意字段伪造和原有范围/来源/可信/保存门禁保持不变。FastAPI 450 项、Teacher Web 18 个文件 90 项、TypeScript 类型检查与生产构建通过；真实教案和组卷页面验证缺省应用、来源/置信度、当次覆盖与零横向溢出。
+- M11 第三条纵向切片：自动学习仅在教师开启后观察已确认保存的 Lesson/Paper 版本，且只记录 allow-listed 年级、课时或难度、证据类别和幂等版本标识，不记录 brief、题目、教案或私人资料正文。同一结构化值在同一证据类别出现至少 3 次才形成 owner-scoped 提议；面板展示证据类别、次数和服务端置信度，并明确提议尚未写入、不会进入 `planning_defaults`。浏览器伪造观察证据返回 422，显式偏好会清除同键旧提议但不会由系统自动晋升。FastAPI 452 项、Teacher Web 19 个文件 93 项测试、Teacher Web 类型检查和生产构建通过；完整反馈闭环与 M11 Gate 尚未执行。
+- M10 第六条纵向切片：新增 `LessonSavedExporting.export` 深模块与精确版本下载接口。服务端只从 current-teacher owner 的指定 `lesson_plan_id + version` 读取不可变快照，校验版本 ID 与草稿指纹后交给 `SavedLessonPlanDocumentRenderer`；导出不读取页面临时状态、来源最新 revision 或后续教案版本。教师教案 DOCX/PDF 包含目标与证据、重难点、完整教学流程、题面/选项/答案/解析、评价、作业、板书、备注和精确来源摘要。Teacher Web 只对已保存版本展示 DOCX/PDF 下载，浏览器不提交 owner。
+- M10 固定评测与 Gate：28 个项目自建 synthetic 场景覆盖蓝图/范围、来源、owner/IDOR、完整正文、题目事实、目标对应、逐块编辑、不可变版本、生命周期、精确导出和 Agent 权限，15 类违规均为 0。FastAPI 435 项、Teacher Web 16 个文件 82 项、Agent 10 个文件 42 项全部通过；Teacher Web、Agent 与 legacy Web 类型检查/生产构建通过。精确版本 DOCX 5 页、PDF 4 页逐页检查，无裁切、重叠、乱码或后续版本串入。M10 Gate E/Gate P 连续性通过，随后形成回滚点并获准进入 M11。
+
+## 2026-08-30 验证快照
+
+- M9 已完成阶段转换：可回滚提交已推送并合并到 `main`；项目所有者明确要求按原路线继续开发，M10 成为唯一活动里程碑。
+- M10 第一条纵向切片：新增 `LessonBlueprintPlanning.plan(LessonBlueprintBrief) -> LessonBlueprintDraft` 深模块与 `/api/v1/lesson-plans/blueprints/plan`。请求只含课堂 brief，明确大学范围在业务层拒绝；返回教材候选、目标、重难点、课堂阶段和可见默认假设，固定 `editable + unconfirmed + unsaved + side_effects=[]`。Teacher Web 已接入左右可拖动的需求/蓝图桌面，所有蓝图字段可本地编辑，阶段分钟数实时对照。本切片不查题、不读私人资料、不生成教案正文、不保存。
+- M10 第二条纵向切片：新增 `LessonSourceSelection.options/select` 与两条来源接口。只有教师确认蓝图后才显示受控来源；公共题必须公开、在架、权利明确、教师审核通过、数学验证通过且属于高中范围，私题/私人资料只解析当前 owner 明确勾选的 ID。私人资料候选阶段不返回正文，入选后才返回有界摘录与精确 version/权利说明；题量不足返回真实缺口，固定未保存且无副作用。Teacher Web 已接入公共题、我的私题和我的私人资料三组选择及缺口/完成反馈。
+- M10 第三条纵向切片：新增 `LessonDrafting.build` 与 `/blueprints/build-draft`。生成前使用当前 owner 再次执行来源门禁并核对精确 revision；来源漂移、权利/可信变化、选项或解析缺失、大学范围不会形成正文。正常结果完整包含目标与证据、重难点、教学流程、题面/选项/解析/答案、评价、作业、板书、教师备注和来源清单，并检查时间总和与目标—活动—评价对应。Teacher Web 在同一可编辑桌面展示“待教师复核 · 未保存”的完整草稿，本切片不保存、不创建版本、不导出。
+- M10 第四条纵向切片：新增 `LessonBlockEditing.rewrite` 与 `/blueprints/rewrite-block`。一个深模块 Interface 集中执行来源重验、锁定保护、题目事实保护、只替换目标块、revision 递增和结构/时间/高中范围复检。Teacher Web 对教学目标、重难点、流程、题目用途、评价、作业、板书和备注提供本地编辑、锁定与定向重写，明确显示服务器 revision 和本地未应用修改；题干、选项、答案和解析保持来源原样。
+- M10 第五条纵向切片：新增 `LessonVersioning` 与 `/lesson-plans/versions/*`。保存、历史、读取和生命周期均只使用 current-teacher owner；保存重新解析来源并追加不可变快照，历史编辑再次保存形成递增版本，跨 owner 读取/操作按不存在处理。Teacher Web 增加明确的取消/确认保存、本人历史、打开编辑、另存新版本、回收与恢复；保存后内容仍待教师复核。
+- M10 前五切片针对性后端测试 20 项通过；当日 FastAPI 完整回归 432 项通过（仅 1 条既有 Starlette TestClient 弃用提示）；Teacher Web 16 个测试文件 81 项、TypeScript 类型检查和 Next.js 生产构建通过。第六切片与最终 Gate 的最新数字见 2026-08-31 快照。
 
 ## 2026-08-29 验证快照
 
@@ -48,7 +79,7 @@
 - M9 第六条切片：新增 `PaperSavedExporting.export`，只从当前 owner 的精确 `paper_id + version` 快照生成学生卷、答案卷和双向细目表 DOCX/PDF，共六种导出；不读取未保存页面状态，不漂移到题库最新 revision，不在导出阶段补题、改题或升级可信状态。Teacher Web 明确区分未保存编辑、保存中、已保存版本与导出中，任何修改都会清除当前“已保存”展示并要求再次显式保存；失败继续通过弹窗展示。
 - M9 受控选题修复：明确勾选的公共题和当前 owner 私题视为教师显式意图，不再被蓝图软知识范围误过滤；题型容量、高中范围、可信、重复和高相似硬门禁保持不变。Teacher Web 增加公共题库搜索与明确选择区，只展示已经通过 public/active/approved/MathVerifier/权利门禁的题；当前本地无合格公共供给时显示真实空状态，不把私人或待审核题冒充公共题。真实浏览器在知识范围不覆盖全部私题的蓝图中勾选 4 道题，编辑草稿和双向细目表均完整保留 4 道；控制台零 warning/error。FastAPI 完整测试 400 项、Teacher Web 64 项及生产构建通过。
 - M9 第五/六切片工程回归：FastAPI 完整测试 398 项通过；Teacher Web 13 个测试文件 62 项通过，TypeScript 类型检查与 Next.js 生产构建通过。真实浏览器完成“受控私题选择 → 蓝图一致 → 显式保存版本 1 → 六种导出入口”验收，控制台零 warning/error。对精确保存版本生成的学生卷、答案卷和双向细目表 PDF 共 6 页逐页视觉检查通过：题干/选项/公式可读，无裁切、重叠、乱码或黑块；学生卷不泄露答案，答案卷包含最终答案和完整解析，细目表包含正向及反向规格。
-- M9 固定评测与工作树 Gate：28 个项目自建 synthetic 场景覆盖蓝图/范围、公共可信与权利、显式公共/私题选择、四题完整保留、owner/IDOR、重复、真实缺口、知识/难度分析、编辑、不可变版本、六种导出和 Agent 权限，15 类违规均为 0。FastAPI 406 项、Teacher Web 68 项、Agent 42 项测试及全部类型检查/生产构建通过，legacy 类型检查/构建通过；新增专项回归证明知识/难度及题量/分区/配分偏差不会阻止教师二次确认后保存当前版本。历史组卷只按 current owner 列出、读取、导出和变更生命周期，当前 owner 可打开已有快照、调整题序/分区/配分或删题并另存新版本，旧版本不可变保留。无新依赖、数据库、上传、导出、私有运行数据或商业内容进入 Git。M9 工作树 Gate E/Gate P 连续性检查通过；仍需形成可回滚提交和项目所有者阶段确认，M10 不得启动。
+- M9 固定评测与工作树 Gate：28 个项目自建 synthetic 场景覆盖蓝图/范围、公共可信与权利、显式公共/私题选择、四题完整保留、owner/IDOR、重复、真实缺口、知识/难度分析、编辑、不可变版本、六种导出和 Agent 权限，15 类违规均为 0。FastAPI 406 项、Teacher Web 68 项、Agent 42 项测试及全部类型检查/生产构建通过，legacy 类型检查/构建通过；新增专项回归证明知识/难度及题量/分区/配分偏差不会阻止教师二次确认后保存当前版本。历史组卷只按 current owner 列出、读取、导出和变更生命周期，当前 owner 可打开已有快照、调整题序/分区/配分或删题并另存新版本，旧版本不可变保留。无新依赖、数据库、上传、导出、私有运行数据或商业内容进入 Git。M9 工作树 Gate E/Gate P 连续性检查通过；随后已形成可回滚提交并于 2026-08-30 获得所有者阶段转换确认。
 
 ## 2026-08-28 验证快照
 
@@ -108,12 +139,12 @@
 
 - 自由格式解释中的学校名/考试名等事实仍以结构化结果为唯一可信来源；通用实体消毒是后续增强。
 - Search run 记录当前为进程内实现；云端持久化在封闭测试阶段处理。
-- Lesson 导航当前仍只展示未来工作流；Paper 的 M9 六条实现切片、固定评测和工作树 Gate 已通过，但可回滚提交和项目所有者阶段确认尚未完成。
+- Lesson 六条切片已完成：无副作用蓝图规划、教师明确选择受控来源、完整正文、逐块编辑/锁定、owner-only 不可变版本历史与回收/恢复，以及指定已保存版本 DOCX/PDF 导出。
 - 真实教师身份、会话级权限、云端数据隔离和下架流程尚未上线。
 - Closed Beta 指标事件、Week-4 留存、任务采用率、严重数学错误率和单位成本尚未进入真实教师统计阶段。
 - 当前身份 adapter 仍是本地固定教师，不代表生产认证、商业多租户或云端隔离已经完成。
 - M7 已完成；只有结果中的 `visual_context.image_used=true` 才能描述为“原图参与本次推理”。固定评测和 Gate E 证据见 `M7-MULTIMODAL-SOLVE-EVALUATION.md` 与 `M7-GATE-REVIEW.md`。
-- M8 已完成，固定评测、Gate E 与 Gate P 证据见 `M8-PRIVATE-QUESTION-AUTHORING-EVALUATION.md` 和 `M8-GATE-REVIEW.md`。项目所有者已确认进入 M9；M10 及后续阶段仍不得开始。
+- M9、M10、M11 已完成并获确认，M11 回滚点为 `5614fc0`。M12 会话身份、能力快照、隐私安全运行状态和备份恢复四条切片已接入；删除演练和完整 Gate 尚未完成，M13 仍未开始。
 
 ## 历史能力与新产品的关系
 

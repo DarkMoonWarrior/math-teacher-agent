@@ -32,6 +32,7 @@ uploads/
 
 # Exports and generated artifacts
 output/
+artifacts/
 
 # Logs
 logs/

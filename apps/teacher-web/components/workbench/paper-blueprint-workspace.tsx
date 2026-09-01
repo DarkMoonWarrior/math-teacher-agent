@@ -20,6 +20,8 @@ import {
   TeacherWorkspaceError,
 } from "@/lib/teacher-workspace/contracts";
 import { teacherWorkspace } from "@/lib/teacher-workspace/http-adapter";
+import { EditableNumberInput } from "./editable-number-input";
+import { TeacherPreferenceNotice } from "./teacher-preference-notice";
 import { ArrowRightIcon, ArrowUpIcon, CheckIcon, CloseIcon, LockIcon, PaperIcon } from "./icons";
 import { ResizableSplitPane } from "./resizable-split-pane";
 import { WorkbenchNoticeDialog } from "./workbench-notice-dialog";
@@ -72,11 +74,6 @@ const PAPER_EXPORT_PREVIEW_LABELS = [
 ] as const;
 
 type PaperHistoryLifecycle = "active" | "trashed";
-
-function numberValue(value: string, fallback: number): number {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : fallback;
-}
 
 function errorMessage(cause: unknown, fallback: string): string {
   return cause instanceof TeacherWorkspaceError ? cause.message : fallback;
@@ -284,8 +281,8 @@ export function PaperHistoryEditor({ busy, onClose, onSave, paper, privateQuesti
       </header>
       <div className="paper-history-editor-fields">
         <label>试卷名称<input value={title} onChange={(event) => setTitle(event.target.value)} /></label>
-        <label>考试时间（分钟）<input min={10} max={300} type="number" value={durationMinutes} onChange={(event) => setDurationMinutes(numberValue(event.target.value, durationMinutes))} /></label>
-        <label>试卷总分<input min={items.length * 0.5} max={Math.min(300, items.length * 50)} step={0.5} type="number" value={targetTotalScore} onChange={(event) => setTargetTotalScore(numberValue(event.target.value, targetTotalScore))} /></label>
+        <label>考试时间（分钟）<EditableNumberInput min={10} max={300} value={durationMinutes} onValueChange={setDurationMinutes} /></label>
+        <label>试卷总分<EditableNumberInput min={items.length * 0.5} max={Math.min(300, items.length * 50)} step={0.5} value={targetTotalScore} onValueChange={setTargetTotalScore} /></label>
         <button className="paper-history-distribute" disabled={busy || items.length === 0 || targetTotalScore < items.length * 0.5 || targetTotalScore > items.length * 50} onClick={distributeTargetTotal} type="button">按总分平均调整题目分值</button>
       </div>
       <div className={`paper-history-editor-summary${totalMatches ? "" : " is-mismatch"}`}><strong>{items.length} 题 · 当前 {totalScore.toLocaleString("zh-CN")} / 目标 {targetTotalScore.toLocaleString("zh-CN")} 分</strong><span>{totalMatches ? `保存会生成版本 ${paper.version + 1} 并重算双向细目表。` : "请调整题目分值，或按目标总分平均分配后再保存。"}</span></div>
@@ -319,7 +316,7 @@ export function PaperHistoryEditor({ busy, onClose, onSave, paper, privateQuesti
             {item.question.solution_status === "needs_teacher_verification" && <p className="paper-selection-solution-missing">解析：无（题面已审核，解析尚未生成）</p>}
             <div className="paper-history-editor-item-fields">
               <label>所属分区<input value={item.section_title} onChange={(event) => updateItem(index, { section_title: event.target.value })} /></label>
-              <label>分值<input min={0.5} max={50} step={0.5} type="number" value={item.score} onChange={(event) => updateItem(index, { score: numberValue(event.target.value, item.score) })} /></label>
+              <label>分值<EditableNumberInput min={0.5} max={50} step={0.5} value={item.score} onValueChange={(score) => updateItem(index, { score })} /></label>
             </div>
           </li>
         ))}
@@ -613,7 +610,7 @@ export function PaperEditableDraftView({ draft, applying, saving, exporting, sav
               {item.options.length > 0 && <ol className="paper-selection-options">{item.options.map((option) => <li key={option.key}><b>{option.key}</b><MathText text={option.text} /></li>)}</ol>}
               <div className="paper-item-controls">
                 <label>所属分区<select value={item.section_id} onChange={(event) => updateItem(item.question_id, { section_id: event.target.value, section_title: availableSections.find((section) => section.section_id === event.target.value)?.title ?? item.section_title })}>{availableSections.map((section) => <option key={section.section_id} value={section.section_id}>{section.title}</option>)}</select></label>
-                <label>分值<input min={0.5} max={50} step={0.5} type="number" value={item.score} onChange={(event) => updateItem(item.question_id, { score: numberValue(event.target.value, item.score) })} /></label>
+                <label>分值<EditableNumberInput min={0.5} max={50} step={0.5} value={item.score} onValueChange={(score) => updateItem(item.question_id, { score })} /></label>
               </div>
             </li>
           );
@@ -779,7 +776,23 @@ export function PaperBlueprintWorkspace({ initialBrief, onBriefChange, onOpenAut
     setSelection(null);
     setEditableDraft(null);
     setSavedVersion(null);
-    setBlueprint((current) => current ? { ...current, ...patch } : current);
+    setBlueprint((current) => {
+      if (!current) return current;
+      const overridden = new Set<string>();
+      if ("grade_scope" in patch) overridden.add("default_grade");
+      if ("difficulty_profile" in patch) overridden.add("default_difficulty");
+      const assumptionPrefixes = new Set<string>();
+      if (overridden.has("default_grade")) assumptionPrefixes.add("未明确年级");
+      if (overridden.has("default_difficulty")) assumptionPrefixes.add("未明确难度结构");
+      return {
+        ...current,
+        ...patch,
+        applied_preferences: current.applied_preferences.filter((item) => !overridden.has(item.key)),
+        assumptions: current.assumptions.filter(
+          (item) => !item.includes("教师偏好") || !Array.from(assumptionPrefixes).some((prefix) => item.startsWith(prefix)),
+        ),
+      };
+    });
   }
 
   function updateSection(index: number, patch: Partial<PaperBlueprintSection>) {
@@ -1005,7 +1018,6 @@ export function PaperBlueprintWorkspace({ initialBrief, onBriefChange, onOpenAut
     <main className="paper-blueprint-workspace">
       <ResizableSplitPane ariaLabel="调整组卷要求与蓝图区域宽度" className="paper-blueprint-split" defaultPrimaryPercent={40}>
         <section className="paper-blueprint-intent">
-          <p className="mode-status"><i className="is-ready" aria-hidden="true" />Paper Agent · 蓝图规划与受控选题已接入</p>
           <h1>先把组卷要求，<br />整理成可编辑蓝图。</h1>
           <p className="intro-copy">先整理范围、结构、题量与配分；经你确认后，只从通过门禁的公共题和你明确选择的私题中建立候选清单。</p>
           <form onSubmit={plan}>
@@ -1056,14 +1068,16 @@ export function PaperBlueprintWorkspace({ initialBrief, onBriefChange, onOpenAut
                   <ul aria-label="蓝图状态"><li>{selection ? "已确认" : "未确认"}</li><li>未保存</li><li>{selection ? "候选草案" : "未选题"}</li></ul>
                 </header>
 
+                <TeacherPreferenceNotice preferences={blueprint.applied_preferences} />
+
                 {blueprint.assumptions.length > 0 && <section className="paper-blueprint-assumptions"><strong>需要你核对的默认假设</strong><ul>{blueprint.assumptions.map((item) => <li key={item}>{item}</li>)}</ul></section>}
 
                 <div className="paper-blueprint-fields">
                   <label className="wide">试卷名称<input value={blueprint.title} onChange={(event) => updateBlueprint({ title: event.target.value })} /></label>
                   <label>年级范围<input value={blueprint.grade_scope} onChange={(event) => updateBlueprint({ grade_scope: event.target.value })} /></label>
                   <label>教学用途<input value={blueprint.teaching_usage} onChange={(event) => updateBlueprint({ teaching_usage: event.target.value })} /></label>
-                  <label>考试时间（分钟）<input min={10} max={300} type="number" value={blueprint.duration_minutes} onChange={(event) => updateBlueprint({ duration_minutes: numberValue(event.target.value, blueprint.duration_minutes) })} /></label>
-                  <label>目标总分<input min={5} max={300} step={0.5} type="number" value={blueprint.target_score} onChange={(event) => updateBlueprint({ target_score: numberValue(event.target.value, blueprint.target_score) })} /></label>
+                  <label>考试时间（分钟）<EditableNumberInput min={10} max={300} value={blueprint.duration_minutes} onValueChange={(duration_minutes) => updateBlueprint({ duration_minutes })} /></label>
+                  <label>目标总分<EditableNumberInput min={5} max={300} step={0.5} value={blueprint.target_score} onValueChange={(target_score) => updateBlueprint({ target_score })} /></label>
                   <label>难度结构<select value={blueprint.difficulty_profile} onChange={(event) => updateBlueprint({ difficulty_profile: event.target.value as PaperBlueprintDifficulty })}>{Object.entries(DIFFICULTY_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
                   <label className="wide">知识范围（用顿号分隔）<input value={blueprint.knowledge_points.join("、")} onChange={(event) => updateBlueprint({ knowledge_points: event.target.value.split(/[、,，]/).map((item) => item.trim()).filter(Boolean) })} /></label>
                 </div>
@@ -1075,8 +1089,8 @@ export function PaperBlueprintWorkspace({ initialBrief, onBriefChange, onOpenAut
                       <div key={section.section_id}>
                         <span>{String(index + 1).padStart(2, "0")}</span>
                         <label>分区名称<input value={section.title} onChange={(event) => updateSection(index, { title: event.target.value })} /></label>
-                        <label>题量<input min={0} max={30} type="number" value={section.question_count} onChange={(event) => updateSection(index, { question_count: numberValue(event.target.value, section.question_count) })} /></label>
-                        <label>分值<input min={0} max={300} step={0.5} type="number" value={section.target_score} onChange={(event) => updateSection(index, { target_score: numberValue(event.target.value, section.target_score) })} /></label>
+                        <label>题量<EditableNumberInput min={0} max={30} value={section.question_count} onValueChange={(question_count) => updateSection(index, { question_count })} /></label>
+                        <label>分值<EditableNumberInput min={0} max={300} step={0.5} value={section.target_score} onValueChange={(target_score) => updateSection(index, { target_score })} /></label>
                       </div>
                     ))}
                   </div>

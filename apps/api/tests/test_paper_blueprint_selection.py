@@ -25,6 +25,8 @@ from app.modules.exam_papers.versioning import (
     PaperVersioningConflict,
 )
 from app.modules.question_bank.schemas import QuestionDetail, QuestionSearchPage, QuestionSummary
+from app.modules.teacher_memory import TeacherMemory, TeacherMemoryCommand
+from app.modules.teacher_memory.dependencies import get_teacher_memory
 from app.routes.exam_papers import (
     get_paper_blueprint_selection,
     get_paper_editable_drafting,
@@ -833,8 +835,14 @@ def test_save_and_exact_version_export_http_bind_owner_server_side(tmp_path: Pat
     drafting, versioning, exporting = make_versioning(tmp_path)
     draft_command = PaperEditableDraftCommand(selection_request=command(), edits=[])
     draft = drafting.build(draft_command, owner_id="server-owner")
+    memory = TeacherMemory(database_path=tmp_path / "teacher-memory.sqlite3")
+    memory.apply(
+        TeacherMemoryCommand(operation="set_auto_learning", enabled=True),
+        owner_id="server-owner",
+    )
     app.dependency_overrides[get_paper_versioning] = lambda: versioning
     app.dependency_overrides[get_paper_saved_exporting] = lambda: exporting
+    app.dependency_overrides[get_teacher_memory] = lambda: memory
     app.dependency_overrides[get_current_teacher] = lambda: CurrentTeacher(
         teacher_id="server-owner",
         source="authenticated_session",
@@ -849,6 +857,12 @@ def test_save_and_exact_version_export_http_bind_owner_server_side(tmp_path: Pat
             "/api/v1/exam-papers/blueprints/save-version",
             json=payload,
         )
+        for _ in range(2):
+            repeated = client.post(
+                "/api/v1/exam-papers/blueprints/save-version",
+                json=payload,
+            )
+            assert repeated.status_code == 201
         forged = client.post(
             "/api/v1/exam-papers/blueprints/save-version",
             json={
@@ -875,9 +889,15 @@ def test_save_and_exact_version_export_http_bind_owner_server_side(tmp_path: Pat
     finally:
         app.dependency_overrides.pop(get_paper_versioning, None)
         app.dependency_overrides.pop(get_paper_saved_exporting, None)
+        app.dependency_overrides.pop(get_teacher_memory, None)
         app.dependency_overrides.pop(get_current_teacher, None)
 
     assert response.status_code == 201
+    assert any(
+        proposal.key == "default_difficulty"
+        and proposal.evidence.occurrence_count == 3
+        for proposal in memory.profile(owner_id="server-owner").proposals
+    )
     assert forged.status_code == 422
     assert download.status_code == 200
     assert download.content.startswith(b"%PDF")

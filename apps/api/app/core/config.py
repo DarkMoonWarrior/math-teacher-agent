@@ -89,6 +89,15 @@ class Settings(BaseSettings):
     model_operations_db: Path = Field(
         default=PROJECT_ROOT / "data" / "runtime" / "model-operations-v1.sqlite3"
     )
+    teacher_memory_db: Path = Field(
+        default=PROJECT_ROOT / "data" / "private-runtime" / "teacher-memory.sqlite3"
+    )
+    beta_session_db: Path = Field(
+        default=PROJECT_ROOT / "data" / "private-runtime" / "beta-sessions.sqlite3"
+    )
+    beta_backup_dir: Path = Field(
+        default=PROJECT_ROOT / "data" / "private-runtime" / "backups"
+    )
     lesson_export_dir: Path = Field(default=PROJECT_ROOT / "output")
     cjk_font_regular: Path | None = None
     cjk_font_bold: Path | None = None
@@ -147,6 +156,15 @@ class Settings(BaseSettings):
     solve_agent_enabled: bool = False
     question_authoring_agent_enabled: bool = False
     search_agent_max_query_length: int = 2000
+
+    # -- Closed Beta access -------------------------------------------------
+    # Disabled keeps the fixed local-development teacher. Enabled mode fails
+    # closed unless a valid opaque HttpOnly session is present.
+    beta_access_enabled: bool = False
+    beta_access_roster_json: str = "{}"
+    beta_session_ttl_hours: int = Field(default=12, ge=1, le=168)
+    beta_session_cookie_name: str = "math_ai_beta_session"
+    beta_session_secure_cookie: bool = False
 
     @property
     def cors_origin_list(self) -> list[str]:

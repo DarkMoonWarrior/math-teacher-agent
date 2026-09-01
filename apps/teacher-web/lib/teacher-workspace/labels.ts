@@ -96,7 +96,7 @@ export function evidenceSourceLabel(value: string): string {
 
 export const ERROR_GUIDANCE: Record<string, string> = {
   FEATURE_DISABLED: "请在 FastAPI 环境开启相应 Agent 功能后重试。",
-  UNSUPPORTED_CAPABILITY: "当前 Runtime 不支持这条工作流，请切换至 DeepSeek Harness Runtime。",
+  UNSUPPORTED_CAPABILITY: "当前运行环境不支持这条工作流，请切换至可用的大模型运行环境。",
   RUNTIME_UNAVAILABLE: "请确认 Agent Service 已启动，并且模型配置可用。",
   MODEL_UNAVAILABLE: "模型服务当前不可用；系统不会把未完成任务伪装成成功。",
   TOOL_UNAUTHORIZED: "内部工具权限校验失败，请检查 FastAPI 与 Agent Service 的 M2M 配置。",
