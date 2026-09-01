@@ -448,6 +448,29 @@ export class HttpTeacherWorkspace implements TeacherWorkspace {
     );
   }
 
+  async exportTeacherMemory(signal?: AbortSignal): Promise<PaperExportArtifact> {
+    try {
+      const response = await fetch(apiUrl("/api/v1/teacher-memory/export"), {
+        headers: { Accept: "application/json" },
+        signal,
+      });
+      if (!response.ok) throw await responseError(response);
+      const disposition = response.headers.get("Content-Disposition") ?? "";
+      const encodedName = disposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
+      const plainName = disposition.match(/filename="?([^";]+)"?/i)?.[1];
+      return {
+        blob: await response.blob(),
+        filename: encodedName
+          ? decodeURIComponent(encodedName)
+          : plainName ?? "teacher-memory.json",
+      };
+    } catch (cause) {
+      if (cause instanceof TeacherWorkspaceError) throw cause;
+      if (cause instanceof DOMException && cause.name === "AbortError") throw cause;
+      throw new TeacherWorkspaceError("NETWORK_ERROR", "无法导出教师记忆。");
+    }
+  }
+
   planLessonBlueprint(brief: string, signal?: AbortSignal): Promise<LessonBlueprintDraft> {
     return libraryJsonRequest(
       "/api/v1/lesson-plans/blueprints/plan",

@@ -762,7 +762,6 @@ export function PrivateLibraryWorkspace() {
       <div className="library-workbench-pane library-workbench-pane--upload">
         <section className="library-intro">
         <div>
-          <p className="mode-status"><i className="is-ready" aria-hidden="true" />Private Library 已接入</p>
           <h1>我的资料，<br />我的工作流。</h1>
           <p>上传讲义、试卷和题目图片。资料默认只保存在当前教师的私人工作区。</p>
         </div>

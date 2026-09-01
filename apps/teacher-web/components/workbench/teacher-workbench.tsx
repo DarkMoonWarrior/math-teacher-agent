@@ -112,7 +112,6 @@ type CapabilityDefinition = {
   id: CapabilityId;
   label: string;
   ready: boolean;
-  status: string;
   title: [string, string];
   intro: string;
   inputLabel: string;
@@ -126,6 +125,16 @@ type CapabilityDefinition = {
 
 const CAPABILITY_ORDER: CapabilityId[] = ["search", "solve", "library", "lesson", "paper"];
 const WORKBENCH_NAV_ORDER: Array<CapabilityId | "authoring"> = ["search", "solve", "library", "authoring", "lesson", "paper"];
+
+export function getWorkspaceVisibility(capability: CapabilityId, authoringActive: boolean) {
+  return {
+    authoring: authoringActive,
+    lesson: !authoringActive && capability === "lesson",
+    library: !authoringActive && capability === "library",
+    paper: !authoringActive && capability === "paper",
+    searchSolve: !authoringActive && (capability === "search" || capability === "solve"),
+  };
+}
 
 const SEARCH_PROGRESS: Record<SearchTaskProgressStage, SearchProgressDefinition> = {
   connecting: {
@@ -200,7 +209,6 @@ const CAPABILITIES: Record<CapabilityId, CapabilityDefinition> = {
     id: "search",
     label: "搜题",
     ready: true,
-    status: "Search Agent 已接入",
     title: ["把要找的题，", "直接说出来。"],
     intro: "写下年级、知识点、难度、题量和课堂用途。它负责理解与查找，来源和验证状态会随结果一起返回。",
     inputLabel: "描述搜题需求",
@@ -250,7 +258,6 @@ const CAPABILITIES: Record<CapabilityId, CapabilityDefinition> = {
     id: "solve",
     label: "解题",
     ready: true,
-    status: "Solve Agent 已接入",
     title: ["把一道题，", "讲到可以上课。"],
     intro: "输入完整题目，系统优先查找已有可信解析；需要模型生成时会明确标记教师复核，并单独展示 MathVerifier 能力、范围和证据。",
     inputLabel: "输入完整数学题目",
@@ -300,7 +307,6 @@ const CAPABILITIES: Record<CapabilityId, CapabilityDefinition> = {
     id: "library",
     label: "资料库",
     ready: true,
-    status: "Private Library 已接入",
     title: ["我的资料，", "我的工作流。"],
     intro: "上传 PDF、DOCX 和题目图片；来源、权利与私人边界会随资料一起保留。",
     inputLabel: "选择私人教学资料",
@@ -322,7 +328,6 @@ const CAPABILITIES: Record<CapabilityId, CapabilityDefinition> = {
     id: "lesson",
     label: "教案",
     ready: true,
-    status: "Lesson Agent · 教案蓝图规划已接入",
     title: ["把一节课，", "整理成可修改的教案。"],
     intro: "从课题、学情和课时出发，组织教学目标、重难点、课堂活动与板书。所有生成内容先是草案，由教师决定是否采用。",
     inputLabel: "描述教案需求",
@@ -372,7 +377,6 @@ const CAPABILITIES: Record<CapabilityId, CapabilityDefinition> = {
     id: "paper",
     label: "组卷",
     ready: true,
-    status: "Paper Agent · 蓝图规划已接入",
     title: ["把教学目标，", "排成一份有依据的试卷。"],
     intro: "先确定范围、题量、题型、难度和考试时间，再形成试卷草案与双向细目表。题目来源和验证状态不会被隐藏。",
     inputLabel: "描述组卷需求",
@@ -590,12 +594,13 @@ export function TeacherWorkbench() {
   const definition = CAPABILITIES[capability];
   const query = drafts[capability];
   const phase = phases[capability];
-  const searchVisible = capability === "search";
-  const solveVisible = capability === "solve";
-  const libraryVisible = capability === "library";
-  const lessonVisible = capability === "lesson";
-  const paperVisible = capability === "paper";
-  const authoringVisible = authoringActive;
+  const workspaceVisibility = getWorkspaceVisibility(capability, authoringActive);
+  const authoringVisible = workspaceVisibility.authoring;
+  const searchVisible = workspaceVisibility.searchSolve && capability === "search";
+  const solveVisible = workspaceVisibility.searchSolve && capability === "solve";
+  const libraryVisible = workspaceVisibility.library;
+  const lessonVisible = workspaceVisibility.lesson;
+  const paperVisible = workspaceVisibility.paper;
   const runnable = searchVisible || solveVisible;
   const error = runnable ? errors[capability as "search" | "solve"] : null;
   const running = runnable && phase === "running";
@@ -1100,7 +1105,6 @@ export function TeacherWorkbench() {
         >
         <section className="task-pane">
           <div className="task-pane__intro">
-            <p className="mode-status"><i className={definition.ready ? "is-ready" : ""} aria-hidden="true" />{definition.status}</p>
             <h1>{definition.title[0]}<br />{definition.title[1]}</h1>
             <p className="intro-copy">{definition.intro}</p>
           </div>

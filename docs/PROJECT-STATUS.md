@@ -20,7 +20,7 @@
 - **M8 私有辅助命题：已完成；26 场景固定评测 12 类违规为 0，完整工程回归与 Gate E/Gate P 于 2026-08-28 通过，所有者已确认进入 M9。**
 - **M9 Paper Agent：已完成；六条实现切片、28 场景固定评测、完整工程回归、权限/仓库卫生和 Gate P 连续性检查已通过；可回滚变更已合并到 `main`，所有者于 2026-08-30 确认进入 M10。**
 - **M10 Lesson Agent：已完成；六条切片、28 场景固定评测、完整工程回归与 Gate E/Gate P 连续性已通过，所有者已确认进入 M11。**
-- **M11 Teacher Memory：进行中；显式偏好与透明缺省应用两条切片已接入。**
+- **M11 Teacher Memory：五条切片与完整 Gate 已通过，等待形成回滚点和项目所有者阶段确认；M12 未开始。**
 - M12-M13：Closed Beta 准备与数据验证，均未开始。
 - M14-M17：商业基础、Teacher Pro、教研组和学校，均未开始。
 
@@ -39,15 +39,21 @@
 | 私有辅助命题 | 可用；M8 Gate E/Gate P 已通过 | 独立 `PersonalQuestionLibrary` 与结构化 `QuestionAuthoring` 已实现。题面、解析和解析所得答案在内部判责返工直至闭环；选择题选项独立，高中范围终检生效。命题在 owner-scoped 后台继续运行、可跨页面恢复；题面独立审核通过后立即作为版本化实时快照展示，解析继续后台生成，题面返工时同步标记调整中。正常完成必须交付完整题面、解析和解析所得答案；owner 主动停止时可选择保留最新已通过题面，保存为当前 owner 的私题并明确标注“缺少解析”，答案和解析显示“无”，也可主动用于组卷，但不会进入公共题库或其他 owner 的视图。完整结果只暂存为 owner 草稿，显式保存后才成为完整私题；Agent 无管理写权限。26 场景固定评测 12 类违规为 0。 |
 | Paper | 可用；M9 已完成 | 新 UI 将自然语言整理为可编辑 PaperBlueprint；教师确认后才从通过范围、验证、审核、权利、owner 和相似度门禁的公共题/明确选择私题中建立未保存候选草案。系统在选题后自动归纳实际知识点和难度并写入双向细目表。题量、分区、配分、总分或分析偏差均可见，但不禁用保存；保存前统一提供取消/确认提示，确认后保存当前精确 owner-scoped 不可变版本。无题、题目不完整、越权、可信状态变化或过期指纹仍 fail closed。导出只读取当前 owner 指定版本。28 场景固定评测 15 类违规为 0，Gate E/Gate P 连续性通过。 |
 | Lesson | 可用；M10 Gate 已通过 | 蓝图、受控来源、完整正文和九类内容块编辑已接入。`LessonVersioning` 只接受教师显式确认，保存前重验当前 owner 与精确来源，把正文追加为仅本人可见的不可变版本；历史可打开编辑后另存新版本，可移入回收站和恢复。`LessonSavedExporting` 只从指定不可变版本导出完整教师教案 DOCX/PDF。保存与导出均不升级 `draft_requires_teacher_review`。28 场景固定评测 15 类违规为 0。 |
-| Teacher Memory | 进行中（M11 切片 2） | `TeacherMemory.profile/apply/planning_defaults` 深模块、owner-scoped SQLite、显式结构化偏好和透明缺省应用已接入；Lesson 缺省年级/课时与 Paper 缺省年级/难度可使用当前教师偏好，显式 brief 与当次编辑始终优先，来源/置信度可见；任意任务正文与私人资料正文不进入记忆。 |
+| Teacher Memory | M11 Gate 已通过；等待阶段确认 | `TeacherMemory.profile/apply/planning_defaults` 深模块已闭环显式结构化偏好、透明缺省、可解释提议、接受/拒绝/修正反馈、结构化历史、JSON 导出和固定口令彻底删除。任意任务正文与私人资料正文不进入记忆；Agent 无记忆写入、导出或删除权限。 |
 | 账号/多租户/支付 | 未开始 | 当前教师/管理员模式不是认证或授权系统。 |
 | 商业公共题库 | 未开始填充 | `data/commercial-approved` 保持为空；只允许通过完整门禁的内容进入。 |
+
+## 2026-09-01 验证快照
+
+- M11 第五条纵向切片与完整 Gate：偏好 profile 新增结构化反馈历史和保留说明；当前教师可下载本人完整可检查 JSON。彻底删除必须输入固定口令“删除全部教师记忆”，只清除当前 owner 的显式偏好、观察、提议与反馈，关闭自动学习，并通过单调递增 profile version 阻止删除前陈旧页面覆盖。26 个项目自建 synthetic 场景覆盖偏好、规划优先级、推断、反馈、导出、删除、owner/IDOR 与 Agent 权限，12 类违规均为 0。FastAPI 459 项、Teacher Web 19 个文件 96 项、Agent 10 个文件 42 项测试全部通过；Teacher Web、Agent 与 legacy Web 类型检查/生产构建通过。真实偏好抽屉验证 JSON 导出、删除禁用态、内部滚动、零横向溢出和零控制台 warning/error；未输入完整口令或执行真实删除。M11 功能 Gate 已通过，仍需形成可回滚提交并由项目所有者明确确认后才可进入 M12。
+- M11 第四条纵向切片：偏好面板为每条 owner-scoped 提议提供“采用建议 / 不采用 / 修正后采用”。接受使用服务端提议值，修正仍执行同键 allow-list 校验，两者都因教师明确确认而保存为 `teacher_explicit`、置信度 1.0，并可进入 `planning_defaults`；拒绝不创建偏好，只保存结构化反馈摘要。拒绝后的同值、同证据类别至少需要 3 个新的不同保存版本证据才会重新提议，重复版本仍幂等。另一个 owner 无法处理该提议，过期 profile version 仍冲突失败。FastAPI 455 项、Teacher Web 19 个文件 94 项测试、Teacher Web 类型检查和生产构建通过；生命周期、固定评测与完整 M11 Gate 尚未执行。
 
 ## 2026-08-31 验证快照
 
 - M10 已形成可回滚提交 `9997fc8`，项目所有者明确要求按原路线继续开发，M11 成为唯一活动里程碑。
 - M11 第一条纵向切片：新增 `TeacherMemory.profile/apply` 深模块、`/api/v1/teacher-memory/profile` owner-scoped 路由和全局“教师偏好”面板。当前只允许年级、难度、课时、解析详略和常用题型五类结构化显式偏好；source/confidence 由服务端固定为教师明确设置/1.0，浏览器不能提交 owner、来源或置信度，自动学习默认关闭。FastAPI 447 项、Teacher Web 18 个文件 89 项、Agent 10 个文件 42 项测试全部通过，Teacher Web、Agent 与 legacy Web 类型检查/生产构建通过；真实桌面与 375px 页面保存回读、来源展示、零横向溢出和零控制台告警通过。完整 M11 Gate 尚未执行。
 - M11 第二条纵向切片：新增 `TeacherMemory.planning_defaults` 只读视图，由 Lesson/Paper 蓝图路由依据 current-teacher 在服务端读取。仅在 brief 未明确时应用 Lesson 年级/课时与 Paper 年级/难度；显式 brief 始终覆盖，Lesson 课时不会误作考试时长。蓝图返回实际应用项、服务端来源和置信度，Teacher Web 显示“已应用教师偏好”，当次直接编辑字段会移除对应标记且不回写偏好。owner 隔离、任意字段伪造和原有范围/来源/可信/保存门禁保持不变。FastAPI 450 项、Teacher Web 18 个文件 90 项、TypeScript 类型检查与生产构建通过；真实教案和组卷页面验证缺省应用、来源/置信度、当次覆盖与零横向溢出。
+- M11 第三条纵向切片：自动学习仅在教师开启后观察已确认保存的 Lesson/Paper 版本，且只记录 allow-listed 年级、课时或难度、证据类别和幂等版本标识，不记录 brief、题目、教案或私人资料正文。同一结构化值在同一证据类别出现至少 3 次才形成 owner-scoped 提议；面板展示证据类别、次数和服务端置信度，并明确提议尚未写入、不会进入 `planning_defaults`。浏览器伪造观察证据返回 422，显式偏好会清除同键旧提议但不会由系统自动晋升。FastAPI 452 项、Teacher Web 19 个文件 93 项测试、Teacher Web 类型检查和生产构建通过；完整反馈闭环与 M11 Gate 尚未执行。
 - M10 第六条纵向切片：新增 `LessonSavedExporting.export` 深模块与精确版本下载接口。服务端只从 current-teacher owner 的指定 `lesson_plan_id + version` 读取不可变快照，校验版本 ID 与草稿指纹后交给 `SavedLessonPlanDocumentRenderer`；导出不读取页面临时状态、来源最新 revision 或后续教案版本。教师教案 DOCX/PDF 包含目标与证据、重难点、完整教学流程、题面/选项/答案/解析、评价、作业、板书、备注和精确来源摘要。Teacher Web 只对已保存版本展示 DOCX/PDF 下载，浏览器不提交 owner。
 - M10 固定评测与 Gate：28 个项目自建 synthetic 场景覆盖蓝图/范围、来源、owner/IDOR、完整正文、题目事实、目标对应、逐块编辑、不可变版本、生命周期、精确导出和 Agent 权限，15 类违规均为 0。FastAPI 435 项、Teacher Web 16 个文件 82 项、Agent 10 个文件 42 项全部通过；Teacher Web、Agent 与 legacy Web 类型检查/生产构建通过。精确版本 DOCX 5 页、PDF 4 页逐页检查，无裁切、重叠、乱码或后续版本串入。M10 Gate E/Gate P 连续性通过，随后形成回滚点并获准进入 M11。
 
@@ -132,7 +138,7 @@
 - Closed Beta 指标事件、Week-4 留存、任务采用率、严重数学错误率和单位成本尚未进入真实教师统计阶段。
 - 当前身份 adapter 仍是本地固定教师，不代表生产认证、商业多租户或云端隔离已经完成。
 - M7 已完成；只有结果中的 `visual_context.image_used=true` 才能描述为“原图参与本次推理”。固定评测和 Gate E 证据见 `M7-MULTIMODAL-SOLVE-EVALUATION.md` 与 `M7-GATE-REVIEW.md`。
-- M9、M10 已完成并获确认。M10 固定评测与 Gate 证据见 `M10-LESSON-AGENT-EVALUATION.md` 和 `M10-GATE-REVIEW.md`；M11 正在按独立可回滚切片推进，M12 及后续阶段仍等待 M11 完整 Gate 与项目所有者明确确认。
+- M9、M10 已完成并获确认。M11 五条切片与完整 Gate 已通过，证据见 `M11-TEACHER-MEMORY-EVALUATION.md` 和 `M11-GATE-REVIEW.md`；M12 及后续阶段仍等待 M11 回滚点与项目所有者明确阶段转换确认。
 
 ## 历史能力与新产品的关系
 

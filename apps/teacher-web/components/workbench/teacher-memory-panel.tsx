@@ -4,6 +4,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   type TeacherMemoryCommand,
   type TeacherMemoryProfile,
+  type TeacherPreferenceFeedback,
+  type TeacherPreferenceProposal,
   type TeacherPreferenceKey,
   type TeacherPreferenceValue,
   TeacherWorkspaceError,
@@ -24,6 +26,233 @@ const QUESTION_TYPES = [
   ["open_response", "解答题"],
 ] as const;
 
+const VALUE_LABELS: Record<string, string> = {
+  concise: "简洁",
+  detailed: "详细",
+  fill_blank: "填空题",
+  multiple_choice: "多项选择题",
+  open_response: "解答题",
+  single_choice: "单项选择题",
+  standard: "标准",
+};
+
+function proposalValue(proposal: TeacherPreferenceProposal) {
+  if (Array.isArray(proposal.value)) {
+    return proposal.value.map((item) => VALUE_LABELS[item] ?? item).join("、");
+  }
+  if (proposal.key === "default_difficulty") return `${proposal.value} / 5`;
+  if (proposal.key === "default_lesson_minutes") return `${proposal.value} 分钟`;
+  return VALUE_LABELS[String(proposal.value)] ?? String(proposal.value);
+}
+
+function preferenceDisplayValue(key: TeacherPreferenceKey, value: TeacherPreferenceValue) {
+  if (Array.isArray(value)) return value.map((item) => VALUE_LABELS[item] ?? item).join("、");
+  if (key === "default_difficulty") return `${value} / 5`;
+  if (key === "default_lesson_minutes") return `${value} 分钟`;
+  return VALUE_LABELS[String(value)] ?? String(value);
+}
+
+export function normalizeProposalCorrection(
+  key: TeacherPreferenceKey,
+  value: string,
+): TeacherPreferenceValue {
+  if (key === "default_difficulty" || key === "default_lesson_minutes") {
+    return Number(value);
+  }
+  return value;
+}
+
+type TeacherMemoryProposalsProps = {
+  disabled: boolean;
+  items: TeacherPreferenceProposal[];
+  onAccept: (proposal: TeacherPreferenceProposal) => void;
+  onCorrect: (proposal: TeacherPreferenceProposal, value: TeacherPreferenceValue) => void;
+  onReject: (proposal: TeacherPreferenceProposal) => void;
+};
+
+export function TeacherMemoryProposals({
+  disabled,
+  items,
+  onAccept,
+  onCorrect,
+  onReject,
+}: TeacherMemoryProposalsProps) {
+  const [corrections, setCorrections] = useState<Record<string, string>>({});
+  if (!items.length) return null;
+  return (
+    <section className="teacher-memory-proposals" aria-labelledby="teacher-memory-proposals-title">
+      <header>
+        <div>
+          <span>可解释推断</span>
+          <h3 id="teacher-memory-proposals-title">偏好提议</h3>
+        </div>
+        <strong>{items.length}</strong>
+      </header>
+      <p>仅展示重复行为形成的结构化候选；尚未写入偏好，也不会用于任务默认值。</p>
+      <ol>
+        {items.map((proposal) => (
+          <li key={proposal.proposal_id}>
+            <div><strong>{proposal.label}</strong><b>{proposalValue(proposal)}</b></div>
+            <small>{proposal.evidence.label} · {proposal.evidence.occurrence_count} 次 · 置信度 {Math.round(proposal.confidence * 100)}%</small>
+            <div className="teacher-memory-proposal-actions">
+              <button disabled={disabled} onClick={() => onAccept(proposal)} type="button">采用建议</button>
+              <button disabled={disabled} onClick={() => onReject(proposal)} type="button">不采用</button>
+            </div>
+            <details className="teacher-memory-proposal-correction">
+              <summary>修正后采用</summary>
+              <div>
+                <ProposalCorrectionControl
+                  disabled={disabled}
+                  onChange={(value) => setCorrections((current) => ({
+                    ...current,
+                    [proposal.proposal_id]: value,
+                  }))}
+                  proposal={proposal}
+                  value={corrections[proposal.proposal_id] ?? String(proposal.value)}
+                />
+                <button
+                  disabled={disabled || !(corrections[proposal.proposal_id] ?? String(proposal.value))}
+                  onClick={() => onCorrect(
+                    proposal,
+                    normalizeProposalCorrection(
+                      proposal.key,
+                      corrections[proposal.proposal_id] ?? String(proposal.value),
+                    ),
+                  )}
+                  type="button"
+                >确认修正</button>
+              </div>
+            </details>
+          </li>
+        ))}
+      </ol>
+    </section>
+  );
+}
+
+function ProposalCorrectionControl({
+  disabled,
+  onChange,
+  proposal,
+  value,
+}: {
+  disabled: boolean;
+  onChange: (value: string) => void;
+  proposal: TeacherPreferenceProposal;
+  value: string;
+}) {
+  if (proposal.key === "default_grade") {
+    return (
+      <select aria-label={`修正${proposal.label}`} disabled={disabled} onChange={(event) => onChange(event.target.value)} value={value}>
+        <option>高一</option><option>高二</option><option>高三</option><option>高中通用</option>
+      </select>
+    );
+  }
+  if (proposal.key === "default_difficulty") {
+    return (
+      <select aria-label={`修正${proposal.label}`} disabled={disabled} onChange={(event) => onChange(event.target.value)} value={value}>
+        {[1, 2, 3, 4, 5].map((item) => <option key={item} value={item}>{item} / 5</option>)}
+      </select>
+    );
+  }
+  return (
+    <input
+      aria-label={`修正${proposal.label}`}
+      disabled={disabled}
+      inputMode="numeric"
+      max="300"
+      min="1"
+      onChange={(event) => onChange(event.target.value)}
+      type="number"
+      value={value}
+    />
+  );
+}
+
+const FEEDBACK_ACTION_LABELS: Record<TeacherPreferenceFeedback["action"], string> = {
+  accept: "已采用",
+  correct: "修正后采用",
+  reject: "不采用",
+};
+
+export function TeacherMemoryFeedbackHistory({ items }: { items: TeacherPreferenceFeedback[] }) {
+  if (!items.length) return null;
+  return (
+    <section className="teacher-memory-feedback" aria-labelledby="teacher-memory-feedback-title">
+      <header>
+        <div>
+          <span>可检查记录</span>
+          <h3 id="teacher-memory-feedback-title">反馈记录</h3>
+        </div>
+        <strong>{items.length}</strong>
+      </header>
+      <ol>
+        {items.map((item) => (
+          <li key={item.feedback_id}>
+            <div>
+              <strong>{item.label}</strong>
+              <b>{FEEDBACK_ACTION_LABELS[item.action]}</b>
+            </div>
+            <p>
+              建议值：{preferenceDisplayValue(item.key, item.proposed_value)}
+              {item.resolved_value !== null && item.action === "correct"
+                ? ` → ${preferenceDisplayValue(item.key, item.resolved_value)}`
+                : ""}
+            </p>
+            <small>{item.evidence.label} · {item.evidence.occurrence_count} 次 · 当时置信度 {Math.round(item.confidence * 100)}%</small>
+          </li>
+        ))}
+      </ol>
+    </section>
+  );
+}
+
+type TeacherMemoryLifecycleProps = {
+  confirmation: string;
+  disabled: boolean;
+  onConfirmationChange: (value: string) => void;
+  onDelete: () => void;
+  onExport: () => void;
+  retentionNote: string;
+};
+
+export function TeacherMemoryLifecycle({
+  confirmation,
+  disabled,
+  onConfirmationChange,
+  onDelete,
+  onExport,
+  retentionNote,
+}: TeacherMemoryLifecycleProps) {
+  return (
+    <section className="teacher-memory-lifecycle" aria-labelledby="teacher-memory-lifecycle-title">
+      <header>
+        <span>数据生命周期</span>
+        <h3 id="teacher-memory-lifecycle-title">导出与删除</h3>
+      </header>
+      <p>{retentionNote}</p>
+      <button disabled={disabled} onClick={onExport} type="button">导出 JSON</button>
+      <div className="teacher-memory-delete-all">
+        <strong>永久删除全部教师记忆</strong>
+        <span>此操作清除偏好、提议、观察和反馈，且无法恢复；不会删除试卷、教案或私题。</span>
+        <label>
+          <span>输入“删除全部教师记忆”确认</span>
+          <input
+            disabled={disabled}
+            onChange={(event) => onConfirmationChange(event.target.value)}
+            value={confirmation}
+          />
+        </label>
+        <button
+          disabled={disabled || confirmation !== "删除全部教师记忆"}
+          onClick={onDelete}
+          type="button"
+        >永久删除全部记忆</button>
+      </div>
+    </section>
+  );
+}
+
 function preferenceValue(
   profile: TeacherMemoryProfile | null,
   key: TeacherPreferenceKey,
@@ -40,6 +269,8 @@ export function TeacherMemoryPanel({ open, onClose }: TeacherMemoryPanelProps) {
   const [questionTypes, setQuestionTypes] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [savingKey, setSavingKey] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
+  const [deleteConfirmation, setDeleteConfirmation] = useState("");
   const [message, setMessage] = useState("");
   const closeRef = useRef<HTMLButtonElement | null>(null);
 
@@ -81,7 +312,12 @@ export function TeacherMemoryPanel({ open, onClose }: TeacherMemoryPanelProps) {
     return () => window.removeEventListener("keydown", closeOnEscape);
   }, [onClose, open]);
 
-  async function apply(command: Omit<TeacherMemoryCommand, "expected_version">, key: string) {
+  async function apply(
+    command: Omit<TeacherMemoryCommand, "expected_version">,
+    key: string,
+    successMessage = "偏好已更新。后续任务字段留空时会使用已确认的默认值。",
+    onSuccess?: (next: TeacherMemoryProfile) => void,
+  ) {
     if (!profile || savingKey) return;
     setSavingKey(key);
     setMessage("");
@@ -91,7 +327,8 @@ export function TeacherMemoryPanel({ open, onClose }: TeacherMemoryPanelProps) {
         expected_version: profile.version,
       });
       setProfile(next);
-      setMessage("偏好已更新。后续切片会在任务字段留空时应用这些默认值。");
+      onSuccess?.(next);
+      setMessage(successMessage);
     } catch (cause) {
       setMessage(cause instanceof TeacherWorkspaceError ? cause.message : "偏好未能更新，请重试。");
     } finally {
@@ -106,6 +343,74 @@ export function TeacherMemoryPanel({ open, onClose }: TeacherMemoryPanelProps) {
 
   function remove(key: TeacherPreferenceKey) {
     void apply({ operation: "remove", key }, key);
+  }
+
+  function syncPreferenceInput(key: TeacherPreferenceKey, next: TeacherMemoryProfile) {
+    const value = preferenceValue(next, key);
+    if (key === "default_grade") setGrade(String(value ?? ""));
+    if (key === "default_difficulty") setDifficulty(String(value ?? ""));
+    if (key === "default_lesson_minutes") setMinutes(String(value ?? ""));
+    if (key === "solution_detail_level") setDetail(String(value ?? ""));
+    if (key === "preferred_question_types") setQuestionTypes(Array.isArray(value) ? value : []);
+  }
+
+  function reviewProposal(
+    operation: "accept_proposal" | "reject_proposal" | "correct_proposal",
+    proposal: TeacherPreferenceProposal,
+    value?: TeacherPreferenceValue,
+  ) {
+    const successMessage = operation === "reject_proposal"
+      ? "已记录不采用。至少再出现 3 个新的相同行为证据前，系统不会重复提出这个建议。"
+      : operation === "correct_proposal"
+        ? "已按修正后的值保存为明确偏好。"
+        : "已采用建议并保存为明确偏好。";
+    void apply(
+      { operation, proposal_id: proposal.proposal_id, value },
+      `proposal:${proposal.proposal_id}`,
+      successMessage,
+      operation === "reject_proposal"
+        ? undefined
+        : (next) => syncPreferenceInput(proposal.key, next),
+    );
+  }
+
+  async function exportMemory() {
+    if (exporting || savingKey) return;
+    setExporting(true);
+    setMessage("");
+    try {
+      const artifact = await teacherWorkspace.exportTeacherMemory();
+      const url = URL.createObjectURL(artifact.blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = artifact.filename;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+      setMessage("教师记忆已导出为 JSON。文件不包含任务正文或底层证据标识。");
+    } catch (cause) {
+      setMessage(cause instanceof TeacherWorkspaceError ? cause.message : "教师记忆未能导出，请重试。");
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  function deleteAllMemory() {
+    void apply(
+      { operation: "delete_all", confirmation: deleteConfirmation },
+      "delete-all",
+      "全部教师记忆已删除，自动学习已关闭。试卷、教案和私题未受影响。",
+      (next) => {
+        setGrade("");
+        setDifficulty("");
+        setMinutes("");
+        setDetail("");
+        setQuestionTypes([]);
+        setDeleteConfirmation("");
+        setProfile(next);
+      },
+    );
   }
 
   return (
@@ -154,6 +459,16 @@ export function TeacherMemoryPanel({ open, onClose }: TeacherMemoryPanelProps) {
                 </label>
               </section>
 
+              <TeacherMemoryProposals
+                disabled={Boolean(savingKey)}
+                items={profile.proposals ?? []}
+                onAccept={(proposal) => reviewProposal("accept_proposal", proposal)}
+                onCorrect={(proposal, value) => reviewProposal("correct_proposal", proposal, value)}
+                onReject={(proposal) => reviewProposal("reject_proposal", proposal)}
+              />
+
+              <TeacherMemoryFeedbackHistory items={profile.feedback ?? []} />
+
               <PreferenceRow item={savedByKey.get("default_grade")} label="默认年级" onRemove={() => remove("default_grade")} saving={savingKey === "default_grade"}>
                 <select onChange={(event) => setGrade(event.target.value)} value={grade}>
                   <option value="">请选择</option>
@@ -198,6 +513,15 @@ export function TeacherMemoryPanel({ open, onClose }: TeacherMemoryPanelProps) {
                 </div>
                 <button disabled={!questionTypes.length || Boolean(savingKey)} onClick={() => void apply({ operation: "upsert", key: "preferred_question_types", value: questionTypes }, "preferred_question_types")} type="button">保存</button>
               </PreferenceRow>
+
+              <TeacherMemoryLifecycle
+                confirmation={deleteConfirmation}
+                disabled={Boolean(savingKey) || exporting}
+                onConfirmationChange={setDeleteConfirmation}
+                onDelete={deleteAllMemory}
+                onExport={() => void exportMemory()}
+                retentionNote={profile.retention_note ?? "结构化教师记忆保留至你明确删除。"}
+              />
             </>
           )}
           {message && <p aria-live="polite" className="teacher-memory-message">{message}</p>}

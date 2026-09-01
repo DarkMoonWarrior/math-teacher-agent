@@ -1,9 +1,19 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { PrivateLibraryWorkspace } from "./private-library-workspace";
-import { TeacherWorkbench } from "./teacher-workbench";
+import { getWorkspaceVisibility, TeacherWorkbench } from "./teacher-workbench";
 
 describe("core workspace split layouts", () => {
+  it("keeps the authoring workspace mutually exclusive from the library workspace", () => {
+    expect(getWorkspaceVisibility("library", true)).toEqual({
+      authoring: true,
+      lesson: false,
+      library: false,
+      paper: false,
+      searchSolve: false,
+    });
+  });
+
   it("renders Search and Solve through the shared resizable task-and-result shell", () => {
     const html = renderToStaticMarkup(<TeacherWorkbench />);
 

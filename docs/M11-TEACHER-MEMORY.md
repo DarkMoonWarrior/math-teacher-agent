@@ -62,3 +62,67 @@ this interface. HTTP routes adapt owner-scoped browser requests to these operati
   does not mutate the saved preference profile.
 - Preferences do not bypass high-school scope, source, rights, owner, review,
   verification, selection, save or export gates.
+
+## Slice 3 acceptance
+
+- Inference runs only while the current teacher has automatic learning enabled.
+- Only product-owned signals from explicitly saved lesson and paper versions are
+  observed; browser requests cannot submit evidence, owner, source or confidence.
+- Observations contain only allow-listed structured values and an opaque saved-version
+  identifier. Briefs, titles, question content, lesson bodies and private-source text
+  are never stored as memory evidence.
+- A proposal appears only after the same structured value is observed at least three
+  times within one evidence category. Duplicate saved-version signals are idempotent.
+- Every proposal shows its evidence category, occurrence count and server-calculated
+  confidence, remains owner-scoped and is clearly marked as pending teacher review.
+- Proposals are stored separately from explicit preferences and are never returned by
+  `planning_defaults`. Saving an explicit preference removes stale proposals and
+  observations for that key; no proposal is automatically promoted.
+- Slice 3 itself did not simulate accept, reject or correction; those actions are
+  delivered by the separate Slice 4 controls below.
+
+## Slice 4 acceptance
+
+- Every pending proposal offers three explicit owner actions: accept, reject, or
+  correct and accept. Browser requests identify a proposal but cannot provide owner,
+  evidence category, occurrence count, source, or confidence.
+- Accepting uses the server-owned proposed value; correcting validates the replacement
+  against the same allow-list. Both actions become confidence `1.0`
+  `teacher_explicit` preferences because a teacher explicitly confirmed the result.
+- Accepted and corrected values become eligible for `planning_defaults`; the original
+  proposal and same-key observations are removed so no inferred value remains active
+  beside the explicit preference.
+- Rejecting does not create or change a preference. The rejection records only the
+  structured proposed value, evidence category, count, confidence and owner-scoped
+  proposal identifier; it stores no task or private content.
+- A rejected value cannot be proposed again until at least three new distinct saved
+  version signals of the same value and evidence category have arrived. Duplicate
+  evidence remains idempotent.
+- Proposal lookup and feedback are owner-scoped, optimistic profile version checks
+  still apply, and another teacher receives the same not-found result as a missing or
+  already-handled proposal.
+- Feedback history export/deletion, retention policy, fixed evaluation and the full
+  M11 Gate remain Slice 5 work.
+
+## Slice 5 acceptance
+
+- The profile exposes a readable retention note and a structured feedback history.
+  Feedback includes the preference key, proposed/corrected structured value, action,
+  evidence category, occurrence count and confidence, but never owner identifiers,
+  saved-version identifiers or task/private content.
+- The current teacher can export the complete inspectable profile as JSON. Export is
+  resolved from server-owned identity and cannot include another teacher's memory.
+- Full deletion requires the exact phrase `删除全部教师记忆`. It removes the current
+  owner's explicit preferences, observations, pending proposals and feedback, turns
+  automatic learning off, and leaves other owners untouched.
+- Deletion advances rather than resets the profile version, so a stale pre-deletion
+  page cannot recreate deleted preferences without first refreshing.
+- A fixed 26-case project-authored synthetic evaluation covers preferences, planning
+  precedence, inference, feedback, export, deletion, owner isolation and Agent
+  privilege. All 12 violation categories are zero.
+- FastAPI, Teacher Web, Agent and legacy compatibility regression/typecheck/build
+  pass. The real Teacher Web panel shows export and lifecycle controls, keeps delete
+  disabled without the fixed phrase, scrolls within the panel, has no page overflow
+  and produces no browser console warning/error.
+- Slice 5 completes the functional M11 Gate, but does not authorize M12. A rollback
+  commit and explicit owner transition confirmation are still required.

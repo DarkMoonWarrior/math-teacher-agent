@@ -711,7 +711,6 @@ export function LessonBlueprintWorkspace({ initialBrief, onBriefChange }: Lesson
       <ResizableSplitPane ariaLabel="调整教案要求与蓝图区域宽度" className="lesson-blueprint-split" defaultPrimaryPercent={40} disabled={running} state={error ? "error" : running ? "loading" : draft ? "success" : "default"}>
         <section className="lesson-blueprint-intent">
           <div>
-            <p className="mode-status"><i className="is-ready" aria-hidden="true" />Lesson Agent · 私有版本与历史已接入</p>
             <h1>先把一节课，<br />整理成可编辑蓝图。</h1>
             <p className="intro-copy">交代课题、年级、学情和课时。系统先形成目标、重难点与课堂节奏；经你确认后再展示可明确勾选的受控来源，不会自动读取私有正文或保存。</p>
           </div>

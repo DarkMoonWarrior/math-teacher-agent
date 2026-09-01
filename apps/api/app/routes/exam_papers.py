@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from functools import lru_cache
+import logging
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -9,7 +10,7 @@ from fastapi.responses import FileResponse
 from app.core.config import get_settings
 from app.core.identity import CurrentTeacher, get_current_teacher
 from app.modules.exam_exports import ExamPaperDocumentRenderer, ExamPaperExportError
-from app.modules.teacher_memory import TeacherMemory
+from app.modules.teacher_memory import TeacherMemory, TeacherPreferenceSignal
 from app.modules.teacher_memory.dependencies import get_teacher_memory
 from app.modules.exam_papers import (
     ExamPaperComposer,
@@ -60,6 +61,35 @@ from app.routes.questions import get_question_bank
 
 
 router = APIRouter(prefix="/exam-papers", tags=["exam-papers"])
+logger = logging.getLogger(__name__)
+
+
+def _observe_saved_paper_preferences(
+    memory: TeacherMemory,
+    *,
+    owner_id: str,
+    saved: PaperSavedVersion,
+    command: PaperVersionSaveCommand,
+) -> None:
+    blueprint = command.draft_command.selection_request.blueprint
+    difficulty = {"foundation": 2, "balanced": 3, "challenge": 5}[blueprint.difficulty_profile]
+    evidence_id = f"paper_version:{saved.exam_paper_id}:{saved.version}"
+    for key, value in (
+        ("default_grade", blueprint.grade_scope),
+        ("default_difficulty", difficulty),
+    ):
+        try:
+            memory.apply(
+                TeacherPreferenceSignal(
+                    key=key,
+                    value=value,
+                    evidence_category="confirmed_paper_version",
+                    evidence_id=evidence_id,
+                ),
+                owner_id=owner_id,
+            )
+        except Exception:
+            logger.exception("teacher memory could not observe a saved paper preference")
 
 
 @lru_cache
@@ -240,9 +270,17 @@ def save_paper_blueprint_version(
     command: PaperVersionSaveCommand,
     teacher: CurrentTeacher = Depends(get_current_teacher),
     versioning: PaperVersioning = Depends(get_paper_versioning),
+    memory: TeacherMemory = Depends(get_teacher_memory),
 ) -> PaperSavedVersion:
     try:
-        return versioning.save(command, owner_id=teacher.teacher_id)
+        saved = versioning.save(command, owner_id=teacher.teacher_id)
+        _observe_saved_paper_preferences(
+            memory,
+            owner_id=teacher.teacher_id,
+            saved=saved,
+            command=command,
+        )
+        return saved
     except PaperVersioningConflict as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     except (PaperBlueprintSelectionError, PaperEditableDraftingError, PaperVersioningError) as exc:

@@ -1315,18 +1315,59 @@ export type TeacherPreference = {
 
 export type TeacherPlanningPreference = Omit<TeacherPreference, "updated_at">;
 
+export type TeacherPreferenceProposal = {
+  proposal_id: string;
+  key: TeacherPreferenceKey;
+  label: string;
+  value: TeacherPreferenceValue;
+  status: "pending_teacher_review";
+  confidence: number;
+  evidence: {
+    category: "confirmed_lesson_version" | "confirmed_paper_version";
+    label: string;
+    occurrence_count: number;
+  };
+  created_at: string;
+  updated_at: string;
+};
+
+export type TeacherPreferenceFeedback = {
+  feedback_id: string;
+  proposal_id: string;
+  key: TeacherPreferenceKey;
+  label: string;
+  proposed_value: TeacherPreferenceValue;
+  resolved_value: TeacherPreferenceValue | null;
+  action: "accept" | "reject" | "correct";
+  confidence: number;
+  evidence: TeacherPreferenceProposal["evidence"];
+  created_at: string;
+};
+
 export type TeacherMemoryProfile = {
   version: number;
   auto_learning_enabled: boolean;
   preferences: TeacherPreference[];
+  proposals: TeacherPreferenceProposal[];
+  feedback: TeacherPreferenceFeedback[];
   privacy_note: string;
+  retention_note: string;
 };
 
 export type TeacherMemoryCommand = {
-  operation: "upsert" | "remove" | "set_auto_learning";
+  operation:
+    | "upsert"
+    | "remove"
+    | "set_auto_learning"
+    | "accept_proposal"
+    | "reject_proposal"
+    | "correct_proposal"
+    | "delete_all";
   key?: TeacherPreferenceKey;
   value?: TeacherPreferenceValue;
   enabled?: boolean;
+  proposal_id?: string;
+  confirmation?: string;
   expected_version: number;
 };
 
@@ -1336,6 +1377,7 @@ export interface TeacherWorkspace {
     command: TeacherMemoryCommand,
     signal?: AbortSignal,
   ): Promise<TeacherMemoryProfile>;
+  exportTeacherMemory(signal?: AbortSignal): Promise<PaperExportArtifact>;
   planLessonBlueprint(brief: string, signal?: AbortSignal): Promise<LessonBlueprintDraft>;
   listLessonSourceOptions(
     blueprint: LessonBlueprintDraft,

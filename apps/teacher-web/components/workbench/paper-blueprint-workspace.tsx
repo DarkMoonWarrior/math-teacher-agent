@@ -1018,7 +1018,6 @@ export function PaperBlueprintWorkspace({ initialBrief, onBriefChange, onOpenAut
     <main className="paper-blueprint-workspace">
       <ResizableSplitPane ariaLabel="调整组卷要求与蓝图区域宽度" className="paper-blueprint-split" defaultPrimaryPercent={40}>
         <section className="paper-blueprint-intent">
-          <p className="mode-status"><i className="is-ready" aria-hidden="true" />Paper Agent · 蓝图规划与受控选题已接入</p>
           <h1>先把组卷要求，<br />整理成可编辑蓝图。</h1>
           <p className="intro-copy">先整理范围、结构、题量与配分；经你确认后，只从通过门禁的公共题和你明确选择的私题中建立候选清单。</p>
           <form onSubmit={plan}>

@@ -1,0 +1,33 @@
+{
+  "evaluation_id": "teacher-memory-synthetic-v1",
+  "source": "project-authored-synthetic",
+  "synthetic": true,
+  "cases": [
+    {"id": "explicit_allowlist", "group": "preference", "expected": "validated_teacher_explicit"},
+    {"id": "invalid_value_rejected", "group": "preference", "expected": "fail_closed"},
+    {"id": "owner_profile_isolated", "group": "privacy", "expected": "current_owner_only"},
+    {"id": "stale_version_rejected", "group": "concurrency", "expected": "optimistic_conflict"},
+    {"id": "planning_defaults_structured_only", "group": "planning", "expected": "allowlisted_without_owner_or_content"},
+    {"id": "lesson_explicit_field_wins", "group": "planning", "expected": "task_value_overrides_memory"},
+    {"id": "paper_missing_fields_use_defaults", "group": "planning", "expected": "visible_memory_defaults"},
+    {"id": "auto_learning_off", "group": "inference", "expected": "no_observation_or_proposal"},
+    {"id": "proposal_threshold", "group": "inference", "expected": "three_distinct_signals"},
+    {"id": "duplicate_evidence_idempotent", "group": "inference", "expected": "no_double_count"},
+    {"id": "proposal_never_auto_applied", "group": "inference", "expected": "pending_not_planning_default"},
+    {"id": "accept_promotes_explicit", "group": "feedback", "expected": "teacher_confirmed_confidence_one"},
+    {"id": "reject_records_structured_feedback", "group": "feedback", "expected": "no_task_body_or_evidence_id"},
+    {"id": "rejection_cooldown", "group": "feedback", "expected": "three_new_distinct_signals"},
+    {"id": "correct_promotes_validated", "group": "feedback", "expected": "corrected_teacher_explicit"},
+    {"id": "cross_owner_proposal_review", "group": "privacy", "expected": "not_found_for_other_owner"},
+    {"id": "feedback_owner_isolated", "group": "privacy", "expected": "current_owner_only"},
+    {"id": "profile_omits_private_content", "group": "privacy", "expected": "structured_metadata_only"},
+    {"id": "export_owner_scoped", "group": "export", "expected": "current_owner_json_only"},
+    {"id": "delete_confirmation_required", "group": "lifecycle", "expected": "fixed_phrase_required"},
+    {"id": "delete_clears_owner", "group": "lifecycle", "expected": "all_owner_memory_removed"},
+    {"id": "delete_preserves_other_owner", "group": "privacy", "expected": "other_owner_unchanged"},
+    {"id": "delete_version_monotonic", "group": "lifecycle", "expected": "version_advances"},
+    {"id": "stale_after_delete_rejected", "group": "concurrency", "expected": "deleted_state_not_overwritten"},
+    {"id": "http_owner_spoof_rejected", "group": "privacy", "expected": "browser_cannot_supply_owner_or_evidence"},
+    {"id": "agent_no_memory_mutation_tool", "group": "privilege", "expected": "no_model_visible_memory_write_export_delete"}
+  ]
+}

@@ -1869,12 +1869,26 @@ describe("HttpTeacherWorkspace", () => {
         source: { kind: "teacher_explicit", label: "教师明确设置", confidence: 1 },
         updated_at: "2026-08-31T00:00:00Z",
       }],
+      proposals: [],
+      feedback: [],
       privacy_note: "仅保存结构化教学偏好。",
+      retention_note: "保留至教师删除。",
     } as const;
-    const fetchMock = vi.fn((_input: RequestInfo | URL, _init?: RequestInit) => Promise.resolve(new Response(JSON.stringify(profile), {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
-    })));
+    const fetchMock = vi.fn((input: RequestInfo | URL, _init?: RequestInit) => {
+      if (String(input).endsWith("/teacher-memory/export")) {
+        return Promise.resolve(new Response(JSON.stringify(profile), {
+          status: 200,
+          headers: {
+            "Content-Disposition": 'attachment; filename="teacher-memory.json"',
+            "Content-Type": "application/json",
+          },
+        }));
+      }
+      return Promise.resolve(new Response(JSON.stringify(profile), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }));
+    });
     vi.stubGlobal("fetch", fetchMock);
 
     const workspace = new HttpTeacherWorkspace();
@@ -1885,6 +1899,9 @@ describe("HttpTeacherWorkspace", () => {
       value: "高二",
       expected_version: 0,
     })).resolves.toEqual(profile);
+    await expect(workspace.exportTeacherMemory()).resolves.toMatchObject({
+      filename: "teacher-memory.json",
+    });
 
     expect(String(fetchMock.mock.calls[0]?.[0])).toBe("/api/v1/teacher-memory/profile");
     expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({ method: "GET" });
@@ -1898,5 +1915,6 @@ describe("HttpTeacherWorkspace", () => {
     });
     expect(String(update.body)).not.toContain("owner");
     expect(String(update.body)).not.toContain("confidence");
+    expect(String(fetchMock.mock.calls[2]?.[0])).toBe("/api/v1/teacher-memory/export");
   });
 });

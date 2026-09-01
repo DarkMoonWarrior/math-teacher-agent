@@ -81,6 +81,19 @@ function preservedDraftNotice(solutionMissing: boolean) {
     : "任务已停止；后台已完成的完整题目已保留为未保存私有草稿，可继续编辑后保存。";
 }
 
+type AuthoringResultRevealTarget = Pick<Element, "scrollIntoView">;
+type AuthoringResultRevealScheduler = (callback: FrameRequestCallback) => number;
+
+export function revealAuthoringResult(
+  target: AuthoringResultRevealTarget | null,
+  schedule: AuthoringResultRevealScheduler = window.requestAnimationFrame,
+) {
+  if (!target) return null;
+  return schedule(() => {
+    target.scrollIntoView({ behavior: "smooth", block: "start", inline: "nearest" });
+  });
+}
+
 function errorMessage(cause: unknown) {
   if (cause instanceof TeacherWorkspaceError) return cause.message;
   if (cause instanceof DOMException && cause.name === "AbortError") return "本次操作已取消。";
@@ -228,6 +241,7 @@ export function PersonalQuestionAuthoringWorkspace({
   const [stopDialogOpen, setStopDialogOpen] = useState(false);
   const feedbackReturnFocusRef = useRef<HTMLElement | null>(null);
   const stopDialogRef = useRef<HTMLElement | null>(null);
+  const resultPaneRef = useRef<HTMLDivElement | null>(null);
   const generationStartedAtRef = useRef(0);
   const sessionRef = useRef(`authoring_${Date.now().toString(36)}`);
 
@@ -511,6 +525,7 @@ export function PersonalQuestionAuthoringWorkspace({
         sessionId: sessionRef.current,
       });
       setAuthoringJob(job);
+      revealAuthoringResult(resultPaneRef.current);
     } catch (cause) {
       setError(errorMessage(cause));
       setBusy(null);
@@ -1077,7 +1092,7 @@ export function PersonalQuestionAuthoringWorkspace({
       )}
       </div>
 
-      <div className="authoring-result-pane">
+      <div className="authoring-result-pane" ref={resultPaneRef}>
       {section === "compose" && (
           busy === "generating" || previewMode === "preserved" ? (
             <AuthoringLivePreview

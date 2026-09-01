@@ -135,7 +135,7 @@ describe("LessonBlueprintWorkspace", () => {
       />,
     );
 
-    expect(html).toContain("Lesson Agent · 私有版本与历史已接入");
+    expect(html).not.toContain("Lesson Agent · 私有版本与历史已接入");
     expect(html).toContain("不自动读取未选择的私有内容");
     expect(html).toContain("当前没有教案正文、题目或保存记录");
     expect(html).toContain('aria-label="调整教案要求与蓝图区域宽度"');

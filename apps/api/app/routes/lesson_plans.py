@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from functools import lru_cache
+import logging
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -12,7 +13,7 @@ from app.modules.lesson_exports import (
     LessonPlanExportError,
     SavedLessonPlanDocumentRenderer,
 )
-from app.modules.teacher_memory import TeacherMemory
+from app.modules.teacher_memory import TeacherMemory, TeacherPreferenceSignal
 from app.modules.teacher_memory.dependencies import get_teacher_memory
 from app.modules.lesson_plans import (
     LessonBlueprintBrief,
@@ -68,6 +69,33 @@ from app.routes.personal_question_library import get_personal_question_library
 
 
 router = APIRouter(prefix="/lesson-plans", tags=["lesson-plans"])
+logger = logging.getLogger(__name__)
+
+
+def _observe_saved_lesson_preferences(
+    memory: TeacherMemory,
+    *,
+    owner_id: str,
+    saved: LessonSavedVersion,
+) -> None:
+    blueprint = saved.draft.source_draft.blueprint
+    evidence_id = f"lesson_version:{saved.lesson_plan_id}:{saved.version}"
+    for key, value in (
+        ("default_grade", blueprint.grade_scope),
+        ("default_lesson_minutes", blueprint.duration_minutes),
+    ):
+        try:
+            memory.apply(
+                TeacherPreferenceSignal(
+                    key=key,
+                    value=value,
+                    evidence_category="confirmed_lesson_version",
+                    evidence_id=evidence_id,
+                ),
+                owner_id=owner_id,
+            )
+        except Exception:
+            logger.exception("teacher memory could not observe a saved lesson preference")
 
 
 @lru_cache
@@ -264,9 +292,16 @@ def save_lesson_version(
     command: LessonVersionSaveCommand,
     teacher: CurrentTeacher = Depends(get_current_teacher),
     versioning: LessonVersioning = Depends(get_lesson_versioning),
+    memory: TeacherMemory = Depends(get_teacher_memory),
 ) -> LessonSavedVersion:
     try:
-        return versioning.save(command, owner_id=teacher.teacher_id)
+        saved = versioning.save(command, owner_id=teacher.teacher_id)
+        _observe_saved_lesson_preferences(
+            memory,
+            owner_id=teacher.teacher_id,
+            saved=saved,
+        )
+        return saved
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="教案不存在或不属于当前教师") from exc
     except LessonVersioningConflict as exc:
