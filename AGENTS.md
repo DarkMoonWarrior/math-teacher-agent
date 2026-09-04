@@ -40,6 +40,8 @@ The only product UI is `apps/teacher-web`. The predecessor UI has been removed; 
 
 ## Repository seams
 
+M12 follow-up: Search/Solve run snapshots are bound to the current teacher for read/replay/cancel/resume; ownerless records fail closed. `TeacherAgentSessions.resolve` scopes browser aliases and signed model sessions by teacher AND workflow across Search, Solve, authoring and private-library entries. This is single-process, process-lifetime context: no multi-worker or restart persistence claim. Beta also rejects legacy paper create/compose/compose-template/update, preserving current blueprint/history workflows. Backup path checks reject original/ancestor links and Windows reparse before IO. The explicit fixed evaluation entry is `python -m pytest -c apps/api/pytest-m12.ini -q`; see `docs/M12-GATE-REVIEW.md` for current evidence and blockers. No expanded deletion or backup retention rule is approved merely by these fixes.
+
 - `apps/teacher-web`: primary product UI. It depends on product-owned `TeacherWorkspace` contracts and same-origin `/api/v1` routes.
 - `apps/api`: modular FastAPI business backend and the only owner of business rules, validation, rights decisions, and storage access.
 - `apps/agent`: isolated Node/TypeScript Agent runtime. DeepSeek Harness imports stay here. It uses only the allowlisted internal Tool gateway.

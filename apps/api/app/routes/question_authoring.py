@@ -8,6 +8,7 @@ from functools import lru_cache
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 
 from app.core.config import get_settings
+from app.core.agent_sessions import agent_sessions
 from app.core.identity import CurrentTeacher, get_current_teacher
 from app.modules.math_verifier import MathVerifier
 from app.modules.background_jobs import BackgroundJobRegistry, BackgroundJobView
@@ -112,6 +113,9 @@ async def create_question_authoring_draft(
     settings = get_settings()
     if not settings.question_authoring_agent_enabled:
         raise HTTPException(status_code=503, detail="辅助命题 Agent 当前未启用")
+    command = command.model_copy(update={"session_id": agent_sessions.resolve(
+        owner_id=teacher.teacher_id, workflow="authoring", client_session_id=command.session_id,
+    )})
     if not command.progress_id:
         command = command.model_copy(update={"progress_id": f"qap_{uuid.uuid4().hex}"})
     try:
@@ -156,6 +160,9 @@ async def start_question_authoring_job(
     settings = get_settings()
     if not settings.question_authoring_agent_enabled:
         raise HTTPException(status_code=503, detail="辅助命题 Agent 当前未启用")
+    command = command.model_copy(update={"session_id": agent_sessions.resolve(
+        owner_id=teacher.teacher_id, workflow="authoring", client_session_id=command.session_id,
+    )})
     progress_id = command.progress_id or f"qap_{uuid.uuid4().hex}"
     command = command.model_copy(update={"progress_id": progress_id})
     try:

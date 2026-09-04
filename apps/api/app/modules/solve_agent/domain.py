@@ -37,6 +37,7 @@ class SolveAgentResponse(BaseModel):
 
 
 class SolveAgentRunRecord(BaseModel):
+    owner_id: str = Field(default="", exclude=True, repr=False)
     run_id: str
     request_id: str
     session_id: str = ""
