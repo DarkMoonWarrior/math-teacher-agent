@@ -1,5 +1,7 @@
 # Search Agent — Evaluation v1
 
+> 归档说明（2026-09-04）：本文保留原型/迁移时期的事实与决策。旧 UI、旧路径、分支、待办和验收数字不代表当前实现；请以 [当前开发状态](../PROJECT-STATUS.md) 为准。来源、权利与教材证据继续保留。
+
 > Prompt 3 交付文档 · 离线评估集、指标定义、强制 Trust Gate 与实测结果。
 
 ## 1. Evaluation Dataset

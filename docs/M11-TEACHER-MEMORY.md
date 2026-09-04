@@ -1,5 +1,7 @@
 # M11 Teacher Memory
 
+> 状态同步（2026-09-04）：M0–M11 已完成并完成阶段转换，当前为 M12 切片 1–4。本文的切片过程、测试数量和 Gate 结论保留为当时证据；后续行为与当前边界见 [开发状态](PROJECT-STATUS.md) 和 [开发边界](DEVELOPMENT-BOUNDARY.md)。
+
 ## Goal
 
 Give each teacher a private, inspectable and reversible preference profile that can
@@ -42,7 +44,7 @@ this interface. HTTP routes adapt owner-scoped browser requests to these operati
 
 ## Slice 1 acceptance
 
-- A teacher can open the profile from the global task menu.
+- A teacher can open the profile from the top-right Settings / User menu (moved out of New Task).
 - Empty state has automatic learning off.
 - Allowed preferences can be saved, changed and removed.
 - Every saved item shows source and confidence.

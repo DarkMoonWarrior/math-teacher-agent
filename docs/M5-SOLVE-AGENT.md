@@ -1,5 +1,7 @@
 # M5 Solve Agent 实施边界与 Gate
 
+> 状态同步（2026-09-04）：M0–M11 已完成并完成阶段转换，当前为 M12 切片 1–4。本文的切片过程、测试数量和 Gate 结论保留为当时证据；后续行为与当前边界见 [开发状态](PROJECT-STATUS.md) 和 [开发边界](DEVELOPMENT-BOUNDARY.md)。
+
 更新日期：2026-08-21
 
 ## 产品结果
@@ -19,7 +21,7 @@ Harness 不直接调用模型解题 provider，也不接触题库或 MathVerifie
 M5 第一条 vertical slice 完成 `solve_question` Tool seam。
 第二条 vertical slice 将题库中已有的 MathVerifier/教师独立核验证据归一为显式分级。
 第三条 vertical slice 已完成产品自有 Solve workflow、公开 FastAPI 生命周期和错误分类；只有唯一成功的 `solve_question` 结构化结果能成为最终解答，原始 Tool payload 与模型自由文本不进入浏览器。
-第四条 vertical slice 已完成新 Teacher Web 接入：文字输入、Search 转入、同一 run 恢复、取消、结构化三页结果和 MathVerifier 证据页均已接通。第五条完成固定 synthetic evaluation、revision 追踪、320—1920px 验收和完整 Gate E；M5 已完成，等待所有者确认是否进入 M6。
+第四条 vertical slice 已完成新 Teacher Web 接入：文字输入、Search 转入、同一 run 恢复、取消、结构化三页结果和 MathVerifier 证据页均已接通。第五条完成固定 synthetic evaluation、revision 追踪、320—1920px 验收和完整 Gate E；M5 已完成，后续阶段转换已确认。当前里程碑见 [项目状态](PROJECT-STATUS.md)。
 
 ## 可信等级
 

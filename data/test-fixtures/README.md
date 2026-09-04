@@ -7,7 +7,7 @@
 
 禁止把真实第三方题目、试卷原文或教师私人资料复制进 fixture 以让测试通过。
 需要真实数据的测试必须显式记录为 blocker / migration issue
-（见 `docs/commercial-v1/KNOWN-MIGRATION-ISSUES.md`）。
+（记录到 `docs/PROJECT-STATUS.md`，并遵循 `docs/PRODUCT-GATES.md`；历史迁移问题不作为当前任务清单）。
 
 ## 当前 fixture 家族
 
@@ -23,13 +23,15 @@
 | `search-agent/eval-cases.json` | 50 条合成搜索评估 query（含 expected 字段） | 项目自建 |
 | `search-agent/holdout-cases.json` | 27 条独立 Holdout query（Prompt 3.5，与原 50 条不重复） | 项目自建 |
 
+后续里程碑固定评测也已纳入：`solve-agent`、`private-library`、`multimodal-solve`、`private-question-authoring`、`paper-agent`、`lesson-agent`、`teacher-memory` 下的 `eval-cases.json`。题库另有 `question-bank/pilot/similarity-pair-synthetic-2q-v1.json` 相似度合成样本。
+
 ## 原则
 
 - 所有题目 ID（`q_pilot_set_*`、`q_pilot_probability_*`、`q_pilot_ellipse_*`、`q_function_properties_*`）保留原测试契约，只替换了题干/选项/解析正文。
 - 题干使用项目自建的简单数学内容；数值正确性由 `MathVerifier` 规则作为权威来源（规则名与验证规格是代码契约，不是第三方内容）。
 - 每题 `source.document_path = null`，不含任何本机路径；来源记录统一为项目自建声明。
 - 生成器与自检：`scripts/generate_synthetic_test_fixtures.py`（可重复生成，内置与迁移测试断言一致的自检）。
-- 完整清单与逐文件哈希见 `MANIFEST.json`。
+- 早期批次清单与逐文件哈希见 `MANIFEST.json`；该迁移清单不覆盖后续独立里程碑评测，后者以对应测试和评测文档为准。
 
 ## 禁止
 

@@ -26,9 +26,9 @@ Agent 不得直接访问本目录的数据库实现；它只能经过内部 Tool
 
 除 owner-scoped 上传、OCR/校对、拆题和教材映射外，当前已提供 `/api/v1/agent/private-library/search`：调用方必须逐次提交明确同意，服务端身份签发短时单次检索许可；内部 Tool 只可获得 active + confirmed 资源的有界匹配片段、来源版本与权利依据。浏览器和模型都不能选择 owner，原文件、路径与整份正文不会进入 Agent 输出。
 
-Public 路由通过 `app/core/identity.py` 的 current-teacher seam 在服务端绑定 owner 和 reviewer；浏览器不能提交或选择身份。列表、详情、原文件、OCR、revision、后台任务和拆题候选均按 owner fail closed。当前 adapter 仅用于本地开发并固定返回 `owner_teacher`，不代表生产认证已经完成。
+Public 路由通过 `app/core/identity.py` 的 current-teacher seam 在服务端绑定 owner 和 reviewer；浏览器不能提交或选择身份。列表、详情、原文件、OCR、revision、后台任务和拆题候选均按 owner fail closed。启用 M12 Beta 时由 `BetaAccess` 解析有效会话并绑定身份和能力；只有禁用 Beta 的本地开发才固定返回 `owner_teacher`，不代表生产认证已经完成。
 
-本地数学 OCR 当前只支持 PDF；外部 OCR 每次调用都必须重新提交明确同意。Private Library 外部 OCR 使用已配置的 OpenAI adapter；M7 单题图片可使用 DeepSeek `deepseek-v4-flash-vision-exp`，未配置 DeepSeek 时回退到 OpenAI 图像 adapter。所有 OCR 只生成待教师校对草稿，不会改变 private 状态或自动进入题库。
+资料库产品入口直接发起大模型识别，服务端选择已配置的识别 adapter；原稿、可读整理稿和中文 + LaTeX 编辑稿共同用于校对。原文件和修订证据保持 owner-scoped，识别不会改变 private 状态或自动进入题库。单题图片 Solve 的视觉许可与资料库识别是独立流程。
 
 拆题候选只允许从教师确认的当前文本版本生成；候选编辑与教材映射同样由服务端身份绑定 owner/editor。浏览器只能提交 Curriculum `node_id`，可信教材路径由业务端补全。未映射候选不能导入；导入结果固定为 `private`、`pending` 和 `needs_math_review`，并保留 owner 与来源版本证据。
 
@@ -61,7 +61,7 @@ M7 图片解题只接受当前 owner 已确认且与当前媒体 revision 一致
 
 DeepSeek JSON 输出先做确定性的代码块、控制字符和 LaTeX 转义容错；若长解答仍因截断或格式不完整无法读取，adapter 只执行一次格式恢复重试，并把输出预算提高到配置上限。重试仍失败时返回明确的响应格式错误，不把未完成任务伪装成成功，也不会无限重试。
 
-## Private Question Authoring（M8 进行中）
+## Private Question Authoring（M8 已完成）
 
 M8 第一条切片使用独立 `data/private-runtime/personal-question-library.sqlite3`，不复用公共 `QuestionBank` 表。`/api/v1/personal-question-library` 当前只提供个人题库集合与分类的创建、列表、查看和局部更新；owner 由 current-teacher seam 注入，浏览器提交 `owner_id` 会被拒绝，跨 owner 访问统一返回不存在。
 
@@ -69,7 +69,11 @@ M8 第一条切片使用独立 `data/private-runtime/personal-question-library.s
 
 第三条切片把六项固定可信检查收进同一深模块：可解性、答案/最终答案一致性、选择题答案数量、干扰项结构、MathVerifier 能力与难度披露。明确结构矛盾返回 `checks_failed`；其余仍为 `teacher_review_required`。当前 MathVerifier 不支持任意生成题时返回 `unsupported`，绝不冒充程序验证。
 
-接口返回固定披露 `owner_only`，且公共检索、共享、商业使用与模型训练均为 false。草稿固定 `saved=false`；当前没有 publish/share/admin/delete 接口，也尚未实现题目正文保存。
+接口返回固定披露 `owner_only`，且公共检索、共享、商业使用与模型训练均为 false。生成与显式保存分离；后续切片已完成本人草稿/私题保存、append-only 修订、历史、分类、导出与回收/永久删除。题面独立审核后可实时展示，解析在后台继续；主动停止时可保留已审核题面并以“缺少解析 / 无”保存，不冒充完整或已验证结果。Agent 没有保存、管理或删除权限。
+
+## Paper、Lesson、Memory 与 Beta
+
+M9 试卷和 M10 教案已完成各自蓝图、编辑、owner-scoped 不可变版本、历史生命周期与精确版本导出；M11 `TeacherMemory` 已完成结构化偏好、提议/反馈、导出与删除。当前 M12 切片 1–4 提供 `BetaAccess`、服务端能力快照、`PrivacySafeOperations`、`ReadinessProbe` 和 operator-only `BetaBackupRecovery`。删除演练与完整 M12 Gate 仍未完成，详见 [当前状态](../../docs/PROJECT-STATUS.md)。
 
 ## 测试
 

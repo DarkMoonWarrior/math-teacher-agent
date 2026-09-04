@@ -1,6 +1,6 @@
 # 当前架构与模块 seam
 
-更新日期：2026-08-29
+更新日期：2026-09-04
 
 ## 1. 总体结构
 
@@ -17,9 +17,6 @@ apps/api (FastAPI modular backend, :8000)
                     │ M2M allowlisted HTTP tools
 apps/agent (isolated Node/TypeScript runtime, :4100)
         └── DeepSeek Harness adapter/plugins/tools
-
-apps/web (legacy/reference Next.js UI, :3000)
-        └── uses the same FastAPI business backend
 ```
 
 ## 2. Deep modules and interfaces
@@ -58,7 +55,7 @@ apps/web (legacy/reference Next.js UI, :3000)
 - Current identity: `app/core/identity.py` 是服务端 current-teacher seam；Public 路由不接受浏览器提供的 owner/reviewer，详情、文件、OCR、revision、后台任务和候选访问均通过跨 owner 自动测试。M12 `BetaAccess.issue/resolve/revoke` 在启用时把 opaque HttpOnly Cookie 解析为 current teacher，并返回签发时冻结的 allow-list 能力快照；无有效会话 fail closed，未开放模块由集中式能力依赖在业务路由前拒绝。访问码、令牌生成/哈希、能力快照、到期和撤销均隐藏在模块内部。只有显式禁用 Beta 时才固定返回本地 `owner_teacher` 与全部能力。这仍是 Closed Beta 准入，不是生产认证、授权平台或多租户系统。
 - Operational seam: M12 `PrivacySafeOperations` 独占运行事件 schema 与结果分类，公开接口只接受请求编号、allow-list 能力、方法、结果、状态码、稳定错误类别和耗时；ASGI 中间件只负责测量完整响应并适配为结构化日志。`ReadinessProbe` 独占 API、Beta session store/roster 与必要 Agent runtime/model 的就绪判定，路由只把稳定结果映射为 200/503。两条 seam 都不接收或返回 headers、query、正文、owner、资源 ID、访问秘密、URL 或原始异常消息。
 - Recovery seam: M12 `BetaBackupRecovery.inventory/create_backup/verify_backup/restore_drill` 独占持久化 owner store 清单、SQLite 在线快照、目录文件复制、manifest/逐文件 SHA-256、原子发布和临时恢复演练。`PrivateBackupDestination` 要求 operator 显式确认加密私有卷或等效保护；浏览器和 Agent 没有对应路由。可撤销 Beta session DB 被固定排除，避免恢复旧会话；恢复演练只在新临时目录重建清单文件并执行 SQLite integrity check，不写在线目标。
-- Third slice: `TeacherWorkspace` 隐藏 OCR 后台任务细节；新 Teacher Web 对照原文件、首次提取文本、可编辑校对稿和 revision。本地 PDF OCR 优先，外部 OCR 每次单独同意，任何 OCR 结果仍为待教师校对草稿。
+- Recognition: `TeacherWorkspace` 隐藏识别后台任务细节；Teacher Web 点击“大模型识别”发起外部识别，左侧原文件与右侧可读整理稿等高、独立滚动，下方编辑中文 + LaTeX 校对稿。当前产品不再提供本地 OCR 按钮或额外授权勾选；服务端仍保存 owner、revision 与本次处理证据，识别不自动升级为数学已验证。
 - Fourth slice: 拆题候选绑定教师确认的当前文本版本；浏览器可编辑题目内容但不能提交 owner/editor。教材映射只接受 `node_id`，FastAPI 从受控 Curriculum 补全教材路径。QuestionBank 导入固定为 owner 私有、待审核、待数学验证，并保存资料/版本/候选 provenance。
 - Current retrieval seam: 浏览器逐次明确同意后，FastAPI 为当前教师、查询和数量签发短时单次许可；Harness 只能调用固定 `search_private_library` Tool，`PrivateLibrary` 只从 active + confirmed 资源返回有界匹配片段和来源版本/权利状态。owner、原文件、路径与整份正文不越过 seam。
 - Completion: 12 个项目自建 synthetic 场景的 8 类违规均为 0，完整工程、静态边界与 320—1920px 浏览器 Gate E 已通过；项目所有者已确认进入 M7。
@@ -93,7 +90,7 @@ apps/web (legacy/reference Next.js UI, :3000)
 - Solution presentation guard: provider 解析段只允许成稿推导；确定性元推理检测会触发单段清理，持续污染或确认数学冲突时 fail closed。教师触发的解析重生成由认证 FastAPI 直接调用业务 seam，并通过 `PersonalQuestionLibrary.append_ai_revision` 追加版本；Agent Tool、owner/policy 字段和公共题库接口均不扩张。
 - Third slice: 同一深模块在返回前生成六项固定可信证据，并由 `QuestionDraftVerification` 强制检查项唯一、总状态与阻断项一致、MathVerifier 能力与是否真正运行一致。答案数量、明显答案冲突、选项重复和难度偏差可确定性检查；一般数学可解性、干扰项语义及无受控 rule spec 的任意生成题保持 `inconclusive/unsupported`，模型自述不能升级为 MathVerifier 证据。
 
-### Paper Agent modules（M9 进行中）
+### Paper Agent modules（M9 已完成）
 
 - Planning seam: `PaperBlueprintPlanning.plan` 只把自然语言整理为可编辑、未确认、未保存蓝图；缺失字段用可见假设补全，不查题、不写存储。
 - Selection seam: `PaperBlueprintSelection.select` 只在教师确认后调用受控题库能力。公共题经过范围、权利、verification、review、active 与相似度门禁；私题只允许当前 owner 明确选择，且保持 owner/visibility/revision 不变。供给不足返回真实缺口，不调用辅助命题。
@@ -151,16 +148,15 @@ PersonalQuestionLibrary → public/shared/team/school/commercial-approved data�
 Public Search / Admin content tools → PersonalQuestionLibrary
 ```
 
-## 4. Primary and legacy UI policy
+## 4. 唯一产品 UI
 
-`apps/teacher-web` is the primary product surface and default `dev:web` target. It owns the new visual language and Agent-first navigation.
+`apps/teacher-web` 是唯一产品界面和 `dev:web` 的目标，拥有统一的左右工作区与 Agent-first 导航。
 
-`apps/web` is a legacy/reference surface containing mature workflows inherited from `high-school-math-ai`. It remains valuable for business behaviour, regression comparison and gradual extraction, but it is not a design template and does not define whether a new Agent capability is complete.
+旧 UI 源码、启动命令和 workspace 依赖已移除。迁移/权利/教材证据保留于明确标记的归档目录；历史页面和旧 REST 实现不代表当前 Agent 完成状态。
 
 ## 5. Local deployment
 
 - Teacher Web: `127.0.0.1:3001`.
-- Legacy Web: `127.0.0.1:3000`.
 - FastAPI: `127.0.0.1:8000`.
 - Agent Service: `127.0.0.1:4100` when DSH runtime is enabled.
 

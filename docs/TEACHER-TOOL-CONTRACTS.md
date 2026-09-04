@@ -1,8 +1,8 @@
 # Teacher Tool 当前契约
 
-更新日期：2026-08-22
+更新日期：2026-09-04
 
-本文档是当前 model-visible Tool allowlist 的 source of truth。历史第一版五工具契约保留在 `docs/commercial-v1/TEACHER-TOOL-CONTRACTS-v1.md`，不代表 M5 当前状态。
+本文档是当前 model-visible Tool allowlist 的 source of truth。历史第一版五工具契约保留在 `docs/commercial-v1/TEACHER-TOOL-CONTRACTS-v1.md`，不代表当前工具集合。
 
 ## 精确 Allowlist
 
@@ -14,6 +14,7 @@
 6. `get_curriculum_node`
 7. `inspect_private_library`
 8. `search_private_library`
+9. `create_question_draft`（只生成未保存草稿，不执行业务写入）
 
 自动测试要求可见工具恰好等于该集合。bash、filesystem、web、subagent、workflow、terminal、数据库、私人文件和任意 URL 能力均禁止。
 
@@ -25,7 +26,7 @@
 - 业务接口：`PrivateLibrary.stats(owner_id=current_owner)`
 - 成功响应：资料总数、待校对数、已确认数、待 OCR 数、回收站数、文件类型计数、`visibility=private`、`content_included=false`
 - 禁止返回：owner 标识、标题、文件名、正文、路径、哈希、权利声明或原始文件
-- 当前本地 current owner 固定为 `owner_teacher`；M6 完成前必须替换为可验证的 current-owner seam，模型始终不能选择 owner
+- current owner 由服务端身份上下文绑定；M12 Beta 开启时要求有效会话，仅禁用 Beta 的本地开发使用固定教师。模型始终不能选择 owner
 
 该 Tool 只读且不代表模型已读取资料内容，不执行上传、OCR、校对、拆题、导入、删除、共享或发布。
 
@@ -60,5 +61,9 @@
 - 超时：HTTP 504 + `TOOL_TIMEOUT`
 
 Tool 不保存、不发布、不批准答案或解析，不改变题库、权利、验证或 private/public 状态。Agent 必须原样保留可信等级与验证证据。
+
+## `create_question_draft`
+
+通过内部受控网关调用 `QuestionAuthoring.create_draft`，只接受命题事实与要求，返回 owner-only、未保存的结构化题面、选项、答案/解析和可信检查。后台可公开不含答案的已审核题面进度；主动停止与保留题面的保存流程由认证教师接口处理，不给 Agent 写入或生命周期权限。模型不能选择 owner、伪造审核/验证状态、保存、发布、共享或删除题目。详细契约见 [M8 规范](M8-PRIVATE-QUESTION-AUTHORING.md)。
 
 其他五个历史只读工具的请求/响应继续沿用历史 v1 契约；FastAPI Pydantic 模型与 Agent TypeScript 类型是可执行契约，文档不覆盖实现门禁。

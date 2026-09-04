@@ -19,7 +19,7 @@
 | M0 商业迁移与数据隔离 | 已完成 | 建立商业代码基线、synthetic fixtures、quarantine 与空的 commercial-approved 目录。 | 权利边界清楚；无真实私人数据/密钥；迁移与原系统测试通过。 |
 | M1 TeacherAgentRuntime | 已完成 | 建立产品自有 Runtime seam、Legacy/DSH adapter、独立 Agent Service 和五个只读 Tool。 | Agent 不接触数据库；M2M fail closed；Runtime、Tool 与安全测试通过。 |
 | M2 Trusted Search Core | 已完成 | 自然语言意图、教材映射、真实检索、权利/验证状态、去重、多样性与空结果。 | 固定 synthetic evaluation 覆盖精确、歧义、无结果、权利拒绝和模型不可用。 |
-| M3 新 Teacher Web 基础 | 已完成 | 建立完全新的 Agent-first 教师工作台，旧 `apps/web` 仅保留为业务地基。 | 新视觉、能力导航、响应式、动态纸张和诚实的未接入状态可用。 |
+| M3 新 Teacher Web 基础 | 已完成 | 建立 Agent-first 教师工作台；旧 UI 已移除，`apps/teacher-web` 为唯一产品界面。 | 新视觉、能力导航、响应式、动态纸张和诚实的未接入状态可用。 |
 | M4 Search 集成稳定化 | 已完成 | 让新工作台中的 Search 成为稳定、可理解、可恢复的完整入口。 | 同源请求、加载、取消、错误、空结果、可信标签、关键响应式和全量测试全部通过；Gate E 于 2026-08-21 通过。 |
 | M5 Solve Agent | 已完成 | 为题库题和新题提供分层可信解答，不把模型输出冒充 verified。 | 优先复用 verified solution；新解答明确 `teacher_review_required`；MathVerifier 分级、固定 synthetic eval、320—1920px 响应式和 Gate E 通过。 |
 | M6 Private Library Agent | 已完成 | 让教师的 PDF/DOCX/图片在 private workspace 内完成导入、OCR、拆题、映射和检索。 | 原文件与 revision 可追踪；private-by-default；owner 隔离与越权测试、固定评测和 Gate E 于 2026-08-22 通过；无自动 public 路径。 |

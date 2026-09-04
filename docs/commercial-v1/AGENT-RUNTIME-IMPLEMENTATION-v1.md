@@ -1,5 +1,7 @@
 # Teacher Agent Runtime 实现说明 v1（Prompt 2）
 
+> 归档说明（2026-09-04）：本文保留原型/迁移时期的事实与决策。旧 UI、旧路径、分支、待办和验收数字不代表当前实现；请以 [当前开发状态](../PROJECT-STATUS.md) 为准。来源、权利与教材证据继续保留。
+
 > 历史实现记录：Runtime 基础层仍有效，但其中“现有 UI”指迁移阶段的 `apps/web`。
 > 当前主产品 UI 为 `apps/teacher-web`；最新 seam 与能力状态见 `docs/ARCHITECTURE.md` 和
 > `docs/PROJECT-STATUS.md`。
