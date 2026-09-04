@@ -10,6 +10,8 @@ from uuid import uuid4
 
 from PIL import Image, ImageOps, ImageStat, UnidentifiedImageError
 
+from app.core.deletion import is_link_or_reparse
+
 from .schemas import (
     QuestionCaptureCommand,
     QuestionInputBundle,
@@ -312,6 +314,47 @@ class QuestionCapture:
             ),
             **recognition_payload,
         )
+
+    def permanently_delete(
+        self,
+        asset_id: str,
+        *,
+        owner_id: str,
+        expected_updated_at: str,
+    ) -> None:
+        """Delete one owner's capture record and only its private media revisions."""
+
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            asset = connection.execute(
+                "SELECT updated_at FROM question_capture_assets WHERE asset_id = ? AND owner_id = ?",
+                (asset_id, owner_id),
+            ).fetchone()
+            if asset is None:
+                raise KeyError(asset_id)
+            if asset["updated_at"] != expected_updated_at:
+                raise QuestionCaptureError("题目图片已发生变化，请刷新后重试")
+            media = connection.execute(
+                "SELECT stored_name FROM question_capture_revisions WHERE asset_id = ?",
+                (asset_id,),
+            ).fetchall()
+            for table in (
+                "question_capture_solve_uses",
+                "question_capture_recognitions",
+                "question_capture_revisions",
+            ):
+                connection.execute(f"DELETE FROM {table} WHERE asset_id = ?", (asset_id,))
+            cursor = connection.execute(
+                "DELETE FROM question_capture_assets WHERE asset_id = ? AND owner_id = ?",
+                (asset_id, owner_id),
+            )
+            if cursor.rowcount != 1:  # pragma: no cover - transaction safety
+                raise QuestionCaptureError("题目图片活动存储不完整，已取消永久删除")
+            for row in media:
+                stored_path = self.file_root / Path(row["stored_name"]).name
+                if is_link_or_reparse(stored_path):
+                    raise QuestionCaptureError("题目图片存储路径异常，已取消永久删除")
+                self._confined_path(row["stored_name"]).unlink(missing_ok=True)
 
     def recognize(
         self,

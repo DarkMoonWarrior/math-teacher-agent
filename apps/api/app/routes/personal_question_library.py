@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response
 
 from app.core.config import get_settings
 from app.core.identity import CurrentTeacher, get_current_teacher
+from app.core.deletion import execute_owner_permanent_delete, get_owner_deletion_ledger
 from app.modules.personal_question_library import (
     PersonalAuthoringDraftView,
     PersonalAuthoringDraftList,
@@ -536,14 +537,22 @@ def permanently_delete_personal_question(
     command: PersonalQuestionPermanentDelete,
     teacher: CurrentTeacher = Depends(get_current_teacher),
     library: PersonalQuestionLibrary = Depends(get_personal_question_library),
+    deletion_ledger=Depends(get_owner_deletion_ledger),
 ) -> PersonalQuestionDeletionReceipt:
     try:
-        return library.permanently_delete_question(
-            question_id,
-            command,
+        receipt = execute_owner_permanent_delete(
+            ledger=deletion_ledger,
+            object_kind="personal_question",
+            object_id=question_id,
             owner_id=teacher.teacher_id,
+            operation=lambda: library.permanently_delete_question(
+                question_id,
+                command,
+                owner_id=teacher.teacher_id,
+            ),
         )
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="个人题目不存在") from exc
     except PersonalQuestionLibraryError as exc:
         _raise_library_error(exc)
+    return receipt

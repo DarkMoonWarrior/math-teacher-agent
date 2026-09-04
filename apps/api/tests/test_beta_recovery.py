@@ -1,22 +1,29 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import sqlite3
 import stat
+from datetime import datetime, timedelta, timezone
+from io import BytesIO
 from types import SimpleNamespace
 from pathlib import Path
 
 import pytest
+from PIL import Image
 
 from app.core.config import Settings
 from app.modules.beta_recovery import (
     BackupContractError,
     BackupIntegrityError,
     BetaBackupRecovery,
+    BetaBackupRetention,
     OwnerStoreSource,
     PrivateBackupDestination,
     owner_store_sources,
 )
+from app.modules.data_lifecycle import OwnerDeletionLedger
+from app.modules.private_library import LibraryIngestCommand, PrivateLibrary
 
 
 def _sqlite(path: Path) -> None:
@@ -63,6 +70,7 @@ def test_inventory_is_path_free_and_excludes_beta_sessions(tmp_path: Path) -> No
     serialized = json.dumps([item.model_dump() for item in inventory])
 
     assert "beta_session" not in {source.store_id for source in sources}
+    assert "owner_deletion_ledger" not in {source.store_id for source in sources}
     assert str(tmp_path) not in serialized
     assert all(set(item.model_dump()) == {"store_id", "kind", "status", "file_count"} for item in inventory)
 
@@ -196,3 +204,71 @@ def test_normalized_link_is_rejected_at_destination_input(tmp_path, monkeypatch)
         destination = PrivateBackupDestination(alias, private_storage_confirmed=True)
         destination.prepare(sources=())
     assert not (target / ".math-ai-private-backup-root").exists()
+
+
+def _set_backup_created_at(backup: Path, created_at: datetime) -> None:
+    manifest_path = backup / "manifest.json"
+    payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+    payload["created_at"] = created_at.isoformat()
+    encoded = json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
+    manifest_path.write_bytes(encoded)
+    (backup / "manifest.sha256").write_text(
+        hashlib.sha256(encoded).hexdigest() + "\n",
+        encoding="ascii",
+    )
+
+
+def test_backup_retention_is_preview_first_and_only_prunes_verified_expired_backups(tmp_path: Path) -> None:
+    service, _, _ = _service(tmp_path)
+    destination = PrivateBackupDestination(tmp_path / "backups", private_storage_confirmed=True)
+    old_manifest = service.create_backup(destination)
+    recent_manifest = service.create_backup(destination)
+    now = datetime(2026, 9, 5, tzinfo=timezone.utc)
+    old = destination.root / old_manifest.backup_id
+    recent = destination.root / recent_manifest.backup_id
+    _set_backup_created_at(old, now - timedelta(days=31))
+    _set_backup_created_at(recent, now - timedelta(days=2))
+    malformed = destination.root / "backup_malformed"
+    malformed.mkdir()
+
+    retention = BetaBackupRetention(service)
+    preview = retention.preview(destination.root, now=now)
+    assert preview.expired_backups == 1
+    assert preview.retained_backups == 1
+    assert preview.unclassifiable_entries == 1
+    assert old.exists() and recent.exists() and malformed.exists()
+
+    with pytest.raises(BackupContractError, match="BACKUP_RETENTION_CONFIRMATION_REQUIRED"):
+        retention.prune(destination.root, confirmed=False, now=now)
+    assert old.exists()
+
+    result = retention.prune(destination.root, confirmed=True, now=now)
+    assert result.deleted_backups == 1
+    assert not old.exists()
+    assert recent.exists()
+    assert malformed.exists()
+
+
+def test_restore_drill_suppresses_owner_deleted_object_from_older_backup(tmp_path: Path) -> None:
+    library = PrivateLibrary(tmp_path / "library.sqlite3", tmp_path / "library-files")
+    image = BytesIO()
+    Image.new("RGB", (400, 240), "white").save(image, format="PNG")
+    item = library.ingest(
+        LibraryIngestCommand(title="synthetic", owner_id="alpha"),
+        filename="synthetic.png",
+        content=image.getvalue(),
+    )
+    ledger = OwnerDeletionLedger(tmp_path / "ledger.sqlite3")
+    service = BetaBackupRecovery(
+        sources=(
+            OwnerStoreSource("private_library", "sqlite", library.database_path),
+            OwnerStoreSource("private_library_files", "directory", library.file_root),
+        ),
+        deletion_ledger=ledger,
+    )
+    destination = PrivateBackupDestination(tmp_path / "backups", private_storage_confirmed=True)
+    manifest = service.create_backup(destination)
+    ledger.record(object_kind="library_item", object_id=item.library_item_id, owner_id="alpha")
+
+    report = service.restore_drill(destination.root / manifest.backup_id)
+    assert report.suppressed_deletions == 1

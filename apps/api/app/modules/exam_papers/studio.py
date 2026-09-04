@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
 
+from app.core.deletion import is_link_or_reparse
 from app.modules.exam_papers.schemas import (
     ExamPaperBreakdownItem,
     ExamPaperCreateCommand,
@@ -386,6 +387,55 @@ class ExamPaperStudio:
             if cursor.rowcount != 1:
                 raise KeyError(paper_id)
         return updated
+
+    def permanently_delete_owned(
+        self,
+        paper_id: str,
+        *,
+        owner_id: str,
+        expected_updated_at: str,
+    ) -> None:
+        """Delete one trashed paper snapshot without touching its source questions."""
+
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute(
+                """SELECT lifecycle_state, updated_at FROM exam_papers
+                   WHERE exam_paper_id = ? AND owner_id = ?""",
+                (paper_id, owner_id),
+            ).fetchone()
+            if row is None:
+                raise KeyError(paper_id)
+            if row["lifecycle_state"] != "trashed":
+                raise ExamPaperStudioConflict("试卷必须先移入回收站")
+            if row["updated_at"] != expected_updated_at:
+                raise ExamPaperStudioConflict("试卷已发生变化，请刷新后重试")
+            connection.execute(
+                "DELETE FROM exam_paper_revisions WHERE exam_paper_id = ? AND owner_id = ?",
+                (paper_id, owner_id),
+            )
+            cursor = connection.execute(
+                "DELETE FROM exam_papers WHERE exam_paper_id = ? AND owner_id = ?",
+                (paper_id, owner_id),
+            )
+            if cursor.rowcount != 1:  # pragma: no cover - transaction safety
+                raise ExamPaperStudioConflict("试卷活动存储不完整，已取消永久删除")
+            self._remove_owned_asset_directory(paper_id)
+
+    def _remove_owned_asset_directory(self, paper_id: str) -> None:
+        asset_dir = self.asset_root / paper_id
+        if not asset_dir.exists():
+            return
+        resolved_root = self.asset_root.resolve()
+        resolved_dir = asset_dir.resolve()
+        if resolved_dir.parent != resolved_root or is_link_or_reparse(asset_dir):
+            raise ExamPaperStudioConflict("试卷资源目录不安全，已取消永久删除")
+        files = list(asset_dir.iterdir())
+        if any(is_link_or_reparse(path) or not path.is_file() for path in files):
+            raise ExamPaperStudioConflict("试卷资源目录不完整，已取消永久删除")
+        for path in files:
+            path.unlink()
+        asset_dir.rmdir()
 
     def asset_path(self, paper_id: str, asset_id: str) -> Path:
         paper = self.get(paper_id)

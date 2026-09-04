@@ -51,4 +51,18 @@ class RestoreDrillReport(BaseModel):
     store_count: int = Field(ge=0)
     file_count: int = Field(ge=0)
     sqlite_integrity_checks: int = Field(ge=0)
+    suppressed_deletions: int = Field(default=0, ge=0)
     total_bytes: int = Field(ge=0)
+
+
+class BackupRetentionPreview(BaseModel):
+    retention_days: Literal[30] = 30
+    evaluated_at: datetime
+    cutoff_at: datetime
+    retained_backups: int = Field(ge=0)
+    expired_backups: int = Field(ge=0)
+    unclassifiable_entries: int = Field(ge=0)
+
+
+class BackupRetentionResult(BackupRetentionPreview):
+    deleted_backups: int = Field(ge=0)

@@ -3,6 +3,7 @@ from __future__ import annotations
 import html
 from dataclasses import dataclass
 from pathlib import Path
+from uuid import uuid4
 
 from docx import Document
 from docx.enum.text import WD_ALIGN_PARAGRAPH
@@ -89,7 +90,7 @@ class ExamPaperDocumentRenderer:
         download_name = (
             f"exam-paper-{paper.exam_paper_id}-v{paper.version}-{edition}.{export_format}"
         )
-        path = target_dir / download_name
+        path = target_dir / f"export-{uuid4().hex}.{export_format}"
         try:
             if export_format == "docx":
                 self._render_docx(paper, edition, path)

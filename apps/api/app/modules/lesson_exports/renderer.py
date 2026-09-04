@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from uuid import uuid4
 from typing import Literal
 
 from docx import Document
@@ -65,7 +66,7 @@ class LessonPlanDocumentRenderer:
         target_dir = self.output_root / export_format
         target_dir.mkdir(parents=True, exist_ok=True)
         download_name = f"lesson-plan-{plan.lesson_plan_id}-v{plan.version}.{export_format}"
-        path = target_dir / download_name
+        path = target_dir / f"export-{uuid4().hex}.{export_format}"
         try:
             if export_format == "docx":
                 self._render_docx(plan, path)

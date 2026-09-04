@@ -10,18 +10,21 @@ import stat
 import tempfile
 import uuid
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from app.modules.beta_recovery.schemas import (
     BackupFileRecord,
     BackupInventoryItem,
     BackupManifest,
+    BackupRetentionPreview,
+    BackupRetentionResult,
     BackupSourceKind,
     BackupStoreRecord,
     BackupVerification,
     RestoreDrillReport,
 )
+from app.modules.data_lifecycle import OwnerDeletionLedger, RestoredOwnerDataFilter
 
 
 class BackupContractError(ValueError):
@@ -113,7 +116,13 @@ class BetaBackupRecovery:
     _MANIFEST_CHECKSUM_NAME = "manifest.sha256"
     _PAYLOAD_DIR = "payload"
 
-    def __init__(self, *, sources: tuple[OwnerStoreSource, ...]) -> None:
+    def __init__(
+        self,
+        *,
+        sources: tuple[OwnerStoreSource, ...],
+        deletion_ledger: OwnerDeletionLedger | None = None,
+        restored_data_filter: RestoredOwnerDataFilter | None = None,
+    ) -> None:
         if any(not re.fullmatch(r"[a-z][a-z0-9_]{1,63}", source.store_id)
                or source.kind not in ("sqlite", "directory") for source in sources):
             raise BackupContractError("SOURCE_DESCRIPTOR_INVALID")
@@ -121,6 +130,8 @@ class BetaBackupRecovery:
         if len(store_ids) != len(set(store_ids)):
             raise BackupContractError("DUPLICATE_STORE_ID")
         self.sources = sources
+        self.deletion_ledger = deletion_ledger
+        self.restored_data_filter = restored_data_filter or RestoredOwnerDataFilter()
 
     def inventory(self) -> list[BackupInventoryItem]:
         items: list[BackupInventoryItem] = []
@@ -243,10 +254,12 @@ class BetaBackupRecovery:
             (backup_root.resolve() / self._MANIFEST_NAME).read_text(encoding="utf-8")
         )
         sqlite_checks = 0
+        suppressed_deletions = 0
         with tempfile.TemporaryDirectory(prefix="math-ai-beta-restore-drill-") as temp_name:
             restored_root = Path(temp_name) / self._PAYLOAD_DIR
             restored_root.mkdir()
             source_root = (backup_root.resolve() / self._PAYLOAD_DIR).resolve()
+            restored_sqlite: list[Path] = []
             for store in manifest.stores:
                 for record in store.files:
                     source_file = (source_root / record.relative_path).resolve()
@@ -261,13 +274,21 @@ class BetaBackupRecovery:
                     if self._sha256_file(restored_file) != record.sha256:
                         raise BackupIntegrityError("RESTORE_FILE_CHECKSUM_MISMATCH")
                     if store.kind == "sqlite":
-                        self._verify_sqlite_integrity(restored_file)
-                        sqlite_checks += 1
+                        restored_sqlite.append(restored_file)
+            if self.deletion_ledger is not None:
+                suppressed_deletions = self.restored_data_filter.apply(
+                    restored_root,
+                    self.deletion_ledger.list(),
+                )
+            for restored_file in restored_sqlite:
+                self._verify_sqlite_integrity(restored_file)
+                sqlite_checks += 1
         return RestoreDrillReport(
             backup_id=verification.backup_id,
             store_count=verification.store_count,
             file_count=verification.file_count,
             sqlite_integrity_checks=sqlite_checks,
+            suppressed_deletions=suppressed_deletions,
             total_bytes=verification.total_bytes,
         )
 
@@ -391,3 +412,95 @@ class BetaBackupRecovery:
     @staticmethod
     def _is_link_or_junction(path: Path) -> bool:
         return PrivateBackupDestination._is_link_or_junction(path)
+
+
+class BetaBackupRetention:
+    """Preview and explicitly prune verified backups older than 30 days."""
+
+    RETENTION_DAYS = 30
+
+    def __init__(self, recovery: BetaBackupRecovery) -> None:
+        self.recovery = recovery
+
+    def preview(
+        self, root: Path, *, now: datetime | None = None
+    ) -> BackupRetentionPreview:
+        evaluated_at = now or datetime.now(timezone.utc)
+        if evaluated_at.tzinfo is None:
+            raise BackupContractError("RETENTION_TIME_INVALID")
+        cutoff = evaluated_at - timedelta(days=self.RETENTION_DAYS)
+        expired, retained, unclassifiable = self._classify(root, cutoff=cutoff)
+        return BackupRetentionPreview(
+            evaluated_at=evaluated_at,
+            cutoff_at=cutoff,
+            retained_backups=len(retained),
+            expired_backups=len(expired),
+            unclassifiable_entries=unclassifiable,
+        )
+
+    def prune(
+        self,
+        root: Path,
+        *,
+        confirmed: bool,
+        now: datetime | None = None,
+    ) -> BackupRetentionResult:
+        if not confirmed:
+            raise BackupContractError("BACKUP_RETENTION_CONFIRMATION_REQUIRED")
+        evaluated_at = now or datetime.now(timezone.utc)
+        if evaluated_at.tzinfo is None:
+            raise BackupContractError("RETENTION_TIME_INVALID")
+        cutoff = evaluated_at - timedelta(days=self.RETENTION_DAYS)
+        expired, retained, unclassifiable = self._classify(root, cutoff=cutoff)
+        deleted = 0
+        for backup in expired:
+            self.recovery.verify_backup(backup)
+            self.recovery._directory_files(backup)
+            shutil.rmtree(backup)
+            deleted += 1
+        return BackupRetentionResult(
+            evaluated_at=evaluated_at,
+            cutoff_at=cutoff,
+            retained_backups=len(retained),
+            expired_backups=len(expired),
+            unclassifiable_entries=unclassifiable,
+            deleted_backups=deleted,
+        )
+
+    def _classify(
+        self, root: Path, *, cutoff: datetime
+    ) -> tuple[list[Path], list[Path], int]:
+        PrivateBackupDestination._reject_links_in_existing_ancestors(root.absolute())
+        resolved_root = root.resolve()
+        marker = resolved_root / ".math-ai-private-backup-root"
+        if (
+            not resolved_root.is_dir()
+            or self.recovery._is_link_or_junction(resolved_root)
+            or not marker.is_file()
+            or self.recovery._is_link_or_junction(marker)
+        ):
+            raise BackupContractError("PRIVATE_DESTINATION_INVALID")
+        expired: list[Path] = []
+        retained: list[Path] = []
+        unclassifiable = 0
+        for entry in resolved_root.iterdir():
+            if entry == marker:
+                continue
+            if not entry.name.startswith("backup_") or not entry.is_dir():
+                unclassifiable += 1
+                continue
+            try:
+                self.recovery.verify_backup(entry)
+                manifest = BackupManifest.model_validate_json(
+                    (entry / self.recovery._MANIFEST_NAME).read_text(encoding="utf-8")
+                )
+            except (BackupContractError, BackupIntegrityError, OSError, ValueError):
+                unclassifiable += 1
+                continue
+            if manifest.created_at.tzinfo is None:
+                unclassifiable += 1
+            elif manifest.created_at <= cutoff:
+                expired.append(entry)
+            else:
+                retained.append(entry)
+        return expired, retained, unclassifiable

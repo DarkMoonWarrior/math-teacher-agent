@@ -10,9 +10,11 @@ from app.modules.beta_recovery import (
     BackupContractError,
     BackupIntegrityError,
     BetaBackupRecovery,
+    BetaBackupRetention,
     PrivateBackupDestination,
     owner_store_sources,
 )
+from app.modules.data_lifecycle import OwnerDeletionLedger
 
 
 class _PrivateArgumentParser(argparse.ArgumentParser):
@@ -33,10 +35,16 @@ def main() -> int:
     verify.add_argument("backup", type=Path)
     drill = commands.add_parser("drill")
     drill.add_argument("backup", type=Path)
+    commands.add_parser("retention-preview")
+    retention_prune = commands.add_parser("retention-prune")
+    retention_prune.add_argument("--confirm", action="store_true")
     args = parser.parse_args()
 
     if args.command == "create" and not args.confirm_private_storage:
         print(json.dumps({"error": "PRIVATE_DESTINATION_CONFIRMATION_REQUIRED"}))
+        return 2
+    if args.command == "retention-prune" and not args.confirm:
+        print(json.dumps({"error": "BACKUP_RETENTION_CONFIRMATION_REQUIRED"}))
         return 2
     try:
         settings = get_settings()
@@ -46,7 +54,19 @@ def main() -> int:
         print(json.dumps({"error": "BACKUP_CONFIGURATION_UNAVAILABLE"}))
         return 1
     try:
-        result = _execute(args, settings, BetaBackupRecovery(sources=sources))
+        ledger_path = getattr(settings, "owner_deletion_ledger_db", None)
+        result = _execute(
+            args,
+            settings,
+            BetaBackupRecovery(
+                sources=sources,
+                deletion_ledger=(
+                    OwnerDeletionLedger(ledger_path)
+                    if ledger_path is not None and args.command == "drill"
+                    else None
+                ),
+            ),
+        )
     except BackupContractError:
         print(json.dumps({"error": "BACKUP_CONTRACT_REJECTED"}))
         return 1
@@ -78,8 +98,17 @@ def _execute(args, settings, service: BetaBackupRecovery):
         ).model_dump(mode="json")
     elif args.command == "verify":
         result = service.verify_backup(args.backup).model_dump(mode="json")
-    else:
+    elif args.command == "drill":
         result = service.restore_drill(args.backup).model_dump(mode="json")
+    elif args.command == "retention-preview":
+        result = BetaBackupRetention(service).preview(
+            settings.beta_backup_dir
+        ).model_dump(mode="json")
+    else:
+        result = BetaBackupRetention(service).prune(
+            settings.beta_backup_dir,
+            confirmed=args.confirm,
+        ).model_dump(mode="json")
     return result
 
 

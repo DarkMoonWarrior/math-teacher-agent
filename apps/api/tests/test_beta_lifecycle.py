@@ -41,6 +41,7 @@ def beta_lifecycle(tmp_path, monkeypatch):
         beta_session_cookie_name="rehearsal_session",
         beta_session_secure_cookie=False,
         beta_session_db=tmp_path / "sessions.sqlite3",
+        owner_deletion_ledger_db=tmp_path / "owner-deletions.sqlite3",
     )
     access = BetaAccess(
         database_path=settings.beta_session_db,

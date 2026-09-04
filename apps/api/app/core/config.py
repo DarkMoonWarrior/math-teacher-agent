@@ -97,6 +97,9 @@ class Settings(BaseSettings):
     beta_backup_dir: Path = Field(
         default=PROJECT_ROOT / "data" / "private-runtime" / "backups"
     )
+    owner_deletion_ledger_db: Path = Field(
+        default=PROJECT_ROOT / "data" / "private-runtime" / "owner-deletions.sqlite3"
+    )
     lesson_export_dir: Path = Field(default=PROJECT_ROOT / "output")
     cjk_font_regular: Path | None = None
     cjk_font_bold: Path | None = None

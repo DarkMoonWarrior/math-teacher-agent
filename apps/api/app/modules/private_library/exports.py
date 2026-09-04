@@ -3,6 +3,7 @@ from __future__ import annotations
 import html
 from dataclasses import dataclass
 from pathlib import Path
+from uuid import uuid4
 from typing import Literal
 
 from docx import Document
@@ -41,7 +42,7 @@ class LibraryTextRenderer:
         target = self.output_root / "library" / export_format
         target.mkdir(parents=True, exist_ok=True)
         name = f"library-{item.library_item_id}-v{item.version}.{export_format}"
-        path = target / name
+        path = target / f"export-{uuid4().hex}.{export_format}"
         if export_format == "docx":
             self._docx(item, text, path)
             media = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"

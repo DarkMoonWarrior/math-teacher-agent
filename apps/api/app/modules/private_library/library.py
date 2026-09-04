@@ -14,6 +14,7 @@ from docx import Document
 from PIL import Image, UnidentifiedImageError
 from pypdf import PdfReader
 
+from app.core.deletion import is_link_or_reparse
 from app.modules.pdf_imports.text_repair import private_use_glyph_count
 
 from app.modules.private_library.schemas import (
@@ -251,6 +252,33 @@ class PrivateLibrary:
                 (item_id, command.action, command.actor_id, command.reason.strip(), now),
             )
         return self.get(item_id, owner_id=owner_id)
+
+    def permanently_delete(self, item_id: str, *, owner_id: str, expected_updated_at: str) -> None:
+        """Delete one trashed resource and its exclusive derivatives/file."""
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute(
+                "SELECT stored_name, lifecycle_state, updated_at FROM library_items WHERE library_item_id = ? AND owner_id = ?",
+                (item_id, owner_id),
+            ).fetchone()
+            if row is None:
+                raise KeyError(item_id)
+            if row["lifecycle_state"] != "trashed":
+                raise PrivateLibraryError("资料必须先移入回收站")
+            if row["updated_at"] != expected_updated_at:
+                raise PrivateLibraryError("资料已发生变化，请刷新后重试")
+            for table in ("library_question_candidates", "library_ocr_runs", "library_text_revisions", "library_lifecycle_events"):
+                connection.execute(f"DELETE FROM {table} WHERE library_item_id = ?", (item_id,))
+            connection.execute("DELETE FROM library_items WHERE library_item_id = ? AND owner_id = ?", (item_id, owner_id))
+            # Keep the database transaction open until the one exclusive source file
+            # has been removed. A locked file therefore rolls the row deletion back.
+            stored_file = self.file_root / row["stored_name"]
+            if is_link_or_reparse(stored_file):
+                raise PrivateLibraryError("资料原文件存储路径异常，已取消永久删除")
+            source_file = stored_file.resolve()
+            if source_file.parent != self.file_root.resolve():
+                raise PrivateLibraryError("资料原文件存储路径异常，已取消永久删除")
+            source_file.unlink(missing_ok=True)
 
     def get(self, item_id: str, *, owner_id: str) -> LibraryItemView:
         with self._connect() as connection:

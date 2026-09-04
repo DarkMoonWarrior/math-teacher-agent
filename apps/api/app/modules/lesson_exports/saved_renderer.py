@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
+from uuid import uuid4
 from typing import Literal
 
 from docx import Document
@@ -44,7 +45,7 @@ class SavedLessonPlanDocumentRenderer(LessonPlanDocumentRenderer):
         target_dir.mkdir(parents=True, exist_ok=True)
         safe_id = re.sub(r"[^A-Za-z0-9_-]", "-", saved.lesson_plan_id)
         download_name = f"lesson-plan-{safe_id}-v{saved.version}.{export_format}"
-        path = target_dir / download_name
+        path = target_dir / f"export-{uuid4().hex}.{export_format}"
         try:
             if export_format == "docx":
                 self._render_saved_docx(saved, path)

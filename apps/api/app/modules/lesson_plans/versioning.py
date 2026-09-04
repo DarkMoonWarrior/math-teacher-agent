@@ -207,6 +207,39 @@ class LessonVersioning:
             ).fetchone()
         return self._history_item(updated)
 
+    def permanently_delete(
+        self,
+        lesson_plan_id: str,
+        *,
+        owner_id: str,
+        expected_updated_at: str,
+    ) -> None:
+        """Delete one trashed lesson and its versions, preserving source snapshots."""
+
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute(
+                """SELECT lifecycle_state, updated_at FROM m10_lesson_plans
+                   WHERE lesson_plan_id = ? AND owner_id = ?""",
+                (lesson_plan_id, owner_id),
+            ).fetchone()
+            if row is None:
+                raise KeyError(lesson_plan_id)
+            if row["lifecycle_state"] != "trashed":
+                raise LessonVersioningConflict("教案必须先移入回收站")
+            if row["updated_at"] != expected_updated_at:
+                raise LessonVersioningConflict("教案已发生变化，请刷新后重试")
+            connection.execute(
+                "DELETE FROM m10_lesson_versions WHERE lesson_plan_id = ? AND owner_id = ?",
+                (lesson_plan_id, owner_id),
+            )
+            cursor = connection.execute(
+                "DELETE FROM m10_lesson_plans WHERE lesson_plan_id = ? AND owner_id = ?",
+                (lesson_plan_id, owner_id),
+            )
+            if cursor.rowcount != 1:  # pragma: no cover - transaction safety
+                raise LessonVersioningConflict("教案活动存储不完整，已取消永久删除")
+
     def _validate_current_sources(self, submitted: LessonEditableDraft, *, owner_id: str) -> None:
         try:
             current = self.drafting.build(

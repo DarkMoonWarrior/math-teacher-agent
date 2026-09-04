@@ -6,6 +6,12 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Upload
 from fastapi.responses import FileResponse
 
 from app.core.config import get_settings
+from app.core.deletion import (
+    execute_owner_permanent_delete,
+    OwnerPermanentDeleteCommand,
+    OwnerPermanentDeleteResult,
+    get_owner_deletion_ledger,
+)
 from app.core.identity import CurrentTeacher, get_current_teacher
 from app.modules.question_capture import (
     QuestionCapture,
@@ -85,6 +91,33 @@ def get_question_asset(
         return capture.get(asset_id, owner_id=current_teacher.teacher_id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="私人题目图片不存在") from exc
+
+
+@router.delete("/assets/{asset_id}", response_model=OwnerPermanentDeleteResult)
+def permanently_delete_question_asset(
+    asset_id: str,
+    command: OwnerPermanentDeleteCommand,
+    current_teacher: CurrentTeacher = Depends(get_current_teacher),
+    capture: QuestionCapture = Depends(get_question_capture),
+    deletion_ledger=Depends(get_owner_deletion_ledger),
+) -> OwnerPermanentDeleteResult:
+    try:
+        execute_owner_permanent_delete(
+            ledger=deletion_ledger,
+            object_kind="question_capture",
+            object_id=asset_id,
+            owner_id=current_teacher.teacher_id,
+            operation=lambda: capture.permanently_delete(
+                asset_id,
+                owner_id=current_teacher.teacher_id,
+                expected_updated_at=command.expected_updated_at,
+            ),
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="私人题目图片不存在") from exc
+    except QuestionCaptureError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return OwnerPermanentDeleteResult(object_id=asset_id, object_kind="question_capture")
 
 
 @router.post("/assets/{asset_id}/transform", response_model=QuestionInputBundle)

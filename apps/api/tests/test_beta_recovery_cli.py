@@ -52,6 +52,21 @@ def test_create_requires_confirmation_before_loading_private_settings(monkeypatc
     assert captured.err == ""
 
 
+def test_retention_prune_requires_confirmation_before_loading_private_settings(monkeypatch, capsys):
+    monkeypatch.setattr(sys, "argv", ["beta-backup", "retention-prune"])
+    monkeypatch.setattr(
+        cli,
+        "get_settings",
+        lambda: (_ for _ in ()).throw(AssertionError("settings must not load")),
+    )
+    assert cli.main() == 2
+    captured = capsys.readouterr()
+    assert json.loads(captured.out) == {
+        "error": "BACKUP_RETENTION_CONFIRMATION_REQUIRED"
+    }
+    assert captured.err == ""
+
+
 def test_unknown_argument_does_not_echo_private_value(monkeypatch, capsys):
     monkeypatch.setattr(sys, "argv", ["beta-backup", "inventory", "--synthetic-private-token"])
     with pytest.raises(SystemExit) as error:

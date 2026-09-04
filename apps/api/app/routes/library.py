@@ -8,9 +8,17 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
+from starlette.background import BackgroundTask
 
 from app.core.config import get_settings
+from app.core.deletion import (
+    execute_owner_permanent_delete,
+    OwnerPermanentDeleteCommand,
+    OwnerPermanentDeleteResult,
+    get_owner_deletion_ledger,
+)
 from app.core.identity import CurrentTeacher, get_current_teacher
+from app.core.ephemeral_exports import remove_ephemeral_export
 from app.modules.private_library import (
     CandidateImportResult,
     LibraryIngestCommand,
@@ -391,6 +399,32 @@ def change_library_item_lifecycle(
         )
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="私人资料不存在") from exc
+
+
+@router.delete("/{item_id}", response_model=OwnerPermanentDeleteResult)
+def permanently_delete_library_item(
+    item_id: str,
+    command: OwnerPermanentDeleteCommand,
+    current_teacher: CurrentTeacher = Depends(get_current_teacher),
+    deletion_ledger=Depends(get_owner_deletion_ledger),
+) -> OwnerPermanentDeleteResult:
+    try:
+        execute_owner_permanent_delete(
+            ledger=deletion_ledger,
+            object_kind="library_item",
+            object_id=item_id,
+            owner_id=current_teacher.teacher_id,
+            operation=lambda: get_private_library().permanently_delete(
+                item_id,
+                owner_id=current_teacher.teacher_id,
+                expected_updated_at=command.expected_updated_at,
+            ),
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="私人资料不存在") from exc
+    except PrivateLibraryError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return OwnerPermanentDeleteResult(object_id=item_id, object_kind="library_item")
 
 
 @router.post("/{item_id}/ocr", response_model=LibraryOCRResult)
@@ -907,4 +941,13 @@ def export_library_text(
         raise HTTPException(status_code=404, detail="私人资料不存在") from exc
     except LibraryExportError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    return FileResponse(rendered.path, media_type=rendered.media_type, filename=rendered.download_name)
+    return FileResponse(
+        rendered.path,
+        media_type=rendered.media_type,
+        filename=rendered.download_name,
+        background=BackgroundTask(
+            remove_ephemeral_export,
+            rendered.path,
+            output_root=get_settings().lesson_export_dir,
+        ),
+    )

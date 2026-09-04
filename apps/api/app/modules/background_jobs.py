@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from threading import Lock, Thread
 from typing import Callable, Literal
 from uuid import uuid4
@@ -38,16 +38,26 @@ class BackgroundJobRegistry:
     transient: after an API restart the UI can simply start the operation again.
     """
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        *,
+        terminal_retention: timedelta = timedelta(hours=24),
+        clock: Callable[[], datetime] | None = None,
+    ) -> None:
+        if terminal_retention <= timedelta(0):
+            raise ValueError("terminal_retention must be positive")
         self._lock = Lock()
         self._jobs: dict[str, dict] = {}
+        self._terminal_retention = terminal_retention
+        self._clock = clock or (lambda: datetime.now(UTC))
 
     def start(
         self, *, kind: str, subject_id: str, owner_id: str, runner: Runner
     ) -> BackgroundJobView:
-        now = datetime.now(UTC).isoformat()
+        now = self._now()
         job_id = f"job_{uuid4().hex[:16]}"
         with self._lock:
+            self._prune_expired_locked()
             self._jobs[job_id] = {
                 "job_id": job_id, "kind": kind, "subject_id": subject_id,
                 "owner_id": owner_id,
@@ -61,6 +71,7 @@ class BackgroundJobRegistry:
 
     def get(self, job_id: str, *, owner_id: str) -> BackgroundJobView:
         with self._lock:
+            self._prune_expired_locked()
             value = self._jobs.get(job_id)
             if value is None or value["owner_id"] != owner_id:
                 raise KeyError(job_id)
@@ -70,6 +81,7 @@ class BackgroundJobRegistry:
     def list(self, *, owner_id: str, kind: str | None = None) -> list[BackgroundJobView]:
         """Return the owner's jobs newest-first without exposing registry internals."""
         with self._lock:
+            self._prune_expired_locked()
             values = [
                 deepcopy(value)
                 for value in self._jobs.values()
@@ -105,6 +117,7 @@ class BackgroundJobRegistry:
         still a reliable no-commit boundary.
         """
         with self._lock:
+            self._prune_expired_locked()
             value = self._jobs.get(job_id)
             if value is None or value["owner_id"] != owner_id:
                 raise KeyError(job_id)
@@ -115,13 +128,13 @@ class BackgroundJobRegistry:
                     message=message,
                     error="",
                     result=deepcopy(result or {}),
-                    updated_at=datetime.now(UTC).isoformat(),
+                    updated_at=self._now(),
                 )
             elif value["status"] == "cancelled" and result is not None:
                 value.update(
                     message=message,
                     result=deepcopy(result),
-                    updated_at=datetime.now(UTC).isoformat(),
+                    updated_at=self._now(),
                 )
             return BackgroundJobView.model_validate(self._public_value(value))
 
@@ -146,7 +159,7 @@ class BackgroundJobRegistry:
             if value["cancel_requested"]:
                 raise _BackgroundJobCancelled
             value.update(status="running", message="正在处理")
-            value["updated_at"] = datetime.now(UTC).isoformat()
+            value["updated_at"] = self._now()
 
     def _update_active(self, job_id: str, **values) -> None:
         with self._lock:
@@ -156,7 +169,7 @@ class BackgroundJobRegistry:
             if value["cancel_requested"]:
                 raise _BackgroundJobCancelled
             value.update(values)
-            value["updated_at"] = datetime.now(UTC).isoformat()
+            value["updated_at"] = self._now()
 
     def _finish_cancelled(self, job_id: str) -> None:
         with self._lock:
@@ -168,8 +181,33 @@ class BackgroundJobRegistry:
                 status="cancelled",
                 message=value["message"] or "任务已取消",
                 error="",
-                updated_at=datetime.now(UTC).isoformat(),
+                updated_at=self._now(),
             )
+
+    def _now(self) -> str:
+        value = self._clock()
+        if value.tzinfo is None:
+            raise ValueError("background job clock must be timezone-aware")
+        return value.isoformat()
+
+    def _prune_expired_locked(self) -> None:
+        current = self._clock()
+        if current.tzinfo is None:
+            raise ValueError("background job clock must be timezone-aware")
+        cutoff = current - self._terminal_retention
+        terminal = {"succeeded", "failed", "cancelled"}
+        expired: list[str] = []
+        for job_id, value in self._jobs.items():
+            if value["status"] not in terminal:
+                continue
+            try:
+                updated_at = datetime.fromisoformat(value["updated_at"])
+            except (TypeError, ValueError):
+                continue
+            if updated_at.tzinfo is not None and updated_at <= cutoff:
+                expired.append(job_id)
+        for job_id in expired:
+            del self._jobs[job_id]
 
     def _run(self, job_id: str, runner: Runner) -> None:
         def progress(current: int, total: int, message: str) -> None:
