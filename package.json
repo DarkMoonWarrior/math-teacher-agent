@@ -7,6 +7,7 @@
     "node": ">=24.0.0"
   },
   "scripts": {
+    "check:repo": "node scripts/check_repository_docs.mjs",
     "setup:env": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/bootstrap_dev_env.ps1",
     "dev:teacher": "pnpm --filter @math-teacher-agent/teacher-web dev",
     "build:teacher": "pnpm --filter @math-teacher-agent/teacher-web build",
@@ -15,9 +16,6 @@
     "dev:web": "pnpm dev:teacher",
     "build:web": "pnpm build:teacher",
     "typecheck:web": "pnpm typecheck:teacher",
-    "dev:legacy-web": "pnpm --filter @math-ai/web dev",
-    "build:legacy-web": "pnpm --filter @math-ai/web build",
-    "typecheck:legacy-web": "pnpm --filter @math-ai/web typecheck",
     "dev:api": "python -m uvicorn app.main:app --app-dir apps/api --reload",
     "test:api": "python -m pytest apps/api/tests",
     "dev:agent": "pnpm --filter @math-teacher-agent/agent dev",

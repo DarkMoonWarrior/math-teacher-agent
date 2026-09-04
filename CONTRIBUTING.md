@@ -11,7 +11,7 @@
 - 新 UI 与 Agent-first 交互写入 `apps/teacher-web`。
 - 业务规则、验证、权利、私有性与存储访问写入 `apps/api` 对应业务模块。
 - Harness、Agent loop、模型插件与 Tool transport 只写入 `apps/agent`。
-- `apps/web` 只做明确批准的遗留缺陷修复或业务行为参考，不新增主产品 UI。
+- `apps/teacher-web` 是唯一产品 UI；旧界面已移除，不再维护第二套页面壳。
 
 ## 数据规则
 
@@ -26,18 +26,13 @@
 
 ```powershell
 pnpm typecheck:teacher
+pnpm check:repo
+pnpm test:teacher
 pnpm build:teacher
 pnpm typecheck:agent
 pnpm test:agent
 pnpm build:agent
 .\.venv\Scripts\python.exe -m pytest .\apps\api\tests
-```
-
-只有修改 `apps/web` 时才需要：
-
-```powershell
-pnpm typecheck:legacy-web
-pnpm build:legacy-web
 ```
 
 ## 提交

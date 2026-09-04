@@ -1,6 +1,6 @@
 # 当前开发边界
 
-更新日期：2026-08-30
+更新日期：2026-09-04
 状态：当前 source of truth；历史 PDF 和旧 Prompt 保留为决策证据，但不再决定当前阶段编号。
 
 ## 1. 产品定位与唯一目标用户
@@ -42,11 +42,11 @@
 1. **M7 多模态题目采集与图片解题**：解决截图/单题图片的文字与公式识别、原图保真、带图题视觉推理和可信 Solve 接入。
 2. **M8 私有辅助命题 Agent**：教师描述命题要求，系统生成结构化草稿，并只保存到 owner 独占的私题库。
 
-原 Paper、Lesson、Memory 及后续阶段依次顺延为 M9-M17。M6 仍必须先完整通过 Gate E，不因为未来路线已确认就提前实现 M7/M8。
+原 Paper、Lesson、Memory 及后续阶段依次顺延为 M9-M17。该阶段转换现已完成，M0–M11 均已通过对应 Gate，当前仅推进 M12。
 
 多模态解题不能退化为“OCR 文本后丢弃原图”。带几何图、函数图、坐标系、统计图或表格的题目必须保存受控原图/裁剪，并把视觉理解与 MathVerifier 证据分开。
 
-辅助命题不是 Search 的兜底伪造。Search 空结果或教师不满意时可以显式转入辅助命题，但生成题必须视觉和数据上与真实检索结果分离。三个允许入口是：Search 空/不合适结果、“新任务”菜单、Paper Agent 明确询问；任何入口都不得自动保存或自动加入试卷。
+辅助命题不是 Search 的兜底伪造。Search 空结果或教师不满意时可以显式转入辅助命题，但生成题必须视觉和数据上与真实检索结果分离。允许入口包括顶部命题导航、Search 空/不合适结果、“新任务”菜单与 Paper Agent 明确询问；任何入口都不得自动保存或自动加入试卷。
 
 辅助命制题使用独立 `PersonalQuestionLibrary` 模块和 owner-isolated storage namespace，不以公共 `QuestionBank` 的一个可变 visibility 字段作为唯一隔离手段。该模块没有 publish/share 接口；后台运营/内容管理员没有内容查看和管理接口。详细规则见 [`M8-PRIVATE-QUESTION-AUTHORING.md`](M8-PRIVATE-QUESTION-AUTHORING.md)。
 
@@ -60,21 +60,23 @@ M9 的固定范围、切片顺序和验收见 [`M9-PAPER-AGENT.md`](M9-PAPER-AGE
 
 M10 的固定范围、深模块 Interface 和六条切片顺序见 [`M10-LESSON-AGENT.md`](M10-LESSON-AGENT.md)。六条纵向切片已接入：蓝图规划、受控来源、完整正文与逐块编辑均在保存前重新核验高中范围、当前 owner、精确 revision、权利、可信状态、题目事实、结构、时间和目标对应关系。`LessonVersioning` 是唯一持久化 Interface；只有教师确认可调用，owner 只取登录上下文，历史版本 append-only，编辑旧版本建立新版本，active/recycle 列表仅本人可见且跨 owner 按不存在处理。`LessonSavedExporting` 只导出当前 owner 的指定不可变版本 DOCX/PDF。保存与导出均不升级 AI 内容的待复核状态。浏览器不能提交 owner、路径、权利或可信结论；旧 `LessonPlanStudio` 的立即写入 REST 流程不得作为新 M10 Interface 直接暴露。
 
-本阶段允许：
+M11 已完成能力的持续维护边界（以下规则在 M12 仍有效）：
+
+允许：
 
 - 通过 `TeacherMemory.profile/apply` 深模块维护当前 owner 的结构化偏好；
 - 让教师查看、修改、删除偏好并关闭自动学习；
 - 为偏好记录服务端生成的来源、置信度、版本与更新时间；
-- 后续切片在任务字段为空时透明应用偏好，并允许教师当次覆盖；
+- 在任务字段为空时透明应用偏好，并允许教师当次覆盖（已实现）；
 - 仅用 synthetic owner 与结构化值验证隔离、冲突、来源和删除语义。
 
-本阶段禁止：
+禁止：
 
 - 把题目、解析、教案、资料正文、学生信息、任意 prompt 或上传文件存入教师记忆；
 - 让浏览器或 Agent 提交 owner、source、confidence 或直接访问记忆数据库；
 - 在自动学习关闭时推断偏好，或把推断结果静默提升为教师明确偏好；
 - 用偏好绕过 MathVerifier、权利、owner、高中范围、题目质量或教师确认门禁；
-- 提前开发账号、支付、多租户、教研组、学校后台或学生功能。
+- 在 M12 最小 Beta 会话之外提前开发生产账号、支付、多租户、教研组、学校后台或学生功能。
 
 ## 5. M11 完成 Gate 与 M12 当前 Gate
 

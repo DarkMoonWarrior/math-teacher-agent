@@ -6,7 +6,7 @@ This file is the short, operational source of truth for agents working in this r
 
 Build a trustworthy AI workbench for Chinese high-school mathematics teachers. It is not a generic chat product or a traditional question-search website. A teacher should be able to describe a teaching task, provide an image/PDF/private resource, and eventually complete the main preparation workflow through a Teacher Agent.
 
-The current product line is the new `apps/teacher-web` experience. `apps/web` is retained as a legacy reference implementation and source of mature business-flow knowledge; do not copy its visual shell into the new product or add new UI there unless the owner explicitly requests it.
+The only product UI is `apps/teacher-web`. The predecessor UI has been removed; do not recreate it or add a second product shell. Related migration and rights evidence remains archived under `docs`.
 
 ## Non-negotiable rules
 
@@ -33,7 +33,7 @@ The current product line is the new `apps/teacher-web` experience. `apps/web` is
 - `Lesson Agent`: M10 is complete. Its rollback-safe checkpoint is `9997fc8`, and the owner confirmed transition on 2026-08-31. Blueprint planning, teacher-confirmed gated source selection, complete drafting, block editing/locking, explicit immutable versioning, and exact saved-version DOCX/PDF export are connected through FastAPI and Teacher Web. `LessonVersioning` is the only M10 persistence Interface: it takes owner only from current-teacher context, revalidates current sources and exact revisions, preserves `draft_requires_teacher_review`, appends instead of overwriting versions, and keeps active/recycle history owner-only. `LessonSavedExporting` reads only the current owner's requested immutable version. The 28-case fixed evaluation reports zero violations across 15 categories. Agent/browser payloads cannot save, delete, choose owner or upgrade trust. The old lesson-plan REST workflow is not the M10 product Interface and must not be exposed unchanged because it accepts browser identity and writes immediately.
 - `Teacher Memory`: M11's five vertical slices and complete functional/engineering Gate pass. The `TeacherMemory.profile/apply/planning_defaults` deep module interface owns owner-scoped allow-listed preferences, transparent task defaults, explainable proposals, explicit accept/reject/correct feedback, inspectable structured history, JSON export and fixed-confirmation deletion. Explicit inputs always override memory; proposals never auto-promote; deletion clears only the current owner and advances the profile version. The 26-case fixed synthetic evaluation reports zero violations across 12 categories. Rollback checkpoint `5614fc0` and the owner transition to M12 are complete.
 - `Closed Beta Readiness`: M12 is active. Slices 1–4 add `BetaAccess.issue/resolve/revoke`, an opaque expiring/revocable HttpOnly session, immutable server-owned capability snapshots, a Teacher Web access/capability gate, privacy-safe operational events, a stable `/ready` probe and operator-only private backup/recovery drills. When enabled, current-teacher resolution fails closed without a valid session and disabled capabilities fail with structured 403 before product routers; unavailable persistent workspaces are not mounted. Operational interfaces accept only request ID, allow-listed capability, outcome/status/error class and timing; they never accept headers, queries, bodies, owner/resource IDs, secrets or exception messages. Readiness exposes stable API/Beta/Agent component codes without roster, URLs or raw dependency errors. `BetaBackupRecovery` snapshots configured durable owner stores into an explicitly confirmed private/encrypted destination, verifies the manifest/exact payload/SHA-256 and restores only to a temporary drill directory; it excludes revocable sessions and has no browser/Agent route. Only disabled local development may use fixed `owner_teacher` with all capabilities. This is not production auth, RBAC, MFA, tenancy, organization management, content analytics, a complete audit platform or production disaster recovery.
-- M5 passed its fixed synthetic evaluation and full Gate E audit on 2026-08-21. Mature lesson-plan, paper, import, library, solution, curriculum, question-bank, and verification modules exist in the migrated backend/legacy UI. Existing REST workflows do not mean the corresponding new Agent capability is complete.
+- M5 passed its fixed synthetic evaluation and full Gate E audit on 2026-08-21. Mature lesson-plan, paper, import, library, solution, curriculum, question-bank, and verification modules exist in the migrated backend. Existing REST workflows do not mean the corresponding new Agent capability is complete.
 - Production identity, cloud isolation, billing, and public commercial operation are not implemented.
 - M0-M11 are complete. M11 rollback checkpoint is `5614fc0`, and the owner confirmed transition on 2026-09-01. M12 Closed Beta Readiness is the only active milestone; M13 and later remain blocked until the complete M12 Gate and owner transition confirmation.
 
@@ -42,7 +42,6 @@ The current product line is the new `apps/teacher-web` experience. `apps/web` is
 - `apps/teacher-web`: primary product UI. It depends on product-owned `TeacherWorkspace` contracts and same-origin `/api/v1` routes.
 - `apps/api`: modular FastAPI business backend and the only owner of business rules, validation, rights decisions, and storage access.
 - `apps/agent`: isolated Node/TypeScript Agent runtime. DeepSeek Harness imports stay here. It uses only the allowlisted internal Tool gateway.
-- `apps/web`: legacy/reference UI. Preserve it for behaviour comparison and incremental extraction; it is not the default product entry.
 - `data/test-fixtures`: synthetic test data only. Never turn fixtures into production content.
 - `data/commercial-approved`: commercial content only after RightsGate + MathVerifier + Teacher Review.
 - `PersonalQuestionLibrary`: owner-only assisted-authored questions in a storage namespace separate from public QuestionBank; it has no publish/share path or admin content interface. Successful generation is recorded only as an unsaved owner workspace draft; each content edit appends a revision, explicit save creates a private question, and permanent deletion requires trash state, a current version token and fixed owner confirmation before clearing that question's active snapshot and revision chain.
@@ -66,10 +65,9 @@ Do not invent requirements to finish a task. When old documents conflict with th
 
 Run checks proportional to the changed seam:
 
-- Primary UI: `pnpm typecheck:teacher` and `pnpm build:teacher`.
+- Primary UI: `pnpm typecheck:teacher`, `pnpm test:teacher`, and `pnpm build:teacher`.
 - Agent runtime: `pnpm typecheck:agent`, `pnpm test:agent`, and `pnpm build:agent`.
 - Backend: `python -m pytest apps/api/tests` from an environment with `apps/api[dev]` installed.
-- Legacy UI only when touched: `pnpm typecheck:legacy-web` and `pnpm build:legacy-web`.
 
 Never use real model credentials in automated tests. Never commit `.env`, databases, uploads, exports, private resources, or third-party question content.
 

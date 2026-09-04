@@ -1,5 +1,7 @@
 # M7 多模态题目采集与图片解题
 
+> 状态同步（2026-09-04）：M0–M11 已完成并完成阶段转换，当前为 M12 切片 1–4。本文的切片过程、测试数量和 Gate 结论保留为当时证据；后续行为与当前边界见 [开发状态](PROJECT-STATUS.md) 和 [开发边界](DEVELOPMENT-BOUNDARY.md)。
+
 更新日期：2026-08-24
 状态：已完成；Gate E 于 2026-08-24 通过，项目所有者已确认进入 M8
 
@@ -87,4 +89,4 @@ Solve 输入区增加：上传图片、粘贴截图、拍照入口、图片预�
 
 M7 Gate E 通过并由项目所有者确认前，不进入 M8 私有辅助命题 Agent。
 
-完整固定评测与 Gate 审计见 [`M7-MULTIMODAL-SOLVE-EVALUATION.md`](M7-MULTIMODAL-SOLVE-EVALUATION.md) 和 [`M7-GATE-REVIEW.md`](M7-GATE-REVIEW.md)。当前 Gate 已通过，但尚未获得进入 M8 的阶段确认。
+完整固定评测与 Gate 审计见 [`M7-MULTIMODAL-SOLVE-EVALUATION.md`](M7-MULTIMODAL-SOLVE-EVALUATION.md) 和 [`M7-GATE-REVIEW.md`](M7-GATE-REVIEW.md)。Gate 已通过，进入 M8 的阶段转换已确认。当前里程碑见 [项目状态](PROJECT-STATUS.md)。

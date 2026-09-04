@@ -1,5 +1,7 @@
 # 商业 V1 迁移 · Clean Snapshot 白名单
 
+> 归档说明（2026-09-04）：本文保留原型/迁移时期的事实与决策。旧 UI、旧路径、分支、待办和验收数字不代表当前实现；请以 [当前开发状态](../PROJECT-STATUS.md) 为准。来源、权利与教材证据继续保留。
+
 - 文档编号：COMMERCIAL-V1 / DOC-06
 - 记录日期：2026-08-16
 - 用途：Prompt 1 执行"Clean Snapshot 迁移"时的**唯一迁移依据**（与 DOC-02/04 配套使用）。
@@ -105,4 +107,3 @@
 - 数据权利审查：`DATA-RIGHTS-MIGRATION-REVIEW.md`（DOC-04）。
 - 已知问题：`KNOWN-MIGRATION-ISSUES.md`（DOC-05）。
 - 本清单与上述文档冲突时，以本清单为准（最严格者生效）。
-

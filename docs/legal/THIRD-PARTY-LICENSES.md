@@ -1,6 +1,7 @@
 # 第三方依赖许可清单（Commercial V1）
 
 核验日期：2026-08-20（新增 `apps/teacher-web` 入口复核；依赖版本未变化）
+维护说明（2026-09-04）：移除旧 UI 后仅调整应用范围；本次锁文件未升级依赖。下表保留原包元数据核验日期与 REVIEW 项，不把仓库清理视为新的许可证全文审核。
 核验方式：已安装发行版的包元数据（Python: `importlib.metadata`；Node: 各包 `package.json` 的 `license` 字段）。
 
 状态定义：
@@ -37,7 +38,7 @@ pluggy（MIT）、iniconfig（MIT）。
 | --- | --- | --- | --- |
 | pix2text（math-ocr extra） | 本地数学公式 OCR | PyPI 声明待核验 | REVIEW |
 
-## Node 前端依赖（apps/teacher-web 与 apps/web）
+## Node 前端依赖（apps/teacher-web）
 
 | 包 | 版本 | 许可 | 状态 |
 | --- | --- | --- | --- |

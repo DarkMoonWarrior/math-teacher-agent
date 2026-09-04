@@ -1,5 +1,7 @@
 # Search Agent MVP — Product Spec v1
 
+> 归档说明（2026-09-04）：本文保留原型/迁移时期的事实与决策。旧 UI、旧路径、分支、待办和验收数字不代表当前实现；请以 [当前开发状态](../PROJECT-STATUS.md) 为准。来源、权利与教材证据继续保留。
+
 > Prompt 3 历史交付文档 · Commercial Repository: DarkMoonWarrior/math-teacher-agent
 > 状态：MVP 已合并并接入 `apps/teacher-web`；当前稳定化状态见 `docs/PROJECT-STATUS.md`。
 

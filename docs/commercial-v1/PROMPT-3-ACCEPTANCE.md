@@ -1,5 +1,7 @@
 # Prompt 3 Acceptance
 
+> 归档说明（2026-09-04）：本文保留原型/迁移时期的事实与决策。旧 UI、旧路径、分支、待办和验收数字不代表当前实现；请以 [当前开发状态](../PROJECT-STATUS.md) 为准。来源、权利与教材证据继续保留。
+
 > 历史验收记录：Search Agent 已合并并迁移到新的 `apps/teacher-web` 主入口。
 > 后续修复与当前未决项以 `docs/PROJECT-STATUS.md` 和 `POST-BASELINE-BACKLOG.md` 为准。
 

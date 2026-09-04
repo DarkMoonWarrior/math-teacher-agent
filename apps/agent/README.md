@@ -5,9 +5,9 @@
 安全边界：
 
 - 本服务**不直接访问任何数据库**；题目/课程数据只能通过 FastAPI Internal Tool Gateway 获取。
-- 模型可见工具**恰好只有 8 个受控只读工具**：`search_questions`、`get_question`、
+- 模型可见工具**恰好只有 9 个受控工具**，其中 8 个只读：`search_questions`、`get_question`、
   `solve_question`、`find_similar_questions`、`verify_question`、`get_curriculum_node`、
-  `inspect_private_library`、`search_private_library`。
+  `inspect_private_library`、`search_private_library`。第 9 个 `create_question_draft` 仅返回未保存命题草稿，不执行业务持久化。
 - 组合不挂载 bash / filesystem / web / subagent / workflow 等任何额外能力。
 - Harness 依赖精确锁定 `0.1.0-rc.6`，所有 DeepSeek Harness import 只允许出现在本 app 内。
 
@@ -35,7 +35,7 @@ pnpm build:agent     # 编译到 dist/
 
 - 产品自有 Runtime interface 与 DeepSeek Harness adapter 已实现。
 - Search Agent 与 Solve Agent Tool seam、取消、恢复、tool-loop 上限和最小权限均有自动测试。
-- 目前模型可见能力仍严格限制为 8 个受控只读 Tool；`inspect_private_library` 只返回聚合状态，`search_private_library` 必须携带 FastAPI 为本次操作签发的一次性许可且只返回确认文本的有界片段；图片 `solve_question` 只原样转发一个绑定完整 Solve 意图的一次性 capability，owner、题面、模式、要求与精确 media/OCR revision 均由 FastAPI 恢复，Agent 看不到资源 selector、路径或图片字节；解题结果原样返回 MathVerifier 的 status/capability/scope 分级，不保存或发布；Lesson/Paper 写工具尚未接入。
+- 目前模型可见能力严格限制为 8 个只读 Tool 和 1 个仅生成未保存草稿的命题 Tool；`inspect_private_library` 只返回聚合状态，`search_private_library` 必须携带 FastAPI 为本次操作签发的一次性许可且只返回确认文本的有界片段；图片 `solve_question` 只原样转发一个绑定完整 Solve 意图的一次性 capability，owner、题面、模式、要求与精确 media/OCR revision 均由 FastAPI 恢复，Agent 看不到资源 selector、路径或图片字节；解题结果原样返回 MathVerifier 的 status/capability/scope 分级，不保存或发布；Lesson/Paper 写工具尚未接入。
 - 默认 `test-mock` 不调用真实模型；生产密钥只存在于本服务环境。
 
 ## HTTP 接口（machine-to-machine）

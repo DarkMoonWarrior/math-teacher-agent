@@ -15,16 +15,23 @@
 - [`M6-PRIVATE-LIBRARY-AGENT.md`](M6-PRIVATE-LIBRARY-AGENT.md)：已完成 M6 的范围、隐私边界、纵向切片和完成 Gate。
 - [`M6-PRIVATE-LIBRARY-EVALUATION.md`](M6-PRIVATE-LIBRARY-EVALUATION.md)：M6 的固定 synthetic evaluation、违规计数和结果边界。
 - [`M6-GATE-REVIEW.md`](M6-GATE-REVIEW.md)：M6 完成 Gate、工程回归、浏览器验收和阶段转换结论。
-- [`M7-MULTIMODAL-QUESTION-SOLVE.md`](M7-MULTIMODAL-QUESTION-SOLVE.md)：当前 M7 的单题图片/截图、公式 OCR、图形保真输入、可信 Solve 边界与切片状态。
+- [`M7-MULTIMODAL-QUESTION-SOLVE.md`](M7-MULTIMODAL-QUESTION-SOLVE.md)：已完成 M7 的单题图片/截图、公式 OCR、图形保真输入、可信 Solve 边界与切片状态。
 - [`M8-PRIVATE-QUESTION-AUTHORING.md`](M8-PRIVATE-QUESTION-AUTHORING.md)：辅助命题、owner 独占私题库、个人分类管理和永久公共禁入规则。
 - [`M8-PRIVATE-QUESTION-AUTHORING-EVALUATION.md`](M8-PRIVATE-QUESTION-AUTHORING-EVALUATION.md)：M8 的 26 场景固定 synthetic evaluation、违规计数和结果边界。
 - [`M8-GATE-REVIEW.md`](M8-GATE-REVIEW.md)：M8 功能 Gate、Gate E/Gate P、工程回归和阶段转换结论。
 - [`../AGENTS.md`](../AGENTS.md)：供代码开发 Agent 执行的精简规则。
 
+- [`M9-PAPER-AGENT.md`](M9-PAPER-AGENT.md)、[评测](M9-PAPER-AGENT-EVALUATION.md)、[Gate](M9-GATE-REVIEW.md)：已完成的组卷、历史版本与精确导出。
+- [`M10-LESSON-AGENT.md`](M10-LESSON-AGENT.md)、[评测](M10-LESSON-AGENT-EVALUATION.md)、[Gate](M10-GATE-REVIEW.md)：已完成的教案闭环。
+- [`M11-TEACHER-MEMORY.md`](M11-TEACHER-MEMORY.md)、[评测](M11-TEACHER-MEMORY-EVALUATION.md)、[Gate](M11-GATE-REVIEW.md)：已完成的教师偏好与生命周期。
+- [`M12-CLOSED-BETA-READINESS.md`](M12-CLOSED-BETA-READINESS.md)：唯一活动里程碑，切片 1–4 已接入，切片 5 和完整 Gate 尚未完成。
+- [`TEACHER-TOOL-CONTRACTS.md`](TEACHER-TOOL-CONTRACTS.md)：当前九项受控 Tool 契约。
+- [`REPOSITORY-SYNC.md`](REPOSITORY-SYNC.md)：仓库清理范围、文档分层与本轮复验记录。
+
 ## 治理与历史记录
 
 - `commercial-v1/`：商业仓库迁移、Runtime、Search Agent、测试与验收的历史证据。内容仍有审计价值，但其中的“下一步”“Prompt N”与 `apps/web` 主入口描述不再代表当前计划。
-- `high-school-math-ai/`：旧原型时期的产品、架构、教材、审计与 UI 资料。作为地基和证据保留，不作为新 UI 或当前开发优先级的默认来源。
+- `high-school-math-ai/`：旧原型的架构、教材、审计与权利证据，其中教材基线仍被当前代码使用。旧 UI 源码与信息架构已删除，不作为当前开发优先级来源。
 - `legal/`：第三方许可证与法律相关清单。
 
 ## 文档维护规则

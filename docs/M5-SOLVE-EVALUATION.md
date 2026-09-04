@@ -1,5 +1,7 @@
 # M5 Solve Agent 固定合成评测
 
+> 状态同步（2026-09-04）：M0–M11 已完成并完成阶段转换，当前为 M12 切片 1–4。本文的切片过程、测试数量和 Gate 结论保留为当时证据；后续行为与当前边界见 [开发状态](PROJECT-STATUS.md) 和 [开发边界](DEVELOPMENT-BOUNDARY.md)。
+
 - 评测日期：2026-08-21
 - 评测 ID：`solve-agent-synthetic-v1`
 - 数据来源：项目自建 synthetic fixture，不含真实教师资料或第三方题库内容

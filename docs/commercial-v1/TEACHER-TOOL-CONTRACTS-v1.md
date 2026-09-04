@@ -1,5 +1,7 @@
 # Teacher Tool 契约 v1（5 个只读工具）
 
+> 归档说明（2026-09-04）：本文保留原型/迁移时期的事实与决策。旧 UI、旧路径、分支、待办和验收数字不代表当前实现；请以 [当前开发状态](../PROJECT-STATUS.md) 为准。来源、权利与教材证据继续保留。
+
 本文档定义第一版 Teacher Agent 的 model-visible tool allowlist 与每个工具经
 FastAPI Internal Tool Gateway（`/internal/agent-tools/v1/*`）的正式契约。
 Gateway 实际以 FastAPI Pydantic 模型为准（`apps/api/app/routes/internal_agent_tools.py`）。

@@ -8,5 +8,5 @@
 4. 可追溯：来源文件、修订历史与下架路径齐全。
 
 **当前为空。** 任何内容在满足
-`docs/commercial-v1/DATA-RIGHTS-MIGRATION-REVIEW.md` 的出口条件之前，
+当前 `docs/PRODUCT-GATES.md` 与 `docs/DEVELOPMENT-BOUNDARY.md` 的发布条件之前，
 不得被放入本目录。
