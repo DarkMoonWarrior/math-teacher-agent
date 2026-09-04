@@ -25,7 +25,7 @@
 - [`M10-LESSON-AGENT.md`](M10-LESSON-AGENT.md)、[评测](M10-LESSON-AGENT-EVALUATION.md)、[Gate](M10-GATE-REVIEW.md)：已完成的教案闭环。
 - [`M11-TEACHER-MEMORY.md`](M11-TEACHER-MEMORY.md)、[评测](M11-TEACHER-MEMORY-EVALUATION.md)、[Gate](M11-GATE-REVIEW.md)：已完成的教师偏好与生命周期。
 - [`M12-CLOSED-BETA-READINESS.md`](M12-CLOSED-BETA-READINESS.md)：唯一活动里程碑，切片 1–4 已接入，切片 5 和完整 Gate 尚未完成。
-- [`M12-DATA-LIFECYCLE.md`](M12-DATA-LIFECYCLE.md)：第五切片的旧接口隔离修复、实际数据保留边界、33 项合成演练和待完成项。
+- [`M12-DATA-LIFECYCLE.md`](M12-DATA-LIFECYCLE.md)：第五切片的旧接口隔离、会话预览/确认清理、HTTP 缓存保护、实际数据保留边界、合成演练和待完成项。
 - [`TEACHER-TOOL-CONTRACTS.md`](TEACHER-TOOL-CONTRACTS.md)：当前九项受控 Tool 契约。
 - [`REPOSITORY-SYNC.md`](REPOSITORY-SYNC.md)：仓库清理范围、文档分层与本轮复验记录。
 

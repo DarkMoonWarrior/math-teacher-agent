@@ -42,7 +42,7 @@ describe("Search stream route", () => {
     const upstreamHeaders = upstreamCall[1].headers as Headers;
     expect(upstreamHeaders.get("cookie")).toBe("math_beta_session=opaque");
     expect(response.headers.get("content-type")).toBe("text/event-stream; charset=utf-8");
-    expect(response.headers.get("cache-control")).toBe("no-cache, no-transform");
+    expect(response.headers.get("cache-control")).toBe("private, no-store, no-transform");
     expect(response.headers.get("x-accel-buffering")).toBe("no");
     expect(response.headers.get("x-request-id")).toBe("req_stream");
     await expect(response.text()).resolves.toBe('data: {"type":"run_started"}\n\n');
@@ -60,6 +60,7 @@ describe("Search stream route", () => {
     const response = await POST(request);
 
     expect(response.status).toBe(502);
+    expect(response.headers.get("cache-control")).toBe("private, no-store, no-transform");
     await expect(response.json()).resolves.toEqual({
       error: {
         code: "NETWORK_ERROR",
