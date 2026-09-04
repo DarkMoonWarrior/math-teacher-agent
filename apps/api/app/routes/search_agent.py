@@ -21,11 +21,13 @@ import uuid
 from functools import lru_cache
 from typing import Any
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 from app.core.config import get_settings
+from app.core.identity import CurrentTeacher, get_current_teacher
+from app.core.agent_sessions import agent_sessions
 from app.agent_runtime import TeacherAgentEvent, TeacherAgentEventType
 from app.modules.search_agent import SearchAgentPipeline, SearchAgentResponse, SearchAgentRunRecord
 
@@ -86,22 +88,26 @@ def _require_feature() -> None:
         )
 
 
-def _require_run(run_id: str) -> SearchAgentRunRecord:
+def _require_run(run_id: str, *, owner_id: str) -> SearchAgentRunRecord:
     _require_feature()
     record = _RUNS.get(run_id)
-    if record is None:
+    if record is None or record.owner_id != owner_id:
         raise _SearchAgentHttpError(404, "RUN_NOT_FOUND", "run 不存在", run_id)
     return record
 
 
 @router.post("", response_model=SearchAgentResponse)
-async def search(body: SearchAgentSearchRequest) -> SearchAgentResponse:
+async def search(body: SearchAgentSearchRequest, teacher: CurrentTeacher = Depends(get_current_teacher)) -> SearchAgentResponse:
     _require_feature()
+    body = body.model_copy(update={"session_id": agent_sessions.resolve(
+        owner_id=teacher.teacher_id, workflow="search", client_session_id=body.session_id,
+    )})
     request_id = f"req_{uuid.uuid4().hex}"
     response = await get_search_agent_pipeline().run(
         body.query, session_id=body.session_id, request_id=request_id
     )
     record = SearchAgentRunRecord(
+        owner_id=teacher.teacher_id,
         run_id=response.run_id or f"run_{uuid.uuid4().hex}",
         request_id=request_id,
         session_id=response.session_id,
@@ -113,17 +119,23 @@ async def search(body: SearchAgentSearchRequest) -> SearchAgentResponse:
         error=response.error,
         finished_at=None,
     )
+    previous = _RUNS.get(record.run_id)
+    if previous is not None and previous.owner_id != teacher.teacher_id:
+        raise _SearchAgentHttpError(409, "RUN_CONFLICT", "任务编号冲突，请重试", request_id)
     _RUNS[record.run_id] = record
     return response
 
 
-def _record_stream_event(body: SearchAgentSearchRequest, event: TeacherAgentEvent) -> None:
+def _record_stream_event(body: SearchAgentSearchRequest, event: TeacherAgentEvent, *, owner_id: str) -> None:
     """Persist the observable run lifecycle before the event reaches the client."""
     if not event.run_id:
         return
     record = _RUNS.get(event.run_id)
+    if record is not None and record.owner_id != owner_id:
+        raise _SearchAgentHttpError(409, "RUN_CONFLICT", "任务编号冲突，请重试", event.request_id)
     if record is None:
         record = SearchAgentRunRecord(
+            owner_id=owner_id,
             run_id=event.run_id,
             request_id=event.request_id,
             session_id=event.session_id,
@@ -170,9 +182,12 @@ def _record_stream_event(body: SearchAgentSearchRequest, event: TeacherAgentEven
 
 
 @router.post("/stream")
-async def stream_search(body: SearchAgentSearchRequest) -> StreamingResponse:
+async def stream_search(body: SearchAgentSearchRequest, teacher: CurrentTeacher = Depends(get_current_teacher)) -> StreamingResponse:
     """Run Search once and stream its real lifecycle; disconnect cancels that run."""
     _require_feature()
+    body = body.model_copy(update={"session_id": agent_sessions.resolve(
+        owner_id=teacher.teacher_id, workflow="search", client_session_id=body.session_id,
+    )})
     request_id = f"req_{uuid.uuid4().hex}"
     pipeline = get_search_agent_pipeline()
 
@@ -182,7 +197,7 @@ async def stream_search(body: SearchAgentSearchRequest) -> StreamingResponse:
             session_id=body.session_id,
             request_id=request_id,
         ):
-            _record_stream_event(body, event)
+            _record_stream_event(body, event, owner_id=teacher.teacher_id)
             yield f"data: {json.dumps(event.model_dump(mode='json'), ensure_ascii=False)}\n\n"
 
     return StreamingResponse(
@@ -193,14 +208,14 @@ async def stream_search(body: SearchAgentSearchRequest) -> StreamingResponse:
 
 
 @router.get("/{run_id}")
-async def get_run(run_id: str) -> dict[str, Any]:
-    record = _require_run(run_id)
+async def get_run(run_id: str, teacher: CurrentTeacher = Depends(get_current_teacher)) -> dict[str, Any]:
+    record = _require_run(run_id, owner_id=teacher.teacher_id)
     return record.model_dump(mode="json")
 
 
 @router.get("/{run_id}/stream")
-async def stream_run(run_id: str) -> StreamingResponse:
-    record = _require_run(run_id)
+async def stream_run(run_id: str, teacher: CurrentTeacher = Depends(get_current_teacher)) -> StreamingResponse:
+    record = _require_run(run_id, owner_id=teacher.teacher_id)
 
     async def events():
         started = TeacherAgentEvent(
@@ -239,8 +254,8 @@ async def stream_run(run_id: str) -> StreamingResponse:
 
 
 @router.post("/{run_id}/cancel")
-async def cancel_run(run_id: str) -> dict[str, Any]:
-    record = _require_run(run_id)
+async def cancel_run(run_id: str, teacher: CurrentTeacher = Depends(get_current_teacher)) -> dict[str, Any]:
+    record = _require_run(run_id, owner_id=teacher.teacher_id)
     if record.status in {"ok", "error", "cancelled"}:
         return {
             "run_id": run_id,

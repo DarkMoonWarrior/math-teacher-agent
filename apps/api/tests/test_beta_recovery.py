@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import stat
+from types import SimpleNamespace
 from pathlib import Path
 
 import pytest
@@ -138,3 +140,59 @@ def test_unlisted_payload_file_fails_closed(tmp_path: Path) -> None:
 
     with pytest.raises(BackupIntegrityError, match="BACKUP_PAYLOAD_FILE_SET_MISMATCH"):
         service.verify_backup(backup_root)
+
+
+def _mark_reparse(monkeypatch, path: Path) -> None:
+    """Exercise Windows reparse handling without requiring symlink privileges."""
+    original = Path.lstat
+
+    def lstat(item, *args, **kwargs):
+        info = original(item, *args, **kwargs)
+        if item.absolute() == path.absolute():
+            return SimpleNamespace(st_mode=info.st_mode,
+                                   st_file_attributes=stat.FILE_ATTRIBUTE_REPARSE_POINT)
+        return info
+
+    monkeypatch.setattr(Path, "lstat", lstat)
+
+
+@pytest.mark.parametrize("entry", ["destination", "source_parent", "backup", "payload"])
+def test_backup_rejects_reparse_paths_before_reading_or_writing(tmp_path, monkeypatch, entry):
+    live = tmp_path / "live"
+    live.mkdir()
+    service, _, _ = _service(live)
+    destination = PrivateBackupDestination(tmp_path / "backups", private_storage_confirmed=True)
+    manifest = service.create_backup(destination)
+    backup = destination.root / manifest.backup_id
+    blocked = {"destination": destination.root, "source_parent": live,
+               "backup": backup, "payload": backup / "payload"}[entry]
+    _mark_reparse(monkeypatch, blocked)
+    with pytest.raises((BackupContractError, BackupIntegrityError)):
+        if entry in ("backup", "payload"):
+            service.verify_backup(backup)
+        else:
+            service.create_backup(destination)
+    assert len(list(destination.root.glob("backup_*"))) == 1
+
+
+def test_source_descriptor_cannot_escape_payload_before_snapshot(tmp_path):
+    database = tmp_path / "owner.sqlite3"
+    _sqlite(database)
+    with pytest.raises(BackupContractError):
+        BetaBackupRecovery(sources=(OwnerStoreSource("../escape", "sqlite", database),))
+
+
+def test_normalized_link_is_rejected_at_destination_input(tmp_path, monkeypatch):
+    # Model resolve() dereferencing a link: validation must see the original path.
+    alias, target = tmp_path / "alias", tmp_path / "target"
+    alias.mkdir()
+    target.mkdir()
+    original_resolve = Path.resolve
+    original_link = Path.is_symlink
+    monkeypatch.setattr(Path, "resolve", lambda path, *a, **kw:
+                        target if path == alias else original_resolve(path, *a, **kw))
+    monkeypatch.setattr(Path, "is_symlink", lambda path: path == alias or original_link(path))
+    with pytest.raises(BackupContractError):
+        destination = PrivateBackupDestination(alias, private_storage_confirmed=True)
+        destination.prepare(sources=())
+    assert not (target / ".math-ai-private-backup-root").exists()

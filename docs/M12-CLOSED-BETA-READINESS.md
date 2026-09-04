@@ -94,10 +94,21 @@ Search/Solve stream proxies explicitly disallow caching. The separately approved
 operator-only `BetaSessionMaintenance.preview/prune` supports preview-first,
 explicitly confirmed cleanup of expired/revoked sessions, with atomic deletion and
 live/unclassifiable record preservation. It has no browser/Agent route or scheduler;
-real user records have not been cleaned. FastAPI 540 tests pass (one OS-privileged
+real user records have not been cleaned. FastAPI 587 tests pass (one OS-privileged
 symlink test skipped); Teacher Web 102 tests, typecheck and production build pass.
 See [data lifecycle evidence and remaining gaps](M12-DATA-LIFECYCLE.md).
 Slice 5 is partial and the complete M12 Gate remains open.
+
+Task snapshots now bind the server-owned teacher, and `TeacherAgentSessions.resolve`
+scopes model sessions by teacher AND workflow before Search, Solve, authoring or
+private-library execution. Foreign/tampered signed session names are refused before
+Runtime calls. Original/ancestor backup paths and Windows reparse points are checked
+before normalization or IO; unsafe store identifiers are rejected before snapshotting.
+Legacy paper creation/composition/update REST entries are also disabled in Beta.
+The fixed evaluation entry is `python -m pytest -c apps/api/pytest-m12.ini -q`;
+see [current Gate evidence](M12-GATE-REVIEW.md) and the
+[session decision](ADR-2026-09-04-OWNER-AGENT-SESSIONS.md). This deployment remains
+single API process; old model session names expire across API restarts, not saved content.
 
 ## Slice 2 interface and acceptance
 

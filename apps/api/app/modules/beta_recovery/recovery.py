@@ -3,8 +3,10 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import shutil
 import sqlite3
+import stat
 import tempfile
 import uuid
 from dataclasses import dataclass
@@ -50,11 +52,17 @@ class PrivateBackupDestination:
     def __init__(self, root: Path, *, private_storage_confirmed: bool) -> None:
         if not private_storage_confirmed:
             raise BackupContractError("PRIVATE_DESTINATION_CONFIRMATION_REQUIRED")
-        self.root = root.resolve()
+        # Keep the lexical path until every existing component has been checked.
+        # resolve() first would hide a link/junction supplied by the operator.
+        self._requested_root = root.absolute()
+        self._reject_links_in_existing_ancestors(self._requested_root)
+        self.root = self._requested_root.resolve()
 
     def prepare(self, *, sources: tuple[OwnerStoreSource, ...]) -> None:
+        self._reject_links_in_existing_ancestors(self._requested_root)
         self._reject_links_in_existing_ancestors(self.root)
         for source in sources:
+            self._reject_links_in_existing_ancestors(source.path.absolute())
             resolved_source = source.path.resolve()
             if self.root == resolved_source or self._is_within(resolved_source, self.root):
                 raise BackupContractError("BACKUP_DESTINATION_CONTAINS_SOURCE")
@@ -64,7 +72,7 @@ class PrivateBackupDestination:
         if not self.root.is_dir() or self._is_link_or_junction(self.root):
             raise BackupContractError("PRIVATE_DESTINATION_INVALID")
         marker = self.root / ".math-ai-private-backup-root"
-        if marker.exists() and self._is_link_or_junction(marker):
+        if self._is_link_or_junction(marker):
             raise BackupContractError("PRIVATE_DESTINATION_MARKER_INVALID")
         if not marker.exists():
             marker.write_text("private closed beta backups\n", encoding="utf-8")
@@ -79,20 +87,23 @@ class PrivateBackupDestination:
 
     @classmethod
     def _reject_links_in_existing_ancestors(cls, path: Path) -> None:
-        current = path
-        while not current.exists() and current.parent != current:
-            current = current.parent
-        while True:
+        for current in (path, *path.parents):
             if cls._is_link_or_junction(current):
                 raise BackupContractError("PRIVATE_DESTINATION_LINK_NOT_ALLOWED")
-            if current.parent == current:
-                break
-            current = current.parent
 
     @staticmethod
     def _is_link_or_junction(path: Path) -> bool:
+        # All Windows reparse points are unsafe here, not just directory junctions.
         is_junction = getattr(path, "is_junction", None)
-        return path.is_symlink() or bool(is_junction and is_junction())
+        if path.is_symlink() or bool(is_junction and is_junction()):
+            return True
+        try:
+            info = path.lstat()
+        except FileNotFoundError:
+            return False
+        return stat.S_ISLNK(info.st_mode) or bool(
+            getattr(info, "st_file_attributes", 0) & stat.FILE_ATTRIBUTE_REPARSE_POINT
+        )
 
 
 class BetaBackupRecovery:
@@ -103,6 +114,9 @@ class BetaBackupRecovery:
     _PAYLOAD_DIR = "payload"
 
     def __init__(self, *, sources: tuple[OwnerStoreSource, ...]) -> None:
+        if any(not re.fullmatch(r"[a-z][a-z0-9_]{1,63}", source.store_id)
+               or source.kind not in ("sqlite", "directory") for source in sources):
+            raise BackupContractError("SOURCE_DESCRIPTOR_INVALID")
         store_ids = [source.store_id for source in sources]
         if len(store_ids) != len(set(store_ids)):
             raise BackupContractError("DUPLICATE_STORE_ID")
@@ -111,8 +125,11 @@ class BetaBackupRecovery:
     def inventory(self) -> list[BackupInventoryItem]:
         items: list[BackupInventoryItem] = []
         for source in self.sources:
+            PrivateBackupDestination._reject_links_in_existing_ancestors(source.path.absolute())
             file_count = 0
             if source.path.exists():
+                if source.kind == "sqlite" and not source.path.is_file():
+                    raise BackupContractError("SQLITE_SOURCE_INVALID")
                 file_count = 1 if source.kind == "sqlite" else len(self._directory_files(source.path))
             items.append(
                 BackupInventoryItem(
@@ -152,10 +169,14 @@ class BetaBackupRecovery:
             return manifest
         except Exception:
             if staging.exists() and staging.parent == destination.root:
+                # Never recursively clean a staging tree that acquired a link.
+                PrivateBackupDestination._reject_links_in_existing_ancestors(staging)
+                self._directory_files(staging)
                 shutil.rmtree(staging)
             raise
 
     def verify_backup(self, backup_root: Path) -> BackupVerification:
+        PrivateBackupDestination._reject_links_in_existing_ancestors(backup_root.absolute())
         root = backup_root.resolve()
         if not root.is_dir() or self._is_link_or_junction(root):
             raise BackupIntegrityError("BACKUP_DIRECTORY_INVALID")
@@ -181,7 +202,9 @@ class BetaBackupRecovery:
         file_count = 0
         total_bytes = 0
         seen_paths: set[str] = set()
-        payload_root = (root / self._PAYLOAD_DIR).resolve()
+        payload_path = root / self._PAYLOAD_DIR
+        PrivateBackupDestination._reject_links_in_existing_ancestors(payload_path)
+        payload_root = payload_path.resolve()
         actual_paths = {
             path.relative_to(payload_root).as_posix()
             for path in self._directory_files(payload_root)
@@ -191,7 +214,13 @@ class BetaBackupRecovery:
                 if record.relative_path in seen_paths:
                     raise BackupIntegrityError("BACKUP_FILE_DUPLICATED")
                 seen_paths.add(record.relative_path)
-                candidate = (payload_root / Path(record.relative_path)).resolve()
+                relative = Path(record.relative_path)
+                if (relative.is_absolute() or relative.drive or ".." in relative.parts
+                        or "\\" in record.relative_path or ":" in record.relative_path):
+                    raise BackupIntegrityError("BACKUP_PATH_OUTSIDE_ROOT")
+                original = payload_root / relative
+                PrivateBackupDestination._reject_links_in_existing_ancestors(original)
+                candidate = original.resolve()
                 self._assert_payload_file(candidate, payload_root)
                 if candidate.stat().st_size != record.size_bytes:
                     raise BackupIntegrityError("BACKUP_FILE_SIZE_MISMATCH")
@@ -243,6 +272,7 @@ class BetaBackupRecovery:
         )
 
     def _capture_source(self, source: OwnerStoreSource, payload_root: Path) -> BackupStoreRecord:
+        PrivateBackupDestination._reject_links_in_existing_ancestors(source.path.absolute())
         if not source.path.exists():
             return BackupStoreRecord(
                 store_id=source.store_id,
@@ -277,6 +307,7 @@ class BetaBackupRecovery:
 
     @classmethod
     def _directory_files(cls, root: Path) -> list[Path]:
+        PrivateBackupDestination._reject_links_in_existing_ancestors(root.absolute())
         if not root.is_dir() or cls._is_link_or_junction(root):
             raise BackupContractError("DIRECTORY_SOURCE_LINK_NOT_ALLOWED")
         files: list[Path] = []

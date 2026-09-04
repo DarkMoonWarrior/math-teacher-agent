@@ -110,6 +110,7 @@ apps/agent (isolated Node/TypeScript runtime, :4100)
 - Seam: product-owned Python and TypeScript runtime contracts.
 - Adapters: `LegacyTeacherAgentRuntime` and isolated DeepSeek Harness runtime.
 - Rule: Harness-specific event names and types stop at the adapter. Business callers and tests cross only the product interface.
+- Session boundary: `TeacherAgentSessions.resolve` 在四类公开 Agent 入口把浏览器别名转换为绑定教师和模块的签名会话；外来或篡改的签名编号在 Runtime 前拒绝。Search/Solve run 快照单独绑定 owner，读取/回放/取消/恢复先校验身份。当前单进程密钥在 API 重启后失效，保存内容不变；不支持多 worker 共享上下文。见 [会话隔离 ADR](ADR-2026-09-04-OWNER-AGENT-SESSIONS.md)。
 
 ### Business modules
 
@@ -123,7 +124,6 @@ Allowed:
 
 ```text
 teacher-web → public FastAPI routes
-legacy web → public FastAPI routes
 FastAPI routes → business modules
 FastAPI runtime adapter → Agent Service
 Agent Service → internal Tool gateway

@@ -28,6 +28,7 @@ from app.routes import questions as question_routes
 from app.routes import question_similarity as similarity_routes
 from app.routes import solutions as solution_routes
 from app.routes import model_operations as model_routes
+from app.routes import exam_papers as paper_routes
 from app.routes.personal_question_library import get_personal_question_library
 
 
@@ -132,6 +133,32 @@ def test_beta_legacy_imports_do_not_expose_or_modify_another_owner(beta_lifecycl
     assert response.status_code == 403
     assert "synthetic-alpha-only" not in response.text
     assert studio.workspace().batches[0].lifecycle_state == "active"
+
+
+def test_beta_legacy_paper_composer_cannot_read_unscoped_private_bank(beta_lifecycle, monkeypatch):
+    from app.modules.exam_papers import ExamPaperComposer
+    from tests.test_exam_paper_composer import ComposerQuestionBank
+
+    bank = ComposerQuestionBank()  # Synthetic private questions, no production stores.
+    monkeypatch.setattr(paper_routes, "get_exam_paper_composer", lambda: ExamPaperComposer(bank))
+    response = beta_lifecycle[0]["beta"].post("/api/v1/exam-papers/compose", json={
+        "target_score": 10, "type_quotas": [{"question_type": "single_choice", "count": 2}],
+    })
+    assert response.status_code == 403
+    assert "教师自有题库" not in response.text
+
+
+@pytest.mark.parametrize("method,path", [
+    ("POST", ""), ("POST", "/compose"), ("POST", "/compose-template"), ("PUT", "/synthetic"),
+])
+def test_beta_legacy_paper_writes_stop_before_storage(beta_lifecycle, monkeypatch, method, path):
+    def forbidden():
+        raise AssertionError("Legacy paper stores must not be opened in Beta")
+    monkeypatch.setattr(paper_routes, "get_exam_paper_studio", forbidden)
+    monkeypatch.setattr(paper_routes, "get_exam_paper_composer", forbidden)
+    response = beta_lifecycle[0]["alpha"].request(method, f"/api/v1/exam-papers{path}", json={})
+    assert response.status_code == 403
+    assert response.json()["detail"]["code"] == "LEGACY_WORKFLOW_UNAVAILABLE"
 
 
 def test_beta_memory_export_delete_is_bound_to_real_session(beta_lifecycle):

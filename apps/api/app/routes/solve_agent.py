@@ -18,6 +18,7 @@ from pydantic import BaseModel
 
 from app.agent_runtime import TeacherAgentEvent, TeacherAgentEventType
 from app.core.config import get_settings
+from app.core.agent_sessions import agent_sessions
 from app.core.identity import CurrentTeacher, get_current_teacher
 from app.modules.solve_agent import (
     SolveAgentCommand,
@@ -74,18 +75,22 @@ def _require_feature() -> None:
         )
 
 
-def _require_run(run_id: str) -> SolveAgentRunRecord:
+def _require_run(run_id: str, *, owner_id: str) -> SolveAgentRunRecord:
     _require_feature()
     record = _RUNS.get(run_id)
-    if record is None:
+    if record is None or record.owner_id != owner_id:
         raise _SolveAgentHttpError(404, "RUN_NOT_FOUND", "run 不存在", run_id)
     return record
 
 
-def _store_response(command: SolveAgentCommand, response: SolveAgentResponse) -> None:
+def _store_response(command: SolveAgentCommand, response: SolveAgentResponse, *, owner_id: str) -> None:
     if not response.run_id:
         response.run_id = f"run_{uuid.uuid4().hex}"
+    previous = _RUNS.get(response.run_id)
+    if previous is not None and previous.owner_id != owner_id:
+        raise _SolveAgentHttpError(409, "RUN_CONFLICT", "任务编号冲突，请重试", response.request_id)
     _RUNS[response.run_id] = SolveAgentRunRecord(
+        owner_id=owner_id,
         run_id=response.run_id,
         request_id=response.request_id,
         session_id=response.session_id,
@@ -103,21 +108,27 @@ async def solve(
     current_teacher: CurrentTeacher = Depends(get_current_teacher),
 ) -> SolveAgentResponse:
     _require_feature()
+    command = command.model_copy(update={"session_id": agent_sessions.resolve(
+        owner_id=current_teacher.teacher_id, workflow="solve", client_session_id=command.session_id,
+    )})
     response = await get_solve_agent_workflow().run(
         command,
         owner_id=current_teacher.teacher_id,
         request_id=f"req_{uuid.uuid4().hex}",
     )
-    _store_response(command, response)
+    _store_response(command, response, owner_id=current_teacher.teacher_id)
     return response
 
 
-def _record_stream_event(command: SolveAgentCommand, event: TeacherAgentEvent) -> None:
+def _record_stream_event(command: SolveAgentCommand, event: TeacherAgentEvent, *, owner_id: str) -> None:
     if not event.run_id:
         return
     record = _RUNS.get(event.run_id)
+    if record is not None and record.owner_id != owner_id:
+        raise _SolveAgentHttpError(409, "RUN_CONFLICT", "任务编号冲突，请重试", event.request_id)
     if record is None:
         record = SolveAgentRunRecord(
+            owner_id=owner_id,
             run_id=event.run_id,
             request_id=event.request_id,
             session_id=event.session_id,
@@ -159,6 +170,9 @@ async def stream_solve(
     current_teacher: CurrentTeacher = Depends(get_current_teacher),
 ) -> StreamingResponse:
     _require_feature()
+    command = command.model_copy(update={"session_id": agent_sessions.resolve(
+        owner_id=current_teacher.teacher_id, workflow="solve", client_session_id=command.session_id,
+    )})
     request_id = f"req_{uuid.uuid4().hex}"
     workflow = get_solve_agent_workflow()
 
@@ -168,7 +182,7 @@ async def stream_solve(
             owner_id=current_teacher.teacher_id,
             request_id=request_id,
         ):
-            _record_stream_event(command, event)
+            _record_stream_event(command, event, owner_id=current_teacher.teacher_id)
             yield f"data: {json.dumps(event.model_dump(mode='json'), ensure_ascii=False)}\n\n"
 
     return StreamingResponse(
@@ -179,13 +193,13 @@ async def stream_solve(
 
 
 @router.get("/{run_id}")
-async def get_run(run_id: str) -> dict[str, Any]:
-    return _require_run(run_id).model_dump(mode="json")
+async def get_run(run_id: str, teacher: CurrentTeacher = Depends(get_current_teacher)) -> dict[str, Any]:
+    return _require_run(run_id, owner_id=teacher.teacher_id).model_dump(mode="json")
 
 
 @router.get("/{run_id}/stream")
-async def stream_run(run_id: str) -> StreamingResponse:
-    record = _require_run(run_id)
+async def stream_run(run_id: str, teacher: CurrentTeacher = Depends(get_current_teacher)) -> StreamingResponse:
+    record = _require_run(run_id, owner_id=teacher.teacher_id)
 
     async def events():
         started = TeacherAgentEvent(
@@ -224,8 +238,8 @@ async def stream_run(run_id: str) -> StreamingResponse:
 
 
 @router.post("/{run_id}/cancel")
-async def cancel_run(run_id: str) -> dict[str, Any]:
-    record = _require_run(run_id)
+async def cancel_run(run_id: str, teacher: CurrentTeacher = Depends(get_current_teacher)) -> dict[str, Any]:
+    record = _require_run(run_id, owner_id=teacher.teacher_id)
     if record.status in {"ok", "error", "cancelled"}:
         return {"run_id": run_id, "status": record.status, "error": record.error}
     outcome = await get_solve_agent_workflow().cancel(run_id)
@@ -241,7 +255,7 @@ async def resume_run(
     run_id: str,
     current_teacher: CurrentTeacher = Depends(get_current_teacher),
 ) -> SolveAgentResponse:
-    record = _require_run(run_id)
+    record = _require_run(run_id, owner_id=current_teacher.teacher_id)
     if record.status not in {"error", "cancelled"}:
         raise _SolveAgentHttpError(
             409,
@@ -262,5 +276,5 @@ async def resume_run(
         owner_id=current_teacher.teacher_id,
         request_id=f"req_{uuid.uuid4().hex}",
     )
-    _store_response(record.command, response)
+    _store_response(record.command, response, owner_id=current_teacher.teacher_id)
     return response

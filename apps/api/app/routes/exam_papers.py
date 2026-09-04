@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import FileResponse
 
 from app.core.config import get_settings
-from app.core.identity import CurrentTeacher, get_current_teacher
+from app.core.identity import CurrentTeacher, get_current_teacher, require_local_legacy_access
 from app.modules.exam_exports import ExamPaperDocumentRenderer, ExamPaperExportError
 from app.modules.teacher_memory import TeacherMemory, TeacherPreferenceSignal
 from app.modules.teacher_memory.dependencies import get_teacher_memory
@@ -187,7 +187,8 @@ def change_exam_paper_lifecycle(
         raise HTTPException(status_code=404, detail="试卷不存在") from exc
 
 
-@router.post("", response_model=ExamPaperView, status_code=201)
+@router.post("", response_model=ExamPaperView, status_code=201,
+             dependencies=[Depends(require_local_legacy_access)])
 def create_exam_paper(
     command: ExamPaperCreateCommand,
     teacher: CurrentTeacher = Depends(get_current_teacher),
@@ -200,7 +201,8 @@ def create_exam_paper(
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
-@router.post("/compose", response_model=ExamPaperProposal)
+@router.post("/compose", response_model=ExamPaperProposal,
+             dependencies=[Depends(require_local_legacy_access)])
 def compose_exam_paper(command: ExamPaperComposeCommand) -> ExamPaperProposal:
     try:
         return get_exam_paper_composer().compose(command)
@@ -292,7 +294,8 @@ def list_exam_paper_templates() -> ExamPaperTemplateList:
     return get_exam_paper_template_catalog().list()
 
 
-@router.post("/compose-template", response_model=ExamPaperProposal)
+@router.post("/compose-template", response_model=ExamPaperProposal,
+             dependencies=[Depends(require_local_legacy_access)])
 def compose_exam_paper_template(
     command: ExamPaperTemplateComposeCommand,
 ) -> ExamPaperProposal:
@@ -316,7 +319,8 @@ def get_exam_paper(
         raise HTTPException(status_code=404, detail="试卷不存在") from exc
 
 
-@router.put("/{paper_id}", response_model=ExamPaperView)
+@router.put("/{paper_id}", response_model=ExamPaperView,
+            dependencies=[Depends(require_local_legacy_access)])
 def update_exam_paper(
     paper_id: str,
     command: ExamPaperUpdateCommand,
