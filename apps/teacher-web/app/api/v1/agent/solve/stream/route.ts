@@ -19,7 +19,7 @@ function gatewayError(message: string): NextResponse {
         request_id: "",
       },
     },
-    { status: 502 },
+    { status: 502, headers: { "Cache-Control": "private, no-store, no-transform" } },
   );
 }
 
@@ -50,7 +50,7 @@ export async function POST(request: Request): Promise<Response> {
     "Content-Type",
     upstream.headers.get("content-type") ?? "application/octet-stream",
   );
-  responseHeaders.set("Cache-Control", "no-cache, no-transform");
+  responseHeaders.set("Cache-Control", "private, no-store, no-transform");
   responseHeaders.set("X-Accel-Buffering", "no");
 
   const requestId = upstream.headers.get("x-request-id");

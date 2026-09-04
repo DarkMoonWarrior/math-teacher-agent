@@ -27,6 +27,7 @@ from app.routes import lesson_plans as lesson_routes
 from app.routes import questions as question_routes
 from app.routes import question_similarity as similarity_routes
 from app.routes import solutions as solution_routes
+from app.routes import model_operations as model_routes
 from app.routes.personal_question_library import get_personal_question_library
 
 
@@ -78,6 +79,41 @@ def _synthetic_import(studio):
         ),
         [("synthetic.pdf", output.getvalue())],
     ).batch
+
+
+@pytest.mark.parametrize("operation", ["status", "login", "logout", "profile", "export", "denied", "invalid"])
+def test_private_http_responses_are_not_storable(beta_lifecycle, operation):
+    clients = beta_lifecycle[0]
+    client = clients["alpha"]
+    if operation == "login":
+        response = client.post("/api/v1/beta-session", json={"access_code": "synthetic-alpha"})
+        assert "httponly" in response.headers["set-cookie"].lower()
+    elif operation == "logout":
+        response = client.delete("/api/v1/beta-session")
+    elif operation == "denied":
+        response = clients["anonymous"].get("/api/v1/teacher-memory/profile")
+        assert response.status_code == 401
+    elif operation == "invalid":
+        response = client.post("/api/v1/beta-session", json={})
+        assert response.status_code == 422
+    else:
+        path = "/beta-session" if operation == "status" else f"/teacher-memory/{operation}"
+        response = client.get(f"/api/v1{path}")
+        assert response.status_code == 200
+    directives = response.headers.get("cache-control", "").split(", ")
+    assert "private" in directives
+    assert "no-store" in directives
+
+
+@pytest.mark.parametrize("user", ["anonymous", "alpha", "beta"])
+def test_beta_old_model_dashboard_denied_before_global_storage(beta_lifecycle, monkeypatch, user):
+    def forbidden():
+        raise AssertionError("Global operations storage must not be opened in Beta")
+
+    monkeypatch.setattr(model_routes, "get_model_operations_registry", forbidden)
+    response = beta_lifecycle[0][user].get("/api/v1/admin/model-operations")
+    assert response.status_code == 403
+    assert response.json()["detail"]["code"] == "LEGACY_WORKFLOW_UNAVAILABLE"
 
 
 @pytest.mark.parametrize("operation", ["list", "download", "trash"])

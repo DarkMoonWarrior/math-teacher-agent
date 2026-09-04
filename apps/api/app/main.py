@@ -4,6 +4,7 @@ from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import get_settings
+from app.core.http_privacy import PrivateApiResponseMiddleware
 from app.core.identity import (
     require_any_beta_capability,
     require_beta_capability,
@@ -60,6 +61,7 @@ app.add_middleware(
     PrivacySafeOperationsMiddleware,
     operations=PrivacySafeOperations(),
 )
+app.add_middleware(PrivateApiResponseMiddleware)
 
 
 @app.get("/health", tags=["system"])
@@ -105,7 +107,10 @@ app.include_router(
     prefix="/api/v1",
     dependencies=[Depends(require_beta_capability("library"))],
 )
-app.include_router(model_operations_router, prefix="/api/v1")
+app.include_router(
+    model_operations_router, prefix="/api/v1",
+    dependencies=[Depends(require_local_legacy_access)],
+)
 app.include_router(
     search_agent_router,
     prefix="/api/v1",

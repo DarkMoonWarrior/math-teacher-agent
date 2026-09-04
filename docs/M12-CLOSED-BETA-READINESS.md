@@ -87,10 +87,15 @@ neither interface accepts or returns teacher content, secrets, identities, URLs 
 exception messages. `BetaBackupRecovery` inventories durable owner-bearing stores,
 creates consistent SQLite/file snapshots in an explicitly confirmed private
 destination, verifies the manifest and every payload checksum, and restores only into
-an isolated temporary drill directory. Slice 5 now includes a 33-case real-session,
-synthetic-store lifecycle rehearsal and a Beta-only block on unsafe legacy REST
-workflows, explicitly approved by the owner. FastAPI 507 tests and Teacher Web 102
-tests pass; prior typecheck/build evidence is in the repository sync record.
+an isolated temporary drill directory. Slice 5 includes real-session, synthetic-store
+lifecycle rehearsals and an owner-approved Beta-only block on unsafe legacy REST
+workflows and the global model-operations dashboard. Private API responses and
+Search/Solve stream proxies explicitly disallow caching. The separately approved
+operator-only `BetaSessionMaintenance.preview/prune` supports preview-first,
+explicitly confirmed cleanup of expired/revoked sessions, with atomic deletion and
+live/unclassifiable record preservation. It has no browser/Agent route or scheduler;
+real user records have not been cleaned. FastAPI 540 tests pass (one OS-privileged
+symlink test skipped); Teacher Web 102 tests, typecheck and production build pass.
 See [data lifecycle evidence and remaining gaps](M12-DATA-LIFECYCLE.md).
 Slice 5 is partial and the complete M12 Gate remains open.
 
