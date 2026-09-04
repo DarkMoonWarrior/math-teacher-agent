@@ -52,6 +52,13 @@ M12 follow-up: Search/Solve run snapshots are bound to the current teacher for r
 
 ## Decision policy
 
+M12 object checks must run before provider initialization, source resolution or
+version rebuilding, not just before the final write. Library OCR, paper history
+revision and lesson version save have preflight owner checks as well as domain
+checks. Real-cookie object regressions and backup CLI privacy regressions are part
+of the fixed M12 profile. The backup CLI emits stable error codes only, including
+argument/configuration failures; unconfirmed creation must not load settings.
+
 Proceed autonomously for clear bugs, tests, refactors, type errors, performance work, documentation corrections, and implementation details that preserve behaviour.
 
 Stop and explain impact before changing product behaviour, teacher workflow, data meaning, rights rules, private/public state, deletion semantics, destructive migrations, permissions, publication gates, or commercial rules.

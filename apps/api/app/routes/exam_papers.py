@@ -346,6 +346,8 @@ def revise_exam_paper_history(
     teacher: CurrentTeacher = Depends(get_current_teacher),
 ) -> ExamPaperView:
     try:
+        studio = get_exam_paper_studio()
+        studio.get_owned(paper_id, owner_id=teacher.teacher_id)
         resolved_items = []
         source = None
         if command.selected_public_question_ids or command.selected_private_question_ids:
@@ -361,7 +363,7 @@ def revise_exam_paper_history(
                 items=resolved_items,
             )
             source.validate_all()
-        return get_exam_paper_studio().revise_owned_history(
+        return studio.revise_owned_history(
             paper_id,
             command,
             owner_id=teacher.teacher_id,

@@ -235,12 +235,15 @@ def test_local_ocr_audit_does_not_claim_external_consent(tmp_path: Path) -> None
     assert consent == 0
 
 
-def test_local_ocr_rejects_duplicate_long_running_job() -> None:
+def test_local_ocr_rejects_duplicate_long_running_job(tmp_path: Path, monkeypatch) -> None:
     from app.routes.library import _local_math_ocr_lock
 
+    library = make_library(tmp_path)
+    item = library.ingest(ingest_command(), filename="synthetic.docx", content=docx_bytes("合成测试"))
+    monkeypatch.setattr(library_routes, "get_private_library", lambda: library)
     assert _local_math_ocr_lock.acquire(blocking=False)
     try:
-        response = TestClient(app).post("/api/v1/library/any-item/local-math-ocr")
+        response = TestClient(app).post(f"/api/v1/library/{item.library_item_id}/local-math-ocr")
     finally:
         _local_math_ocr_lock.release()
 

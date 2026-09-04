@@ -400,8 +400,10 @@ def run_library_ocr(
     current_teacher: CurrentTeacher = Depends(get_current_teacher),
 ) -> LibraryOCRResult:
     try:
+        library = get_private_library()
+        library.get(item_id, owner_id=current_teacher.teacher_id)
         provider = get_library_ocr_provider()
-        item, provider_name, warnings = get_private_library().apply_ocr(
+        item, provider_name, warnings = library.apply_ocr(
             item_id,
             provider=provider,
             consent=command.external_processing_consent,
@@ -424,10 +426,15 @@ def run_local_math_ocr(
     item_id: str,
     current_teacher: CurrentTeacher = Depends(get_current_teacher),
 ) -> LibraryOCRResult:
+    try:
+        library = get_private_library()
+        library.get(item_id, owner_id=current_teacher.teacher_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="私人资料不存在") from exc
     if not _local_math_ocr_lock.acquire(blocking=False):
         raise HTTPException(status_code=409, detail="本地数学 OCR 正在处理另一份资料，请等待当前任务完成后再试")
     try:
-        item, provider_name, warnings = get_private_library().apply_local_ocr(
+        item, provider_name, warnings = library.apply_local_ocr(
             item_id,
             provider=get_local_math_ocr_provider(),
             owner_id=current_teacher.teacher_id,
