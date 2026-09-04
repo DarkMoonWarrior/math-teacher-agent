@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import FileResponse
 
 from app.core.config import get_settings
-from app.core.identity import CurrentTeacher, get_current_teacher
+from app.core.identity import CurrentTeacher, get_current_teacher, require_local_legacy_access
 from app.modules.lesson_exports import (
     LessonPlanExportError,
     SavedLessonPlanDocumentRenderer,
@@ -197,12 +197,12 @@ def get_lesson_saved_exporting(
     )
 
 
-@router.get("", response_model=LessonPlanList)
+@router.get("", response_model=LessonPlanList, dependencies=[Depends(require_local_legacy_access)])
 def list_lesson_plans(limit: int = Query(default=30, ge=1, le=100), lifecycle_state: Literal["active", "trashed"] = Query(default="active")) -> LessonPlanList:
     return get_lesson_plan_studio().list(limit=limit, lifecycle_state=lifecycle_state)
 
 
-@router.post("/{lesson_plan_id}/lifecycle", response_model=LessonPlanView)
+@router.post("/{lesson_plan_id}/lifecycle", response_model=LessonPlanView, dependencies=[Depends(require_local_legacy_access)])
 def change_lesson_plan_lifecycle(lesson_plan_id: str, command: LessonPlanLifecycleCommand) -> LessonPlanView:
     try:
         return get_lesson_plan_studio().change_lifecycle(lesson_plan_id, command)
@@ -210,7 +210,7 @@ def change_lesson_plan_lifecycle(lesson_plan_id: str, command: LessonPlanLifecyc
         raise HTTPException(status_code=404, detail="教案不存在") from exc
 
 
-@router.post("/generate", response_model=LessonPlanView, status_code=201)
+@router.post("/generate", response_model=LessonPlanView, status_code=201, dependencies=[Depends(require_local_legacy_access)])
 def generate_lesson_plan(command: LessonPlanGenerationRequest) -> LessonPlanView:
     try:
         return get_lesson_plan_studio().create(command)
@@ -390,7 +390,7 @@ def change_lesson_version_lifecycle(
         raise HTTPException(status_code=404, detail="教案不存在或不属于当前教师") from exc
 
 
-@router.get("/{lesson_plan_id}", response_model=LessonPlanView)
+@router.get("/{lesson_plan_id}", response_model=LessonPlanView, dependencies=[Depends(require_local_legacy_access)])
 def get_lesson_plan(lesson_plan_id: str) -> LessonPlanView:
     try:
         return get_lesson_plan_studio().get(lesson_plan_id)
@@ -398,7 +398,7 @@ def get_lesson_plan(lesson_plan_id: str) -> LessonPlanView:
         raise HTTPException(status_code=404, detail="教案不存在") from exc
 
 
-@router.put("/{lesson_plan_id}/blocks/{block}/lock", response_model=LessonPlanView)
+@router.put("/{lesson_plan_id}/blocks/{block}/lock", response_model=LessonPlanView, dependencies=[Depends(require_local_legacy_access)])
 def set_lesson_plan_block_lock(
     lesson_plan_id: str,
     block: LessonPlanBlock,
@@ -415,6 +415,7 @@ def set_lesson_plan_block_lock(
 @router.post(
     "/{lesson_plan_id}/blocks/{block}/rewrite",
     response_model=LessonPlanBlockRewriteResult,
+    dependencies=[Depends(require_local_legacy_access)],
 )
 def rewrite_lesson_plan_block(
     lesson_plan_id: str,
@@ -431,7 +432,7 @@ def rewrite_lesson_plan_block(
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
-@router.get("/{lesson_plan_id}/export")
+@router.get("/{lesson_plan_id}/export", dependencies=[Depends(require_local_legacy_access)])
 def export_lesson_plan(
     lesson_plan_id: str,
     format: Literal["docx", "pdf"] = Query(default="docx"),
@@ -450,7 +451,7 @@ def export_lesson_plan(
     )
 
 
-@router.patch("/{lesson_plan_id}", response_model=LessonPlanView)
+@router.patch("/{lesson_plan_id}", response_model=LessonPlanView, dependencies=[Depends(require_local_legacy_access)])
 def update_lesson_plan(
     lesson_plan_id: str, command: LessonPlanUpdateCommand
 ) -> LessonPlanView:

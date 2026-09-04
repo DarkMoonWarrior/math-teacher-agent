@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Respon
 from fastapi.responses import FileResponse
 
 from app.core.config import get_settings
-from app.core.identity import CurrentTeacher, get_current_teacher
+from app.core.identity import CurrentTeacher, get_current_teacher, require_local_legacy_access
 from app.modules.pdf_imports import (
     BoundaryCandidateCreate,
     BoundaryCandidateList,
@@ -49,7 +49,10 @@ from app.modules.pdf_imports import (
 from app.modules.question_bank import QuestionBank, QuestionBankError
 
 
-router = APIRouter(prefix="/imports", tags=["pdf-imports"])
+router = APIRouter(
+    prefix="/imports", tags=["pdf-imports"],
+    dependencies=[Depends(require_local_legacy_access)],
+)
 
 
 @lru_cache

@@ -36,6 +36,7 @@ The only product UI is `apps/teacher-web`. The predecessor UI has been removed; 
 - M5 passed its fixed synthetic evaluation and full Gate E audit on 2026-08-21. Mature lesson-plan, paper, import, library, solution, curriculum, question-bank, and verification modules exist in the migrated backend. Existing REST workflows do not mean the corresponding new Agent capability is complete.
 - Production identity, cloud isolation, billing, and public commercial operation are not implemented.
 - M0-M11 are complete. M11 rollback checkpoint is `5614fc0`, and the owner confirmed transition on 2026-09-01. M12 Closed Beta Readiness is the only active milestone; M13 and later remain blocked until the complete M12 Gate and owner transition confirmation.
+- M12 slice 5 is partial: a 33-case real-session/synthetic-store lifecycle rehearsal covers owner export/deletion and legacy-route denial. With owner approval, Beta mode now rejects legacy import, question-bank management/media, similarity, solution and old lesson REST workflows before storage/provider execution; local development remains compatible. Current product interfaces remain active. See `docs/M12-DATA-LIFECYCLE.md` for retention gaps; do not equate recycle state with permanent erasure or claim full M12 completion.
 
 ## Repository seams
 

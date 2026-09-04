@@ -66,6 +66,24 @@ _CAPABILITY_LABELS: dict[BetaCapability, str] = {
 }
 
 
+def require_local_legacy_access(
+    settings: Settings = Depends(get_settings),
+) -> None:
+    """Legacy single-user REST workflows must never operate on Beta stores.
+
+    Check deployment mode, not an overridable teacher/source field. This is not
+    a substitute for owner checks in the supported product interfaces.
+    """
+    if settings.beta_access_enabled:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "code": "LEGACY_WORKFLOW_UNAVAILABLE",
+                "message": "封闭测试不开放旧版工作流，请使用当前教师工作台。",
+            },
+        )
+
+
 def require_beta_capability(capability: BetaCapability):
     def requirement(
         current_teacher: CurrentTeacher = Depends(get_current_teacher),
