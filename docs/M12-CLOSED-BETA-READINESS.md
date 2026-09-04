@@ -87,8 +87,12 @@ neither interface accepts or returns teacher content, secrets, identities, URLs 
 exception messages. `BetaBackupRecovery` inventories durable owner-bearing stores,
 creates consistent SQLite/file snapshots in an explicitly confirmed private
 destination, verifies the manifest and every payload checksum, and restores only into
-an isolated temporary drill directory. FastAPI 474 tests and Teacher Web 102 tests,
-typecheck and production build pass. Slice 5 and the complete M12 Gate remain open.
+an isolated temporary drill directory. Slice 5 now includes a 33-case real-session,
+synthetic-store lifecycle rehearsal and a Beta-only block on unsafe legacy REST
+workflows, explicitly approved by the owner. FastAPI 507 tests and Teacher Web 102
+tests pass; prior typecheck/build evidence is in the repository sync record.
+See [data lifecycle evidence and remaining gaps](M12-DATA-LIFECYCLE.md).
+Slice 5 is partial and the complete M12 Gate remains open.
 
 ## Slice 2 interface and acceptance
 

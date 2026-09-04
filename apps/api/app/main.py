@@ -4,7 +4,11 @@ from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import get_settings
-from app.core.identity import require_any_beta_capability, require_beta_capability
+from app.core.identity import (
+    require_any_beta_capability,
+    require_beta_capability,
+    require_local_legacy_access,
+)
 from app.modules.beta_operations import PrivacySafeOperations, PrivacySafeOperationsMiddleware
 from app.routes.curriculum import router as curriculum_router
 from app.routes.beta_session import router as beta_session_router
@@ -73,8 +77,14 @@ app.include_router(
     prefix="/api/v1",
     dependencies=[Depends(require_beta_capability("library"))],
 )
-app.include_router(questions_router, prefix="/api/v1")
-app.include_router(question_similarity_router, prefix="/api/v1")
+app.include_router(
+    questions_router, prefix="/api/v1",
+    dependencies=[Depends(require_local_legacy_access)],
+)
+app.include_router(
+    question_similarity_router, prefix="/api/v1",
+    dependencies=[Depends(require_local_legacy_access)],
+)
 app.include_router(
     lesson_plans_router,
     prefix="/api/v1",
@@ -88,7 +98,7 @@ app.include_router(
 app.include_router(
     solutions_router,
     prefix="/api/v1",
-    dependencies=[Depends(require_beta_capability("solve"))],
+    dependencies=[Depends(require_beta_capability("solve")), Depends(require_local_legacy_access)],
 )
 app.include_router(
     library_router,
