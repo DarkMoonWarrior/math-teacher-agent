@@ -56,6 +56,10 @@ class LessonVersioning:
         self._initialize()
 
     def save(self, command: LessonVersionSaveCommand, *, owner_id: str) -> LessonSavedVersion:
+        if command.lesson_plan_id:
+            # Reject foreign IDs before source validation/building. The transaction
+            # below rechecks ownership and lifecycle before committing a version.
+            self.get(command.lesson_plan_id, owner_id=owner_id)
         submitted = command.draft
         self._validate_current_sources(submitted, owner_id=owner_id)
         try:

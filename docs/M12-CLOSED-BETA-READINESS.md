@@ -94,7 +94,7 @@ Search/Solve stream proxies explicitly disallow caching. The separately approved
 operator-only `BetaSessionMaintenance.preview/prune` supports preview-first,
 explicitly confirmed cleanup of expired/revoked sessions, with atomic deletion and
 live/unclassifiable record preservation. It has no browser/Agent route or scheduler;
-real user records have not been cleaned. FastAPI 587 tests pass (one OS-privileged
+real user records have not been cleaned. FastAPI 638 tests pass (one OS-privileged
 symlink test skipped); Teacher Web 102 tests, typecheck and production build pass.
 See [data lifecycle evidence and remaining gaps](M12-DATA-LIFECYCLE.md).
 Slice 5 is partial and the complete M12 Gate remains open.
@@ -109,6 +109,14 @@ The fixed evaluation entry is `python -m pytest -c apps/api/pytest-m12.ini -q`;
 see [current Gate evidence](M12-GATE-REVIEW.md) and the
 [session decision](ADR-2026-09-04-OWNER-AGENT-SESSIONS.md). This deployment remains
 single API process; old model session names expire across API restarts, not saved content.
+
+The object-level rehearsal now includes 42 real-cookie cases for library/capture,
+candidate-parent substitution, background results and paper/lesson history/export.
+OCR initialization, paper added-source resolution and lesson version validation
+reject foreign object IDs before starting work; domain/transaction checks remain.
+Backup CLI privacy has nine additional cases, including successful create/verify/drill:
+unconfirmed creation stops before settings, and failures expose only stable codes.
+These are isolation/error-handling fixes, not approval for new deletion semantics.
 
 ## Slice 2 interface and acceptance
 
@@ -181,6 +189,13 @@ does not expose a browser or Agent backup route.
 - The operator CLI supports `inventory`, `create`, `verify` and `drill`; `create`
   requires `--confirm-private-storage`. Its output is summary metadata, not content or
   source paths.
+- CLI exit code 2 reports `BACKUP_ARGUMENTS_INVALID` or
+  `PRIVATE_DESTINATION_CONFIRMATION_REQUIRED` before loading configuration. Exit code
+  1 reports `BACKUP_CONFIGURATION_UNAVAILABLE`, `BACKUP_CONTRACT_REJECTED`,
+  `BACKUP_INTEGRITY_FAILED`, `BACKUP_STORAGE_UNAVAILABLE` or `BACKUP_OPERATION_FAILED`.
+  Raw parameter values, configuration validation messages and exception tracebacks
+  are not printed. Inspect the command's static `--help` for usage; do not add secrets
+  to command arguments to diagnose a failure.
 - Slice 4 proves a local/private backup contract and restoration rehearsal. Cloud
   retention, key management, scheduled backups, disaster-recovery RTO/RPO and live
   replacement remain production operations outside this slice.
