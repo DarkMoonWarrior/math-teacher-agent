@@ -73,7 +73,7 @@ M8 第一条切片使用独立 `data/private-runtime/personal-question-library.s
 
 ## Paper、Lesson、Memory 与 Beta
 
-M9 试卷和 M10 教案已完成各自蓝图、编辑、owner-scoped 不可变版本、历史生命周期与精确版本导出；M11 `TeacherMemory` 已完成结构化偏好、提议/反馈、导出与删除。当前 M12 切片 1–4 提供 `BetaAccess`、服务端能力快照、`PrivacySafeOperations`、`ReadinessProbe` 和 operator-only `BetaBackupRecovery`。删除演练与完整 M12 Gate 仍未完成，详见 [当前状态](../../docs/PROJECT-STATUS.md)。
+M9 试卷和 M10 教案已完成各自蓝图、编辑、owner-scoped 不可变版本、历史生命周期与精确版本导出；M11 `TeacherMemory` 已完成结构化偏好、提议/反馈、导出与删除。M12 已完成 `BetaAccess`、服务端能力快照、`PrivacySafeOperations`、`ReadinessProbe`、operator-only `BetaBackupRecovery`，以及 owner 删除墓碑、30 天备份保留、失效会话清理、临时导出清理和终态任务保留。完整边界见 [当前状态](../../docs/PROJECT-STATUS.md) 与 [数据生命周期](../../docs/M12-DATA-LIFECYCLE.md)。
 
 ## 测试
 

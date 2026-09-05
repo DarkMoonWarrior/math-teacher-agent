@@ -54,7 +54,7 @@ apps/agent (isolated Node/TypeScript runtime, :4100)
 - Trust: 标题、文件名、正文、原文件、路径和 owner 标识均不进入第一条 Tool 输出；Agent 不能据此声称已读取资料内容。
 - Current identity: `app/core/identity.py` 是服务端 current-teacher seam；Public 路由不接受浏览器提供的 owner/reviewer，详情、文件、OCR、revision、后台任务和候选访问均通过跨 owner 自动测试。M12 `BetaAccess.issue/resolve/revoke` 在启用时把 opaque HttpOnly Cookie 解析为 current teacher，并返回签发时冻结的 allow-list 能力快照；无有效会话 fail closed，未开放模块由集中式能力依赖在业务路由前拒绝。访问码、令牌生成/哈希、能力快照、到期和撤销均隐藏在模块内部。只有显式禁用 Beta 时才固定返回本地 `owner_teacher` 与全部能力。这仍是 Closed Beta 准入，不是生产认证、授权平台或多租户系统。
 - Operational seam: M12 `PrivacySafeOperations` 独占运行事件 schema 与结果分类，公开接口只接受请求编号、allow-list 能力、方法、结果、状态码、稳定错误类别和耗时；ASGI 中间件只负责测量完整响应并适配为结构化日志。`ReadinessProbe` 独占 API、Beta session store/roster 与必要 Agent runtime/model 的就绪判定，路由只把稳定结果映射为 200/503。两条 seam 都不接收或返回 headers、query、正文、owner、资源 ID、访问秘密、URL 或原始异常消息。
-- Recovery seam: M12 `BetaBackupRecovery.inventory/create_backup/verify_backup/restore_drill` 独占持久化 owner store 清单、SQLite 在线快照、目录文件复制、manifest/逐文件 SHA-256、原子发布和临时恢复演练。`PrivateBackupDestination` 要求 operator 显式确认加密私有卷或等效保护；浏览器和 Agent 没有对应路由。可撤销 Beta session DB 被固定排除，避免恢复旧会话；恢复演练只在新临时目录重建清单文件并执行 SQLite integrity check，不写在线目标。
+- Recovery/lifecycle seam: M12 `BetaBackupRecovery.inventory/create_backup/verify_backup/restore_drill` 独占 owner store 清单、SQLite 在线快照、目录复制、manifest/逐文件 SHA-256、原子发布和隔离恢复；`BetaBackupRetention` 固定 30 天并坚持预览/确认清理。`OwnerDeletionLedger` 位于 owner 备份之外，`RestoredOwnerDataFilter` 在隔离恢复中抑制已删除对象，防止旧快照复活。`PrivateBackupDestination` 要求 operator 显式确认私有加密卷或等效保护；浏览器和 Agent 无入口。可撤销 Beta session DB 固定排除。
 - Session maintenance seam: 经所有者批准，独立 `BetaSessionMaintenance.preview/prune` 只维护配置中的会话库；默认只读预览，明确确认后在同一事务内重新筛选并删除到期/撤销记录，错误回滚。有效和无法判定的记录保留；缺失库、链接/Windows reparse point、不匹配 schema/触发器拒绝。输出只有计数与截止时间，无浏览器/Agent 入口、自动计划或教师内容删除。
 - HTTP privacy: `PrivateApiResponseMiddleware` 为 `/api/v1` 响应设置 `private, no-store`，流式响应保留 `no-transform`，不缓存/拼接响应正文，不改写 Cookie 或 Vary。Teacher Web 搜题/解题代理（含连接失败响应）保持相同约束。此项不是清空已有下载、浏览器页面状态或介质擦除。
 - Recognition: `TeacherWorkspace` 隐藏识别后台任务细节；Teacher Web 点击“大模型识别”发起外部识别，左侧原文件与右侧可读整理稿等高、独立滚动，下方编辑中文 + LaTeX 校对稿。当前产品不再提供本地 OCR 按钮或额外授权勾选；服务端仍保存 owner、revision 与本次处理证据，识别不自动升级为数学已验证。
@@ -103,7 +103,7 @@ apps/agent (isolated Node/TypeScript runtime, :4100)
 - Export seam: `PaperSavedExporting.export` 只接受当前 owner 的精确 `paper_id + version + kind + format`，读取保存时的题目快照与双向细目表，不读取页面草稿或题库最新 revision。它复用 `ExamPaperDocumentRenderer` 生成学生卷、答案卷和双向细目表的 DOCX/PDF，不改变任何业务状态。
 - Ownership: 浏览器和 Agent 均不能提交 owner、版本号生成规则、可信结论或保存结论；跨 owner 的版本与导出统一不可见。保存试卷不会复制、发布或改变 PersonalQuestionLibrary 内容。
 - Teacher Memory seam: `TeacherMemory.profile/apply/planning_defaults` 是 M11 的产品 Interface。SQLite、值编码、版本冲突、来源和置信度生成都隐藏在模块内部；公开路由只从 current-teacher context 绑定 owner。模块只接受 allow-listed 结构化偏好，显式值固定 `teacher_explicit + confidence 1.0`，自动学习只从已确认保存版本形成可解释提议且永不自动晋升；反馈、导出和删除均不接收浏览器 owner，也不保存任务或私人资料正文。
-- Current completion boundary: M11 已形成可回滚提交 `5614fc0` 并于 2026-09-01 获得项目所有者进入 M12 的确认。M12 是唯一活动里程碑；Beta 会话身份、能力快照、隐私安全运行状态和备份恢复四条切片已接入，删除演练和完整 Gate 尚未完成，因此不能进入 M13。
+- Current completion boundary: M0–M12 已完成。M12 五条切片及完整 Gate 通过，实现回滚点 `570cf79`；M13 尚未启动，等待项目所有者明确确认阶段转换。M12 不代表生产认证、多租户、云端容灾或真实教师指标已经完成。
 
 ### Teacher Agent Runtime module
 

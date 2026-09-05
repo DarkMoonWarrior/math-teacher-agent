@@ -24,9 +24,9 @@
 - [`M9-PAPER-AGENT.md`](M9-PAPER-AGENT.md)、[评测](M9-PAPER-AGENT-EVALUATION.md)、[Gate](M9-GATE-REVIEW.md)：已完成的组卷、历史版本与精确导出。
 - [`M10-LESSON-AGENT.md`](M10-LESSON-AGENT.md)、[评测](M10-LESSON-AGENT-EVALUATION.md)、[Gate](M10-GATE-REVIEW.md)：已完成的教案闭环。
 - [`M11-TEACHER-MEMORY.md`](M11-TEACHER-MEMORY.md)、[评测](M11-TEACHER-MEMORY-EVALUATION.md)、[Gate](M11-GATE-REVIEW.md)：已完成的教师偏好与生命周期。
-- [`M12-CLOSED-BETA-READINESS.md`](M12-CLOSED-BETA-READINESS.md)：唯一活动里程碑，切片 1–4 已接入，切片 5 和完整 Gate 尚未完成。
-- [`M12-DATA-LIFECYCLE.md`](M12-DATA-LIFECYCLE.md)：第五切片的旧接口隔离、会话预览/确认清理、HTTP 缓存保护、实际数据保留边界、合成演练和待完成项。
-- [`M12-GATE-REVIEW.md`](M12-GATE-REVIEW.md)：固定评测入口、当前 E/P/Q 证据及尚未满足的完成条件；不是 M12 完成声明。
+- [`M12-CLOSED-BETA-READINESS.md`](M12-CLOSED-BETA-READINESS.md)：已完成的五条切片、深模块边界与 M13 前限制。
+- [`M12-DATA-LIFECYCLE.md`](M12-DATA-LIFECYCLE.md)：owner 删除、恢复墓碑、备份/会话/导出/任务保留和合成演练证据。
+- [`M12-GATE-REVIEW.md`](M12-GATE-REVIEW.md)：M12 固定评测、完整 E/P/Q 连续性证据和完成边界。
 - [`ADR-2026-09-04-OWNER-AGENT-SESSIONS.md`](ADR-2026-09-04-OWNER-AGENT-SESSIONS.md)：教师/模块签名会话、任务 owner 校验及单进程限制。
 - [`TEACHER-TOOL-CONTRACTS.md`](TEACHER-TOOL-CONTRACTS.md)：当前九项受控 Tool 契约。
 - [`REPOSITORY-SYNC.md`](REPOSITORY-SYNC.md)：仓库清理范围、文档分层与本轮复验记录。
