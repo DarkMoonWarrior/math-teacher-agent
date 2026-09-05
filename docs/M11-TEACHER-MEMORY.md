@@ -1,6 +1,6 @@
 # M11 Teacher Memory
 
-> 状态同步（2026-09-05）：M0–M12 已完成，M13 等待项目所有者确认。本文的切片过程、测试数量和 Gate 结论保留为当时证据；后续行为与当前边界见 [开发状态](PROJECT-STATUS.md) 和 [开发边界](DEVELOPMENT-BOUNDARY.md)。
+> 状态同步（2026-09-05）：M0–M12 已完成，项目所有者已确认进入 M13，当前进行中。本文的切片过程、测试数量和 Gate 结论保留为当时证据；后续行为与当前边界见 [开发状态](PROJECT-STATUS.md) 和 [开发边界](DEVELOPMENT-BOUNDARY.md)。
 
 ## Goal
 

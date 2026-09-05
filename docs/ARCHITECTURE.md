@@ -103,7 +103,8 @@ apps/agent (isolated Node/TypeScript runtime, :4100)
 - Export seam: `PaperSavedExporting.export` 只接受当前 owner 的精确 `paper_id + version + kind + format`，读取保存时的题目快照与双向细目表，不读取页面草稿或题库最新 revision。它复用 `ExamPaperDocumentRenderer` 生成学生卷、答案卷和双向细目表的 DOCX/PDF，不改变任何业务状态。
 - Ownership: 浏览器和 Agent 均不能提交 owner、版本号生成规则、可信结论或保存结论；跨 owner 的版本与导出统一不可见。保存试卷不会复制、发布或改变 PersonalQuestionLibrary 内容。
 - Teacher Memory seam: `TeacherMemory.profile/apply/planning_defaults` 是 M11 的产品 Interface。SQLite、值编码、版本冲突、来源和置信度生成都隐藏在模块内部；公开路由只从 current-teacher context 绑定 owner。模块只接受 allow-listed 结构化偏好，显式值固定 `teacher_explicit + confidence 1.0`，自动学习只从已确认保存版本形成可解释提议且永不自动晋升；反馈、导出和删除均不接收浏览器 owner，也不保存任务或私人资料正文。
-- Current completion boundary: M0–M12 已完成。M12 五条切片及完整 Gate 通过，实现回滚点 `570cf79`；M13 尚未启动，等待项目所有者明确确认阶段转换。M12 不代表生产认证、多租户、云端容灾或真实教师指标已经完成。
+- Beta validation seam: `BetaValidationMetrics.record/snapshot` 是 M13 的版本化指标 Interface。调用方只能提交严格枚举的无内容 observation；Implementation 在 SQLite 写入前以私有 HMAC 摘要 owner/task，并集中计算 16 项 `m13.v1` 指标、eligible cohort 留存及四级可信错误率。当前没有全局 adapter、路由或工作流接入，因此尚未采集真实行为；生命周期规则确认后才建立真实采集 adapter。
+- Current completion boundary: M0–M12 已完成，项目所有者于 2026-09-05 确认进入 M13。M13 进行中且切片 1 指标契约已完成；真实采集、运营读数、真实 Beta 和 Gate 尚未开始。M12/M13 当前实现不代表生产认证、多租户、云端容灾或真实教师指标已经完成。
 
 ### Teacher Agent Runtime module
 

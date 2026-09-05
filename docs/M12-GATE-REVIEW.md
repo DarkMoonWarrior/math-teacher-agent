@@ -1,6 +1,6 @@
 # M12 Gate 核对记录（已完成）
 
-核对日期：2026-09-05。**M12 Closed Beta Readiness 的五条切片与完整工程/隐私/可信连续性 Gate 已通过。** 实现回滚点为 `570cf79`。M13 尚未启动，须由项目所有者另行确认阶段转换。
+核对日期：2026-09-05。**M12 Closed Beta Readiness 的五条切片与完整工程/隐私/可信连续性 Gate 已通过。** 实现回滚点为 `570cf79`。项目所有者已于同日确认阶段转换并启动 M13；本文仍只记录 M12 完成证据，M13 状态见 [M13 Closed Beta Validation](M13-CLOSED-BETA-VALIDATION.md)。
 
 ## 固定验证入口
 
