@@ -8,6 +8,8 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 METRIC_DEFINITION_VERSION = "m13.v1"
+NOTICE_VERSION = "m13.notice.v1"
+RETENTION_DAYS = 90
 
 BetaWorkflow = Literal[
     "search",
@@ -123,3 +125,80 @@ class BetaMetricSnapshot(BaseModel):
     generated_at: datetime
     metrics: dict[str, BetaMetricValue]
     trust_tier_error_rates: dict[BetaTrustTier, BetaMetricValue]
+
+
+class BetaValidationNotice(BaseModel):
+    """Stable teacher-facing disclosure for the optional M13 event store."""
+
+    model_config = ConfigDict(frozen=True)
+
+    notice_version: Literal["m13.notice.v1"] = NOTICE_VERSION
+    definition_version: Literal["m13.v1"] = METRIC_DEFINITION_VERSION
+    collection_enabled: bool
+    acknowledgment_required: Literal[True] = True
+    retention_days: Literal[90] = RETENTION_DAYS
+    collected_categories: tuple[str, ...] = (
+        "工作流类型与完成、接受或导出等状态",
+        "可信等级、耗时及模型成本数值",
+    )
+    excluded_categories: tuple[str, ...] = (
+        "题目、答案、解析、提示词与教师输入正文",
+        "上传文件、网址、学生信息与个人题库名称",
+    )
+    teacher_rights: tuple[str, ...] = (
+        "随时导出本人保留期内的聚合指标",
+        "随时退出指标采集并删除本人指标事件",
+    )
+
+
+class BetaValidationParticipation(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    notice_version: Literal["m13.notice.v1"] = NOTICE_VERSION
+    acknowledged_at: datetime
+    collection_active: Literal[True] = True
+
+
+class BetaParticipantMetricExport(BaseModel):
+    """Content-free export for the authenticated teacher only."""
+
+    model_config = ConfigDict(frozen=True)
+
+    notice_version: Literal["m13.notice.v1"] = NOTICE_VERSION
+    definition_version: Literal["m13.v1"] = METRIC_DEFINITION_VERSION
+    retention_days: Literal[90] = RETENTION_DAYS
+    generated_at: datetime
+    window_start: datetime
+    window_end: datetime
+    acknowledged_at: datetime | None
+    event_count: int = Field(ge=0)
+    metrics: dict[str, BetaMetricValue]
+    trust_tier_error_rates: dict[BetaTrustTier, BetaMetricValue]
+
+
+class BetaParticipantDeletion(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    deleted_at: datetime
+    deleted_events: int = Field(ge=0)
+    participation_removed: bool
+    collection_active: Literal[False] = False
+
+
+class BetaValidationDeleteCommand(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    confirm_delete_my_validation_data: Literal[True]
+
+
+class BetaValidationRetentionReport(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    retention_days: Literal[90] = RETENTION_DAYS
+    evaluated_at: datetime
+    cutoff_at: datetime
+    total_events: int = Field(ge=0)
+    retained_events: int = Field(ge=0)
+    expired_events: int = Field(ge=0)
+    unclassified_events: int = Field(ge=0)
+    deleted_events: int = Field(default=0, ge=0)

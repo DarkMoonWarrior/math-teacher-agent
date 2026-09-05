@@ -24,6 +24,15 @@ PUBLIC = {
     ("DELETE", "/api/v1/beta-session"),
 }
 
+# Authenticated teachers retain access to the disclosure, export and deletion
+# rights even when their product capability allow-list is empty.
+ACCOUNT_RIGHTS = {
+    ("GET", "/api/v1/beta-validation/notice"),
+    ("POST", "/api/v1/beta-validation/participation"),
+    ("GET", "/api/v1/beta-validation/export"),
+    ("DELETE", "/api/v1/beta-validation/participation"),
+}
+
 
 def _routes():
     # FastAPI's deferred router contexts include parent dependencies/prefixes.
@@ -90,7 +99,15 @@ def test_denied_requests_are_rejected_across_the_route_inventory(beta_lifecycle,
             assert calls & {get_current_teacher, require_local_legacy_access}, route.path
             path = re.sub(r"\{[^}]+\}", "synthetic-missing", route.path)
             response = client.request(method, path, json={})
-            assert response.status_code in (401, 403), (state, method, route.path, response.status_code)
-            if state == "no_capabilities":
-                assert response.status_code == 403, route.path
+            if state == "no_capabilities" and (method, route.path) in ACCOUNT_RIGHTS:
+                assert response.status_code in (200, 409, 422, 503), route.path
+            else:
+                assert response.status_code in (401, 403), (
+                    state,
+                    method,
+                    route.path,
+                    response.status_code,
+                )
+                if state == "no_capabilities":
+                    assert response.status_code == 403, route.path
             assert response.headers["cache-control"] == "private, no-store"

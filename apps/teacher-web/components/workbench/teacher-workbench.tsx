@@ -57,6 +57,7 @@ import { PaperBlueprintWorkspace } from "./paper-blueprint-workspace";
 import { LessonBlueprintWorkspace } from "./lesson-blueprint-workspace";
 import { ResizableSplitPane } from "./resizable-split-pane";
 import { TeacherMemoryPanel } from "./teacher-memory-panel";
+import { BetaValidationPanel } from "./beta-validation-panel";
 import {
   type BetaSessionContextValue,
   useBetaCapabilities,
@@ -543,12 +544,14 @@ function PreviewPaper({ capability, page }: { capability: CapabilityId; page: nu
 
 export function AccountSettingsPopover({
   error,
+  onOpenBetaValidation,
   onOpenTeacherPreferences,
   onSignOut,
   session,
   teacherPreferencesAvailable,
 }: {
   error: string;
+  onOpenBetaValidation: () => void;
   onOpenTeacherPreferences: () => void;
   onSignOut: () => void;
   session: BetaSessionContextValue;
@@ -580,6 +583,13 @@ export function AccountSettingsPopover({
         <span>
           <strong>教师偏好</strong>
           <small>{teacherPreferencesAvailable ? "查看、修改与删除偏好" : "本轮测试暂未开放"}</small>
+        </span>
+      </button>
+      <button onClick={onOpenBetaValidation} role="menuitem" type="button">
+        <HistoryIcon />
+        <span>
+          <strong>封闭测试与数据</strong>
+          <small>查看告知、导出或退出数据验证</small>
         </span>
       </button>
       <button
@@ -635,6 +645,7 @@ export function TeacherWorkbench() {
   const [accountSettingsOpen, setAccountSettingsOpen] = useState(false);
   const [accountError, setAccountError] = useState("");
   const [teacherMemoryOpen, setTeacherMemoryOpen] = useState(false);
+  const [betaValidationOpen, setBetaValidationOpen] = useState(false);
   const [authoringEntry, setAuthoringEntry] = useState<{
     source: QuestionAuthoringEntrySource;
     brief: string;
@@ -1211,6 +1222,10 @@ export function TeacherWorkbench() {
               {accountSettingsOpen ? (
                 <AccountSettingsPopover
                   error={accountError}
+                  onOpenBetaValidation={() => {
+                    setAccountSettingsOpen(false);
+                    setBetaValidationOpen(true);
+                  }}
                   onOpenTeacherPreferences={() => {
                     setAccountSettingsOpen(false);
                     setTeacherMemoryOpen(true);
@@ -1228,6 +1243,7 @@ export function TeacherWorkbench() {
       {betaCapabilities.has("teacher_memory") && (
         <TeacherMemoryPanel open={teacherMemoryOpen} onClose={() => setTeacherMemoryOpen(false)} />
       )}
+      <BetaValidationPanel open={betaValidationOpen} onClose={() => setBetaValidationOpen(false)} />
 
       {betaCapabilities.has("authoring") && <div data-workspace-view="authoring" hidden={!authoringVisible}>
         {authoringEntry && (

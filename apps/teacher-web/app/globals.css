@@ -1813,11 +1813,54 @@ svg { flex: 0 0 auto; }
 .teacher-memory-delete-all > button { background: var(--color-error); color: var(--color-paper); justify-self: start; padding: 0.55rem 0.8rem; }
 .teacher-memory-lifecycle button:disabled { cursor: not-allowed; opacity: 0.45; }
 
+.beta-validation-panel__body { align-content: start; }
+.beta-validation-summary {
+  border: 0.0625rem solid var(--color-rule);
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.beta-validation-summary > div { display: grid; gap: var(--space-2xs); padding: var(--space-md); }
+.beta-validation-summary > div + div { border-left: 0.0625rem solid var(--color-rule); }
+.beta-validation-summary span { color: var(--color-muted); font-size: var(--text-xs); }
+.beta-validation-summary strong { font-family: var(--font-display); font-size: var(--text-lg); font-weight: 500; }
+.beta-validation-list { border: 0.0625rem solid var(--color-rule); display: grid; gap: var(--space-xs); padding: var(--space-md); }
+.beta-validation-list.is-collected { border-left: 0.2rem solid var(--color-teal); }
+.beta-validation-list.is-excluded { border-left: 0.2rem solid var(--color-vermilion); }
+.beta-validation-list h3 { font-size: var(--text-md); }
+.beta-validation-list ul { display: grid; gap: var(--space-xs); margin: 0; padding-left: 1.15rem; }
+.beta-validation-list li { color: var(--color-muted); font-size: var(--text-sm); line-height: 1.6; }
+.beta-validation-primary,
+.beta-validation-actions > button {
+  background: var(--color-ink);
+  color: var(--color-paper);
+  justify-self: start;
+  padding: 0.7rem 1rem;
+}
+.beta-validation-actions { border-top: 0.0625rem solid var(--color-rule); display: flex; flex-wrap: wrap; gap: var(--space-sm); padding-top: var(--space-md); }
+.beta-validation-actions button { border: 0.0625rem solid var(--color-ink); padding: 0.65rem 0.9rem; }
+.beta-validation-actions button.is-danger { background: transparent; border-color: var(--color-error); color: var(--color-error); }
+.beta-validation-actions button:disabled,
+.beta-validation-primary:disabled { cursor: not-allowed; opacity: 0.45; }
+.beta-validation-leave-confirm {
+  background: var(--color-error-soft);
+  display: grid;
+  flex-basis: 100%;
+  gap: var(--space-xs);
+  padding: var(--space-md);
+}
+.beta-validation-leave-confirm > strong { color: var(--color-error); }
+.beta-validation-leave-confirm > p { color: var(--color-muted); font-size: var(--text-xs); line-height: 1.55; }
+.beta-validation-leave-confirm > div { display: flex; gap: var(--space-xs); }
+.beta-validation-leave-confirm > div > button { background: var(--color-paper); color: var(--color-ink); }
+.beta-validation-leave-confirm > div > button.is-danger { background: var(--color-error); color: var(--color-paper); }
+
 @media (max-width: 34rem) {
   .teacher-memory-panel__body { padding: var(--space-md); }
   .teacher-memory-auto { grid-template-columns: minmax(0, 1fr); }
   .teacher-memory-row__controls { grid-template-columns: minmax(0, 1fr); }
   .teacher-memory-proposal-correction > div { grid-template-columns: minmax(0, 1fr); }
+  .beta-validation-summary { grid-template-columns: minmax(0, 1fr); }
+  .beta-validation-summary > div + div { border-left: 0; border-top: 0.0625rem solid var(--color-rule); }
 }
 
 .paper-authoring-entry,

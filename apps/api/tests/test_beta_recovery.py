@@ -48,7 +48,7 @@ def _service(tmp_path: Path) -> tuple[BetaBackupRecovery, Path, Path]:
     return service, database, files
 
 
-def test_inventory_is_path_free_and_excludes_beta_sessions(tmp_path: Path) -> None:
+def test_inventory_is_path_free_and_excludes_sessions_and_validation_events(tmp_path: Path) -> None:
     settings = Settings(
         question_bank_db=tmp_path / "question-bank.sqlite3",
         question_media_dir=tmp_path / "question-media",
@@ -64,12 +64,14 @@ def test_inventory_is_path_free_and_excludes_beta_sessions(tmp_path: Path) -> No
         exam_paper_asset_dir=tmp_path / "paper-assets",
         teacher_memory_db=tmp_path / "memory.sqlite3",
         beta_session_db=tmp_path / "sessions.sqlite3",
+        beta_validation_db=tmp_path / "validation.sqlite3",
     )
     sources = owner_store_sources(settings)
     inventory = BetaBackupRecovery(sources=sources).inventory()
     serialized = json.dumps([item.model_dump() for item in inventory])
 
     assert "beta_session" not in {source.store_id for source in sources}
+    assert "beta_validation" not in {source.store_id for source in sources}
     assert "owner_deletion_ledger" not in {source.store_id for source in sources}
     assert str(tmp_path) not in serialized
     assert all(set(item.model_dump()) == {"store_id", "kind", "status", "file_count"} for item in inventory)

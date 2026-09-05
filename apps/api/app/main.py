@@ -13,6 +13,7 @@ from app.core.identity import (
 from app.modules.beta_operations import PrivacySafeOperations, PrivacySafeOperationsMiddleware
 from app.routes.curriculum import router as curriculum_router
 from app.routes.beta_session import router as beta_session_router
+from app.routes.beta_validation import router as beta_validation_router
 from app.routes.exam_papers import router as exam_papers_router
 from app.routes.internal_agent_tools import (
     _GatewayHttpError,
@@ -74,6 +75,7 @@ app.include_router(readiness_router)
 
 app.include_router(curriculum_router, prefix="/api/v1")
 app.include_router(beta_session_router, prefix="/api/v1")
+app.include_router(beta_validation_router, prefix="/api/v1")
 app.include_router(
     imports_router,
     prefix="/api/v1",

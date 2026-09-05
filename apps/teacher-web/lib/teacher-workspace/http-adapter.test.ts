@@ -362,6 +362,48 @@ describe("HttpTeacherWorkspace", () => {
     );
   });
 
+  it("uses authenticated, owner-scoped lifecycle endpoints for beta validation data", async () => {
+    const notice = {
+      notice_version: "m13.notice.v1",
+      definition_version: "m13.v1",
+      collection_enabled: true,
+      acknowledgment_required: true,
+      retention_days: 90,
+      collected_categories: ["状态"],
+      excluded_categories: ["正文"],
+      teacher_rights: ["导出", "退出"],
+    };
+    const deletion = {
+      deleted_at: "2026-09-05T10:00:00Z",
+      deleted_events: 2,
+      participation_removed: true,
+      collection_active: false,
+    };
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify(notice), { status: 200, headers: { "Content-Type": "application/json" } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(deletion), { status: 200, headers: { "Content-Type": "application/json" } }));
+    vi.stubGlobal("fetch", fetchMock);
+    const workspace = new HttpTeacherWorkspace();
+
+    await expect(workspace.getBetaValidationNotice()).resolves.toEqual(notice);
+    await expect(workspace.leaveBetaValidation()).resolves.toEqual(deletion);
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      "/api/v1/beta-validation/notice",
+      expect.objectContaining({ method: "GET", credentials: "include" }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "/api/v1/beta-validation/participation",
+      expect.objectContaining({
+        method: "DELETE",
+        credentials: "include",
+        body: JSON.stringify({ confirm_delete_my_validation_data: true }),
+      }),
+    );
+  });
+
   it("preserves a capability denial code and its teacher-facing explanation", async () => {
     const fetchMock = vi.fn(async () => new Response(JSON.stringify({
       detail: {

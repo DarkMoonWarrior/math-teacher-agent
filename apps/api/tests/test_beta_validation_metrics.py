@@ -43,6 +43,7 @@ def _record(
     duration_ms: int | None = None,
     model_cost_usd: Decimal = Decimal("0"),
 ) -> None:
+    metrics.acknowledge(owner_id=owner)
     metrics.record(
         owner_id=owner,
         observation=BetaValidationObservation(
@@ -113,6 +114,7 @@ def test_observation_contract_rejects_content_and_inconsistent_facts() -> None:
 def test_record_hmacs_identity_and_never_persists_raw_owner_or_task(tmp_path: Path) -> None:
     clock = MutableClock(datetime(2026, 9, 5, tzinfo=timezone.utc))
     metrics = _metrics(tmp_path, clock)
+    metrics.acknowledge(owner_id="teacher_private_001")
     receipt = metrics.record(
         owner_id="teacher_private_001",
         observation=BetaValidationObservation(

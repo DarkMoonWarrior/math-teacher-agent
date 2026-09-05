@@ -1,7 +1,11 @@
 import {
   TeacherWorkspace,
   TeacherWorkspaceError,
+  type BetaParticipantDeletion,
+  type BetaParticipantMetricExport,
   type BetaSessionStatus,
+  type BetaValidationNotice,
+  type BetaValidationParticipation,
   type LibraryItemDetail,
   type LibraryItemSummary,
   type LibraryTextRevisionList,
@@ -462,6 +466,43 @@ export class HttpTeacherWorkspace implements TeacherWorkspace {
       "/api/v1/beta-session",
       { method: "DELETE", signal },
       "暂时无法退出封闭测试。",
+    );
+  }
+
+  getBetaValidationNotice(signal?: AbortSignal): Promise<BetaValidationNotice> {
+    return libraryJsonRequest(
+      "/api/v1/beta-validation/notice",
+      { method: "GET", signal },
+      "无法读取封闭测试数据说明。",
+    );
+  }
+
+  acknowledgeBetaValidation(signal?: AbortSignal): Promise<BetaValidationParticipation> {
+    return libraryJsonRequest(
+      "/api/v1/beta-validation/participation",
+      { method: "POST", signal },
+      "暂时无法加入数据验证。",
+    );
+  }
+
+  getBetaValidationExport(signal?: AbortSignal): Promise<BetaParticipantMetricExport> {
+    return libraryJsonRequest(
+      "/api/v1/beta-validation/export",
+      { method: "GET", signal },
+      "无法导出你的封闭测试指标。",
+    );
+  }
+
+  leaveBetaValidation(signal?: AbortSignal): Promise<BetaParticipantDeletion> {
+    return libraryJsonRequest(
+      "/api/v1/beta-validation/participation",
+      {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ confirm_delete_my_validation_data: true }),
+        signal,
+      },
+      "暂时无法退出数据验证。",
     );
   }
 

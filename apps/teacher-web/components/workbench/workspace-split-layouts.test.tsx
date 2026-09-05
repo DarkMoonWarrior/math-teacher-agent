@@ -7,6 +7,7 @@ import {
   TeacherWorkbench,
 } from "./teacher-workbench";
 import { BetaCapabilityBoundary } from "./beta-access-gate";
+import { BetaValidationPanel } from "./beta-validation-panel";
 
 describe("core workspace split layouts", () => {
   it("keeps the authoring workspace mutually exclusive from the library workspace", () => {
@@ -64,6 +65,7 @@ describe("core workspace split layouts", () => {
     const html = renderToStaticMarkup(
       <AccountSettingsPopover
         error=""
+        onOpenBetaValidation={() => undefined}
         onOpenTeacherPreferences={() => undefined}
         onSignOut={() => undefined}
         session={{
@@ -81,6 +83,18 @@ describe("core workspace split layouts", () => {
     expect(html).toContain("测试教师");
     expect(html).toContain("封闭测试用户");
     expect(html).toContain("教师偏好");
+    expect(html).toContain("封闭测试与数据");
     expect(html).toContain("退出登录");
+  });
+
+  it("explains that closed-beta metric collection is optional and content-free", () => {
+    const html = renderToStaticMarkup(
+      <BetaValidationPanel open onClose={() => undefined} />,
+    );
+
+    expect(html).toContain("封闭测试与数据");
+    expect(html).toContain("由你决定是否参与");
+    expect(html).toContain("数据验证默认关闭");
+    expect(html).toContain("不含题面、答案、解析或教师输入正文");
   });
 });

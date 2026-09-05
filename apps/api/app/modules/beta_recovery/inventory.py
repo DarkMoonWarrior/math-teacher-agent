@@ -7,9 +7,10 @@ from app.modules.beta_recovery.recovery import OwnerStoreSource
 def owner_store_sources(settings: Settings) -> tuple[OwnerStoreSource, ...]:
     """Durable owner-bearing stores included in the Closed Beta backup set.
 
-    The revocable Beta session database is intentionally excluded: restoring it could
-    revive obsolete sessions. Derived similarity indexes and generated exports can be
-    rebuilt and are also excluded.
+    The revocable Beta session database and M13 validation event database are
+    intentionally excluded: restoring either could revive an ended session or
+    teacher-deleted metric events. Derived similarity indexes and generated exports
+    can be rebuilt and are also excluded.
     """
 
     return (

@@ -1391,10 +1391,58 @@ export type BetaSessionStatus = {
   capabilities: ProductCapability[];
 };
 
+export type BetaMetricValue = {
+  value: number | null;
+  numerator: number;
+  denominator: number | null;
+  unit: "count" | "rate" | "usd" | "milliseconds";
+};
+
+export type BetaValidationNotice = {
+  notice_version: "m13.notice.v1";
+  definition_version: "m13.v1";
+  collection_enabled: boolean;
+  acknowledgment_required: true;
+  retention_days: 90;
+  collected_categories: string[];
+  excluded_categories: string[];
+  teacher_rights: string[];
+};
+
+export type BetaValidationParticipation = {
+  notice_version: "m13.notice.v1";
+  acknowledged_at: string;
+  collection_active: true;
+};
+
+export type BetaParticipantMetricExport = {
+  notice_version: "m13.notice.v1";
+  definition_version: "m13.v1";
+  retention_days: 90;
+  generated_at: string;
+  window_start: string;
+  window_end: string;
+  acknowledged_at: string | null;
+  event_count: number;
+  metrics: Record<string, BetaMetricValue>;
+  trust_tier_error_rates: Record<string, BetaMetricValue>;
+};
+
+export type BetaParticipantDeletion = {
+  deleted_at: string;
+  deleted_events: number;
+  participation_removed: boolean;
+  collection_active: false;
+};
+
 export interface TeacherWorkspace {
   getBetaSession(signal?: AbortSignal): Promise<BetaSessionStatus>;
   startBetaSession(accessCode: string, signal?: AbortSignal): Promise<BetaSessionStatus>;
   endBetaSession(signal?: AbortSignal): Promise<BetaSessionStatus>;
+  getBetaValidationNotice(signal?: AbortSignal): Promise<BetaValidationNotice>;
+  acknowledgeBetaValidation(signal?: AbortSignal): Promise<BetaValidationParticipation>;
+  getBetaValidationExport(signal?: AbortSignal): Promise<BetaParticipantMetricExport>;
+  leaveBetaValidation(signal?: AbortSignal): Promise<BetaParticipantDeletion>;
   getTeacherMemoryProfile(signal?: AbortSignal): Promise<TeacherMemoryProfile>;
   updateTeacherMemoryProfile(
     command: TeacherMemoryCommand,

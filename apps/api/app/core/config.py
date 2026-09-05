@@ -3,7 +3,7 @@ from __future__ import annotations
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import Field
+from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -94,6 +94,9 @@ class Settings(BaseSettings):
     beta_session_db: Path = Field(
         default=PROJECT_ROOT / "data" / "private-runtime" / "beta-sessions.sqlite3"
     )
+    beta_validation_db: Path = Field(
+        default=PROJECT_ROOT / "data" / "private-runtime" / "beta-validation.sqlite3"
+    )
     beta_backup_dir: Path = Field(
         default=PROJECT_ROOT / "data" / "private-runtime" / "backups"
     )
@@ -167,6 +170,12 @@ class Settings(BaseSettings):
     beta_session_ttl_hours: int = Field(default=12, ge=1, le=168)
     beta_session_cookie_name: str = "math_ai_beta_session"
     beta_session_secure_cookie: bool = False
+
+    # M13 validation is separately gated and remains off even when Beta access is on.
+    # A participant must acknowledge the current notice before the module records facts.
+    beta_validation_enabled: bool = False
+    beta_validation_identity_secret: SecretStr = SecretStr("")
+    beta_validation_retention_days: int = Field(default=90, ge=90, le=90)
 
     @property
     def cors_origin_list(self) -> list[str]:

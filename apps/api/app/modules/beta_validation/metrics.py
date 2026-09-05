@@ -13,11 +13,16 @@ from pathlib import Path
 
 from app.modules.beta_validation.schemas import (
     METRIC_DEFINITION_VERSION,
+    NOTICE_VERSION,
+    RETENTION_DAYS,
     BetaMetricDefinition,
     BetaMetricSnapshot,
     BetaMetricValue,
+    BetaParticipantDeletion,
+    BetaParticipantMetricExport,
     BetaTrustTier,
     BetaValidationObservation,
+    BetaValidationParticipation,
     BetaValidationReceipt,
 )
 
@@ -29,6 +34,10 @@ _TRUST_TIERS: tuple[BetaTrustTier, ...] = (
     "model_reviewed",
     "teacher_review_required",
 )
+
+
+class BetaValidationLifecycleError(ValueError):
+    """Stable lifecycle error code without identifiers or storage details."""
 
 
 METRIC_CATALOG: tuple[BetaMetricDefinition, ...] = (
@@ -54,9 +63,9 @@ METRIC_CATALOG: tuple[BetaMetricDefinition, ...] = (
 class BetaValidationMetrics:
     """Persist pseudonymous facts and calculate the versioned M13 metric contract.
 
-    The two-operation Interface is intentionally content blind: callers can only
-    record a strict observation or request an aggregate snapshot. Raw owner and
-    task identifiers are HMAC-digested before SQLite sees them.
+    The Interface is intentionally content blind. It owns notice acknowledgment,
+    strict event recording, aggregate snapshots, participant export and deletion.
+    Raw owner and task identifiers are HMAC-digested before SQLite sees them.
     """
 
     def __init__(
@@ -80,13 +89,24 @@ class BetaValidationMetrics:
         owner_id: str,
         observation: BetaValidationObservation,
     ) -> BetaValidationReceipt:
-        if not _OWNER_PATTERN.fullmatch(owner_id):
-            raise ValueError("owner_id 必须是服务端生成的非内容标识。")
         occurred_at = self._now()
         event_id = f"bve_{uuid.uuid4().hex}"
-        participant_key = self._digest("participant", owner_id)
+        participant_key = self._participant_key(owner_id)
         task_key = self._digest("task", f"{owner_id}\x00{observation.task_ref}")
         with self._connect() as connection:
+            # Serialize the consent check with participant deletion. Either the
+            # event commits before an exit transaction (and is deleted by it),
+            # or it observes no current acknowledgment and is rejected.
+            connection.execute("BEGIN IMMEDIATE")
+            acknowledged = connection.execute(
+                """SELECT 1 FROM m13_beta_validation_participants
+                   WHERE participant_key = ? AND notice_version = ?""",
+                (participant_key, NOTICE_VERSION),
+            ).fetchone()
+            if acknowledged is None:
+                raise BetaValidationLifecycleError(
+                    "BETA_VALIDATION_NOTICE_ACKNOWLEDGMENT_REQUIRED"
+                )
             connection.execute(
                 """INSERT INTO m13_beta_validation_events
                    (event_id, definition_version, participant_key, task_key,
@@ -107,6 +127,101 @@ class BetaValidationMetrics:
                 ),
             )
         return BetaValidationReceipt(event_id=event_id, occurred_at=occurred_at)
+
+    def acknowledge(self, *, owner_id: str) -> BetaValidationParticipation:
+        participant_key = self._participant_key(owner_id)
+        acknowledged_at = self._now()
+        with self._connect() as connection:
+            connection.execute(
+                """INSERT INTO m13_beta_validation_participants
+                       (participant_key, notice_version, acknowledged_at)
+                   VALUES (?, ?, ?)
+                   ON CONFLICT(participant_key) DO UPDATE SET
+                       notice_version = excluded.notice_version,
+                       acknowledged_at = excluded.acknowledged_at
+                   WHERE m13_beta_validation_participants.notice_version
+                         != excluded.notice_version""",
+                (participant_key, NOTICE_VERSION, acknowledged_at.isoformat()),
+            )
+            stored = connection.execute(
+                """SELECT acknowledged_at FROM m13_beta_validation_participants
+                   WHERE participant_key = ? AND notice_version = ?""",
+                (participant_key, NOTICE_VERSION),
+            ).fetchone()
+        return BetaValidationParticipation(
+            acknowledged_at=datetime.fromisoformat(stored["acknowledged_at"]).astimezone(
+                timezone.utc
+            )
+        )
+
+    def export_participant(self, *, owner_id: str) -> BetaParticipantMetricExport:
+        participant_key = self._participant_key(owner_id)
+        window_end = self._now()
+        window_start = window_end - timedelta(days=RETENTION_DAYS)
+        with self._connect() as connection:
+            participation = connection.execute(
+                """SELECT acknowledged_at FROM m13_beta_validation_participants
+                   WHERE participant_key = ? AND notice_version = ?""",
+                (participant_key, NOTICE_VERSION),
+            ).fetchone()
+        retained_rows = self._rows_before(
+            window_end + timedelta(microseconds=1),
+            participant_key=participant_key,
+        )
+        window_rows = [
+            row for row in retained_rows if window_start <= self._row_time(row)
+        ]
+        return BetaParticipantMetricExport(
+            generated_at=window_end,
+            window_start=window_start,
+            window_end=window_end,
+            acknowledged_at=(
+                datetime.fromisoformat(participation["acknowledged_at"]).astimezone(
+                    timezone.utc
+                )
+                if participation is not None
+                else None
+            ),
+            event_count=len(window_rows),
+            metrics=self._aggregate(
+                window_rows=window_rows,
+                all_rows=window_rows,
+                window_end=window_end,
+            ),
+            trust_tier_error_rates=self._trust_tier_error_rates(window_rows),
+        )
+
+    def delete_participant(
+        self,
+        *,
+        owner_id: str,
+        confirmed: bool = False,
+    ) -> BetaParticipantDeletion:
+        if confirmed is not True:
+            raise BetaValidationLifecycleError(
+                "BETA_VALIDATION_DELETE_CONFIRMATION_REQUIRED"
+            )
+        participant_key = self._participant_key(owner_id)
+        deleted_at = self._now()
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            deleted_events = connection.execute(
+                "DELETE FROM m13_beta_validation_events WHERE participant_key = ?",
+                (participant_key,),
+            ).rowcount
+            participation_removed = (
+                connection.execute(
+                    """DELETE FROM m13_beta_validation_participants
+                       WHERE participant_key = ?""",
+                    (participant_key,),
+                ).rowcount
+                > 0
+            )
+        return BetaParticipantDeletion(
+            deleted_at=deleted_at,
+            deleted_events=deleted_events,
+            participation_removed=participation_removed,
+        )
 
     def snapshot(
         self,
@@ -268,17 +383,34 @@ class BetaValidationMetrics:
     def _digest(self, namespace: str, value: str) -> str:
         return hmac.new(self._secret, f"{namespace}\x00{value}".encode("utf-8"), hashlib.sha256).hexdigest()
 
-    def _rows_before(self, end: datetime) -> list[sqlite3.Row]:
+    def _rows_before(
+        self,
+        end: datetime,
+        *,
+        participant_key: str | None = None,
+    ) -> list[sqlite3.Row]:
+        participant_filter = " AND participant_key = ?" if participant_key else ""
+        parameters = (
+            (METRIC_DEFINITION_VERSION, end.isoformat(), participant_key)
+            if participant_key
+            else (METRIC_DEFINITION_VERSION, end.isoformat())
+        )
         with self._connect() as connection:
             return connection.execute(
-                """SELECT rowid AS sequence, participant_key, task_key,
+                f"""SELECT rowid AS sequence, participant_key, task_key,
                           workflow, event_type,
                           trust_tier, duration_ms, model_cost_usd, occurred_at
                    FROM m13_beta_validation_events
                    WHERE definition_version = ? AND occurred_at < ?
+                   {participant_filter}
                    ORDER BY occurred_at, sequence""",
-                (METRIC_DEFINITION_VERSION, end.isoformat()),
+                parameters,
             ).fetchall()
+
+    def _participant_key(self, owner_id: str) -> str:
+        if not _OWNER_PATTERN.fullmatch(owner_id):
+            raise ValueError("owner_id 必须是服务端生成的非内容标识。")
+        return self._digest("participant", owner_id)
 
     @staticmethod
     def _row_time(row: sqlite3.Row) -> datetime:
@@ -319,5 +451,10 @@ class BetaValidationMetrics:
                     ON m13_beta_validation_events (definition_version, occurred_at);
                 CREATE INDEX IF NOT EXISTS idx_m13_validation_participant
                     ON m13_beta_validation_events (participant_key, occurred_at);
+                CREATE TABLE IF NOT EXISTS m13_beta_validation_participants (
+                    participant_key TEXT PRIMARY KEY,
+                    notice_version TEXT NOT NULL,
+                    acknowledged_at TEXT NOT NULL
+                );
                 """
             )
