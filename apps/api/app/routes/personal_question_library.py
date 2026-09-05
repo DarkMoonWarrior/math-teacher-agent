@@ -42,6 +42,8 @@ from app.modules.question_authoring import (
     QuestionAuthoring,
     QuestionAuthoringError,
 )
+from app.modules.beta_validation.dependencies import get_beta_validation_facts
+from app.modules.beta_validation.facts import BetaValidationFacts
 
 
 router = APIRouter(
@@ -323,13 +325,20 @@ def save_personal_authoring_draft(
     command: PersonalQuestionSave,
     teacher: CurrentTeacher = Depends(get_current_teacher),
     library: PersonalQuestionLibrary = Depends(get_personal_question_library),
+    validation_facts: BetaValidationFacts = Depends(get_beta_validation_facts),
 ) -> PersonalQuestionView:
     try:
-        return library.save_authoring_draft(
+        saved = library.save_authoring_draft(
             draft_id,
             command,
             owner_id=teacher.teacher_id,
         )
+        validation_facts.record_checkpoint(
+            owner_id=teacher.teacher_id,
+            fact="authoring_saved",
+            task_ref=draft_id,
+        )
+        return saved
     except KeyError as exc:
         raise HTTPException(
             status_code=404,

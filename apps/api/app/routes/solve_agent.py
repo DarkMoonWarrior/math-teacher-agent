@@ -26,6 +26,8 @@ from app.modules.solve_agent import (
     SolveAgentRunRecord,
     SolveAgentWorkflow,
 )
+from app.modules.beta_validation.dependencies import get_beta_validation_facts
+from app.modules.beta_validation.facts import BetaValidationFacts
 
 router = APIRouter(prefix="/agent/solve", tags=["solve-agent"])
 
@@ -106,6 +108,7 @@ def _store_response(command: SolveAgentCommand, response: SolveAgentResponse, *,
 async def solve(
     command: SolveAgentCommand,
     current_teacher: CurrentTeacher = Depends(get_current_teacher),
+    validation_facts: BetaValidationFacts = Depends(get_beta_validation_facts),
 ) -> SolveAgentResponse:
     _require_feature()
     command = command.model_copy(update={"session_id": agent_sessions.resolve(
@@ -117,12 +120,33 @@ async def solve(
         request_id=f"req_{uuid.uuid4().hex}",
     )
     _store_response(command, response, owner_id=current_teacher.teacher_id)
+    if response.status == "ok" and response.run_id and response.solution is not None:
+        validation_facts.record_checkpoint(
+            owner_id=current_teacher.teacher_id,
+            fact="solve_completed",
+            task_ref=response.run_id,
+            duration_ms=response.duration_ms,
+            trust_tier=response.solution.confidence_status,
+            tool_call_count=response.tool_call_count,
+        )
+    elif response.run_id and response.tool_call_count:
+        validation_facts.record_tool_failure(
+            owner_id=current_teacher.teacher_id,
+            workflow="solve",
+            task_ref=response.run_id,
+            tool_call_count=response.tool_call_count,
+        )
     return response
 
 
-def _record_stream_event(command: SolveAgentCommand, event: TeacherAgentEvent, *, owner_id: str) -> None:
+def _record_stream_event(
+    command: SolveAgentCommand,
+    event: TeacherAgentEvent,
+    *,
+    owner_id: str,
+) -> SolveAgentResponse | None:
     if not event.run_id:
-        return
+        return None
     record = _RUNS.get(event.run_id)
     if record is not None and record.owner_id != owner_id:
         raise _SolveAgentHttpError(409, "RUN_CONFLICT", "任务编号冲突，请重试", event.request_id)
@@ -138,7 +162,7 @@ def _record_stream_event(command: SolveAgentCommand, event: TeacherAgentEvent, *
         _RUNS[event.run_id] = record
     if event.type == TeacherAgentEventType.RUN_STARTED:
         record.status = "running"
-        return
+        return None
     if event.type == TeacherAgentEventType.RUN_COMPLETED:
         raw = event.data.get("solve_response")
         if isinstance(raw, dict):
@@ -154,7 +178,7 @@ def _record_stream_event(command: SolveAgentCommand, event: TeacherAgentEvent, *
                 "request_id": event.request_id,
             }
         record.finished_at = time.time()
-        return
+        return record.response
     if event.type in {TeacherAgentEventType.RUN_FAILED, TeacherAgentEventType.RUN_CANCELLED}:
         record.status = (
             "cancelled" if event.type == TeacherAgentEventType.RUN_CANCELLED else "error"
@@ -162,12 +186,14 @@ def _record_stream_event(command: SolveAgentCommand, event: TeacherAgentEvent, *
         raw_error = event.data.get("error")
         record.error = raw_error if isinstance(raw_error, dict) else None
         record.finished_at = time.time()
+    return None
 
 
 @router.post("/stream")
 async def stream_solve(
     command: SolveAgentCommand,
     current_teacher: CurrentTeacher = Depends(get_current_teacher),
+    validation_facts: BetaValidationFacts = Depends(get_beta_validation_facts),
 ) -> StreamingResponse:
     _require_feature()
     command = command.model_copy(update={"session_id": agent_sessions.resolve(
@@ -182,7 +208,30 @@ async def stream_solve(
             owner_id=current_teacher.teacher_id,
             request_id=request_id,
         ):
-            _record_stream_event(command, event, owner_id=current_teacher.teacher_id)
+            completed = _record_stream_event(
+                command, event, owner_id=current_teacher.teacher_id
+            )
+            if (
+                completed is not None
+                and completed.status == "ok"
+                and completed.run_id
+                and completed.solution is not None
+            ):
+                validation_facts.record_checkpoint(
+                    owner_id=current_teacher.teacher_id,
+                    fact="solve_completed",
+                    task_ref=completed.run_id,
+                    duration_ms=completed.duration_ms,
+                    trust_tier=completed.solution.confidence_status,
+                    tool_call_count=completed.tool_call_count,
+                )
+            elif completed is not None and completed.run_id and completed.tool_call_count:
+                validation_facts.record_tool_failure(
+                    owner_id=current_teacher.teacher_id,
+                    workflow="solve",
+                    task_ref=completed.run_id,
+                    tool_call_count=completed.tool_call_count,
+                )
             yield f"data: {json.dumps(event.model_dump(mode='json'), ensure_ascii=False)}\n\n"
 
     return StreamingResponse(

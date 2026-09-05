@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 import logging
+import time
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -64,6 +65,8 @@ from app.modules.exam_papers.versioning import (
     PaperVersioningError,
 )
 from app.modules.exam_papers.studio import ExamPaperStudioConflict
+from app.modules.beta_validation.dependencies import get_beta_validation_facts
+from app.modules.beta_validation.facts import BetaValidationFacts
 from app.routes.personal_question_library import get_personal_question_library
 from app.routes.questions import get_question_bank
 
@@ -307,14 +310,23 @@ def save_paper_blueprint_version(
     teacher: CurrentTeacher = Depends(get_current_teacher),
     versioning: PaperVersioning = Depends(get_paper_versioning),
     memory: TeacherMemory = Depends(get_teacher_memory),
+    validation_facts: BetaValidationFacts = Depends(get_beta_validation_facts),
 ) -> PaperSavedVersion:
     try:
+        started_at = time.monotonic()
         saved = versioning.save(command, owner_id=teacher.teacher_id)
         _observe_saved_paper_preferences(
             memory,
             owner_id=teacher.teacher_id,
             saved=saved,
             command=command,
+        )
+        validation_facts.record_checkpoint(
+            owner_id=teacher.teacher_id,
+            fact="paper_generated",
+            task_ref=saved.exam_paper_id,
+            duration_ms=int((time.monotonic() - started_at) * 1000),
+            trust_tier="teacher_review_required",
         )
         return saved
     except PaperVersioningConflict as exc:
@@ -450,6 +462,7 @@ def export_saved_exam_paper_version(
     edition: ExamPaperEdition = Query(default="student"),
     teacher: CurrentTeacher = Depends(get_current_teacher),
     exporting: PaperSavedExporting = Depends(get_paper_saved_exporting),
+    validation_facts: BetaValidationFacts = Depends(get_beta_validation_facts),
 ) -> FileResponse:
     try:
         rendered = exporting.export(
@@ -463,6 +476,11 @@ def export_saved_exam_paper_version(
         raise HTTPException(status_code=404, detail="试卷版本不存在或不属于当前教师") from exc
     except ExamPaperExportError as exc:
         raise HTTPException(status_code=500, detail="导出失败，请稍后重试") from exc
+    validation_facts.record_checkpoint(
+        owner_id=teacher.teacher_id,
+        fact="paper_exported",
+        task_ref=paper_id,
+    )
     return FileResponse(
         path=rendered.path,
         media_type=rendered.media_type,

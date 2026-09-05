@@ -55,6 +55,8 @@ from app.routes.curriculum import get_catalog
 from app.modules.private_library.exports import LibraryExportError, LibraryTextRenderer
 from app.modules.deepseek import DeepSeekClientError, DeepSeekJsonClient
 from app.modules.background_jobs import BackgroundJobRegistry, BackgroundJobView
+from app.modules.beta_validation.dependencies import get_beta_validation_facts
+from app.modules.beta_validation.facts import BetaValidationFacts
 
 
 router = APIRouter(prefix="/library", tags=["private-library"])
@@ -859,6 +861,7 @@ def import_question_candidate(
     item_id: str,
     candidate_id: str,
     current_teacher: CurrentTeacher = Depends(get_current_teacher),
+    validation_facts: BetaValidationFacts = Depends(get_beta_validation_facts),
 ) -> CandidateImportResult:
     try:
         library = get_private_library()
@@ -897,6 +900,11 @@ def import_question_candidate(
             candidate_id,
             question.question_id,
             owner_id=current_teacher.teacher_id,
+        )
+        validation_facts.record_checkpoint(
+            owner_id=current_teacher.teacher_id,
+            fact="private_library_import_confirmed",
+            task_ref=question.question_id,
         )
         return CandidateImportResult(candidate=marked, question_id=question.question_id)
     except KeyError as exc:

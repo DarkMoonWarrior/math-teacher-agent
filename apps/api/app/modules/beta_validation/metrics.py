@@ -89,10 +89,31 @@ class BetaValidationMetrics:
         owner_id: str,
         observation: BetaValidationObservation,
     ) -> BetaValidationReceipt:
+        return self._record_batch(
+            owner_id=owner_id,
+            observations=(observation,),
+        )[0]
+
+    def _record_batch(
+        self,
+        *,
+        owner_id: str,
+        observations: tuple[BetaValidationObservation, ...],
+    ) -> tuple[BetaValidationReceipt, ...]:
+        """Atomically persist one server fact and its derived completion event."""
+
+        if not observations:
+            return ()
         occurred_at = self._now()
-        event_id = f"bve_{uuid.uuid4().hex}"
         participant_key = self._participant_key(owner_id)
-        task_key = self._digest("task", f"{owner_id}\x00{observation.task_ref}")
+        prepared = tuple(
+            (
+                f"bve_{uuid.uuid4().hex}",
+                observation,
+                self._digest("task", f"{owner_id}\x00{observation.task_ref}"),
+            )
+            for observation in observations
+        )
         with self._connect() as connection:
             # Serialize the consent check with participant deletion. Either the
             # event commits before an exit transaction (and is deleted by it),
@@ -107,26 +128,32 @@ class BetaValidationMetrics:
                 raise BetaValidationLifecycleError(
                     "BETA_VALIDATION_NOTICE_ACKNOWLEDGMENT_REQUIRED"
                 )
-            connection.execute(
+            connection.executemany(
                 """INSERT INTO m13_beta_validation_events
                    (event_id, definition_version, participant_key, task_key,
                     workflow, event_type, trust_tier, duration_ms,
                     model_cost_usd, occurred_at)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (
-                    event_id,
-                    METRIC_DEFINITION_VERSION,
-                    participant_key,
-                    task_key,
-                    observation.workflow,
-                    observation.event_type,
-                    observation.trust_tier,
-                    observation.duration_ms,
-                    str(observation.model_cost_usd),
-                    occurred_at.isoformat(),
+                tuple(
+                    (
+                        event_id,
+                        METRIC_DEFINITION_VERSION,
+                        participant_key,
+                        task_key,
+                        observation.workflow,
+                        observation.event_type,
+                        observation.trust_tier,
+                        observation.duration_ms,
+                        str(observation.model_cost_usd),
+                        occurred_at.isoformat(),
+                    )
+                    for event_id, observation, task_key in prepared
                 ),
             )
-        return BetaValidationReceipt(event_id=event_id, occurred_at=occurred_at)
+        return tuple(
+            BetaValidationReceipt(event_id=event_id, occurred_at=occurred_at)
+            for event_id, _, _ in prepared
+        )
 
     def acknowledge(self, *, owner_id: str) -> BetaValidationParticipation:
         participant_key = self._participant_key(owner_id)

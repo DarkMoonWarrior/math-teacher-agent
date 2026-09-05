@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 import logging
+import time
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -74,6 +75,8 @@ from app.routes.model_operations import get_model_operations_registry
 from app.routes.questions import get_question_bank
 from app.routes.library import get_private_library
 from app.routes.personal_question_library import get_personal_question_library
+from app.modules.beta_validation.dependencies import get_beta_validation_facts
+from app.modules.beta_validation.facts import BetaValidationFacts
 
 
 router = APIRouter(prefix="/lesson-plans", tags=["lesson-plans"])
@@ -272,9 +275,19 @@ def build_lesson_draft(
     command: LessonDraftCommand,
     teacher: CurrentTeacher = Depends(get_current_teacher),
     drafting: LessonDrafting = Depends(get_lesson_drafting),
+    validation_facts: BetaValidationFacts = Depends(get_beta_validation_facts),
 ) -> LessonEditableDraft:
     try:
-        return drafting.build(command, owner_id=teacher.teacher_id)
+        started_at = time.monotonic()
+        draft = drafting.build(command, owner_id=teacher.teacher_id)
+        validation_facts.record_checkpoint(
+            owner_id=teacher.teacher_id,
+            fact="lesson_generated",
+            task_ref=LessonVersioning.fingerprint(draft),
+            duration_ms=int((time.monotonic() - started_at) * 1000),
+            trust_tier="teacher_review_required",
+        )
+        return draft
     except LessonDraftingConflict as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     except LessonDraftingError as exc:
@@ -301,6 +314,7 @@ def save_lesson_version(
     teacher: CurrentTeacher = Depends(get_current_teacher),
     versioning: LessonVersioning = Depends(get_lesson_versioning),
     memory: TeacherMemory = Depends(get_teacher_memory),
+    validation_facts: BetaValidationFacts = Depends(get_beta_validation_facts),
 ) -> LessonSavedVersion:
     try:
         saved = versioning.save(command, owner_id=teacher.teacher_id)
@@ -308,6 +322,11 @@ def save_lesson_version(
             memory,
             owner_id=teacher.teacher_id,
             saved=saved,
+        )
+        validation_facts.record_checkpoint(
+            owner_id=teacher.teacher_id,
+            fact="lesson_saved",
+            task_ref=saved.draft_fingerprint,
         )
         return saved
     except KeyError as exc:

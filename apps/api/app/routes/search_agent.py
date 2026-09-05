@@ -30,6 +30,8 @@ from app.core.identity import CurrentTeacher, get_current_teacher
 from app.core.agent_sessions import agent_sessions
 from app.agent_runtime import TeacherAgentEvent, TeacherAgentEventType
 from app.modules.search_agent import SearchAgentPipeline, SearchAgentResponse, SearchAgentRunRecord
+from app.modules.beta_validation.dependencies import get_beta_validation_facts
+from app.modules.beta_validation.facts import BetaValidationFacts
 
 router = APIRouter(prefix="/agent/search", tags=["search-agent"])
 
@@ -97,7 +99,11 @@ def _require_run(run_id: str, *, owner_id: str) -> SearchAgentRunRecord:
 
 
 @router.post("", response_model=SearchAgentResponse)
-async def search(body: SearchAgentSearchRequest, teacher: CurrentTeacher = Depends(get_current_teacher)) -> SearchAgentResponse:
+async def search(
+    body: SearchAgentSearchRequest,
+    teacher: CurrentTeacher = Depends(get_current_teacher),
+    validation_facts: BetaValidationFacts = Depends(get_beta_validation_facts),
+) -> SearchAgentResponse:
     _require_feature()
     body = body.model_copy(update={"session_id": agent_sessions.resolve(
         owner_id=teacher.teacher_id, workflow="search", client_session_id=body.session_id,
@@ -123,13 +129,34 @@ async def search(body: SearchAgentSearchRequest, teacher: CurrentTeacher = Depen
     if previous is not None and previous.owner_id != teacher.teacher_id:
         raise _SearchAgentHttpError(409, "RUN_CONFLICT", "任务编号冲突，请重试", request_id)
     _RUNS[record.run_id] = record
+    if response.status == "ok":
+        validation_facts.record_checkpoint(
+            owner_id=teacher.teacher_id,
+            fact="search_completed",
+            task_ref=record.run_id,
+            duration_ms=response.duration_ms,
+            trust_tier="teacher_review_required",
+            tool_call_count=response.tool_call_count,
+        )
+    elif response.tool_call_count:
+        validation_facts.record_tool_failure(
+            owner_id=teacher.teacher_id,
+            workflow="search",
+            task_ref=record.run_id,
+            tool_call_count=response.tool_call_count,
+        )
     return response
 
 
-def _record_stream_event(body: SearchAgentSearchRequest, event: TeacherAgentEvent, *, owner_id: str) -> None:
+def _record_stream_event(
+    body: SearchAgentSearchRequest,
+    event: TeacherAgentEvent,
+    *,
+    owner_id: str,
+) -> SearchAgentResponse | None:
     """Persist the observable run lifecycle before the event reaches the client."""
     if not event.run_id:
-        return
+        return None
     record = _RUNS.get(event.run_id)
     if record is not None and record.owner_id != owner_id:
         raise _SearchAgentHttpError(409, "RUN_CONFLICT", "任务编号冲突，请重试", event.request_id)
@@ -146,7 +173,7 @@ def _record_stream_event(body: SearchAgentSearchRequest, event: TeacherAgentEven
 
     if event.type == TeacherAgentEventType.RUN_STARTED:
         record.status = "running"
-        return
+        return None
 
     if event.type == TeacherAgentEventType.RUN_COMPLETED:
         raw_response = event.data.get("search_response")
@@ -165,7 +192,7 @@ def _record_stream_event(body: SearchAgentSearchRequest, event: TeacherAgentEven
                 "request_id": event.request_id,
             }
         record.finished_at = time.time()
-        return
+        return record.response
 
     if event.type in {
         TeacherAgentEventType.RUN_FAILED,
@@ -179,10 +206,15 @@ def _record_stream_event(body: SearchAgentSearchRequest, event: TeacherAgentEven
         raw_error = event.data.get("error")
         record.error = raw_error if isinstance(raw_error, dict) else None
         record.finished_at = time.time()
+    return None
 
 
 @router.post("/stream")
-async def stream_search(body: SearchAgentSearchRequest, teacher: CurrentTeacher = Depends(get_current_teacher)) -> StreamingResponse:
+async def stream_search(
+    body: SearchAgentSearchRequest,
+    teacher: CurrentTeacher = Depends(get_current_teacher),
+    validation_facts: BetaValidationFacts = Depends(get_beta_validation_facts),
+) -> StreamingResponse:
     """Run Search once and stream its real lifecycle; disconnect cancels that run."""
     _require_feature()
     body = body.model_copy(update={"session_id": agent_sessions.resolve(
@@ -197,7 +229,25 @@ async def stream_search(body: SearchAgentSearchRequest, teacher: CurrentTeacher 
             session_id=body.session_id,
             request_id=request_id,
         ):
-            _record_stream_event(body, event, owner_id=teacher.teacher_id)
+            completed = _record_stream_event(
+                body, event, owner_id=teacher.teacher_id
+            )
+            if completed is not None and completed.status == "ok" and completed.run_id:
+                validation_facts.record_checkpoint(
+                    owner_id=teacher.teacher_id,
+                    fact="search_completed",
+                    task_ref=completed.run_id,
+                    duration_ms=completed.duration_ms,
+                    trust_tier="teacher_review_required",
+                    tool_call_count=completed.tool_call_count,
+                )
+            elif completed is not None and completed.run_id and completed.tool_call_count:
+                validation_facts.record_tool_failure(
+                    owner_id=teacher.teacher_id,
+                    workflow="search",
+                    task_ref=completed.run_id,
+                    tool_call_count=completed.tool_call_count,
+                )
             yield f"data: {json.dumps(event.model_dump(mode='json'), ensure_ascii=False)}\n\n"
 
     return StreamingResponse(

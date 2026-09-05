@@ -29,7 +29,7 @@
 | **M10 Lesson Agent** | **已完成；阶段转换已确认** | 基于教材、真实题目和教师资料生成可逐段编辑的教案草稿。 | 六条切片、28 场景固定评测、Gate E/Gate P 连续性和完整 DOCX/PDF 视觉检查通过；回滚点 `9997fc8`，所有者于 2026-08-31 确认进入 M11。 |
 | **M11 Teacher Memory** | **已完成；阶段转换已确认** | 在真实教师反馈基础上保存可解释、可控制的偏好。 | 五条切片、26 场景固定评测 12 类违规为 0、完整工程 Gate 通过；回滚点 `5614fc0`，所有者于 2026-09-01 确认进入 M12。 |
 | **M12 Closed Beta Readiness** | **已完成；阶段转换已确认** | 建立让真实教师安全试用所需的最小身份、owner 隔离、feature flags、监控、备份、恢复与删除边界。 | 五条切片、固定评测和完整 E/P/Q 连续性 Gate 通过；回滚点 `570cf79`。不接支付、不扩大功能。 |
-| **M13 Closed Beta Validation** | **进行中；切片 1–2 已完成** | 停止堆功能，用 20-30 位真实教师验证有用性、重复使用、错误率和付费意愿。 | 达到 `PRODUCT-GATES.md` 的 Gate A/B/Q；Gate C 有真实证据；analytics 不记录私人正文、私题或学生信息。 |
+| **M13 Closed Beta Validation** | **进行中；切片 3 首批服务端事实已接入** | 停止堆功能，用 20-30 位真实教师验证有用性、重复使用、错误率和付费意愿。 | 达到 `PRODUCT-GATES.md` 的 Gate A/B/Q；Gate C 有真实证据；analytics 不记录私人正文、私题或学生信息。 |
 | M14 Commercial Foundation | 待开始 | 在 Beta Gate 通过后建设生产级认证、PostgreSQL、对象存储、后台任务、Entitlement、订单、支付和退款。 | RBAC、IDOR、tenant isolation、私题永久隔离、支付幂等、Webhook 验签、退款/订阅状态机和恢复能力通过。 |
 | M15 Teacher Pro | 待开始 | 面向个人高中数学教师发布 Free + Teacher Pro。 | 权利下架、隐私/条款、私题数据导出/删除、成本监控、客服/退款和生产发布 Checklist 完成；留存与单位经济健康。 |
 | M16 教研组版 | 待开始 | 在个人版成立后增加小范围共享题库、试卷/教案模板与协同审核。 | private/team 明确分离；辅助命制私题仍不可共享；共享需授权；撤销、审计与角色权限测试通过。 |

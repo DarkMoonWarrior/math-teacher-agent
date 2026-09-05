@@ -4,6 +4,7 @@ import asyncio
 import time
 import uuid
 from functools import lru_cache
+from time import monotonic
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 
@@ -12,6 +13,8 @@ from app.core.agent_sessions import agent_sessions
 from app.core.identity import CurrentTeacher, get_current_teacher
 from app.modules.math_verifier import MathVerifier
 from app.modules.background_jobs import BackgroundJobRegistry, BackgroundJobView
+from app.modules.beta_validation.dependencies import get_beta_validation_facts
+from app.modules.beta_validation.facts import BetaValidationFacts
 from app.modules.question_authoring import (
     DeepSeekQuestionAuthoringProvider,
     QuestionAuthoring,
@@ -109,6 +112,7 @@ async def create_question_authoring_draft(
     request: Request,
     teacher: CurrentTeacher = Depends(get_current_teacher),
     library: PersonalQuestionLibrary = Depends(get_personal_question_library),
+    validation_facts: BetaValidationFacts = Depends(get_beta_validation_facts),
 ) -> QuestionAuthoringAgentResponse:
     settings = get_settings()
     if not settings.question_authoring_agent_enabled:
@@ -126,6 +130,7 @@ async def create_question_authoring_draft(
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     request_id = request.headers.get("X-Request-Id", "").strip()[:160]
+    started_at = monotonic()
     response = await get_question_authoring_agent_workflow().run(
         command,
         owner_id=teacher.teacher_id,
@@ -137,6 +142,21 @@ async def create_question_authoring_draft(
             "staging",
         )
         library.stage_generated_draft(response.draft, owner_id=teacher.teacher_id)
+        validation_facts.record_checkpoint(
+            owner_id=teacher.teacher_id,
+            fact="authoring_completed",
+            task_ref=response.draft.draft_id,
+            duration_ms=int((monotonic() - started_at) * 1000),
+            trust_tier="teacher_review_required",
+            tool_call_count=response.tool_call_count,
+        )
+    elif response.tool_call_count:
+        validation_facts.record_tool_failure(
+            owner_id=teacher.teacher_id,
+            workflow="authoring",
+            task_ref=command.progress_id,
+            tool_call_count=response.tool_call_count,
+        )
     return response
 
 
@@ -150,6 +170,7 @@ async def start_question_authoring_job(
     request: Request,
     teacher: CurrentTeacher = Depends(get_current_teacher),
     library: PersonalQuestionLibrary = Depends(get_personal_question_library),
+    validation_facts: BetaValidationFacts = Depends(get_beta_validation_facts),
 ) -> BackgroundJobView:
     """Start an owner-scoped authoring loop that survives page navigation.
 
@@ -176,6 +197,7 @@ async def start_question_authoring_job(
     owner_id = teacher.teacher_id
 
     def runner(report) -> dict:
+        started_at = monotonic()
         attempt = 0
         while True:
             attempt += 1
@@ -207,12 +229,27 @@ async def start_question_authoring_job(
                 report(attempt, attempt, "正在建立私有草稿")
                 get_question_authoring_progress_registry().update(progress_id, "staging")
                 library.stage_generated_draft(response.draft, owner_id=owner_id)
+                validation_facts.record_checkpoint(
+                    owner_id=owner_id,
+                    fact="authoring_completed",
+                    task_ref=response.draft.draft_id,
+                    duration_ms=int((monotonic() - started_at) * 1000),
+                    trust_tier="teacher_review_required",
+                    tool_call_count=response.tool_call_count,
+                )
                 report(attempt, attempt, "完整题目与解析已生成")
                 return {
                     "draft_id": response.draft.draft_id,
                     "request_id": response.request_id,
                 }
             message = _agent_error_message(response.error)
+            if response.tool_call_count:
+                validation_facts.record_tool_failure(
+                    owner_id=owner_id,
+                    workflow="authoring",
+                    task_ref=f"{progress_id}.attempt.{attempt}",
+                    tool_call_count=response.tool_call_count,
+                )
             if "超出高中数学范围" in message or "大学" in message:
                 raise RuntimeError(message)
             get_question_authoring_progress_registry().update(

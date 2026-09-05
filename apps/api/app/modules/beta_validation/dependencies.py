@@ -6,6 +6,7 @@ from functools import lru_cache
 from fastapi import Depends, HTTPException
 
 from app.core.config import Settings, get_settings
+from app.modules.beta_validation.facts import BetaValidationFacts
 from app.modules.beta_validation.metrics import BetaValidationMetrics
 
 
@@ -63,3 +64,23 @@ def get_beta_validation_store(
                 "message": "封闭测试指标配置尚未就绪。",
             },
         ) from None
+
+
+def get_beta_validation_facts(
+    settings: Settings = Depends(get_settings),
+) -> BetaValidationFacts:
+    """Return a fail-open recorder for ordinary product workflows."""
+
+    if not settings.beta_validation_enabled:
+        return BetaValidationFacts.disabled()
+    secret = settings.beta_validation_identity_secret.get_secret_value()
+    if len(secret) < 32:
+        return BetaValidationFacts.unavailable()
+    try:
+        metrics = _build_beta_validation_metrics(
+            str(settings.beta_validation_db),
+            secret,
+        )
+    except (OSError, ValueError, sqlite3.Error):
+        return BetaValidationFacts.unavailable()
+    return BetaValidationFacts(metrics)

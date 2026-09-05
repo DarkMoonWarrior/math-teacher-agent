@@ -69,7 +69,7 @@ class LessonVersioning:
             raise LessonVersioningError("教案未通过结构、课时或高中范围检查，不能保存。") from exc
 
         now = datetime.now(timezone.utc).isoformat()
-        fingerprint = self._fingerprint(validated)
+        fingerprint = self.fingerprint(validated)
         with self._connect() as connection:
             connection.execute("BEGIN IMMEDIATE")
             if command.lesson_plan_id:
@@ -255,7 +255,8 @@ class LessonVersioning:
             raise LessonVersioningError(str(exc)) from exc
 
     @staticmethod
-    def _fingerprint(draft: LessonEditableDraft) -> str:
+    def fingerprint(draft: LessonEditableDraft) -> str:
+        """Return the stable reference shared by generated and saved versions."""
         raw = json.dumps(
             draft.model_dump(mode="json"),
             ensure_ascii=False,
@@ -345,6 +346,6 @@ class LessonSavedExporting:
             ) from exc
         if saved.version != version or saved.lesson_plan_id != lesson_plan_id:
             raise LessonSavedExportingError("教案版本快照不一致，已停止导出。")
-        if saved.draft_fingerprint != LessonVersioning._fingerprint(saved.draft):
+        if saved.draft_fingerprint != LessonVersioning.fingerprint(saved.draft):
             raise LessonSavedExportingError("教案版本内容校验失败，已停止导出。")
         return self.renderer.render_saved(saved, export_format)
