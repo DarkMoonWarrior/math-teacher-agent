@@ -80,6 +80,13 @@ export type SearchTaskRequest = {
   sessionId: string;
 };
 
+export type BetaFactReceipt = {
+  state: "recorded" | "disabled" | "not_participating" | "unavailable" | "invalid";
+  recorded_events: number;
+};
+
+export type BetaTaskDecision = "accepted" | "rejected";
+
 export type SearchTaskProgressStage =
   | "connecting"
   | "understanding"
@@ -1549,6 +1556,19 @@ export interface TeacherWorkspace {
     request: SearchTaskRequest,
     options?: SearchTaskOptions,
   ): Promise<SearchTaskResult>;
+
+  selectSearchResult(
+    runId: string,
+    questionId: string,
+    signal?: AbortSignal,
+  ): Promise<BetaFactReceipt>;
+
+  recordTaskDecision(
+    workflow: "search" | "solve",
+    runId: string,
+    decision: BetaTaskDecision,
+    signal?: AbortSignal,
+  ): Promise<BetaFactReceipt>;
 
   solveQuestion(
     request: SolveTaskRequest,

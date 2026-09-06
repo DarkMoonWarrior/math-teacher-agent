@@ -19,7 +19,7 @@ import json
 import time
 import uuid
 from functools import lru_cache
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -41,6 +41,14 @@ _RUNS: dict[str, SearchAgentRunRecord] = {}
 class SearchAgentSearchRequest(BaseModel):
     query: str = Field(min_length=1, max_length=2000)
     session_id: str | None = Field(default=None, max_length=160)
+
+
+class SearchResultSelectionCommand(BaseModel):
+    question_id: str = Field(pattern=r"^[A-Za-z0-9_.:-]{1,160}$")
+
+
+class SearchTaskDecisionCommand(BaseModel):
+    decision: Literal["accepted", "rejected"]
 
 
 class _ErrorBody(BaseModel):
@@ -95,6 +103,18 @@ def _require_run(run_id: str, *, owner_id: str) -> SearchAgentRunRecord:
     record = _RUNS.get(run_id)
     if record is None or record.owner_id != owner_id:
         raise _SearchAgentHttpError(404, "RUN_NOT_FOUND", "run 不存在", run_id)
+    return record
+
+
+def _require_completed_run(run_id: str, *, owner_id: str) -> SearchAgentRunRecord:
+    record = _require_run(run_id, owner_id=owner_id)
+    if record.status != "ok" or record.response is None:
+        raise _SearchAgentHttpError(
+            409,
+            "RUN_NOT_COMPLETED",
+            "只有已完成的搜索任务可以记录选择或反馈",
+            record.request_id,
+        )
     return record
 
 
@@ -261,6 +281,48 @@ async def stream_search(
 async def get_run(run_id: str, teacher: CurrentTeacher = Depends(get_current_teacher)) -> dict[str, Any]:
     record = _require_run(run_id, owner_id=teacher.teacher_id)
     return record.model_dump(mode="json")
+
+
+@router.post("/{run_id}/selection")
+def select_search_result(
+    run_id: str,
+    command: SearchResultSelectionCommand,
+    teacher: CurrentTeacher = Depends(get_current_teacher),
+    validation_facts: BetaValidationFacts = Depends(get_beta_validation_facts),
+) -> dict[str, str | int]:
+    record = _require_completed_run(run_id, owner_id=teacher.teacher_id)
+    if not any(
+        item.question_id == command.question_id
+        for item in record.response.results
+    ):
+        raise _SearchAgentHttpError(
+            404,
+            "SEARCH_RESULT_NOT_FOUND",
+            "所选题目不属于本次搜索结果",
+            record.request_id,
+        )
+    result = validation_facts.record_search_selection(
+        owner_id=teacher.teacher_id,
+        task_ref=record.run_id,
+    )
+    return {"state": result.state, "recorded_events": result.recorded_events}
+
+
+@router.post("/{run_id}/decision")
+def decide_search_task(
+    run_id: str,
+    command: SearchTaskDecisionCommand,
+    teacher: CurrentTeacher = Depends(get_current_teacher),
+    validation_facts: BetaValidationFacts = Depends(get_beta_validation_facts),
+) -> dict[str, str | int]:
+    record = _require_completed_run(run_id, owner_id=teacher.teacher_id)
+    result = validation_facts.record_task_decision(
+        owner_id=teacher.teacher_id,
+        workflow="search",
+        task_ref=record.run_id,
+        decision=command.decision,
+    )
+    return {"state": result.state, "recorded_events": result.recorded_events}
 
 
 @router.get("/{run_id}/stream")

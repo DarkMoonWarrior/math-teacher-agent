@@ -1,4 +1,5 @@
 from pathlib import Path
+from decimal import Decimal
 
 import pytest
 
@@ -114,3 +115,94 @@ def test_explicit_provider_readiness_uses_its_own_key(tmp_path: Path) -> None:
     routes = {route.feature: route for route in dashboard.routes}
     assert routes["lesson_plan_generation"].ready is False
     assert routes["question_variant"].model == "deepseek-model"
+
+
+def test_priced_usage_is_reported_only_with_server_validation_owner(tmp_path: Path) -> None:
+    class RecordingSink:
+        calls: list[dict] = []
+
+        def record_model_usage(self, **values) -> None:
+            self.calls.append(values)
+
+    sink = RecordingSink()
+    registry = ModelOperationsRegistry(
+        tmp_path / "model-runs.sqlite3",
+        input_rate=2.5,
+        cached_input_rate=0.25,
+        output_rate=15.0,
+        usage_sink=sink,
+    )
+
+    with registry.track(
+        feature="lesson_plan_generation",
+        provider="openai",
+        model="test-model",
+        prompt_version="lesson-plan-v1",
+        actor_id="display-only-actor",
+    ) as run:
+        run.capture_response({"usage": {"input_tokens": 100, "output_tokens": 20}})
+    with registry.track(
+        feature="lesson_plan_generation",
+        provider="openai",
+        model="test-model",
+        prompt_version="lesson-plan-v1",
+        actor_id="teacher-1",
+        validation_owner_id="teacher-1",
+    ) as run:
+        run.capture_response({"usage": {"input_tokens": 100, "output_tokens": 20}})
+
+    assert len(sink.calls) == 1
+    assert sink.calls[0]["owner_id"] == "teacher-1"
+    assert sink.calls[0]["feature"] == "lesson_plan_generation"
+    assert sink.calls[0]["task_ref"].startswith("run_")
+    assert sink.calls[0]["model_cost_usd"] == Decimal("0.00055")
+
+
+def test_usage_sink_failure_never_breaks_model_task(tmp_path: Path) -> None:
+    class FailingSink:
+        def record_model_usage(self, **_values) -> None:
+            raise RuntimeError("analytics unavailable")
+
+    registry = ModelOperationsRegistry(
+        tmp_path / "model-runs.sqlite3",
+        input_rate=1,
+        cached_input_rate=1,
+        output_rate=1,
+        usage_sink=FailingSink(),
+    )
+
+    with registry.track(
+        feature="lesson_plan_generation",
+        provider="openai",
+        model="test-model",
+        prompt_version="lesson-plan-v1",
+        validation_owner_id="teacher-1",
+    ) as run:
+        run.capture_response({"usage": {"input_tokens": 1, "output_tokens": 1}})
+
+    assert registry.list_runs(limit=1)[0].status == "succeeded"
+
+
+def test_deepseek_cost_uses_only_explicit_server_rate_snapshot(tmp_path: Path) -> None:
+    registry = ModelOperationsRegistry(
+        tmp_path / "model-runs.sqlite3",
+        provider_rates={"deepseek": (1.0, 0.1, 2.0)},
+    )
+
+    with registry.track(
+        feature="private_resource_ocr",
+        provider="deepseek",
+        model="configured-model",
+        prompt_version="private-resource-ocr-v1",
+    ) as run:
+        run.capture_response({
+            "usage": {
+                "prompt_tokens": 1000,
+                "prompt_cache_hit_tokens": 400,
+                "completion_tokens": 200,
+                "total_tokens": 1200,
+            }
+        })
+
+    recorded = registry.list_runs(limit=1)[0]
+    assert recorded.estimated_cost_usd == pytest.approx(0.00104)

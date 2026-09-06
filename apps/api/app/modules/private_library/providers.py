@@ -205,6 +205,7 @@ class OpenAIResourceOCRProvider:
             model=self.model,
             prompt_version="private-resource-ocr-v1",
             actor_id=teacher_id,
+            validation_owner_id=teacher_id,
         ) as run:
             try:
                 with urlopen(request, timeout=self.timeout_seconds) as response:
@@ -412,6 +413,7 @@ class DeepSeekResourceOCRProvider:
             model=self.model,
             prompt_version="private-resource-deepseek-ocr-v1",
             actor_id=teacher_id,
+            validation_owner_id=teacher_id,
         ) as run:
             try:
                 with urlopen(request, timeout=self.timeout_seconds) as response:

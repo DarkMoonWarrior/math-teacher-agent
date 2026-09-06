@@ -4,10 +4,11 @@ import re
 import sqlite3
 from contextlib import AbstractContextManager
 from datetime import UTC, datetime
+from decimal import Decimal
 from pathlib import Path
 from time import perf_counter
 from types import TracebackType
-from typing import Protocol
+from typing import Mapping, Protocol
 from uuid import uuid4
 
 from app.modules.model_operations.schemas import (
@@ -44,7 +45,19 @@ class ModelRunRecorder(Protocol):
         model: str,
         prompt_version: str,
         actor_id: str | None = None,
+        validation_owner_id: str | None = None,
     ) -> AbstractContextManager[ModelRunSpan]: ...
+
+
+class ModelUsageSink(Protocol):
+    def record_model_usage(
+        self,
+        *,
+        owner_id: str,
+        feature: str,
+        task_ref: str,
+        model_cost_usd: Decimal,
+    ) -> object: ...
 
 
 class NullModelRunSpan:
@@ -61,6 +74,7 @@ class NullModelRunRecorder:
         model: str,
         prompt_version: str,
         actor_id: str | None = None,
+        validation_owner_id: str | None = None,
     ) -> "_NullModelRunContext":
         return _NullModelRunContext()
 
@@ -88,6 +102,7 @@ class _SQLiteModelRunSpan:
         model: str,
         prompt_version: str,
         actor_id: str | None,
+        validation_owner_id: str | None,
     ) -> None:
         self.registry = registry
         self.feature = feature
@@ -95,6 +110,7 @@ class _SQLiteModelRunSpan:
         self.model = model
         self.prompt_version = prompt_version
         self.actor_id = actor_id
+        self.validation_owner_id = validation_owner_id
         self.started_at = perf_counter()
         self.created_at = datetime.now(UTC)
         self.usage = {
@@ -112,7 +128,11 @@ class _SQLiteModelRunSpan:
         input_details = usage.get("input_tokens_details") or usage.get("prompt_tokens_details") or {}
         self.usage = {
             "input_tokens": int(usage.get("input_tokens") or usage.get("prompt_tokens") or 0),
-            "cached_input_tokens": int(input_details.get("cached_tokens") or 0),
+            "cached_input_tokens": int(
+                input_details.get("cached_tokens")
+                or usage.get("prompt_cache_hit_tokens")
+                or 0
+            ),
             "output_tokens": int(usage.get("output_tokens") or usage.get("completion_tokens") or 0),
             "total_tokens": int(usage.get("total_tokens") or 0),
         }
@@ -134,6 +154,7 @@ class _SQLiteModelRunSpan:
             model=self.model,
             prompt_version=self.prompt_version,
             actor_id=self.actor_id,
+            validation_owner_id=self.validation_owner_id,
             created_at=self.created_at,
             latency_ms=latency_ms,
             usage=self.usage,
@@ -152,20 +173,26 @@ class ModelOperationsRegistry:
         input_rate: float | None = None,
         cached_input_rate: float | None = None,
         output_rate: float | None = None,
+        provider_rates: Mapping[str, tuple[float, float, float]] | None = None,
+        usage_sink: ModelUsageSink | None = None,
     ) -> None:
         self.database_path = Path(database_path)
         self.database_path.parent.mkdir(parents=True, exist_ok=True)
         self.input_rate = input_rate
         self.cached_input_rate = cached_input_rate
         self.output_rate = output_rate
+        self.provider_rates = dict(provider_rates or {})
+        if all(rate is not None for rate in (input_rate, cached_input_rate, output_rate)):
+            self.provider_rates.setdefault(
+                "openai",
+                (float(input_rate), float(cached_input_rate), float(output_rate)),
+            )
+        self.usage_sink = usage_sink
         self._initialize()
 
     @property
     def pricing_configured(self) -> bool:
-        return all(
-            rate is not None
-            for rate in (self.input_rate, self.cached_input_rate, self.output_rate)
-        )
+        return bool(self.provider_rates)
 
     def track(
         self,
@@ -175,6 +202,7 @@ class ModelOperationsRegistry:
         model: str,
         prompt_version: str,
         actor_id: str | None = None,
+        validation_owner_id: str | None = None,
     ) -> _SQLiteModelRunSpan:
         return _SQLiteModelRunSpan(
             self,
@@ -183,6 +211,7 @@ class ModelOperationsRegistry:
             model=model,
             prompt_version=prompt_version,
             actor_id=actor_id,
+            validation_owner_id=validation_owner_id,
         )
 
     def dashboard(
@@ -231,7 +260,7 @@ class ModelOperationsRegistry:
             timeout_seconds=timeout_seconds,
             pricing_configured=self.pricing_configured,
             pricing_note=(
-                "按当前环境费率快照估算，仅供运营参考"
+                "仅按已配置供应商的环境费率快照估算，未配置供应商不计入成本"
                 if self.pricing_configured
                 else "尚未配置费率快照，暂只统计 token 用量"
             ),
@@ -257,6 +286,7 @@ class ModelOperationsRegistry:
         model: str,
         prompt_version: str,
         actor_id: str | None,
+        validation_owner_id: str | None,
         created_at: datetime,
         latency_ms: int,
         usage: dict[str, int],
@@ -264,6 +294,7 @@ class ModelOperationsRegistry:
     ) -> None:
         estimated_cost = self._estimate_cost(provider=provider, usage=usage)
         error_message = self._safe_error(error) if error else None
+        run_id = f"run_{uuid4().hex}"
         with self._connect() as connection:
             connection.execute(
                 """
@@ -275,7 +306,7 @@ class ModelOperationsRegistry:
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
-                    f"run_{uuid4().hex}", feature, provider, model, prompt_version,
+                    run_id, feature, provider, model, prompt_version,
                     "failed" if error else "succeeded",
                     usage["input_tokens"], usage["cached_input_tokens"],
                     usage["output_tokens"], usage["total_tokens"], latency_ms,
@@ -283,17 +314,33 @@ class ModelOperationsRegistry:
                     error_message, actor_id, created_at.isoformat(),
                 ),
             )
+        if validation_owner_id and estimated_cost is not None and estimated_cost > 0:
+            try:
+                if self.usage_sink is not None:
+                    self.usage_sink.record_model_usage(
+                        owner_id=validation_owner_id,
+                        feature=feature,
+                        task_ref=run_id,
+                        model_cost_usd=Decimal(str(estimated_cost)),
+                    )
+            except Exception:
+                # Validation telemetry is fail-open by contract: a metric sink
+                # must never turn a successful model-backed product task into
+                # a user-visible failure.
+                pass
 
     def _estimate_cost(self, *, provider: str, usage: dict[str, int]) -> float | None:
-        if provider != "openai":
+        if provider.startswith("local_") or provider in {"verified_answer", "local_rule"}:
             return 0.0
-        if not self.pricing_configured:
+        rates = self.provider_rates.get(provider)
+        if rates is None:
             return None
+        input_rate, cached_input_rate, output_rate = rates
         uncached_input = max(0, usage["input_tokens"] - usage["cached_input_tokens"])
         cost = (
-            uncached_input * float(self.input_rate)
-            + usage["cached_input_tokens"] * float(self.cached_input_rate)
-            + usage["output_tokens"] * float(self.output_rate)
+            uncached_input * input_rate
+            + usage["cached_input_tokens"] * cached_input_rate
+            + usage["output_tokens"] * output_rate
         ) / 1_000_000
         return round(cost, 8)
 

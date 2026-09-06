@@ -60,7 +60,9 @@ class BetaValidationObservation(BaseModel):
     event_type: BetaValidationEventType
     trust_tier: BetaTrustTier | None = None
     duration_ms: int | None = Field(default=None, ge=0, le=86_400_000)
-    model_cost_usd: Decimal = Field(default=Decimal("0"), ge=0, max_digits=12, decimal_places=6)
+    model_cost_usd: Decimal = Field(
+        default=Decimal("0"), ge=0, max_digits=14, decimal_places=8
+    )
 
     @model_validator(mode="after")
     def validate_event_contract(self) -> "BetaValidationObservation":

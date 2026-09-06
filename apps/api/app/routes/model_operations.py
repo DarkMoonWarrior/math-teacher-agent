@@ -5,6 +5,7 @@ from functools import lru_cache
 from fastapi import APIRouter, Query
 
 from app.core.config import get_settings
+from app.modules.beta_validation.dependencies import build_beta_validation_facts
 from app.modules.model_operations import ModelOperationsDashboard, ModelOperationsRegistry
 
 
@@ -14,11 +15,29 @@ router = APIRouter(prefix="/admin/model-operations", tags=["model-operations"])
 @lru_cache
 def get_model_operations_registry() -> ModelOperationsRegistry:
     settings = get_settings()
+    provider_rates: dict[str, tuple[float, float, float]] = {}
+    deepseek_rates = (
+        settings.deepseek_input_usd_per_million,
+        settings.deepseek_cached_input_usd_per_million,
+        settings.deepseek_output_usd_per_million,
+    )
+    if (
+        deepseek_rates[0] is not None
+        and deepseek_rates[1] is not None
+        and deepseek_rates[2] is not None
+    ):
+        provider_rates["deepseek"] = (
+            float(deepseek_rates[0]),
+            float(deepseek_rates[1]),
+            float(deepseek_rates[2]),
+        )
     return ModelOperationsRegistry(
         settings.model_operations_db,
         input_rate=settings.openai_input_usd_per_million,
         cached_input_rate=settings.openai_cached_input_usd_per_million,
         output_rate=settings.openai_output_usd_per_million,
+        provider_rates=provider_rates,
+        usage_sink=build_beta_validation_facts(settings),
     )
 
 

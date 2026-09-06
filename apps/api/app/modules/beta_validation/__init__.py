@@ -1,6 +1,7 @@
 from app.modules.beta_validation.facts import (
     BetaFactResult,
     BetaServerFact,
+    BetaTaskDecision,
     BetaValidationFacts,
 )
 from app.modules.beta_validation.metrics import (
@@ -45,6 +46,7 @@ __all__ = [
     "BetaParticipantDeletion",
     "BetaParticipantMetricExport",
     "BetaServerFact",
+    "BetaTaskDecision",
     "BetaTrustTier",
     "BetaValidationDeleteCommand",
     "BetaValidationEventType",

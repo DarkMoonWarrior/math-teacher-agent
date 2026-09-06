@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sqlite3
 from dataclasses import dataclass
+from decimal import Decimal
 from typing import Literal
 
 from pydantic import ValidationError
@@ -36,6 +37,7 @@ BetaFactState = Literal[
     "unavailable",
     "invalid",
 ]
+BetaTaskDecision = Literal["accepted", "rejected"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -65,6 +67,17 @@ _FACTS: dict[BetaServerFact, _FactDefinition] = {
         "authoring", "authoring_completed", True
     ),
     "authoring_saved": _FactDefinition("authoring", "authoring_saved", False),
+}
+
+_MODEL_FEATURE_WORKFLOWS: dict[str, BetaWorkflow] = {
+    "question_authoring": "authoring",
+    "solution_assistant": "solve",
+    "private_resource_ocr": "library",
+    "private_question_ocr": "solve",
+    "lesson_plan_generation": "lesson",
+    "lesson_block_rewrite": "lesson",
+    "question_variant": "solve",
+    "question_variant_polish": "solve",
 }
 
 
@@ -113,47 +126,108 @@ class BetaValidationFacts:
             duration_ms is None or trust_tier is None
         ):
             return BetaFactResult("invalid")
-        try:
-            observations: list[BetaValidationObservation] = []
-            if definition.event_type is not None:
-                observations.append(
-                    BetaValidationObservation(
-                        workflow=definition.workflow,
-                        event_type=definition.event_type,
-                        task_ref=task_ref,
-                    )
-                )
-            if definition.completes_task:
-                observations.append(
-                    BetaValidationObservation(
-                        workflow=definition.workflow,
-                        event_type="task_completed",
-                        task_ref=task_ref,
-                        trust_tier=trust_tier,
-                        duration_ms=duration_ms,
-                    )
-                )
-            if tool_call_count < 0:
-                return BetaFactResult("invalid")
-            observations.extend(
+        observations: list[BetaValidationObservation] = []
+        if definition.event_type is not None:
+            observations.append(
                 BetaValidationObservation(
                     workflow=definition.workflow,
-                    event_type="agent_tool_succeeded",
+                    event_type=definition.event_type,
                     task_ref=task_ref,
                 )
-                for _ in range(tool_call_count)
             )
-            receipts = self._metrics._record_batch(
-                owner_id=owner_id,
-                observations=tuple(observations),
+        if definition.completes_task:
+            observations.append(
+                BetaValidationObservation(
+                    workflow=definition.workflow,
+                    event_type="task_completed",
+                    task_ref=task_ref,
+                    trust_tier=trust_tier,
+                    duration_ms=duration_ms,
+                )
             )
-        except BetaValidationLifecycleError:
-            return BetaFactResult("not_participating")
-        except (OSError, sqlite3.Error):
-            return BetaFactResult("unavailable")
-        except (TypeError, ValueError, ValidationError):
+        if tool_call_count < 0:
             return BetaFactResult("invalid")
-        return BetaFactResult("recorded", len(receipts))
+        observations.extend(
+            BetaValidationObservation(
+                workflow=definition.workflow,
+                event_type="agent_tool_succeeded",
+                task_ref=task_ref,
+            )
+            for _ in range(tool_call_count)
+        )
+        return self._record(owner_id=owner_id, observations=tuple(observations))
+
+    def record_search_selection(
+        self,
+        *,
+        owner_id: str,
+        task_ref: str,
+    ) -> BetaFactResult:
+        """Record an owner-validated result choice and its acceptance together."""
+
+        return self._record(
+            owner_id=owner_id,
+            observations=(
+                BetaValidationObservation(
+                    workflow="search",
+                    event_type="search_result_selected",
+                    task_ref=task_ref,
+                ),
+                BetaValidationObservation(
+                    workflow="search",
+                    event_type="task_accepted",
+                    task_ref=task_ref,
+                ),
+            ),
+        )
+
+    def record_task_decision(
+        self,
+        *,
+        owner_id: str,
+        workflow: BetaWorkflow,
+        task_ref: str,
+        decision: BetaTaskDecision,
+    ) -> BetaFactResult:
+        return self._record(
+            owner_id=owner_id,
+            observations=(
+                BetaValidationObservation(
+                    workflow=workflow,
+                    event_type=(
+                        "task_accepted" if decision == "accepted" else "task_rejected"
+                    ),
+                    task_ref=task_ref,
+                ),
+            ),
+        )
+
+    def record_model_usage(
+        self,
+        *,
+        owner_id: str,
+        feature: str,
+        task_ref: str,
+        model_cost_usd: Decimal,
+    ) -> BetaFactResult:
+        """Accept only an already-priced, server-attributed model run."""
+
+        workflow = _MODEL_FEATURE_WORKFLOWS.get(feature)
+        if workflow is None:
+            return BetaFactResult("invalid")
+        if model_cost_usd <= 0:
+            return BetaFactResult("invalid")
+        return self._record(
+            owner_id=owner_id,
+            observations=(
+                BetaValidationObservation(
+                    workflow=workflow,
+                    event_type="model_usage",
+                    task_ref=task_ref,
+                    model_cost_usd=model_cost_usd,
+                ),
+            ),
+        )
 
     def record_tool_failure(
         self,
@@ -163,23 +237,34 @@ class BetaValidationFacts:
         task_ref: str,
         tool_call_count: int,
     ) -> BetaFactResult:
+        if tool_call_count <= 0:
+            return BetaFactResult("invalid")
+        return self._record(
+            owner_id=owner_id,
+            observations=tuple(
+                BetaValidationObservation(
+                    workflow=workflow,
+                    event_type="agent_tool_failed",
+                    task_ref=task_ref,
+                )
+                for _ in range(tool_call_count)
+            ),
+        )
+
+    def _record(
+        self,
+        *,
+        owner_id: str,
+        observations: tuple[BetaValidationObservation, ...],
+    ) -> BetaFactResult:
         if self._metrics is None:
             return BetaFactResult(
                 "unavailable" if self._unavailable else "disabled"
             )
-        if tool_call_count <= 0:
-            return BetaFactResult("invalid")
         try:
             receipts = self._metrics._record_batch(
                 owner_id=owner_id,
-                observations=tuple(
-                    BetaValidationObservation(
-                        workflow=workflow,
-                        event_type="agent_tool_failed",
-                        task_ref=task_ref,
-                    )
-                    for _ in range(tool_call_count)
-                ),
+                observations=observations,
             )
         except BetaValidationLifecycleError:
             return BetaFactResult("not_participating")

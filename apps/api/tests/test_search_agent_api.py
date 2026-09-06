@@ -11,6 +11,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from app.core.config import Settings
+from app.core.identity import CurrentTeacher, get_current_teacher
 from app.modules.curriculum import CsvCurriculumCatalog
 from app.modules.question_bank import QuestionBank
 from app.routes import search_agent as route_mod
@@ -70,8 +71,15 @@ def test_feature_disabled_returns_structured_error(monkeypatch: pytest.MonkeyPat
         ("get", "/api/v1/agent/search/run_x"),
         ("get", "/api/v1/agent/search/run_x/stream"),
         ("post", "/api/v1/agent/search/run_x/cancel"),
+        ("post", "/api/v1/agent/search/run_x/selection"),
+        ("post", "/api/v1/agent/search/run_x/decision"),
     ]:
-        kwargs = {"json": {"query": "找题"}} if method == "post" else {}
+        if path.endswith("/selection"):
+            kwargs = {"json": {"question_id": "q_1"}}
+        elif path.endswith("/decision"):
+            kwargs = {"json": {"decision": "accepted"}}
+        else:
+            kwargs = {"json": {"query": "找题"}} if method == "post" else {}
         response = getattr(client, method)(path, **kwargs)
         assert response.status_code == 404
         assert response.json()["error"]["code"] == "FEATURE_DISABLED"
@@ -89,6 +97,48 @@ def test_post_search_and_get_record(api_client: TestClient) -> None:
     record = api_client.get(f"/api/v1/agent/search/{run_id}")
     assert record.status_code == 200
     assert record.json()["response"]["results"][0]["question_id"] == "q_sa_focus_01"
+
+
+def test_selection_and_decision_require_owner_completed_run_and_real_result(
+    api_client: TestClient,
+) -> None:
+    payload = api_client.post(
+        "/api/v1/agent/search", json={"query": "给我找椭圆焦点弦题"}
+    ).json()
+    run_id = payload["run_id"]
+
+    selected = api_client.post(
+        f"/api/v1/agent/search/{run_id}/selection",
+        json={"question_id": "q_sa_focus_01"},
+    )
+    decided = api_client.post(
+        f"/api/v1/agent/search/{run_id}/decision",
+        json={"decision": "rejected"},
+    )
+    missing = api_client.post(
+        f"/api/v1/agent/search/{run_id}/selection",
+        json={"question_id": "q_not_in_result"},
+    )
+
+    assert selected.status_code == 200
+    assert selected.json()["state"] == "disabled"
+    assert decided.status_code == 200
+    assert decided.json()["state"] == "disabled"
+    assert missing.status_code == 404
+    assert missing.json()["error"]["code"] == "SEARCH_RESULT_NOT_FOUND"
+
+    api_client.app.dependency_overrides[get_current_teacher] = lambda: CurrentTeacher(
+        teacher_id="another_teacher", source="authenticated_session"
+    )
+    try:
+        hidden = api_client.post(
+            f"/api/v1/agent/search/{run_id}/decision",
+            json={"decision": "accepted"},
+        )
+        assert hidden.status_code == 404
+        assert hidden.json()["error"]["code"] == "RUN_NOT_FOUND"
+    finally:
+        api_client.app.dependency_overrides.pop(get_current_teacher, None)
 
 
 def test_unknown_run_is_structured_404(api_client: TestClient) -> None:

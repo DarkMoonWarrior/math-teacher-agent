@@ -14,6 +14,7 @@ from app.agent_runtime import (
     TeacherAgentRunStatus,
 )
 from app.core.config import Settings
+from app.core.identity import CurrentTeacher, get_current_teacher
 from app.modules.solve_agent import SolveAgentWorkflow
 from app.routes import solve_agent as route_mod
 from app.routes.solve_agent import (
@@ -61,12 +62,16 @@ def test_feature_disabled_returns_structured_error(
         ("get", "/api/v1/agent/solve/run_x/stream"),
         ("post", "/api/v1/agent/solve/run_x/cancel"),
         ("post", "/api/v1/agent/solve/run_x/resume"),
+        ("post", "/api/v1/agent/solve/run_x/decision"),
     ]:
-        kwargs = (
-            {"json": {"question_text": "解方程 2x-4=0。"}}
-            if path.endswith("/solve") or path.endswith("/stream") and "run_x" not in path
-            else {}
-        )
+        if path.endswith("/decision"):
+            kwargs = {"json": {"decision": "accepted"}}
+        else:
+            kwargs = (
+                {"json": {"question_text": "解方程 2x-4=0。"}}
+                if path.endswith("/solve") or path.endswith("/stream") and "run_x" not in path
+                else {}
+            )
         response = getattr(client, method)(path, **kwargs)
         assert response.status_code == 404
         assert response.json()["error"]["code"] == "FEATURE_DISABLED"
@@ -86,6 +91,33 @@ def test_post_solve_and_get_record(api_client: TestClient) -> None:
     record = api_client.get(f"/api/v1/agent/solve/{payload['run_id']}")
     assert record.status_code == 200
     assert record.json()["response"]["solution"]["explanation"]["final_answer"] == "x=2"
+
+
+def test_decision_requires_owner_completed_solve_run(api_client: TestClient) -> None:
+    payload = api_client.post(
+        "/api/v1/agent/solve", json={"question_text": "解方程 2x-4=0。"}
+    ).json()
+    run_id = payload["run_id"]
+
+    response = api_client.post(
+        f"/api/v1/agent/solve/{run_id}/decision",
+        json={"decision": "accepted"},
+    )
+    assert response.status_code == 200
+    assert response.json()["state"] == "disabled"
+
+    api_client.app.dependency_overrides[get_current_teacher] = lambda: CurrentTeacher(
+        teacher_id="another_teacher", source="authenticated_session"
+    )
+    try:
+        hidden = api_client.post(
+            f"/api/v1/agent/solve/{run_id}/decision",
+            json={"decision": "rejected"},
+        )
+        assert hidden.status_code == 404
+        assert hidden.json()["error"]["code"] == "RUN_NOT_FOUND"
+    finally:
+        api_client.app.dependency_overrides.pop(get_current_teacher, None)
 
 
 def test_stream_runs_once_and_terminal_snapshot_does_not_rerun(

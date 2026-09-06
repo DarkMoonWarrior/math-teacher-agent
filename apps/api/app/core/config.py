@@ -122,6 +122,9 @@ class Settings(BaseSettings):
     deepseek_vision_model: str = "deepseek-v4-flash-vision-exp"
     deepseek_base_url: str = "https://api.deepseek.com"
     deepseek_timeout_seconds: int = 90
+    deepseek_input_usd_per_million: float | None = None
+    deepseek_cached_input_usd_per_million: float | None = None
+    deepseek_output_usd_per_million: float | None = None
     pilot_batch_json: Path = Field(
         default=PROJECT_ROOT / "data" / "pilot" / "batch-2026-08-001-30q.json"
     )

@@ -11,6 +11,8 @@ import {
 } from "react";
 import { MathText } from "@/components/math-text";
 import {
+  type BetaFactReceipt,
+  type BetaTaskDecision,
   type SearchQuestion,
   type QuestionInputBundle,
   type QuestionAuthoringEntrySource,
@@ -69,6 +71,18 @@ type FlipDirection = "next" | "previous";
 type CapabilityId = "search" | "solve" | "library" | "lesson" | "paper";
 type RunnableCapabilityId = "search" | "solve";
 type PersistentWorkspaceId = "authoring" | "library" | "lesson" | "paper";
+type TaskFeedbackState = {
+  decision: BetaTaskDecision;
+  state: BetaFactReceipt["state"];
+};
+
+const FEEDBACK_STATE_LABEL: Record<BetaFactReceipt["state"], string> = {
+  recorded: "已记录；如果改选，将以最后一次选择为准。",
+  disabled: "封闭测试数据采集未开启，本次选择没有写入统计。",
+  not_participating: "你尚未加入封闭测试数据采集，本次选择没有写入统计。",
+  unavailable: "统计服务暂时不可用，本次选择没有写入统计。",
+  invalid: "本次选择不符合统计口径，因此没有写入统计。",
+};
 
 type SearchTaskRecord = {
   id: string;
@@ -512,6 +526,44 @@ function QuestionPaper({
   );
 }
 
+function TaskFeedbackControl({
+  busy,
+  feedback,
+  onDecision,
+}: {
+  busy: boolean;
+  feedback: TaskFeedbackState | null;
+  onDecision: (decision: BetaTaskDecision) => void;
+}) {
+  return (
+    <section className="task-feedback" aria-label="评价本次结果">
+      <div>
+        <strong>这次结果是否有帮助？</strong>
+        <span>只记录你的明确选择，不上传题目或解析内容。</span>
+      </div>
+      <div className="task-feedback__actions">
+        <button
+          aria-pressed={feedback?.decision === "accepted"}
+          disabled={busy}
+          onClick={() => onDecision("accepted")}
+          type="button"
+        >有帮助</button>
+        <button
+          aria-pressed={feedback?.decision === "rejected"}
+          disabled={busy}
+          onClick={() => onDecision("rejected")}
+          type="button"
+        >不合适</button>
+      </div>
+      {feedback && (
+        <small role="status">
+          {FEEDBACK_STATE_LABEL[feedback.state]}
+        </small>
+      )}
+    </section>
+  );
+}
+
 function PreviewPaper({ capability, page }: { capability: CapabilityId; page: number }) {
   const definition = CAPABILITIES[capability];
   const content = definition.pages[page];
@@ -660,6 +712,8 @@ export function TeacherWorkbench() {
   const [previewPage, setPreviewPage] = useState(0);
   const [questionPage, setQuestionPage] = useState(0);
   const [solvePage, setSolvePage] = useState(0);
+  const [taskFeedback, setTaskFeedback] = useState<Record<string, TaskFeedbackState>>({});
+  const [feedbackBusyKey, setFeedbackBusyKey] = useState("");
   const [turning, setTurning] = useState(false);
   const [flipDirection, setFlipDirection] = useState<FlipDirection>("next");
   const sessionRef = useRef("");
@@ -1093,6 +1147,25 @@ export function TeacherWorkbench() {
 
   function continueToSolve(item: SearchQuestion) {
     if (turning || running || !betaCapabilities.has("solve")) return;
+    if (result?.run_id) {
+      const feedbackKey = `search:${result.run_id}`;
+      void teacherWorkspace.selectSearchResult(result.run_id, item.question_id)
+        .then((receipt) => {
+          setTaskFeedback((current) => ({
+            ...current,
+            [feedbackKey]: {
+              decision: "accepted",
+              state: receipt.state,
+            },
+          }));
+        })
+        .catch(() => {
+          setTaskFeedback((current) => ({
+            ...current,
+            [feedbackKey]: { decision: "accepted", state: "unavailable" },
+          }));
+        });
+    }
     setDrafts((current) => ({ ...current, solve: item.stem || item.stem_preview }));
     setSolveResult(null);
     setQuestionBundle(null);
@@ -1102,6 +1175,30 @@ export function TeacherWorkbench() {
     setSolvePage(0);
     selectCapability("solve");
     window.setTimeout(returnToComposer, 480);
+  }
+
+  async function decideTask(
+    workflow: "search" | "solve",
+    runId: string,
+    decision: BetaTaskDecision,
+  ) {
+    const feedbackKey = `${workflow}:${runId}`;
+    if (feedbackBusyKey) return;
+    setFeedbackBusyKey(feedbackKey);
+    try {
+      const receipt = await teacherWorkspace.recordTaskDecision(workflow, runId, decision);
+      setTaskFeedback((current) => ({
+        ...current,
+        [feedbackKey]: { decision, state: receipt.state },
+      }));
+    } catch {
+      setTaskFeedback((current) => ({
+        ...current,
+        [feedbackKey]: { decision, state: "unavailable" },
+      }));
+    } finally {
+      setFeedbackBusyKey("");
+    }
   }
 
   function turnPage(direction: FlipDirection) {
@@ -1468,8 +1565,22 @@ export function TeacherWorkbench() {
               </button>}
             </section>
           )}
+          {searchVisible && phase === "success" && result?.run_id && (
+            <TaskFeedbackControl
+              busy={feedbackBusyKey === `search:${result.run_id}`}
+              feedback={taskFeedback[`search:${result.run_id}`] ?? null}
+              onDecision={(decision) => void decideTask("search", result.run_id, decision)}
+            />
+          )}
           {solveVisible && phase === "success" && solveResult?.solution && (
             <SolveResultBrief result={solveResult} />
+          )}
+          {solveVisible && phase === "success" && solveResult?.solution && solveResult.run_id && (
+            <TaskFeedbackControl
+              busy={feedbackBusyKey === `solve:${solveResult.run_id}`}
+              feedback={taskFeedback[`solve:${solveResult.run_id}`] ?? null}
+              onDecision={(decision) => void decideTask("solve", solveResult.run_id, decision)}
+            />
           )}
         </section>
         </ResizableSplitPane>

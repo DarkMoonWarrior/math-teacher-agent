@@ -404,6 +404,48 @@ describe("HttpTeacherWorkspace", () => {
     );
   });
 
+  it("records only explicit Search selections and Search/Solve decisions", async () => {
+    const receipt = { state: "recorded" as const, recorded_events: 1 };
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify(receipt), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    const workspace = new HttpTeacherWorkspace();
+
+    await expect(workspace.selectSearchResult("run/search 1", "question:1")).resolves.toEqual(receipt);
+    await expect(workspace.recordTaskDecision("search", "run/search 1", "rejected")).resolves.toEqual(receipt);
+    await expect(workspace.recordTaskDecision("solve", "run/solve 1", "accepted")).resolves.toEqual(receipt);
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      "/api/v1/agent/search/run%2Fsearch%201/selection",
+      expect.objectContaining({
+        method: "POST",
+        credentials: "include",
+        body: JSON.stringify({ question_id: "question:1" }),
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "/api/v1/agent/search/run%2Fsearch%201/decision",
+      expect.objectContaining({
+        method: "POST",
+        credentials: "include",
+        body: JSON.stringify({ decision: "rejected" }),
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
+      "/api/v1/agent/solve/run%2Fsolve%201/decision",
+      expect.objectContaining({
+        method: "POST",
+        credentials: "include",
+        body: JSON.stringify({ decision: "accepted" }),
+      }),
+    );
+  });
+
   it("preserves a capability denial code and its teacher-facing explanation", async () => {
     const fetchMock = vi.fn(async () => new Response(JSON.stringify({
       detail: {

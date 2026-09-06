@@ -2,6 +2,7 @@ from app.modules.model_operations.registry import (
     ModelOperationsRegistry,
     ModelRunRecorder,
     ModelRunSpan,
+    ModelUsageSink,
     NullModelRunRecorder,
 )
 from app.modules.model_operations.schemas import (
@@ -19,6 +20,7 @@ __all__ = [
     "ModelRouteStatus",
     "ModelRunRecorder",
     "ModelRunSpan",
+    "ModelUsageSink",
     "ModelRunStats",
     "ModelRunView",
     "NullModelRunRecorder",

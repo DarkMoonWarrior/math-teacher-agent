@@ -71,6 +71,12 @@ def get_beta_validation_facts(
 ) -> BetaValidationFacts:
     """Return a fail-open recorder for ordinary product workflows."""
 
+    return build_beta_validation_facts(settings)
+
+
+def build_beta_validation_facts(settings: Settings) -> BetaValidationFacts:
+    """Build the same fail-open sink outside FastAPI dependency injection."""
+
     if not settings.beta_validation_enabled:
         return BetaValidationFacts.disabled()
     secret = settings.beta_validation_identity_secret.get_secret_value()

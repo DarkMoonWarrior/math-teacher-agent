@@ -158,6 +158,7 @@ class OpenAIQuestionRecognitionProvider:
             model=self.model,
             prompt_version="private-question-ocr-v1",
             actor_id=teacher_id,
+            validation_owner_id=teacher_id,
         ) as run:
             try:
                 with urlopen(request, timeout=self.timeout_seconds) as response:
@@ -349,6 +350,7 @@ class DeepSeekVisionQuestionRecognitionProvider:
             model=self.model,
             prompt_version="private-question-ocr-v2",
             actor_id=teacher_id,
+            validation_owner_id=teacher_id,
         ) as run:
             try:
                 with urlopen(request, timeout=self.timeout_seconds) as response:

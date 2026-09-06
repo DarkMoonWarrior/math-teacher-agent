@@ -3,6 +3,8 @@ import {
   TeacherWorkspaceError,
   type BetaParticipantDeletion,
   type BetaParticipantMetricExport,
+  type BetaFactReceipt,
+  type BetaTaskDecision,
   type BetaSessionStatus,
   type BetaValidationNotice,
   type BetaValidationParticipation,
@@ -1905,6 +1907,41 @@ export class HttpTeacherWorkspace implements TeacherWorkspace {
     } finally {
       signal?.removeEventListener("abort", onAbort);
     }
+  }
+
+  selectSearchResult(
+    runId: string,
+    questionId: string,
+    signal?: AbortSignal,
+  ): Promise<BetaFactReceipt> {
+    return libraryJsonRequest(
+      `/api/v1/agent/search/${encodeURIComponent(runId)}/selection`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question_id: questionId }),
+        signal,
+      },
+      "暂时无法记录本次选题。",
+    );
+  }
+
+  recordTaskDecision(
+    workflow: "search" | "solve",
+    runId: string,
+    decision: BetaTaskDecision,
+    signal?: AbortSignal,
+  ): Promise<BetaFactReceipt> {
+    return libraryJsonRequest(
+      `/api/v1/agent/${workflow}/${encodeURIComponent(runId)}/decision`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ decision }),
+        signal,
+      },
+      "暂时无法记录本次评价。",
+    );
   }
 
   async solveQuestion(

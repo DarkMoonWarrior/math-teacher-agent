@@ -70,6 +70,7 @@ class TemplateLessonPlanProvider:
             model=self.model,
             prompt_version="lesson-plan-v1",
             actor_id=context.request.teacher_id,
+            validation_owner_id=context.request.teacher_id,
         ):
             return self._generate(context)
 
@@ -157,6 +158,7 @@ class TemplateLessonPlanProvider:
             model=self.model,
             prompt_version="lesson-block-rewrite-v1",
             actor_id=context.teacher_id,
+            validation_owner_id=context.teacher_id,
         ):
             return self._rewrite(context)
 
@@ -278,6 +280,7 @@ class OpenAIResponsesLessonPlanProvider:
             model=self.model,
             prompt_version="lesson-plan-v1",
             actor_id=context.request.teacher_id,
+            validation_owner_id=context.request.teacher_id,
         ) as run:
             raw = self._request_structured_output(payload, action="教案生成")
             run.capture_response(raw)
@@ -330,6 +333,7 @@ class OpenAIResponsesLessonPlanProvider:
             model=self.model,
             prompt_version="lesson-block-rewrite-v1",
             actor_id=context.teacher_id,
+            validation_owner_id=context.teacher_id,
         ) as run:
             raw = self._request_structured_output(payload, action="教案局部改写")
             run.capture_response(raw)

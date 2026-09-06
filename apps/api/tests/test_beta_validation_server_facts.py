@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sqlite3
 from datetime import datetime, timezone
+from decimal import Decimal
 
 from app.modules.beta_validation import BetaValidationFacts, BetaValidationMetrics
 
@@ -114,3 +115,75 @@ def test_agent_tool_outcomes_are_derived_from_server_call_count(tmp_path) -> Non
     assert rate.numerator == 1
     assert rate.denominator == 3
     assert rate.value == 1 / 3
+
+
+def test_explicit_selection_and_latest_task_decision_share_server_task(tmp_path) -> None:
+    metrics = _metrics(tmp_path)
+    metrics.acknowledge(owner_id="teacher_1")
+    facts = BetaValidationFacts(metrics)
+    facts.record_checkpoint(
+        owner_id="teacher_1",
+        fact="search_completed",
+        task_ref="search_run_4",
+        duration_ms=180,
+        trust_tier="teacher_review_required",
+    )
+
+    selected = facts.record_search_selection(
+        owner_id="teacher_1",
+        task_ref="search_run_4",
+    )
+    corrected = facts.record_task_decision(
+        owner_id="teacher_1",
+        workflow="search",
+        task_ref="search_run_4",
+        decision="rejected",
+    )
+
+    assert selected.recorded_events == 2
+    assert corrected.recorded_events == 1
+    exported = metrics.export_participant(owner_id="teacher_1")
+    assert exported.metrics["search_to_selection_rate"].value == 1
+    assert exported.metrics["task_acceptance_rate"].value == 0
+
+
+def test_server_priced_model_usage_contributes_to_cost_metrics(tmp_path) -> None:
+    metrics = _metrics(tmp_path)
+    metrics.acknowledge(owner_id="teacher_1")
+    facts = BetaValidationFacts(metrics)
+    facts.record_checkpoint(
+        owner_id="teacher_1",
+        fact="solve_completed",
+        task_ref="solve_run_5",
+        duration_ms=320,
+        trust_tier="model_reviewed",
+    )
+
+    result = facts.record_model_usage(
+        owner_id="teacher_1",
+        feature="solution_assistant",
+        task_ref="model_run_5",
+        model_cost_usd=Decimal("0.012345"),
+    )
+
+    assert result.recorded_events == 1
+    exported = metrics.export_participant(owner_id="teacher_1")
+    assert exported.metrics["average_model_cost_per_teacher"].value == 0.012345
+    assert exported.metrics["average_model_cost_per_completed_task"].value == 0.012345
+
+
+def test_server_priced_model_usage_keeps_sub_microdollar_precision(tmp_path) -> None:
+    metrics = _metrics(tmp_path)
+    metrics.acknowledge(owner_id="teacher_1")
+    facts = BetaValidationFacts(metrics)
+
+    result = facts.record_model_usage(
+        owner_id="teacher_1",
+        feature="private_resource_ocr",
+        task_ref="model_run_tiny",
+        model_cost_usd=Decimal("0.00000010"),
+    )
+
+    assert result.recorded_events == 1
+    exported = metrics.export_participant(owner_id="teacher_1")
+    assert exported.metrics["average_model_cost_per_teacher"].value == 0.0000001
