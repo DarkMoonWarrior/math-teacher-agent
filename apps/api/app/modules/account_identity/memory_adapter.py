@@ -6,13 +6,17 @@ from datetime import datetime, timedelta, timezone
 
 from app.core.capabilities import ALL_WORKBENCH_CAPABILITIES
 from app.modules.account_identity.contracts import (
+    AccountAdministrationError,
     AccountIdentityConflict,
     AccountIdentityDenied,
 )
 from app.modules.account_identity.crypto import hash_password, verify_password
 from app.modules.account_identity.schemas import (
+    AccountDisable,
     AccountIdentityContext,
+    AccountLifecycleReceipt,
     AccountLogin,
+    AccountPasswordReset,
     AccountSessionGrant,
     PersonalAccountProvision,
     ProvisionedAccount,
@@ -109,6 +113,42 @@ class InMemoryAccountIdentity:
 
     def store_ready(self) -> bool:
         return True
+
+    def disable_account(
+        self, command: AccountDisable, *, confirmed: bool = False
+    ) -> AccountLifecycleReceipt:
+        if confirmed is not True:
+            raise AccountAdministrationError("ACCOUNT_DISABLE_CONFIRMATION_REQUIRED")
+        account = self._accounts.get(command.email)
+        if account is None or account["active"] is not True:
+            raise AccountAdministrationError("ACCOUNT_NOT_ACTIVE")
+        account["active"] = False
+        revoked = 0
+        for session in self._sessions.values():
+            if session["account"] is account and session["revoked"] is not True:
+                session["revoked"] = True
+                revoked += 1
+        return AccountLifecycleReceipt(
+            action="disabled", changed=True, revoked_sessions=revoked
+        )
+
+    def reset_password(
+        self, command: AccountPasswordReset, *, confirmed: bool = False
+    ) -> AccountLifecycleReceipt:
+        if confirmed is not True:
+            raise AccountAdministrationError("PASSWORD_RESET_CONFIRMATION_REQUIRED")
+        account = self._accounts.get(command.email)
+        if account is None or account["active"] is not True:
+            raise AccountAdministrationError("ACCOUNT_NOT_ACTIVE")
+        account["password_hash"] = hash_password(command.new_password)
+        revoked = 0
+        for session in self._sessions.values():
+            if session["account"] is account and session["revoked"] is not True:
+                session["revoked"] = True
+                revoked += 1
+        return AccountLifecycleReceipt(
+            action="password_reset", changed=True, revoked_sessions=revoked
+        )
 
     def _context(
         self, account: dict[str, object], *, expires_at: datetime

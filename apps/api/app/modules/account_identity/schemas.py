@@ -11,6 +11,17 @@ from app.core.capabilities import WorkbenchCapability
 AccountRole = Literal["personal_owner"]
 
 
+def _normalize_email(value: str) -> str:
+    normalized = value.strip().casefold()
+    if (
+        normalized.count("@") != 1
+        or normalized.startswith("@")
+        or normalized.endswith("@")
+    ):
+        raise ValueError("邮箱格式无效。")
+    return normalized
+
+
 class PersonalAccountProvision(BaseModel):
     """Operator-only input. It is intentionally not exposed as an HTTP route."""
 
@@ -24,14 +35,7 @@ class PersonalAccountProvision(BaseModel):
     @field_validator("email")
     @classmethod
     def normalize_email(cls, value: str) -> str:
-        normalized = value.strip().casefold()
-        if (
-            normalized.count("@") != 1
-            or normalized.startswith("@")
-            or normalized.endswith("@")
-        ):
-            raise ValueError("邮箱格式无效。")
-        return normalized
+        return _normalize_email(value)
 
 
 class AccountLogin(BaseModel):
@@ -44,6 +48,43 @@ class AccountLogin(BaseModel):
     @classmethod
     def normalize_email(cls, value: str) -> str:
         return value.strip().casefold()
+
+
+class AccountDisable(BaseModel):
+    """Operator-only account lifecycle input."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    email: str = Field(min_length=3, max_length=254)
+
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, value: str) -> str:
+        return _normalize_email(value)
+
+
+class AccountPasswordReset(BaseModel):
+    """Operator-only credential reset input; never accepted by HTTP or Agent tools."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    email: str = Field(min_length=3, max_length=254)
+    new_password: str = Field(min_length=12, max_length=256)
+
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, value: str) -> str:
+        return _normalize_email(value)
+
+
+class AccountLifecycleReceipt(BaseModel):
+    """Non-identifying operator receipt for lifecycle mutations."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    action: Literal["disabled", "password_reset"]
+    changed: bool
+    revoked_sessions: int = Field(ge=0)
 
 
 class AccountIdentityContext(BaseModel):
