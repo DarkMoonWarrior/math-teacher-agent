@@ -7,6 +7,7 @@ import re
 import sqlite3
 import uuid
 from collections.abc import Callable, Iterable
+from contextlib import closing
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from pathlib import Path
@@ -123,7 +124,7 @@ class BetaValidationMetrics:
             )
             for observation in observations
         )
-        with self._connect() as connection:
+        with closing(self._connect()) as connection, connection:
             # Serialize the consent check with participant deletion. Either the
             # event commits before an exit transaction (and is deleted by it),
             # or it observes no current acknowledgment and is rejected.
@@ -167,7 +168,7 @@ class BetaValidationMetrics:
     def acknowledge(self, *, owner_id: str) -> BetaValidationParticipation:
         participant_key = self._participant_key(owner_id)
         acknowledged_at = self._now()
-        with self._connect() as connection:
+        with closing(self._connect()) as connection, connection:
             connection.execute(
                 """INSERT INTO m13_beta_validation_participants
                        (participant_key, notice_version, acknowledged_at)
@@ -194,7 +195,7 @@ class BetaValidationMetrics:
         participant_key = self._participant_key(owner_id)
         window_end = self._now()
         window_start = window_end - timedelta(days=RETENTION_DAYS)
-        with self._connect() as connection:
+        with closing(self._connect()) as connection, connection:
             participation = connection.execute(
                 """SELECT acknowledged_at FROM m13_beta_validation_participants
                    WHERE participant_key = ? AND notice_version = ?""",
@@ -239,7 +240,7 @@ class BetaValidationMetrics:
             )
         participant_key = self._participant_key(owner_id)
         deleted_at = self._now()
-        with self._connect() as connection:
+        with closing(self._connect()) as connection, connection:
             connection.execute("BEGIN IMMEDIATE")
             deleted_events = connection.execute(
                 "DELETE FROM m13_beta_validation_events WHERE participant_key = ?",
@@ -308,7 +309,7 @@ class BetaValidationMetrics:
             sample_status = "target_range"
         else:
             sample_status = "above_target"
-        with self._connect() as connection:
+        with closing(self._connect()) as connection, connection:
             acknowledged = connection.execute(
                 """SELECT COUNT(*) AS count
                    FROM m13_beta_validation_participants
@@ -554,7 +555,7 @@ class BetaValidationMetrics:
             if participant_key
             else (METRIC_DEFINITION_VERSION, end.isoformat())
         )
-        with self._connect() as connection:
+        with closing(self._connect()) as connection, connection:
             return connection.execute(
                 f"""SELECT rowid AS sequence, participant_key, task_key,
                           workflow, event_type,
@@ -596,7 +597,7 @@ class BetaValidationMetrics:
         return connection
 
     def _initialize(self) -> None:
-        with self._connect() as connection:
+        with closing(self._connect()) as connection, connection:
             connection.executescript(
                 """
                 PRAGMA journal_mode = WAL;

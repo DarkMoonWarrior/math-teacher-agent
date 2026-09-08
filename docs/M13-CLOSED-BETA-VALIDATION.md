@@ -2,7 +2,7 @@
 
 ## 当前状态
 
-项目所有者于 2026-09-05 明确确认从已完成的 M12 进入 M13。M13 当前进行中；“版本化指标契约”“采集启用与生命周期”“核心工作流埋点”和“私有运营读数”四条切片已经实现，下一步是操作预演和分阶段真实 Beta。M13 的目标是验证真实教师价值，不是继续堆叠产品功能，也不提前建设 M14 的支付、组织或生产基础设施。
+项目所有者于 2026-09-05 明确确认从已完成的 M12 进入 M13。M13 当前进行中；“版本化指标契约”“采集启用与生命周期”“核心工作流埋点”“私有运营读数”和“操作预演”五条切片已经实现，下一步是配置审核后的分阶段真实 Beta。M13 的目标是验证真实教师价值，不是继续堆叠产品功能，也不提前建设 M14 的支付、组织或生产基础设施。
 
 ## 唯一目标与完成 Gate
 
@@ -21,8 +21,9 @@ M12 合成评测只能证明进入 Beta 的准备条件，不能替代这些真�
 2. **采集启用与生命周期（已完成）**：采集开关与 Beta 访问门禁分离并默认关闭；教师必须先在右上角“设置 → 封闭测试与数据”阅读并确认 `m13.notice.v1`，模块才接受该教师的事件。事件固定保留 90 天；教师可在同一面板导出本人保留期内的聚合和分母，可二次确认退出并原子删除本人事件与确认记录。关闭采集不能关闭既有导出/删除权。操作者过期清理默认预览、明确确认后才执行，且保留异常记录。生命周期入口与业务埋点保持解耦；核心服务端事实已由切片 3 接入，默认配置仍不会采集真实行为。
 3. **核心工作流埋点（已完成）**：`BetaValidationFacts` 已把采集关闭、未确认告知和指标存储异常收口为不影响业务的结果，并把主事件、任务完成与 Tool 结果在同一事务写入。Search/Solve 成功与耗时、命题完成/私题保存、Paper 版本生成/导出、Lesson 草稿生成/版本保存、私人资料题目确认导入均只从 current-owner 的服务端成功节点触发。Search 只有点击本次返回的真实题目才记录选择；Search/Solve 接受或拒绝只作用于本人已完成 run，并以最后一次决定为准。模型成本只从 FastAPI 直接持有可信 owner 的 provider 调用产生，且仅使用操作者显式配置的 OpenAI/DeepSeek 费率快照；隔离 Agent 内部调用在建立签名 owner 上下文前不归因，绝不使用占位 owner。浏览器、Agent 与模型不能提交 owner、可信结论、成本或成功状态。
 4. **私有运营读数（已完成）**：`BetaValidationMetrics.private_operations_readout` 输出 1–90 天窗口内的最小化聚合快照、明确分子/分母、周激活 cohort 的 Week-1/Week-4 eligible 与 retained 数量，以及相对 20–30 位目标样本的 `empty/below_target/target_range/above_target` 状态。读数仅由本机操作者命令访问，不提供 HTTP、浏览器或 Agent 路由，不返回 owner/task 摘要或逐行事件，也不能创建缺失指标库或后台代操作。
-5. **分阶段真实 Beta（未开始）**：先完成操作预演，再邀请 20–30 位真实教师；记录支持请求、严重数学错误证据和主动商业信号，只修真实阻塞与可信问题。
-6. **M13 Gate（未开始）**：复核 A/B/C/Q、Gate P 和 Gate E，列明达标、未达标与样本限制；未通过不得扩大用户、营销或进入 M14。
+5. **操作预演（已完成）**：本机命令在一次性临时 SQLite 中合成两位教师和四个无正文事件，依次验证未确认告知不能记录、本人导出隔离、只读运营汇总不含标识、90 天预览不删除、确认清理只删过期事件、退出只删本人，以及临时库在返回前删除。随后只读检查当前部署的 Beta 访问、采集开关、摘要密钥和既有指标库，输出布尔状态与稳定 blocker，不输出路径或密钥，也不自动启用采集或创建配置库。
+6. **分阶段真实 Beta（未开始）**：先解决部署 preflight blocker，再邀请 20–30 位真实教师；记录支持请求、严重数学错误证据和主动商业信号，只修真实阻塞与可信问题。
+7. **M13 Gate（未开始）**：复核 A/B/C/Q、Gate P 和 Gate E，列明达标、未达标与样本限制；未通过不得扩大用户、营销或进入 M14。
 
 ## `m13.v1` 指标口径
 
@@ -56,6 +57,7 @@ M12 合成评测只能证明进入 Beta 的准备条件，不能替代这些真�
 - M13 指标库不进入 M12 的 owner 内容备份，避免教师退出删除后的指标事件被旧内容备份恢复；指标库只受本切片的 90 天保留与退出删除规则管理。
 - 操作者命令 `python -m app.modules.beta_validation.maintenance_cli preview` 默认只报告计数；仅 `prune --confirm` 删除早于 90 天且结构可验证的事件。它不接受浏览器/Agent 参数，不删除确认记录、教师内容、近期事件或无法分类记录。
 - 私有运营读数从 `apps/api` 执行 `..\..\.venv\Scripts\python.exe -m app.modules.beta_validation.operations_cli --days 90`；命令以 SQLite 只读模式打开既有指标库，配置、密钥或存储未就绪时只返回稳定错误码。输出只有版本、窗口、事件/参与/激活计数、16 项聚合指标、可信分层错误率和周 cohort 分母，不含任何个人或任务标识。
+- 操作预演从 `apps/api` 执行 `..\..\.venv\Scripts\python.exe -m app.modules.beta_validation.rehearsal_cli`。所有写操作仅发生在自动删除的合成临时库；当前部署只接受只读 schema/汇总检查。退出码 `0` 只表示合成检查和部署 preflight 同时就绪；退出码 `2` 表示合成检查通过但部署仍有 blocker。只有 `all_checks_passed=true` 且 `deployment.ready_for_invitation=true` 才具备邀请首批教师的技术配置条件，这仍不替代所有者的实际邀请决定。
 - 只有在操作者打开独立采集开关且教师确认当前告知版本后，首批服务端节点才会产生事件；默认配置仍不采集。未来账户注销 Interface 必须复用同一退出删除语义；当前产品尚不存在账户注销。
 - M13 不改变私题永久 owner-only、无后台内容权限、无公开发布路径和 Gate P 的既有规则。
 
@@ -63,8 +65,9 @@ M12 合成评测只能证明进入 Beta 的准备条件，不能替代这些真�
 
 - `apps/api/tests/test_beta_validation_metrics.py`：6 项 synthetic 指标测试通过。
 - `apps/api/tests/test_beta_validation_lifecycle.py`、`test_beta_validation_maintenance.py` 与 `test_beta_validation_server_facts.py`：15 项告知、隔离导出、退出删除、禁用后权利、保留清理、原子服务端事实和 Tool 结果测试通过。
-- 新固定入口：`.\.venv\Scripts\python.exe -m pytest -c apps/api/pytest-m13.ini -q`，继承 M12 的全部固定安全/质量文件并追加 M13 指标契约、生命周期、服务端事实、明确选择/评价、成本归因和只读运营读数；当前结果 **251 passed、1 skipped**。
-- 完整 FastAPI：**681 passed、1 skipped**。
+- `apps/api/tests/test_beta_validation_rehearsal.py`：4 项临时库清理、生命周期预演、只读部署审核和输出脱敏测试通过。
+- 新固定入口：`.\.venv\Scripts\python.exe -m pytest -c apps/api/pytest-m13.ini -q`，继承 M12 的全部固定安全/质量文件并追加 M13 指标契约、生命周期、服务端事实、明确选择/评价、成本归因、只读运营读数和操作预演；当前结果 **255 passed、1 skipped**。
+- 完整 FastAPI：**685 passed、1 skipped**。
 - Teacher Web：**105 passed**，类型检查与生产构建通过；设置面板覆盖默认关闭告知、明确加入、本人汇总导出和退出删除入口，Search/Solve 结果页提供非阻塞的明确评价。
 - 自动测试使用临时 SQLite、合成 owner/task 标识和固定成本，不调用真实模型、不读取或写入真实教师数据。
 

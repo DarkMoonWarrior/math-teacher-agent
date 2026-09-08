@@ -1,6 +1,6 @@
 # 当前开发状态
 
-更新日期：2026-09-08。M0–M12 已完成；项目所有者已确认进入 M13。M13 Closed Beta Validation 进行中，版本化指标契约、采集生命周期、核心工作流埋点和私有运营读数切片已完成，下一步为操作预演和分阶段真实 Beta。
+更新日期：2026-09-08。M0–M12 已完成；项目所有者已确认进入 M13。M13 Closed Beta Validation 进行中，版本化指标契约、采集生命周期、核心工作流埋点、私有运营读数和操作预演切片已完成，下一步为配置审核后的分阶段真实 Beta。
 
 | 范围 | 当前状态 |
 | --- | --- |
@@ -13,7 +13,7 @@
 | M10 Lesson | 已完成；28 场景、15 类违规为 0；回滚点 `9997fc8` |
 | M11 Teacher Memory | 已完成；26 场景、12 类违规为 0；回滚点 `5614fc0` |
 | M12 Closed Beta Readiness | 已完成；五条切片、固定评测与完整 Gate 通过；回滚点 `570cf79` |
-| M13 Closed Beta Validation | 进行中；切片 1–4 已完成；下一步为真实采集前操作预演 |
+| M13 Closed Beta Validation | 进行中；切片 1–5 已完成；下一步为小批次真实教师验证 |
 | M14–M17 | 未开始；依次为商业基础、Teacher Pro、教研组、学校 |
 
 ## 当前产品能力
@@ -41,7 +41,7 @@
 
 ## 工程基线与限制
 
-M13 当前固定集 **251 passed、1 skipped**；完整 FastAPI **681 passed、1 skipped**；Teacher Web **105 passed**，Agent **42 passed**，Teacher Web 类型检查与生产构建基线保持通过。本切片的自动测试只使用临时目录、合成内容和 provider 替身，不调用真实模型或清理真实用户数据。
+M13 当前固定集 **255 passed、1 skipped**；完整 FastAPI **685 passed、1 skipped**；Teacher Web **105 passed**，Agent **42 passed**，Teacher Web 类型检查与生产构建基线保持通过。本切片的自动测试只使用临时目录、合成内容和 provider 替身，不调用真实模型或清理真实用户数据。
 
 `apps/teacher-web` 是唯一产品 UI；旧 UI 源码、入口和依赖已移除。运行库、私人上传、环境、导出与备份不进入 Git。商业题目目录仍为空，合成 fixture 不具备第三方内容权利。
 
@@ -52,3 +52,5 @@ M13 当前固定集 **251 passed、1 skipped**；完整 FastAPI **681 passed、1
 `BetaValidationMetrics` 已把 16 项 Gate 指标和教师权利收口在一个深模块 Interface 中：严格枚举事件、HMAC 摘要 owner/task、按可信等级分层严重数学错误、零分母返回空值，并计算选择/导出/保存转化、留存、Tool 失败、成本与耗时。采集开关默认关闭；教师确认 `m13.notice.v1` 后才允许记录，事件保留 90 天，本人可以导出聚合或退出并删除本人事件。`BetaValidationFacts` 进一步隐藏采集状态、参与状态、事件映射和存储故障；Search/Solve、命题、Paper、Lesson、资料导入及私题保存已从服务端成功节点接入，主事件与完成/Tool 结果原子写入且任何指标故障不影响教师工作流。Search 只有点击真实结果才形成选择，搜索/解题评价要求 current-owner 的已完成 run 且最后一次决定生效。模型成本只接受 FastAPI 直接持有可信 owner 的调用，并按显式配置的 OpenAI/DeepSeek 费率快照计算；隔离 Agent 内部调用在建立签名 owner 传递前保持不归因。默认配置仍不会采集。
 
 切片 4 增加了仅本机操作者可运行的只读聚合命令。它展示统计窗口、事件数、确认参与数、激活教师数、所有指标的分子/分母、可信等级错误率，以及按周聚合的 Week-1/Week-4 cohort 进度；同时明确标注样本是否达到 20–30 位目标。该命令没有 HTTP、浏览器或 Agent 入口，不输出逐人/逐任务信息，不读取正文，也不会在指标库缺失时创建空库。当前默认配置仍关闭采集且没有真实指标库，因此只读预演会安全返回“未就绪”，不能据此宣称已有 Beta 样本。
+
+切片 5 增加一次性操作预演：七条安全检查只在自动删除的合成临时库中执行，覆盖告知、本人导出、运营读数、保留清理与退出删除；当前部署只做不含路径/密钥的只读 preflight。实际预演七项均通过，Beta 访问已开启，但本地部署仍明确报告 `COLLECTION_DISABLED`、`IDENTITY_SECRET_MISSING` 和 `METRIC_STORE_MISSING`，因此当前不具备邀请真实教师参与指标验证的技术配置条件，也没有产生任何真实指标。
