@@ -44,10 +44,14 @@ os.environ["MATH_AI_SOLUTION_PROVIDER"] = "local"
 # overrides Settings to cover Closed Beta behavior.
 os.environ["MATH_AI_BETA_ACCESS_ENABLED"] = "false"
 os.environ["MATH_AI_BETA_ACCESS_ROSTER_JSON"] = "{}"
+os.environ["MATH_AI_PRODUCTION_IDENTITY_ENABLED"] = "false"
 
 # Destructive lifecycle tests must never create a ledger beside developer data.
 # The process-owned directory is removed automatically after pytest exits.
 _TEST_LIFECYCLE_RUNTIME = TemporaryDirectory(prefix="math-ai-lifecycle-tests-")
+os.environ["MATH_AI_PRODUCTION_IDENTITY_DB"] = str(
+    Path(_TEST_LIFECYCLE_RUNTIME.name) / "account-identity.sqlite3"
+)
 os.environ["MATH_AI_OWNER_DELETION_LEDGER_DB"] = str(
     Path(_TEST_LIFECYCLE_RUNTIME.name) / "owner-deletions.sqlite3"
 )

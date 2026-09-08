@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 
 from app.agent_runtime import TeacherAgentRuntime
 from app.core.config import Settings
+from app.modules.account_identity import AccountIdentity
 from app.modules.beta_access import BetaAccess
 from app.modules.beta_operations.schemas import (
     ReadinessComponent,
@@ -18,6 +19,7 @@ class ReadinessProbe:
         self,
         *,
         settings: Settings,
+        account_identity: AccountIdentity,
         beta_access: BetaAccess,
         runtime: TeacherAgentRuntime,
     ) -> ReadinessSnapshot:
@@ -30,15 +32,60 @@ class ReadinessProbe:
             )
         ]
 
-        beta_ready = beta_access.store_ready() and (
-            not settings.beta_access_enabled or beta_access.has_participants()
-        )
-        components.append(ReadinessComponent(
-            name="beta_access",
-            status="ready" if beta_ready else "unavailable",
-            code="BETA_ACCESS_READY" if beta_ready else "BETA_ACCESS_UNAVAILABLE",
-            message="封闭测试会话存储可用。" if beta_ready else "封闭测试准入配置或会话存储不可用。",
-        ))
+        if settings.production_identity_enabled and settings.beta_access_enabled:
+            components.append(
+                ReadinessComponent(
+                    name="account_identity",
+                    status="unavailable",
+                    code="IDENTITY_MODE_CONFLICT",
+                    message="正式账号与封闭测试访问不能同时启用。",
+                )
+            )
+        elif settings.production_identity_enabled:
+            identity_ready = account_identity.store_ready()
+            components.append(
+                ReadinessComponent(
+                    name="account_identity",
+                    status="ready" if identity_ready else "unavailable",
+                    code=(
+                        "PRODUCTION_IDENTITY_READY"
+                        if identity_ready
+                        else "PRODUCTION_IDENTITY_UNAVAILABLE"
+                    ),
+                    message=(
+                        "正式账号会话存储可用。"
+                        if identity_ready
+                        else "正式账号会话存储不可用。"
+                    ),
+                )
+            )
+        elif settings.beta_access_enabled:
+            beta_ready = beta_access.store_ready() and beta_access.has_participants()
+            components.append(
+                ReadinessComponent(
+                    name="beta_access",
+                    status="ready" if beta_ready else "unavailable",
+                    code=(
+                        "BETA_ACCESS_READY"
+                        if beta_ready
+                        else "BETA_ACCESS_UNAVAILABLE"
+                    ),
+                    message=(
+                        "封闭测试会话存储可用。"
+                        if beta_ready
+                        else "封闭测试准入配置或会话存储不可用。"
+                    ),
+                )
+            )
+        else:
+            components.append(
+                ReadinessComponent(
+                    name="beta_access",
+                    status="not_required",
+                    code="BETA_ACCESS_NOT_REQUIRED",
+                    message="当前使用纯本地开发身份。",
+                )
+            )
 
         agent_required = any((
             settings.search_agent_enabled,

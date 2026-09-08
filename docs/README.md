@@ -27,7 +27,8 @@
 - [`M12-CLOSED-BETA-READINESS.md`](M12-CLOSED-BETA-READINESS.md)：已完成的五条切片、深模块边界与 M13 前限制。
 - [`M12-DATA-LIFECYCLE.md`](M12-DATA-LIFECYCLE.md)：owner 删除、恢复墓碑、备份/会话/导出/任务保留和合成演练证据。
 - [`M12-GATE-REVIEW.md`](M12-GATE-REVIEW.md)：M12 固定评测、完整 E/P/Q 连续性证据和完成边界。
-- [`M13-CLOSED-BETA-VALIDATION.md`](M13-CLOSED-BETA-VALIDATION.md)：进行中的真实 Beta 验证、版本化指标契约、隐私采集边界和切片顺序。
+- [`M13-CLOSED-BETA-VALIDATION.md`](M13-CLOSED-BETA-VALIDATION.md)：已实现但真实样本验证延期的 Beta 指标切片；Gate 未通过。
+- [`M14-COMMERCIAL-FOUNDATION.md`](M14-COMMERCIAL-FOUNDATION.md)：当前商业基础阶段的身份、tenant、owner 和后续存储/商业边界。
 - [`ADR-2026-09-04-OWNER-AGENT-SESSIONS.md`](ADR-2026-09-04-OWNER-AGENT-SESSIONS.md)：教师/模块签名会话、任务 owner 校验及单进程限制。
 - [`TEACHER-TOOL-CONTRACTS.md`](TEACHER-TOOL-CONTRACTS.md)：当前九项受控 Tool 契约。
 - [`REPOSITORY-SYNC.md`](REPOSITORY-SYNC.md)：仓库清理范围、文档分层与本轮复验记录。

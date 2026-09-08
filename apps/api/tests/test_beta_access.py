@@ -197,7 +197,7 @@ def test_beta_session_http_cookie_is_fail_closed_and_owner_scoped(tmp_path: Path
             assert unavailable.json()["detail"] == {
                 "code": "CAPABILITY_UNAVAILABLE",
                 "capability": "paper",
-                "message": "当前封闭测试尚未开放组卷。",
+                "message": "当前账号尚未开放组卷。",
             }
 
             logout = alpha_client.delete("/api/v1/beta-session")
@@ -223,8 +223,12 @@ def test_local_development_identity_remains_available_only_when_beta_is_disabled
     local_settings = Settings(
         beta_access_enabled=False,
         beta_session_db=tmp_path / "beta.sqlite3",
+        teacher_memory_db=tmp_path / "teacher-memory.sqlite3",
     )
     app.dependency_overrides[get_settings] = lambda: local_settings
+    app.dependency_overrides[get_teacher_memory] = lambda: TeacherMemory(
+        database_path=tmp_path / "teacher-memory.sqlite3"
+    )
     try:
         with TestClient(app) as client:
             status = client.get("/api/v1/beta-session")
@@ -246,4 +250,5 @@ def test_local_development_identity_remains_available_only_when_beta_is_disabled
             }
             assert client.get("/api/v1/teacher-memory/profile").status_code == 200
     finally:
+        app.dependency_overrides.pop(get_teacher_memory, None)
         app.dependency_overrides.pop(get_settings, None)

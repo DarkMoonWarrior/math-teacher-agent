@@ -10,6 +10,8 @@ from fastapi.testclient import TestClient
 from app.agent_runtime import TeacherAgentHealth, get_teacher_agent_runtime
 from app.core.config import Settings, get_settings
 from app.main import app
+from app.modules.account_identity import InMemoryAccountIdentity
+from app.modules.account_identity.dependencies import get_account_identity
 from app.modules.beta_access import BetaAccess
 from app.modules.beta_access.dependencies import get_beta_access
 from app.modules.beta_operations import PrivacySafeOperations, ReadinessProbe
@@ -96,11 +98,15 @@ def test_readiness_explains_ready_components_without_configuration_secrets(
     )
     app.dependency_overrides[get_settings] = lambda: settings
     app.dependency_overrides[get_beta_access] = lambda: _access(tmp_path)
+    app.dependency_overrides[get_account_identity] = lambda: InMemoryAccountIdentity(
+        session_ttl=timedelta(hours=1)
+    )
     app.dependency_overrides[get_teacher_agent_runtime] = lambda: _HealthyRuntime()
     try:
         response = TestClient(app).get("/ready")
     finally:
         app.dependency_overrides.pop(get_teacher_agent_runtime, None)
+        app.dependency_overrides.pop(get_account_identity, None)
         app.dependency_overrides.pop(get_beta_access, None)
         app.dependency_overrides.pop(get_settings, None)
 
@@ -108,7 +114,7 @@ def test_readiness_explains_ready_components_without_configuration_secrets(
     assert response.json()["status"] == "ready"
     assert {item["code"] for item in response.json()["components"]} == {
         "API_READY",
-        "BETA_ACCESS_READY",
+        "BETA_ACCESS_NOT_REQUIRED",
         "AGENT_NOT_REQUIRED",
     }
     serialized = response.text.lower()
@@ -129,6 +135,7 @@ def test_readiness_degrades_without_leaking_runtime_exception(tmp_path: Path) ->
     )
     snapshot = asyncio.run(ReadinessProbe().check(
         settings=settings,
+        account_identity=InMemoryAccountIdentity(session_ttl=timedelta(hours=1)),
         beta_access=_access(tmp_path),
         runtime=_UnavailableRuntime(),  # type: ignore[arg-type]
     ))
@@ -139,3 +146,56 @@ def test_readiness_degrades_without_leaking_runtime_exception(tmp_path: Path) ->
         "AGENT_UNAVAILABLE",
     }
     assert "private internal failure" not in snapshot.model_dump_json()
+
+
+def test_readiness_uses_production_identity_store_when_that_mode_is_active(
+    tmp_path: Path,
+) -> None:
+    settings = Settings(
+        production_identity_enabled=True,
+        beta_access_enabled=False,
+        search_agent_enabled=False,
+        solve_agent_enabled=False,
+        question_authoring_agent_enabled=False,
+    )
+    identity = InMemoryAccountIdentity(session_ttl=timedelta(hours=1))
+    snapshot = asyncio.run(
+        ReadinessProbe().check(
+            settings=settings,
+            account_identity=identity,
+            beta_access=_access(tmp_path),
+            runtime=_HealthyRuntime(),  # type: ignore[arg-type]
+        )
+    )
+
+    assert snapshot.status == "ready"
+    assert {item.code for item in snapshot.components} == {
+        "API_READY",
+        "PRODUCTION_IDENTITY_READY",
+        "AGENT_NOT_REQUIRED",
+    }
+
+
+def test_readiness_fails_closed_when_identity_modes_conflict(tmp_path: Path) -> None:
+    settings = Settings(
+        production_identity_enabled=True,
+        beta_access_enabled=True,
+        search_agent_enabled=False,
+        solve_agent_enabled=False,
+        question_authoring_agent_enabled=False,
+    )
+    snapshot = asyncio.run(
+        ReadinessProbe().check(
+            settings=settings,
+            account_identity=InMemoryAccountIdentity(
+                session_ttl=timedelta(hours=1)
+            ),
+            beta_access=_access(tmp_path),
+            runtime=_HealthyRuntime(),  # type: ignore[arg-type]
+        )
+    )
+
+    assert snapshot.status == "degraded"
+    assert "IDENTITY_MODE_CONFLICT" in {
+        item.code for item in snapshot.components
+    }

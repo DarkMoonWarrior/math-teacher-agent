@@ -35,7 +35,7 @@ class OperationalEvent(BaseModel):
 
 
 class ReadinessComponent(BaseModel):
-    name: Literal["api", "beta_access", "agent_runtime"]
+    name: Literal["api", "beta_access", "account_identity", "agent_runtime"]
     status: Literal["ready", "not_required", "unavailable"]
     code: str = Field(min_length=1, max_length=80)
     message: str = Field(min_length=1, max_length=200)

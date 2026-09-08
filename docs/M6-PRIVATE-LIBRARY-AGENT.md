@@ -1,6 +1,6 @@
 # M6 Private Library Agent
 
-> 状态同步（2026-09-05）：M0–M12 已完成，项目所有者已确认进入 M13，当前进行中。本文的切片过程、测试数量和 Gate 结论保留为当时证据；后续行为与当前边界见 [开发状态](PROJECT-STATUS.md) 和 [开发边界](DEVELOPMENT-BOUNDARY.md)。
+> 状态同步（2026-09-09）：M0–M12 已完成；M13 工程切片已完成但真实验证延期、Gate 未通过；项目所有者已授权进入 M14，当前进行中。本文的切片过程、测试数量和 Gate 结论保留为当时证据；后续行为与当前边界见 [开发状态](PROJECT-STATUS.md) 和 [开发边界](DEVELOPMENT-BOUNDARY.md)。
 
 更新日期：2026-08-22
 状态：已完成；Gate E 于 2026-08-22 通过，进入 M7 的阶段转换已确认。后续实现以 [项目状态](PROJECT-STATUS.md) 为准。

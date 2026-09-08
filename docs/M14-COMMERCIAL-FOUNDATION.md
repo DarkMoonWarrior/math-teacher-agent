@@ -1,0 +1,68 @@
+# M14 Commercial Foundation
+
+更新日期：2026-09-09。
+
+项目所有者因暂时缺少足够真实教师样本，明确决定暂停 M13 真实 Beta，不把合成测试误记为产品 Gate 通过，并授权进入 M14。M13 状态因此是“切片 1–5 完成、真实验证延期、Gate 未通过”，不是“验证成功”。M14 当前进行中，只建设商业化前必须成立的生产边界；支付、组织和学校能力不能反向定义身份或数据所有权。
+
+## 1. 不可混用的三个标识
+
+- `account_id`：登录凭据对应的账号主体，只由账号模块创建和解析。
+- `tenant_id`：授权与未来数据隔离边界。当前只支持一账号一个个人 tenant，不宣称已经具备组织多租户。
+- `owner_id`：现有私人内容的稳定所有者标识。业务模块继续只接收服务端解析出的 owner；浏览器、Agent、模型、请求正文和查询参数都不能选择它。
+
+三者必须分别持久化、分别测试，不允许因为当前个人账号是一对一关系而合并字段。账号停用、tenant 成员关系和内容归属也必须独立表达。
+
+## 2. 身份 Interface 与运行模式
+
+`AccountIdentity` 是正式身份深模块 Interface，负责操作者创建个人账号、验证凭据、解析不透明会话和撤销会话。HTTP 只开放登录、会话状态和退出；没有公开注册或由 Agent 创建账号的入口。
+
+运行模式互斥：
+
+1. `production_identity_enabled=true`：只接受正式账号会话。
+2. `beta_access_enabled=true`：只接受 M12 临时封闭测试会话。
+3. 两者都关闭：固定 `owner_teacher`，仅供本地开发。
+4. 两者同时开启：服务端 fail closed，返回 `IDENTITY_MODE_CONFLICT`。
+
+任何账号模式都停用缺少安全 owner 契约的旧版单用户接口。能力门禁使用全局 `WorkbenchCapability`，不再由 Beta 模块拥有业务能力定义。
+
+## 3. 当前切片：生产身份基础（已实现）
+
+- 独立 `AccountIdentity` Protocol，并提供内存测试 adapter 与 SQLite 过渡 adapter。
+- 账号、个人 tenant、成员关系、owner 和会话分别建模；当前角色只有 `personal_owner`。
+- 密码使用带随机 salt 的 scrypt；会话 token 只保存 SHA-256 摘要，支持到期和撤销。
+- 登录失败统一为“邮箱或密码无效”，公开响应不返回 account、tenant 或 owner 内部标识。
+- Cookie 为 HttpOnly、SameSite Strict；正式配置默认要求 Secure。
+- 正式身份功能默认关闭；关闭时不创建身份数据库。
+- 生产身份和 Beta 身份不能同时启用；生产模式中的旧单用户接口统一拒绝。
+- `/ready` 只检查当前模式实际使用的身份 adapter；纯本地模式不创建无用身份库，模式冲突明确返回降级状态。
+- 现有私人内容仍以 `owner_id` 隔离，正式会话只把服务端解析出的 owner 交给业务模块。
+
+当前 SQLite adapter 只是验证 Interface 和迁移边界，不是生产数据库声明。当前切片没有创建真实账号、迁移真实内容或启用正式登录。
+
+## 4. 后续切片顺序
+
+1. **账号生命周期加固**：操作者创建/停用、密码重置、会话轮换与清理、登录限流、审计最小集，并明确 MFA 决策。所有破坏性维护继续预览后确认。
+2. **PostgreSQL tenant adapter**：在不改变业务 Interface 的前提下替换身份和 owner-aware 存储；提供逐对象盘点、迁移、对账、回滚和 IDOR/tenant isolation 测试。
+3. **对象存储与持久任务**：原文件、导出和后台任务获得明确 owner/tenant key、保留期、幂等和恢复语义。
+4. **Entitlement**：只表达账号可用能力，不替代身份、owner 权利或内容可信门禁。
+5. **订单、订阅、支付与退款**：最后接入；要求幂等、Webhook 验签、状态机、对账和退款恢复全部独立验证。
+6. **M14 Gate**：认证、RBAC/IDOR、tenant 隔离、私题永久隔离、恢复与商业状态机证据齐全后才可进入 M15。
+
+## 5. 明确未完成
+
+- PostgreSQL、云对象存储、持久队列、多进程会话一致性和生产灾备。
+- 公开注册、邮箱验证、找回密码、MFA、登录限流、设备管理和完整安全审计。
+- 除 `personal_owner` 外的角色、组织 tenant、成员邀请、学生和学校后台。
+- Entitlement、订单、订阅、支付、Webhook 和退款。
+- M13 的真实教师价值、重复使用、错误率与付费意愿 Gate。
+
+因此当前实现可作为 M14 身份边界的工程基础，但不能对外称为生产认证或商业发布就绪。
+
+## 6. 验证入口
+
+- M14 固定回归：`python -m pytest -c apps/api/pytest-m14.ini -q`
+- 完整 API：`python -m pytest apps/api/tests -q`
+- Teacher Web：`npm --prefix apps/teacher-web test`、类型检查与生产构建
+- Agent：`npm --prefix apps/agent test`、类型检查与生产构建
+
+最终测试数字以 `PROJECT-STATUS.md` 和 `REPOSITORY-SYNC.md` 的同一提交快照为准。
