@@ -22,6 +22,8 @@ PUBLIC = {
     ("GET", "/api/v1/curriculum/nodes/{node_id}"),
     ("GET", "/api/v1/beta-session"), ("POST", "/api/v1/beta-session"),
     ("DELETE", "/api/v1/beta-session"),
+    ("GET", "/api/v1/account-session"), ("POST", "/api/v1/account-session"),
+    ("DELETE", "/api/v1/account-session"),
 }
 
 # Authenticated teachers retain access to the disclosure, export and deletion

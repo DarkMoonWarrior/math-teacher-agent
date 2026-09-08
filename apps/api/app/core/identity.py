@@ -5,13 +5,15 @@ from typing import Literal
 from fastapi import Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
+from app.core.capabilities import ALL_WORKBENCH_CAPABILITIES, WorkbenchCapability
 from app.core.config import Settings, get_settings
-from app.modules.beta_access import (
-    ALL_BETA_CAPABILITIES,
-    BetaAccess,
-    BetaAccessDenied,
-    BetaCapability,
+from app.modules.account_identity import (
+    AccountIdentity,
+    AccountIdentityDenied,
+    AccountRole,
 )
+from app.modules.account_identity.dependencies import get_account_identity
+from app.modules.beta_access import BetaAccess, BetaAccessDenied
 from app.modules.beta_access.dependencies import get_beta_access
 
 
@@ -24,17 +26,51 @@ class CurrentTeacher(BaseModel):
     """
 
     teacher_id: str = Field(min_length=1, max_length=120)
-    source: Literal["local_development", "authenticated_session", "beta_session"]
-    capabilities: list[BetaCapability] = Field(
-        default_factory=lambda: list(ALL_BETA_CAPABILITIES)
+    source: Literal[
+        "local_development",
+        "authenticated_session",
+        "beta_session",
+        "production_session",
+    ]
+    capabilities: list[WorkbenchCapability] = Field(
+        default_factory=lambda: list(ALL_WORKBENCH_CAPABILITIES)
     )
+    account_id: str | None = None
+    tenant_id: str | None = None
+    role: AccountRole | None = None
 
 
 def get_current_teacher(
     request: Request,
     settings: Settings = Depends(get_settings),
     access: BetaAccess = Depends(get_beta_access),
+    account_identity: AccountIdentity = Depends(get_account_identity),
 ) -> CurrentTeacher:
+    if settings.production_identity_enabled and settings.beta_access_enabled:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "code": "IDENTITY_MODE_CONFLICT",
+                "message": "正式账号与封闭测试访问不能同时启用。",
+            },
+        )
+    if settings.production_identity_enabled:
+        token = request.cookies.get(settings.production_session_cookie_name, "")
+        try:
+            identity = account_identity.resolve(token)
+        except AccountIdentityDenied as exc:
+            raise HTTPException(
+                status_code=401,
+                detail="正式账号会话无效或已过期，请重新登录。",
+            ) from exc
+        return CurrentTeacher(
+            teacher_id=identity.owner_id,
+            source="production_session",
+            capabilities=identity.capabilities,
+            account_id=identity.account_id,
+            tenant_id=identity.tenant_id,
+            role=identity.role,
+        )
     if settings.beta_access_enabled:
         token = request.cookies.get(settings.beta_session_cookie_name, "")
         try:
@@ -55,7 +91,7 @@ def get_current_teacher(
     )
 
 
-_CAPABILITY_LABELS: dict[BetaCapability, str] = {
+_CAPABILITY_LABELS: dict[WorkbenchCapability, str] = {
     "search": "搜题",
     "solve": "解题",
     "library": "资料库",
@@ -74,17 +110,17 @@ def require_local_legacy_access(
     Check deployment mode, not an overridable teacher/source field. This is not
     a substitute for owner checks in the supported product interfaces.
     """
-    if settings.beta_access_enabled:
+    if settings.beta_access_enabled or settings.production_identity_enabled:
         raise HTTPException(
             status_code=403,
             detail={
                 "code": "LEGACY_WORKFLOW_UNAVAILABLE",
-                "message": "封闭测试不开放旧版工作流，请使用当前教师工作台。",
+                "message": "账号模式不开放旧版工作流，请使用当前教师工作台。",
             },
         )
 
 
-def require_beta_capability(capability: BetaCapability):
+def require_capability(capability: WorkbenchCapability):
     def requirement(
         current_teacher: CurrentTeacher = Depends(get_current_teacher),
     ) -> CurrentTeacher:
@@ -94,7 +130,7 @@ def require_beta_capability(capability: BetaCapability):
                 detail={
                     "code": "CAPABILITY_UNAVAILABLE",
                     "capability": capability,
-                    "message": f"当前封闭测试尚未开放{_CAPABILITY_LABELS[capability]}。",
+                    "message": f"当前账号尚未开放{_CAPABILITY_LABELS[capability]}。",
                 },
             )
         return current_teacher
@@ -102,9 +138,9 @@ def require_beta_capability(capability: BetaCapability):
     return requirement
 
 
-def require_any_beta_capability(*capabilities: BetaCapability):
+def require_any_capability(*capabilities: WorkbenchCapability):
     if not capabilities:
-        raise ValueError("至少需要一个封闭测试能力。")
+        raise ValueError("至少需要一个工作台能力。")
 
     def requirement(
         current_teacher: CurrentTeacher = Depends(get_current_teacher),
@@ -117,7 +153,7 @@ def require_any_beta_capability(*capabilities: BetaCapability):
                 detail={
                     "code": "CAPABILITY_UNAVAILABLE",
                     "capability": capabilities[0],
-                    "message": "当前封闭测试尚未开放此工作区。",
+                    "message": "当前账号尚未开放此工作区。",
                 },
             )
         return current_teacher

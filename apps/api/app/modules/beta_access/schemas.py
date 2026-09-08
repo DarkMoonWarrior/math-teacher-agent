@@ -5,26 +5,15 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-
-BetaCapability = Literal[
-    "search",
-    "solve",
-    "library",
-    "authoring",
-    "lesson",
-    "paper",
-    "teacher_memory",
-]
-
-ALL_BETA_CAPABILITIES: tuple[BetaCapability, ...] = (
-    "search",
-    "solve",
-    "library",
-    "authoring",
-    "lesson",
-    "paper",
-    "teacher_memory",
+from app.core.capabilities import (
+    ALL_WORKBENCH_CAPABILITIES,
+    WorkbenchCapability,
 )
+
+# Compatibility names for the Closed Beta adapter. Capability vocabulary belongs
+# to the workbench, not to the temporary access mechanism.
+BetaCapability = WorkbenchCapability
+ALL_BETA_CAPABILITIES = ALL_WORKBENCH_CAPABILITIES
 
 
 class BetaParticipant(BaseModel):
@@ -41,7 +30,11 @@ class BetaParticipant(BaseModel):
         value: list[BetaCapability],
     ) -> list[BetaCapability]:
         selected = set(value)
-        return [capability for capability in ALL_BETA_CAPABILITIES if capability in selected]
+        return [
+            capability
+            for capability in ALL_BETA_CAPABILITIES
+            if capability in selected
+        ]
 
 
 class BetaTeacherIdentity(BetaParticipant):

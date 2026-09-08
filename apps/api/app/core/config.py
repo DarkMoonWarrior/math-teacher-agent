@@ -180,6 +180,17 @@ class Settings(BaseSettings):
     beta_validation_identity_secret: SecretStr = SecretStr("")
     beta_validation_retention_days: int = Field(default=90, ge=90, le=90)
 
+    # -- M14 production identity foundation -------------------------------
+    # Mutually exclusive with Closed Beta access. Disabled by default until
+    # account provisioning, recovery and deployment hardening are complete.
+    production_identity_enabled: bool = False
+    production_identity_db: Path = Field(
+        default=PROJECT_ROOT / "data" / "private-runtime" / "account-identity.sqlite3"
+    )
+    production_session_ttl_hours: int = Field(default=12, ge=1, le=168)
+    production_session_cookie_name: str = "math_ai_account_session"
+    production_session_secure_cookie: bool = True
+
     @property
     def cors_origin_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]

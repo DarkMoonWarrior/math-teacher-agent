@@ -7,8 +7,35 @@ from functools import lru_cache
 from fastapi import Depends
 
 from app.core.config import Settings, get_settings
-from app.modules.beta_access.access import BetaAccess
+from app.modules.beta_access.access import BetaAccess, BetaAccessDenied
 from app.modules.beta_access.schemas import BetaParticipant
+
+
+class DisabledBetaAccess:
+    """No-storage adapter used outside the exclusive Closed Beta mode."""
+
+    @staticmethod
+    def issue(access_code: str):
+        raise BetaAccessDenied("封闭测试访问未启用。")
+
+    @staticmethod
+    def resolve(token: str):
+        raise BetaAccessDenied("封闭测试访问未启用。")
+
+    @staticmethod
+    def revoke(token: str) -> bool:
+        return False
+
+    @staticmethod
+    def store_ready() -> bool:
+        return False
+
+    @staticmethod
+    def has_participants() -> bool:
+        return False
+
+
+_DISABLED_BETA_ACCESS = DisabledBetaAccess()
 
 
 def _parse_participants(raw: str, *, enabled: bool) -> dict[str, BetaParticipant]:
@@ -43,6 +70,8 @@ def _build_beta_access(
 
 
 def get_beta_access(settings: Settings = Depends(get_settings)) -> BetaAccess:
+    if not settings.beta_access_enabled or settings.production_identity_enabled:
+        return _DISABLED_BETA_ACCESS  # type: ignore[return-value]
     return _build_beta_access(
         str(settings.beta_session_db),
         settings.beta_access_roster_json,

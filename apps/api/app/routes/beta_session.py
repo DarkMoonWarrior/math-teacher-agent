@@ -16,12 +16,24 @@ from app.modules.beta_access.dependencies import get_beta_access
 router = APIRouter(prefix="/beta-session", tags=["beta-session"])
 
 
+def _reject_conflicting_identity_modes(settings: Settings) -> None:
+    if settings.production_identity_enabled and settings.beta_access_enabled:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "code": "IDENTITY_MODE_CONFLICT",
+                "message": "正式账号与封闭测试访问不能同时启用。",
+            },
+        )
+
+
 def _status_for_token(
     request: Request,
     *,
     settings: Settings,
     access: BetaAccess,
 ) -> BetaSessionStatus:
+    _reject_conflicting_identity_modes(settings)
     if not settings.beta_access_enabled:
         return BetaSessionStatus(
             mode="local_development",
@@ -59,6 +71,7 @@ def start_session(
     settings: Settings = Depends(get_settings),
     access: BetaAccess = Depends(get_beta_access),
 ) -> BetaSessionStatus:
+    _reject_conflicting_identity_modes(settings)
     if not settings.beta_access_enabled:
         raise HTTPException(status_code=409, detail="当前未启用封闭测试访问模式。")
     try:
@@ -90,6 +103,7 @@ def end_session(
     settings: Settings = Depends(get_settings),
     access: BetaAccess = Depends(get_beta_access),
 ) -> BetaSessionStatus:
+    _reject_conflicting_identity_modes(settings)
     token = request.cookies.get(settings.beta_session_cookie_name, "")
     if settings.beta_access_enabled and token:
         access.revoke(token)
