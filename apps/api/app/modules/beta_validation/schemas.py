@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Literal
 
@@ -127,6 +127,37 @@ class BetaMetricSnapshot(BaseModel):
     generated_at: datetime
     metrics: dict[str, BetaMetricValue]
     trust_tier_error_rates: dict[BetaTrustTier, BetaMetricValue]
+
+
+class BetaCohortProgress(BaseModel):
+    """Weekly activation cohort without participant or task identifiers."""
+
+    model_config = ConfigDict(frozen=True)
+
+    activation_week_start: date
+    activated_teachers: int = Field(ge=0)
+    week_1_retention: BetaMetricValue
+    week_4_retention: BetaMetricValue
+
+
+class BetaPrivateOperationsReadout(BaseModel):
+    """Content-free, aggregate-only readout for the private Beta operator."""
+
+    model_config = ConfigDict(frozen=True)
+
+    definition_version: Literal["m13.v1"] = METRIC_DEFINITION_VERSION
+    generated_at: datetime
+    window_start: datetime
+    window_end: datetime
+    event_count: int = Field(ge=0)
+    acknowledged_participants: int = Field(ge=0)
+    activated_teachers: int = Field(ge=0)
+    target_beta_teachers_min: Literal[20] = 20
+    target_beta_teachers_max: Literal[30] = 30
+    sample_status: Literal["empty", "below_target", "target_range", "above_target"]
+    metrics: dict[str, BetaMetricValue]
+    trust_tier_error_rates: dict[BetaTrustTier, BetaMetricValue]
+    cohorts: tuple[BetaCohortProgress, ...]
 
 
 class BetaValidationNotice(BaseModel):

@@ -18,6 +18,8 @@ from app.modules.beta_validation.schemas import (
     BetaMetricDefinition,
     BetaMetricSnapshot,
     BetaMetricValue,
+    BetaCohortProgress,
+    BetaPrivateOperationsReadout,
     BetaParticipantDeletion,
     BetaParticipantMetricExport,
     BetaTrustTier,
@@ -74,14 +76,21 @@ class BetaValidationMetrics:
         database_path: Path,
         identity_secret: str,
         clock: Callable[[], datetime] | None = None,
+        read_only: bool = False,
     ) -> None:
         if len(identity_secret) < 32:
             raise ValueError("M13 指标身份摘要密钥至少需要 32 个字符。")
         self.database_path = database_path
-        self.database_path.parent.mkdir(parents=True, exist_ok=True)
+        self._read_only = read_only
+        if self._read_only:
+            if not self.database_path.is_file():
+                raise OSError("M13 指标库不存在。")
+        else:
+            self.database_path.parent.mkdir(parents=True, exist_ok=True)
         self._secret = identity_secret.encode("utf-8")
         self._clock = clock or (lambda: datetime.now(timezone.utc))
-        self._initialize()
+        if not self._read_only:
+            self._initialize()
 
     def record(
         self,
@@ -271,6 +280,129 @@ class BetaValidationMetrics:
             trust_tier_error_rates=self._trust_tier_error_rates(window_rows),
         )
 
+    def private_operations_readout(
+        self,
+        *,
+        window_start: datetime,
+        window_end: datetime,
+    ) -> BetaPrivateOperationsReadout:
+        """Return the M13 operator view without exposing row-level facts."""
+
+        start = self._utc(window_start)
+        end = self._utc(window_end)
+        if start >= end:
+            raise ValueError("指标窗口结束时间必须晚于开始时间。")
+        rows = self._rows_before(end)
+        window_rows = [row for row in rows if start <= self._row_time(row) < end]
+        metrics = self._aggregate(
+            window_rows=window_rows,
+            all_rows=rows,
+            window_end=end,
+        )
+        activated = int(metrics["activated_teacher"].numerator)
+        if activated == 0:
+            sample_status = "empty"
+        elif activated < 20:
+            sample_status = "below_target"
+        elif activated <= 30:
+            sample_status = "target_range"
+        else:
+            sample_status = "above_target"
+        with self._connect() as connection:
+            acknowledged = connection.execute(
+                """SELECT COUNT(*) AS count
+                   FROM m13_beta_validation_participants
+                   WHERE notice_version = ?""",
+                (NOTICE_VERSION,),
+            ).fetchone()["count"]
+        return BetaPrivateOperationsReadout(
+            generated_at=self._now(),
+            window_start=start,
+            window_end=end,
+            event_count=len(window_rows),
+            acknowledged_participants=acknowledged,
+            activated_teachers=activated,
+            sample_status=sample_status,
+            metrics=metrics,
+            trust_tier_error_rates=self._trust_tier_error_rates(window_rows),
+            cohorts=self._cohort_progress(
+                rows=rows,
+                window_start=start,
+                window_end=end,
+            ),
+        )
+
+    def _cohort_progress(
+        self,
+        *,
+        rows: list[sqlite3.Row],
+        window_start: datetime,
+        window_end: datetime,
+    ) -> tuple[BetaCohortProgress, ...]:
+        completions: dict[str, list[datetime]] = {}
+        for row in rows:
+            if row["event_type"] == "task_completed":
+                completions.setdefault(row["participant_key"], []).append(
+                    self._row_time(row)
+                )
+        cohorts: dict[datetime, list[list[datetime]]] = {}
+        for times in completions.values():
+            ordered = sorted(times)
+            activated_at = ordered[0]
+            if not window_start <= activated_at < window_end:
+                continue
+            week_start = (activated_at - timedelta(days=activated_at.weekday())).replace(
+                hour=0,
+                minute=0,
+                second=0,
+                microsecond=0,
+            )
+            cohorts.setdefault(week_start, []).append(ordered)
+
+        progress: list[BetaCohortProgress] = []
+        for week_start, members in sorted(cohorts.items()):
+            week_1 = self._cohort_retention(
+                members,
+                window_end=window_end,
+                start_day=7,
+                eligible_day=14,
+            )
+            week_4 = self._cohort_retention(
+                members,
+                window_end=window_end,
+                start_day=28,
+                eligible_day=35,
+            )
+            progress.append(
+                BetaCohortProgress(
+                    activation_week_start=week_start.date(),
+                    activated_teachers=len(members),
+                    week_1_retention=self._rate(*week_1),
+                    week_4_retention=self._rate(*week_4),
+                )
+            )
+        return tuple(progress)
+
+    @staticmethod
+    def _cohort_retention(
+        members: list[list[datetime]],
+        *,
+        window_end: datetime,
+        start_day: int,
+        eligible_day: int,
+    ) -> tuple[int, int]:
+        retained = 0
+        eligible = 0
+        for ordered in members:
+            activated_at = ordered[0]
+            if activated_at + timedelta(days=eligible_day) > window_end:
+                continue
+            eligible += 1
+            period_start = activated_at + timedelta(days=start_day)
+            period_end = activated_at + timedelta(days=eligible_day)
+            retained += any(period_start <= item < period_end for item in ordered)
+        return retained, eligible
+
     def _aggregate(self, *, window_rows: list[sqlite3.Row], all_rows: list[sqlite3.Row], window_end: datetime) -> dict[str, BetaMetricValue]:
         completed = self._task_set(window_rows, "task_completed")
         active_participants = {row["participant_key"] for row in window_rows}
@@ -453,7 +585,13 @@ class BetaValidationMetrics:
         return value.astimezone(timezone.utc)
 
     def _connect(self) -> sqlite3.Connection:
-        connection = sqlite3.connect(self.database_path)
+        if self._read_only:
+            connection = sqlite3.connect(
+                f"{self.database_path.resolve().as_uri()}?mode=ro",
+                uri=True,
+            )
+        else:
+            connection = sqlite3.connect(self.database_path)
         connection.row_factory = sqlite3.Row
         return connection
 
