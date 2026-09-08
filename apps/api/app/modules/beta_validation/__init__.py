@@ -9,6 +9,7 @@ from app.modules.beta_validation.metrics import (
     BetaValidationLifecycleError,
     BetaValidationMetrics,
 )
+from app.modules.beta_validation.rehearsal import run_beta_operations_rehearsal
 from app.modules.beta_validation.maintenance import (
     BetaValidationMaintenanceError,
     BetaValidationRetention,
@@ -21,6 +22,9 @@ from app.modules.beta_validation.schemas import (
     BetaMetricSnapshot,
     BetaMetricValue,
     BetaCohortProgress,
+    BetaDeploymentPreflight,
+    BetaOperationsRehearsalCheck,
+    BetaOperationsRehearsalReport,
     BetaPrivateOperationsReadout,
     BetaParticipantDeletion,
     BetaParticipantMetricExport,
@@ -46,6 +50,9 @@ __all__ = [
     "BetaMetricSnapshot",
     "BetaMetricValue",
     "BetaCohortProgress",
+    "BetaDeploymentPreflight",
+    "BetaOperationsRehearsalCheck",
+    "BetaOperationsRehearsalReport",
     "BetaPrivateOperationsReadout",
     "BetaParticipantDeletion",
     "BetaParticipantMetricExport",
@@ -65,4 +72,5 @@ __all__ = [
     "BetaValidationRetention",
     "BetaValidationRetentionReport",
     "BetaWorkflow",
+    "run_beta_operations_rehearsal",
 ]

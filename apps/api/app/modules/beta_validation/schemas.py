@@ -44,6 +44,22 @@ BetaValidationEventType = Literal[
     "serious_math_error_confirmed",
     "model_usage",
 ]
+BetaRehearsalCheckName = Literal[
+    "notice_required",
+    "owner_export_isolated",
+    "retention_preview_safe",
+    "retention_prune_exact",
+    "operations_readout_private",
+    "owner_exit_exact",
+    "temporary_store_removed",
+]
+BetaRehearsalBlocker = Literal[
+    "BETA_ACCESS_DISABLED",
+    "COLLECTION_DISABLED",
+    "IDENTITY_SECRET_MISSING",
+    "METRIC_STORE_MISSING",
+    "METRIC_STORE_UNREADABLE",
+]
 
 
 class BetaValidationObservation(BaseModel):
@@ -158,6 +174,43 @@ class BetaPrivateOperationsReadout(BaseModel):
     metrics: dict[str, BetaMetricValue]
     trust_tier_error_rates: dict[BetaTrustTier, BetaMetricValue]
     cohorts: tuple[BetaCohortProgress, ...]
+
+
+class BetaOperationsRehearsalCheck(BaseModel):
+    """One content-free assertion from the disposable M13 rehearsal."""
+
+    model_config = ConfigDict(frozen=True)
+
+    name: BetaRehearsalCheckName
+    passed: bool
+
+
+class BetaDeploymentPreflight(BaseModel):
+    """Boolean-only deployment readiness; never includes paths or secrets."""
+
+    model_config = ConfigDict(frozen=True)
+
+    beta_access_enabled: bool
+    collection_enabled: bool
+    identity_secret_configured: bool
+    metric_store_exists: bool
+    metric_store_readable: bool
+    ready_for_invitation: bool
+    blockers: tuple[BetaRehearsalBlocker, ...]
+
+
+class BetaOperationsRehearsalReport(BaseModel):
+    """Synthetic rehearsal plus a non-mutating deployment preflight."""
+
+    model_config = ConfigDict(frozen=True)
+
+    definition_version: Literal["m13.v1"] = METRIC_DEFINITION_VERSION
+    notice_version: Literal["m13.notice.v1"] = NOTICE_VERSION
+    generated_at: datetime
+    synthetic_only: Literal[True] = True
+    all_checks_passed: bool
+    checks: tuple[BetaOperationsRehearsalCheck, ...]
+    deployment: BetaDeploymentPreflight
 
 
 class BetaValidationNotice(BaseModel):
