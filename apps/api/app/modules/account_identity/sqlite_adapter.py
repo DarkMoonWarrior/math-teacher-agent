@@ -9,6 +9,7 @@ from pathlib import Path
 
 from app.core.capabilities import ALL_WORKBENCH_CAPABILITIES
 from app.modules.account_identity.contracts import (
+    AccountAdministrationError,
     AccountIdentityConflict,
     AccountIdentityDenied,
 )
@@ -18,8 +19,11 @@ from app.modules.account_identity.crypto import (
     verify_password,
 )
 from app.modules.account_identity.schemas import (
+    AccountDisable,
     AccountIdentityContext,
+    AccountLifecycleReceipt,
     AccountLogin,
+    AccountPasswordReset,
     AccountSessionGrant,
     PersonalAccountProvision,
     ProvisionedAccount,
@@ -189,6 +193,67 @@ class SqliteAccountIdentity:
                 return connection.execute("SELECT 1").fetchone()[0] == 1
         except sqlite3.Error:
             return False
+
+    def disable_account(
+        self, command: AccountDisable, *, confirmed: bool = False
+    ) -> AccountLifecycleReceipt:
+        if confirmed is not True:
+            raise AccountAdministrationError("ACCOUNT_DISABLE_CONFIRMATION_REQUIRED")
+        now = self._now().isoformat()
+        try:
+            with self._connect() as connection:
+                connection.execute("BEGIN IMMEDIATE")
+                row = connection.execute(
+                    "SELECT account_id, status FROM m14_accounts WHERE email_normalized = ?",
+                    (command.email,),
+                ).fetchone()
+                if row is None or row["status"] != "active":
+                    raise AccountAdministrationError("ACCOUNT_NOT_ACTIVE")
+                connection.execute(
+                    "UPDATE m14_accounts SET status = 'disabled' WHERE account_id = ?",
+                    (row["account_id"],),
+                )
+                revoked = connection.execute(
+                    """UPDATE m14_account_sessions SET revoked_at = ?
+                       WHERE account_id = ? AND revoked_at IS NULL""",
+                    (now, row["account_id"]),
+                ).rowcount
+        except sqlite3.Error:
+            raise AccountAdministrationError("ACCOUNT_STORE_UNAVAILABLE") from None
+        return AccountLifecycleReceipt(
+            action="disabled", changed=True, revoked_sessions=revoked
+        )
+
+    def reset_password(
+        self, command: AccountPasswordReset, *, confirmed: bool = False
+    ) -> AccountLifecycleReceipt:
+        if confirmed is not True:
+            raise AccountAdministrationError("PASSWORD_RESET_CONFIRMATION_REQUIRED")
+        now = self._now().isoformat()
+        password_hash = hash_password(command.new_password)
+        try:
+            with self._connect() as connection:
+                connection.execute("BEGIN IMMEDIATE")
+                row = connection.execute(
+                    "SELECT account_id, status FROM m14_accounts WHERE email_normalized = ?",
+                    (command.email,),
+                ).fetchone()
+                if row is None or row["status"] != "active":
+                    raise AccountAdministrationError("ACCOUNT_NOT_ACTIVE")
+                connection.execute(
+                    "UPDATE m14_accounts SET password_hash = ? WHERE account_id = ?",
+                    (password_hash, row["account_id"]),
+                )
+                revoked = connection.execute(
+                    """UPDATE m14_account_sessions SET revoked_at = ?
+                       WHERE account_id = ? AND revoked_at IS NULL""",
+                    (now, row["account_id"]),
+                ).rowcount
+        except sqlite3.Error:
+            raise AccountAdministrationError("ACCOUNT_STORE_UNAVAILABLE") from None
+        return AccountLifecycleReceipt(
+            action="password_reset", changed=True, revoked_sessions=revoked
+        )
 
     def _context(self, row: sqlite3.Row, *, expires_at: datetime) -> AccountIdentityContext:
         return AccountIdentityContext(

@@ -12,8 +12,6 @@ from app.modules.account_identity.schemas import (
     AccountIdentityContext,
     AccountLogin,
     AccountSessionGrant,
-    PersonalAccountProvision,
-    ProvisionedAccount,
 )
 from app.modules.account_identity.sqlite_adapter import SqliteAccountIdentity
 
@@ -24,11 +22,6 @@ class DisabledAccountIdentity:
     @staticmethod
     def _deny() -> None:
         raise AccountIdentityDenied("正式账号未启用。")
-
-    def provision_personal_account(
-        self, command: PersonalAccountProvision
-    ) -> ProvisionedAccount:
-        self._deny()
 
     def authenticate(self, command: AccountLogin) -> AccountSessionGrant:
         self._deny()

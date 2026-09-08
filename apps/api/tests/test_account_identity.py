@@ -28,12 +28,12 @@ PASSWORD = "synthetic-password-1234"
 
 
 def _provision(
-    identity: AccountIdentity,
+    identity: object,
     *,
     email: str = "alpha@example.test",
     owner_id: str = "owner-alpha",
 ):
-    return identity.provision_personal_account(
+    return identity.provision_personal_account(  # type: ignore[attr-defined]
         PersonalAccountProvision(
             email=email,
             password=PASSWORD,

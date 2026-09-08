@@ -14,7 +14,7 @@
 
 ## 2. 身份 Interface 与运行模式
 
-`AccountIdentity` 是正式身份深模块 Interface，负责操作者创建个人账号、验证凭据、解析不透明会话和撤销会话。HTTP 只开放登录、会话状态和退出；没有公开注册或由 Agent 创建账号的入口。
+`AccountIdentity` 是业务与传输层依赖的正式身份深模块 Interface，只负责验证凭据、解析不透明会话和撤销会话。独立的 `AccountAdministration` 只供本机操作者创建、停用账号和重置密码。HTTP 只开放登录、会话状态和退出；没有公开注册或由 Agent 创建账号的入口。
 
 运行模式互斥：
 
@@ -25,7 +25,9 @@
 
 任何账号模式都停用缺少安全 owner 契约的旧版单用户接口。能力门禁使用全局 `WorkbenchCapability`，不再由 Beta 模块拥有业务能力定义。
 
-## 3. 当前切片：生产身份基础（已实现）
+## 3. 已实现切片
+
+### 3.1 生产身份基础
 
 - 独立 `AccountIdentity` Protocol，并提供内存测试 adapter 与 SQLite 过渡 adapter。
 - 账号、个人 tenant、成员关系、owner 和会话分别建模；当前角色只有 `personal_owner`。
@@ -39,9 +41,30 @@
 
 当前 SQLite adapter 只是验证 Interface 和迁移边界，不是生产数据库声明。当前切片没有创建真实账号、迁移真实内容或启用正式登录。
 
+### 3.2 账号生命周期第一段
+
+- 新增独立的 `AccountAdministration` Interface。停用账号和重置密码只允许本机操作者调用，没有 HTTP、浏览器或 Agent 入口。
+- 创建、停用和重置都要求操作者显式传入 `--confirm`；密码只通过交互式隐藏输入读取两次，不接受命令行密码参数，也不写入输出。
+- 停用账号与重置密码在一个事务中撤销该账号全部未撤销会话；旧密码、旧会话都不能继续使用。
+- 操作者回执只包含动作、是否改变和撤销会话数，不返回邮箱、account、tenant、owner、密码或 token。
+- 正式会话维护默认只预览，只有 `session-prune --confirm` 才删除已过期或已退出会话；有效会话和无法安全分类的异常记录保留。
+- 维护工具只接受配置中的既有正式身份库，先只读核对精确 schema；缺库、错误库、符号链接/reparse 或错误运行模式均 fail closed，不创建或修补目标库。
+
+操作者入口（需先显式启用正式身份并关闭 Closed Beta）：
+
+```powershell
+python -m app.modules.account_identity.operator_cli provision --email teacher@example.com --display-label "教师" --confirm
+python -m app.modules.account_identity.operator_cli disable --email teacher@example.com --confirm
+python -m app.modules.account_identity.operator_cli reset-password --email teacher@example.com --confirm
+python -m app.modules.account_identity.operator_cli session-preview
+python -m app.modules.account_identity.operator_cli session-prune --confirm
+```
+
+命令需从 `apps/api` 可导入的 Python 环境运行。这里的 SQLite 操作者流程仍是过渡验证，不是面向真实生产环境的账号后台。
+
 ## 4. 后续切片顺序
 
-1. **账号生命周期加固**：操作者创建/停用、密码重置、会话轮换与清理、登录限流、审计最小集，并明确 MFA 决策。所有破坏性维护继续预览后确认。
+1. **账号生命周期加固（进行中）**：操作者创建/停用、密码重置和失效会话预览/确认清理已实现；下一段补登录限流、会话轮换、审计最小集并明确 MFA 决策。
 2. **PostgreSQL tenant adapter**：在不改变业务 Interface 的前提下替换身份和 owner-aware 存储；提供逐对象盘点、迁移、对账、回滚和 IDOR/tenant isolation 测试。
 3. **对象存储与持久任务**：原文件、导出和后台任务获得明确 owner/tenant key、保留期、幂等和恢复语义。
 4. **Entitlement**：只表达账号可用能力，不替代身份、owner 权利或内容可信门禁。
@@ -51,7 +74,7 @@
 ## 5. 明确未完成
 
 - PostgreSQL、云对象存储、持久队列、多进程会话一致性和生产灾备。
-- 公开注册、邮箱验证、找回密码、MFA、登录限流、设备管理和完整安全审计。
+- 公开注册、邮箱验证、自助找回密码、MFA、登录限流、设备管理和安全审计。
 - 除 `personal_owner` 外的角色、组织 tenant、成员邀请、学生和学校后台。
 - Entitlement、订单、订阅、支付、Webhook 和退款。
 - M13 的真实教师价值、重复使用、错误率与付费意愿 Gate。
