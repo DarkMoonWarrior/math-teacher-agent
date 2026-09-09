@@ -9,6 +9,11 @@ from app.modules.account_identity.contracts import (
     AccountLoginProtection,
     AccountLoginProtectionUnavailable,
     AccountLoginRateLimited,
+    LoginNetworkOrigin,
+    LoginNetworkOriginUnavailable,
+)
+from app.modules.account_identity.distributed_login_protection import (
+    HttpDistributedAccountLoginProtection,
 )
 from app.modules.account_identity.hmac_keyring import (
     HmacKeyRingConfigurationError,
@@ -19,6 +24,11 @@ from app.modules.account_identity.lifecycle_audit import (
     SqliteAccountLifecycleAudit,
 )
 from app.modules.account_identity.login_protection import SqliteAccountLoginProtection
+from app.modules.account_identity.login_network_origin import (
+    DirectLoginNetworkOrigin,
+    TrustedProxyLoginNetworkOrigin,
+    UnavailableLoginNetworkOrigin,
+)
 from app.modules.account_identity.memory_adapter import InMemoryAccountIdentity
 from app.modules.account_identity.maintenance import (
     AccountSessionMaintenance,
@@ -63,11 +73,17 @@ __all__ = [
     "AccountSessionStatus",
     "AuditedAccountAdministration",
     "HmacKeyRingConfigurationError",
+    "HttpDistributedAccountLoginProtection",
     "InMemoryAccountIdentity",
+    "LoginNetworkOrigin",
+    "LoginNetworkOriginUnavailable",
     "PersonalAccountProvision",
     "ProvisionedAccount",
     "SqliteAccountIdentity",
     "SqliteAccountLifecycleAudit",
     "SqliteAccountLoginProtection",
+    "DirectLoginNetworkOrigin",
+    "TrustedProxyLoginNetworkOrigin",
+    "UnavailableLoginNetworkOrigin",
     "VersionedHmacKeyRing",
 ]

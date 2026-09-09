@@ -4,7 +4,11 @@ from datetime import datetime, timezone
 
 from app.agent_runtime import TeacherAgentRuntime
 from app.core.config import Settings
-from app.modules.account_identity import AccountIdentity, AccountLoginProtection
+from app.modules.account_identity import (
+    AccountIdentity,
+    AccountLoginProtection,
+    LoginNetworkOrigin,
+)
 from app.modules.beta_access import BetaAccess
 from app.modules.beta_operations.schemas import (
     ReadinessComponent,
@@ -23,6 +27,7 @@ class ReadinessProbe:
         beta_access: BetaAccess,
         runtime: TeacherAgentRuntime,
         login_protection: AccountLoginProtection | None = None,
+        login_network_origin: LoginNetworkOrigin | None = None,
     ) -> ReadinessSnapshot:
         components = [
             ReadinessComponent(
@@ -57,6 +62,26 @@ class ReadinessProbe:
                         "正式账号会话存储可用。"
                         if identity_ready
                         else "正式账号会话存储不可用。"
+                    ),
+                )
+            )
+            network_origin_ready = (
+                login_network_origin is not None
+                and login_network_origin.configuration_ready()
+            )
+            components.append(
+                ReadinessComponent(
+                    name="login_network_origin",
+                    status="ready" if network_origin_ready else "unavailable",
+                    code=(
+                        "LOGIN_NETWORK_ORIGIN_READY"
+                        if network_origin_ready
+                        else "LOGIN_NETWORK_ORIGIN_UNAVAILABLE"
+                    ),
+                    message=(
+                        "登录连接来源边界已就绪。"
+                        if network_origin_ready
+                        else "登录连接来源边界未就绪。"
                     ),
                 )
             )

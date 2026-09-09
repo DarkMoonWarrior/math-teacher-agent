@@ -89,9 +89,17 @@ python -m app.modules.account_identity.operator_cli keyring-status
 - 登录轮换会跨当前/旧密钥统计失败。保留期内若版本化事件所需密钥被提前移除或同一 ID 被错误复用，防护和 `/ready` 失败关闭，不能靠换钥清零限流。
 - 旧密钥配置最多三个。`keyring-status` 只验证配置并输出当前 ID/旧密钥数量，不读取或创建数据库。首次升级、轮换、保留和退出顺序见 [`ADR-2026-09-09-HMAC-KEY-ROTATION.md`](ADR-2026-09-09-HMAC-KEY-ROTATION.md)。
 
+### 3.6 可信代理与分布式限流 adapter
+
+- 独立 `LoginNetworkOrigin` 解析登录来源。本地 `direct` 忽略所有转发头；生产 `trusted_proxy` 只信任显式 CIDR 白名单中的直接 peer，并只接受边缘覆盖后的单一规范 `X-Forwarded-For` IP。
+- 独立 `HttpDistributedAccountLoginProtection` 在本地把邮箱与网络来源转换为版本化 HMAC，只向受控内部服务发送摘要候选、非敏感 key tag、策略和有界结果。它不发送邮箱、IP、密码、token、Cookie 或正文。
+- 远端协议固定为 `m14.login-protection.v1`，禁止重定向和环境代理；错误协议、响应、网络或存储全部失败关闭。生产只允许 HTTPS，服务 token 至少 32 字符且独立保存。
+- `environment=production` 若仍配置 `direct` 或 `sqlite`，登录与 `/ready` 明确不可用。本地开发仍可使用两者。
+- 仓库只实现 adapter 和可测试契约，不捆绑或假装实现外部分布式原子服务；部署责任、原子性、TLS、告警与数据最小化见 [`ADR-2026-09-09-TRUSTED-LOGIN-EDGE.md`](ADR-2026-09-09-TRUSTED-LOGIN-EDGE.md)。
+
 ## 4. 后续切片顺序
 
-1. **账号生命周期加固（进行中）**：操作者创建/停用、密码重置、失效会话预览/确认清理、登录双范围限流、摘要化登录安全事实、当前浏览器会话轮换、MFA 决策、操作者生命周期审计和摘要密钥轮换已实现；下一段补可信生产代理与分布式限流 adapter。
+1. **账号生命周期加固（进行中）**：操作者创建/停用、密码重置、失效会话预览/确认清理、登录双范围限流、摘要化登录安全事实、当前浏览器会话轮换、MFA 决策、操作者生命周期审计、摘要密钥轮换、可信生产代理来源与分布式限流 adapter 已实现；外部分布式服务、边缘部署、告警、已认证操作者/RBAC、MFA 与集中式密钥管理仍未完成。下一段进入 PostgreSQL tenant adapter。
 2. **PostgreSQL tenant adapter**：在不改变业务 Interface 的前提下替换身份和 owner-aware 存储；提供逐对象盘点、迁移、对账、回滚和 IDOR/tenant isolation 测试。
 3. **对象存储与持久任务**：原文件、导出和后台任务获得明确 owner/tenant key、保留期、幂等和恢复语义。
 4. **Entitlement**：只表达账号可用能力，不替代身份、owner 权利或内容可信门禁。

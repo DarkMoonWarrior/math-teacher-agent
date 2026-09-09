@@ -58,6 +58,14 @@ class AccountLoginProtection(Protocol):
     def store_ready(self) -> bool: ...
 
 
+class LoginNetworkOrigin(Protocol):
+    """Resolve a bounded login source from server-owned connection facts."""
+
+    def resolve(self, *, peer_host: str | None, forwarded_for: str | None) -> str: ...
+
+    def configuration_ready(self) -> bool: ...
+
+
 class AccountLifecycleAudit(Protocol):
     """Operator-only mutation audit; stores only keyed digests and bounded facts."""
 
@@ -90,6 +98,10 @@ class AccountAdministrationError(ValueError):
 
 class AccountLoginProtectionUnavailable(ValueError):
     """Login must fail closed when its protection store is unavailable."""
+
+
+class LoginNetworkOriginUnavailable(ValueError):
+    """Login must fail closed when a trusted source cannot be established."""
 
 
 class AccountLoginRateLimited(ValueError):

@@ -88,6 +88,12 @@ class VersionedHmacKeyRing:
     def previous_key_count(self) -> int:
         return len(self._keys) - 1
 
+    @property
+    def digest_tags(self) -> tuple[str, ...]:
+        """Return only non-secret version tags for remote store validation."""
+
+        return tuple(self._tag(key_id, secret) for key_id, secret in self._keys)
+
     def digest(self, scope: str, value: str) -> str:
         key_id, secret = self._keys[0]
         return self._versioned_digest(key_id, secret, scope=scope, value=value)

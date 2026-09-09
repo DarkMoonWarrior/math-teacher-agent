@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal
 
 from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -193,6 +194,19 @@ class Settings(BaseSettings):
     production_login_security_key_id: str = "v1"
     production_login_security_secret: SecretStr = SecretStr("")
     production_login_security_previous_keys_json: SecretStr = SecretStr("{}")
+    # Local development may use the direct ASGI peer and SQLite adapter. A real
+    # production environment must explicitly select the trusted-proxy source
+    # and distributed protection service; dependencies fail closed otherwise.
+    production_login_network_source: Literal["direct", "trusted_proxy"] = "direct"
+    production_trusted_proxy_cidrs: str = ""
+    production_login_protection_provider: Literal[
+        "sqlite", "distributed_http"
+    ] = "sqlite"
+    production_login_protection_service_url: str = ""
+    production_login_protection_service_token: SecretStr = SecretStr("")
+    production_login_protection_service_timeout_seconds: float = Field(
+        default=2.0, ge=0.2, le=10.0
+    )
     production_login_window_minutes: int = Field(default=15, ge=1, le=60)
     production_login_principal_attempts: int = Field(default=5, ge=2, le=20)
     production_login_network_attempts: int = Field(default=30, ge=5, le=200)
