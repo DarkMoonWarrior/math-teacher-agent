@@ -37,6 +37,10 @@ class AccountAdministration(Protocol):
         self, command: AccountDisable, *, confirmed: bool = False
     ) -> AccountLifecycleReceipt: ...
 
+    def reset_password(
+        self, command: AccountPasswordReset, *, confirmed: bool = False
+    ) -> AccountLifecycleReceipt: ...
+
 
 class AccountLoginProtection(Protocol):
     """Server-only login abuse boundary; raw identifiers never leave this seam."""
@@ -53,9 +57,23 @@ class AccountLoginProtection(Protocol):
 
     def store_ready(self) -> bool: ...
 
-    def reset_password(
-        self, command: AccountPasswordReset, *, confirmed: bool = False
-    ) -> AccountLifecycleReceipt: ...
+
+class AccountLifecycleAudit(Protocol):
+    """Operator-only mutation audit; stores only keyed digests and bounded facts."""
+
+    def begin(
+        self, *, action: str, operator_label: str, target_hint: str
+    ) -> str: ...
+
+    def succeed(
+        self, *, event_id: str, changed: bool, affected_sessions: int
+    ) -> None: ...
+
+    def fail(self, *, event_id: str) -> None: ...
+
+    def summary(self) -> dict[str, int]: ...
+
+    def store_ready(self) -> bool: ...
 
 
 class AccountIdentityDenied(ValueError):
@@ -80,3 +98,7 @@ class AccountLoginRateLimited(ValueError):
     def __init__(self, *, retry_after_seconds: int) -> None:
         super().__init__("LOGIN_RATE_LIMITED")
         self.retry_after_seconds = max(1, retry_after_seconds)
+
+
+class AccountLifecycleAuditError(ValueError):
+    """Stable operator audit error without identifiers or storage details."""

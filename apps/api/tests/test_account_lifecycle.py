@@ -25,6 +25,7 @@ from app.modules.account_identity import operator_cli
 
 OLD_PASSWORD = "synthetic-old-password-1234"
 NEW_PASSWORD = "synthetic-new-password-5678"
+AUDIT_SECRET = "synthetic-account-audit-secret-32-bytes-minimum"
 
 
 def _provision(identity: object) -> None:
@@ -197,6 +198,8 @@ def test_operator_cli_prompts_for_password_and_returns_non_identifying_receipts(
         production_identity_enabled=True,
         beta_access_enabled=False,
         production_identity_db=tmp_path / "identity.sqlite3",
+        production_account_audit_db=tmp_path / "account-audit.sqlite3",
+        production_account_audit_secret=AUDIT_SECRET,
     )
     monkeypatch.setattr(operator_cli, "get_settings", lambda: settings)
     secrets = iter([OLD_PASSWORD, OLD_PASSWORD, NEW_PASSWORD, NEW_PASSWORD])
@@ -209,6 +212,8 @@ def test_operator_cli_prompts_for_password_and_returns_non_identifying_receipts(
             "owner@example.test",
             "--display-label",
             "测试教师",
+            "--operator",
+            "local-admin",
             "--confirm",
         ]
     ) == 0
@@ -226,7 +231,14 @@ def test_operator_cli_prompts_for_password_and_returns_non_identifying_receipts(
         AccountLogin(email="owner@example.test", password=OLD_PASSWORD)
     )
     assert operator_cli.main(
-        ["reset-password", "--email", "owner@example.test", "--confirm"]
+        [
+            "reset-password",
+            "--email",
+            "owner@example.test",
+            "--operator",
+            "local-admin",
+            "--confirm",
+        ]
     ) == 0
     reset_output = capsys.readouterr().out
     assert json.loads(reset_output) == {
@@ -244,15 +256,24 @@ def test_operator_cli_refuses_mutations_without_confirmation(
         production_identity_enabled=True,
         beta_access_enabled=False,
         production_identity_db=tmp_path / "identity.sqlite3",
+        production_account_audit_db=tmp_path / "account-audit.sqlite3",
+        production_account_audit_secret=AUDIT_SECRET,
     )
     monkeypatch.setattr(operator_cli, "get_settings", lambda: settings)
     assert operator_cli.main(
-        ["disable", "--email", "owner@example.test"]
+        [
+            "disable",
+            "--email",
+            "owner@example.test",
+            "--operator",
+            "local-admin",
+        ]
     ) == 1
     assert json.loads(capsys.readouterr().out) == {
         "error": "ACCOUNT_DISABLE_CONFIRMATION_REQUIRED"
     }
     assert not settings.production_identity_db.exists()
+    assert not settings.production_account_audit_db.exists()
 
 
 def test_operator_cli_does_not_mutate_an_unexpected_existing_store(
@@ -266,11 +287,20 @@ def test_operator_cli_does_not_mutate_an_unexpected_existing_store(
         production_identity_enabled=True,
         beta_access_enabled=False,
         production_identity_db=database_path,
+        production_account_audit_db=tmp_path / "account-audit.sqlite3",
+        production_account_audit_secret=AUDIT_SECRET,
     )
     monkeypatch.setattr(operator_cli, "get_settings", lambda: settings)
 
     assert operator_cli.main(
-        ["disable", "--email", "owner@example.test", "--confirm"]
+        [
+            "disable",
+            "--email",
+            "owner@example.test",
+            "--operator",
+            "local-admin",
+            "--confirm",
+        ]
     ) == 1
     assert json.loads(capsys.readouterr().out) == {
         "error": "ACCOUNT_SESSION_STORE_SCHEMA_UNEXPECTED"

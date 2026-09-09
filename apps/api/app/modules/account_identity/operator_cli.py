@@ -14,6 +14,11 @@ from app.core.config import Settings, get_settings
 from app.modules.account_identity.contracts import (
     AccountAdministrationError,
     AccountIdentityConflict,
+    AccountLifecycleAuditError,
+)
+from app.modules.account_identity.lifecycle_audit import (
+    AuditedAccountAdministration,
+    SqliteAccountLifecycleAudit,
 )
 from app.modules.account_identity.maintenance import (
     AccountSessionMaintenance,
@@ -36,19 +41,24 @@ def _parser() -> argparse.ArgumentParser:
     provision = commands.add_parser("provision", help="创建个人账号")
     provision.add_argument("--email", required=True)
     provision.add_argument("--display-label", required=True)
+    provision.add_argument("--operator", required=True)
     provision.add_argument("--confirm", action="store_true")
 
     disable = commands.add_parser("disable", help="停用账号并撤销全部会话")
     disable.add_argument("--email", required=True)
+    disable.add_argument("--operator", required=True)
     disable.add_argument("--confirm", action="store_true")
 
     reset = commands.add_parser("reset-password", help="重置密码并撤销全部会话")
     reset.add_argument("--email", required=True)
+    reset.add_argument("--operator", required=True)
     reset.add_argument("--confirm", action="store_true")
 
     commands.add_parser("session-preview", help="预览可清理的失效会话")
     prune = commands.add_parser("session-prune", help="清理失效会话")
+    prune.add_argument("--operator", required=True)
     prune.add_argument("--confirm", action="store_true")
+    commands.add_parser("audit-summary", help="查看不含身份标识的审计计数")
     return parser
 
 
@@ -84,6 +94,16 @@ def _secret(prompt: str) -> str:
     return first
 
 
+def _audit(settings: Settings, *, allow_create: bool) -> SqliteAccountLifecycleAudit:
+    path = Path(settings.production_account_audit_db)
+    if not allow_create and not path.exists():
+        raise AccountLifecycleAuditError("ACCOUNT_AUDIT_UNAVAILABLE")
+    return SqliteAccountLifecycleAudit(
+        database_path=path,
+        secret=settings.production_account_audit_secret.get_secret_value(),
+    )
+
+
 def _require_confirmation(confirmed: bool, code: str) -> None:
     if confirmed is not True:
         raise AccountAdministrationError(code)
@@ -98,13 +118,33 @@ def main(argv: list[str] | None = None) -> int:
                 database_path=settings.production_identity_db
             ).preview()
             output = {"action": args.action, **asdict(report)}
+        elif args.action == "audit-summary":
+            output = {
+                "action": args.action,
+                **_audit(settings, allow_create=False).summary(),
+            }
         elif args.action == "session-prune":
             _require_confirmation(
                 args.confirm, "ACCOUNT_SESSION_CLEANUP_CONFIRMATION_REQUIRED"
             )
-            report = AccountSessionMaintenance(
-                database_path=settings.production_identity_db
-            ).prune(confirmed=True)
+            audit = _audit(settings, allow_create=True)
+            event_id = audit.begin(
+                action="session_prune",
+                operator_label=args.operator,
+                target_hint="production_identity_sessions",
+            )
+            try:
+                report = AccountSessionMaintenance(
+                    database_path=settings.production_identity_db
+                ).prune(confirmed=True)
+            except Exception:
+                audit.fail(event_id=event_id)
+                raise
+            audit.succeed(
+                event_id=event_id,
+                changed=report.deleted > 0,
+                affected_sessions=report.deleted,
+            )
             output = {"action": args.action, **asdict(report)}
         elif args.action == "provision":
             _require_confirmation(args.confirm, "ACCOUNT_PROVISION_CONFIRMATION_REQUIRED")
@@ -113,19 +153,30 @@ def main(argv: list[str] | None = None) -> int:
                 display_label=args.display_label,
                 password=_secret("输入新账号密码："),
             )
-            _identity(settings, allow_create=True).provision_personal_account(command)
+            audit = _audit(settings, allow_create=True)
+            AuditedAccountAdministration(
+                administration=_identity(settings, allow_create=True),
+                audit=audit,
+                operator_label=args.operator,
+            ).provision_personal_account(command)
             output = {"action": "provisioned", "changed": True}
         elif args.action == "disable":
             _require_confirmation(args.confirm, "ACCOUNT_DISABLE_CONFIRMATION_REQUIRED")
-            receipt = _identity(settings, allow_create=False).disable_account(
-                AccountDisable(email=args.email), confirmed=True
-            )
+            receipt = AuditedAccountAdministration(
+                administration=_identity(settings, allow_create=False),
+                audit=_audit(settings, allow_create=True),
+                operator_label=args.operator,
+            ).disable_account(AccountDisable(email=args.email), confirmed=True)
             output = receipt.model_dump()
         else:
             _require_confirmation(
                 args.confirm, "PASSWORD_RESET_CONFIRMATION_REQUIRED"
             )
-            receipt = _identity(settings, allow_create=False).reset_password(
+            receipt = AuditedAccountAdministration(
+                administration=_identity(settings, allow_create=False),
+                audit=_audit(settings, allow_create=True),
+                operator_label=args.operator,
+            ).reset_password(
                 AccountPasswordReset(
                     email=args.email,
                     new_password=_secret("输入新密码："),
@@ -139,6 +190,7 @@ def main(argv: list[str] | None = None) -> int:
     except (
         AccountAdministrationError,
         AccountIdentityConflict,
+        AccountLifecycleAuditError,
         AccountSessionMaintenanceError,
     ) as error:
         print(json.dumps({"error": str(error)}))
