@@ -15,6 +15,11 @@ from app.modules.account_identity.contracts import (
     AccountAdministrationError,
     AccountIdentityConflict,
     AccountLifecycleAuditError,
+    AccountLoginProtectionUnavailable,
+)
+from app.modules.account_identity.hmac_keyring import (
+    HmacKeyRingConfigurationError,
+    VersionedHmacKeyRing,
 )
 from app.modules.account_identity.lifecycle_audit import (
     AuditedAccountAdministration,
@@ -59,6 +64,7 @@ def _parser() -> argparse.ArgumentParser:
     prune.add_argument("--operator", required=True)
     prune.add_argument("--confirm", action="store_true")
     commands.add_parser("audit-summary", help="查看不含身份标识的审计计数")
+    commands.add_parser("keyring-status", help="验证摘要密钥环配置")
     return parser
 
 
@@ -100,8 +106,36 @@ def _audit(settings: Settings, *, allow_create: bool) -> SqliteAccountLifecycleA
         raise AccountLifecycleAuditError("ACCOUNT_AUDIT_UNAVAILABLE")
     return SqliteAccountLifecycleAudit(
         database_path=path,
-        secret=settings.production_account_audit_secret.get_secret_value(),
+        key_ring=_account_audit_key_ring(settings),
     )
+
+
+def _login_key_ring(settings: Settings) -> VersionedHmacKeyRing:
+    try:
+        return VersionedHmacKeyRing.from_config(
+            current_key_id=settings.production_login_security_key_id,
+            current_secret=settings.production_login_security_secret.get_secret_value(),
+            previous_keys_json=(
+                settings.production_login_security_previous_keys_json.get_secret_value()
+            ),
+        )
+    except HmacKeyRingConfigurationError:
+        raise AccountLoginProtectionUnavailable(
+            "LOGIN_PROTECTION_UNAVAILABLE"
+        ) from None
+
+
+def _account_audit_key_ring(settings: Settings) -> VersionedHmacKeyRing:
+    try:
+        return VersionedHmacKeyRing.from_config(
+            current_key_id=settings.production_account_audit_key_id,
+            current_secret=settings.production_account_audit_secret.get_secret_value(),
+            previous_keys_json=(
+                settings.production_account_audit_previous_keys_json.get_secret_value()
+            ),
+        )
+    except HmacKeyRingConfigurationError:
+        raise AccountLifecycleAuditError("ACCOUNT_AUDIT_UNAVAILABLE") from None
 
 
 def _require_confirmation(confirmed: bool, code: str) -> None:
@@ -122,6 +156,20 @@ def main(argv: list[str] | None = None) -> int:
             output = {
                 "action": args.action,
                 **_audit(settings, allow_create=False).summary(),
+            }
+        elif args.action == "keyring-status":
+            login_ring = _login_key_ring(settings)
+            audit_ring = _account_audit_key_ring(settings)
+            output = {
+                "action": args.action,
+                "login": {
+                    "current_key_id": login_ring.current_key_id,
+                    "previous_key_count": login_ring.previous_key_count,
+                },
+                "account_audit": {
+                    "current_key_id": audit_ring.current_key_id,
+                    "previous_key_count": audit_ring.previous_key_count,
+                },
             }
         elif args.action == "session-prune":
             _require_confirmation(
@@ -191,6 +239,7 @@ def main(argv: list[str] | None = None) -> int:
         AccountAdministrationError,
         AccountIdentityConflict,
         AccountLifecycleAuditError,
+        AccountLoginProtectionUnavailable,
         AccountSessionMaintenanceError,
     ) as error:
         print(json.dumps({"error": str(error)}))

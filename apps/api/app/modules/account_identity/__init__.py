@@ -10,6 +10,10 @@ from app.modules.account_identity.contracts import (
     AccountLoginProtectionUnavailable,
     AccountLoginRateLimited,
 )
+from app.modules.account_identity.hmac_keyring import (
+    HmacKeyRingConfigurationError,
+    VersionedHmacKeyRing,
+)
 from app.modules.account_identity.lifecycle_audit import (
     AuditedAccountAdministration,
     SqliteAccountLifecycleAudit,
@@ -58,10 +62,12 @@ __all__ = [
     "AccountSessionMaintenanceReport",
     "AccountSessionStatus",
     "AuditedAccountAdministration",
+    "HmacKeyRingConfigurationError",
     "InMemoryAccountIdentity",
     "PersonalAccountProvision",
     "ProvisionedAccount",
     "SqliteAccountIdentity",
     "SqliteAccountLifecycleAudit",
     "SqliteAccountLoginProtection",
+    "VersionedHmacKeyRing",
 ]

@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import hashlib
-import hmac
 import secrets
 import sqlite3
 import stat
@@ -16,6 +14,7 @@ from app.modules.account_identity.contracts import (
     AccountLifecycleAudit,
     AccountLifecycleAuditError,
 )
+from app.modules.account_identity.hmac_keyring import VersionedHmacKeyRing
 from app.modules.account_identity.schemas import (
     AccountDisable,
     AccountLifecycleReceipt,
@@ -46,13 +45,11 @@ class SqliteAccountLifecycleAudit:
         self,
         *,
         database_path: Path,
-        secret: str,
+        key_ring: VersionedHmacKeyRing,
         clock: Callable[[], datetime] | None = None,
     ) -> None:
-        if len(secret) < 32:
-            raise AccountLifecycleAuditError("ACCOUNT_AUDIT_UNAVAILABLE")
         self._path = database_path.absolute()
-        self._secret = secret.encode("utf-8")
+        self._key_ring = key_ring
         self._clock = clock or (lambda: datetime.now(timezone.utc))
         self._prepare_path()
         if self._path.exists():
@@ -79,8 +76,8 @@ class SqliteAccountLifecycleAudit:
                     (
                         event_id,
                         action,
-                        self._digest("operator", operator),
-                        self._digest("target", target),
+                        self._key_ring.digest("account-audit:operator", operator),
+                        self._key_ring.digest("account-audit:target", target),
                         self._now().isoformat(),
                     ),
                 )
@@ -160,13 +157,6 @@ class SqliteAccountLifecycleAudit:
                 raise AccountLifecycleAuditError("ACCOUNT_AUDIT_EVENT_INVALID")
         except sqlite3.Error:
             raise AccountLifecycleAuditError("ACCOUNT_AUDIT_UNAVAILABLE") from None
-
-    def _digest(self, scope: str, value: str) -> str:
-        return hmac.new(
-            self._secret,
-            f"m14:account-audit:{scope}:{value}".encode("utf-8"),
-            hashlib.sha256,
-        ).hexdigest()
 
     def _now(self) -> datetime:
         value = self._clock()

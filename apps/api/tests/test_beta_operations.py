@@ -13,6 +13,7 @@ from app.main import app
 from app.modules.account_identity import (
     InMemoryAccountIdentity,
     SqliteAccountLoginProtection,
+    VersionedHmacKeyRing,
 )
 from app.modules.account_identity.dependencies import get_account_identity
 from app.modules.beta_access import BetaAccess
@@ -164,7 +165,10 @@ def test_readiness_uses_production_identity_store_when_that_mode_is_active(
     identity = InMemoryAccountIdentity(session_ttl=timedelta(hours=1))
     login_protection = SqliteAccountLoginProtection(
         database_path=tmp_path / "login-security.sqlite3",
-        secret="test-login-security-secret-32-bytes-minimum",
+        key_ring=VersionedHmacKeyRing(
+            current_key_id="login-v1",
+            current_secret="test-login-security-secret-32-bytes-minimum",
+        ),
         window=timedelta(minutes=15),
         principal_attempts=5,
         network_attempts=30,

@@ -190,7 +190,9 @@ class Settings(BaseSettings):
     production_login_security_db: Path = Field(
         default=PROJECT_ROOT / "data" / "private-runtime" / "login-security.sqlite3"
     )
+    production_login_security_key_id: str = "v1"
     production_login_security_secret: SecretStr = SecretStr("")
+    production_login_security_previous_keys_json: SecretStr = SecretStr("{}")
     production_login_window_minutes: int = Field(default=15, ge=1, le=60)
     production_login_principal_attempts: int = Field(default=5, ge=2, le=20)
     production_login_network_attempts: int = Field(default=30, ge=5, le=200)
@@ -198,7 +200,9 @@ class Settings(BaseSettings):
     production_account_audit_db: Path = Field(
         default=PROJECT_ROOT / "data" / "private-runtime" / "account-audit.sqlite3"
     )
+    production_account_audit_key_id: str = "v1"
     production_account_audit_secret: SecretStr = SecretStr("")
+    production_account_audit_previous_keys_json: SecretStr = SecretStr("{}")
     production_session_ttl_hours: int = Field(default=12, ge=1, le=168)
     production_session_cookie_name: str = "math_ai_account_session"
     production_session_secure_cookie: bool = True

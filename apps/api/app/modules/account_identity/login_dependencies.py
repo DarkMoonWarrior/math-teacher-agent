@@ -12,6 +12,7 @@ from app.modules.account_identity.contracts import (
     AccountLoginProtection,
     AccountLoginProtectionUnavailable,
 )
+from app.modules.account_identity.hmac_keyring import VersionedHmacKeyRing
 from app.modules.account_identity.login_protection import SqliteAccountLoginProtection
 
 
@@ -57,15 +58,22 @@ _UNAVAILABLE = UnavailableAccountLoginProtection()
 @lru_cache(maxsize=8)
 def _build_login_protection(
     database_path: str,
+    current_key_id: str,
     secret: str,
+    previous_keys_json: str,
     window_minutes: int,
     principal_attempts: int,
     network_attempts: int,
     retention_hours: int,
 ) -> AccountLoginProtection:
+    key_ring = VersionedHmacKeyRing.from_config(
+        current_key_id=current_key_id,
+        current_secret=secret,
+        previous_keys_json=previous_keys_json,
+    )
     return SqliteAccountLoginProtection(
         database_path=Path(database_path),
-        secret=secret,
+        key_ring=key_ring,
         window=timedelta(minutes=window_minutes),
         principal_attempts=principal_attempts,
         network_attempts=network_attempts,
@@ -78,13 +86,12 @@ def get_account_login_protection(
 ) -> AccountLoginProtection:
     if not settings.production_identity_enabled or settings.beta_access_enabled:
         return _DISABLED
-    secret = settings.production_login_security_secret.get_secret_value()
-    if len(secret) < 32:
-        return _UNAVAILABLE
     try:
         return _build_login_protection(
             str(settings.production_login_security_db),
-            secret,
+            settings.production_login_security_key_id,
+            settings.production_login_security_secret.get_secret_value(),
+            settings.production_login_security_previous_keys_json.get_secret_value(),
             settings.production_login_window_minutes,
             settings.production_login_principal_attempts,
             settings.production_login_network_attempts,
