@@ -62,9 +62,19 @@ python -m app.modules.account_identity.operator_cli session-prune --confirm
 
 命令需从 `apps/api` 可导入的 Python 环境运行。这里的 SQLite 操作者流程仍是过渡验证，不是面向真实生产环境的账号后台。
 
+### 3.3 登录防护与会话轮换
+
+- 独立 `AccountLoginProtection` 在密码验证前按账号线索和服务端连接来源双重限流；未知账号与既有账号使用相同错误响应。
+- principal/network 在写入独立安全库前使用部署密钥 HMAC；库内只有摘要、`succeeded`/`failed`/`throttled` 和服务端时间，不含邮箱、原始 IP、密码、token 或正文。
+- 默认窗口 15 分钟、账号线索 5 次、网络来源 30 次；安全事实默认保留 168 小时。阈值可由部署配置收紧，但不能由浏览器或 Agent 选择。
+- 至少 32 字符的独立登录防护密钥是正式登录和 `/ready` 的必要条件；缺失或安全存储故障时 fail closed。
+- 只使用连接层来源，忽略不可信 `X-Forwarded-For`；生产边缘仍必须提供可信代理链、外层限流和分布式计数。
+- 成功重登会撤销当前浏览器旧 token；安全事实无法写入时撤销刚签发的新 token，不把未审计登录放行。
+- MFA 当前明确未实现。个人商业登录、未来组织特权角色、恢复码和 step-up 的固定决策见 [`ADR-2026-09-09-PRODUCTION-LOGIN-SECURITY.md`](ADR-2026-09-09-PRODUCTION-LOGIN-SECURITY.md)。
+
 ## 4. 后续切片顺序
 
-1. **账号生命周期加固（进行中）**：操作者创建/停用、密码重置和失效会话预览/确认清理已实现；下一段补登录限流、会话轮换、审计最小集并明确 MFA 决策。
+1. **账号生命周期加固（进行中）**：操作者创建/停用、密码重置、失效会话预览/确认清理、登录双范围限流、摘要化登录安全事实、当前浏览器会话轮换和 MFA 决策已实现；下一段补操作者生命周期审计、密钥轮换与生产代理/分布式 adapter。
 2. **PostgreSQL tenant adapter**：在不改变业务 Interface 的前提下替换身份和 owner-aware 存储；提供逐对象盘点、迁移、对账、回滚和 IDOR/tenant isolation 测试。
 3. **对象存储与持久任务**：原文件、导出和后台任务获得明确 owner/tenant key、保留期、幂等和恢复语义。
 4. **Entitlement**：只表达账号可用能力，不替代身份、owner 权利或内容可信门禁。
@@ -74,7 +84,7 @@ python -m app.modules.account_identity.operator_cli session-prune --confirm
 ## 5. 明确未完成
 
 - PostgreSQL、云对象存储、持久队列、多进程会话一致性和生产灾备。
-- 公开注册、邮箱验证、自助找回密码、MFA、登录限流、设备管理和安全审计。
+- 公开注册、邮箱验证、自助找回密码、MFA、设备管理、操作者生命周期审计、生产级分布式限流与告警。
 - 除 `personal_owner` 外的角色、组织 tenant、成员邀请、学生和学校后台。
 - Entitlement、订单、订阅、支付、Webhook 和退款。
 - M13 的真实教师价值、重复使用、错误率与付费意愿 Gate。

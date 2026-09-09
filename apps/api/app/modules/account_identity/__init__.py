@@ -4,8 +4,12 @@ from app.modules.account_identity.contracts import (
     AccountIdentity,
     AccountIdentityConflict,
     AccountIdentityDenied,
+    AccountLoginProtection,
+    AccountLoginProtectionUnavailable,
+    AccountLoginRateLimited,
 )
 from app.modules.account_identity.memory_adapter import InMemoryAccountIdentity
+from app.modules.account_identity.login_protection import SqliteAccountLoginProtection
 from app.modules.account_identity.maintenance import (
     AccountSessionMaintenance,
     AccountSessionMaintenanceError,
@@ -35,6 +39,9 @@ __all__ = [
     "AccountIdentityDenied",
     "AccountLifecycleReceipt",
     "AccountLogin",
+    "AccountLoginProtection",
+    "AccountLoginProtectionUnavailable",
+    "AccountLoginRateLimited",
     "AccountPasswordReset",
     "AccountRole",
     "AccountSessionGrant",
@@ -46,4 +53,5 @@ __all__ = [
     "PersonalAccountProvision",
     "ProvisionedAccount",
     "SqliteAccountIdentity",
+    "SqliteAccountLoginProtection",
 ]
