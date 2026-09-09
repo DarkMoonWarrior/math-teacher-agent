@@ -7,9 +7,13 @@ from app.modules.account_identity import (
     AccountIdentity,
     AccountIdentityDenied,
     AccountLogin,
+    AccountLoginProtection,
+    AccountLoginProtectionUnavailable,
+    AccountLoginRateLimited,
     AccountSessionStatus,
 )
 from app.modules.account_identity.dependencies import get_account_identity
+from app.modules.account_identity.login_dependencies import get_account_login_protection
 
 
 router = APIRouter(prefix="/account-session", tags=["account-session"])
@@ -58,15 +62,69 @@ def session_status(
 @router.post("", response_model=AccountSessionStatus)
 def start_session(
     command: AccountLogin,
+    request: Request,
     response: Response,
     settings: Settings = Depends(get_settings),
     identity: AccountIdentity = Depends(get_account_identity),
+    protection: AccountLoginProtection = Depends(get_account_login_protection),
 ) -> AccountSessionStatus:
     _require_enabled(settings)
+    network_origin = request.client.host if request.client is not None else "unknown"
+    try:
+        protection.assess(email=command.email, network_origin=network_origin)
+    except AccountLoginRateLimited as exc:
+        raise HTTPException(
+            status_code=429,
+            detail={
+                "code": "LOGIN_RATE_LIMITED",
+                "message": "登录尝试过多，请稍后再试。",
+            },
+            headers={"Retry-After": str(exc.retry_after_seconds)},
+        ) from exc
+    except AccountLoginProtectionUnavailable as exc:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "code": "LOGIN_PROTECTION_UNAVAILABLE",
+                "message": "登录防护暂不可用。",
+            },
+        ) from exc
     try:
         grant = identity.authenticate(command)
     except AccountIdentityDenied as exc:
+        try:
+            protection.record(
+                email=command.email,
+                network_origin=network_origin,
+                outcome="failed",
+            )
+        except AccountLoginProtectionUnavailable as protection_exc:
+            raise HTTPException(
+                status_code=503,
+                detail={
+                    "code": "LOGIN_PROTECTION_UNAVAILABLE",
+                    "message": "登录防护暂不可用。",
+                },
+            ) from protection_exc
         raise HTTPException(status_code=401, detail="邮箱或密码无效。") from exc
+    try:
+        protection.record(
+            email=command.email,
+            network_origin=network_origin,
+            outcome="succeeded",
+        )
+    except AccountLoginProtectionUnavailable as exc:
+        identity.revoke(grant.token)
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "code": "LOGIN_PROTECTION_UNAVAILABLE",
+                "message": "登录防护暂不可用。",
+            },
+        ) from exc
+    previous_token = request.cookies.get(settings.production_session_cookie_name, "")
+    if previous_token:
+        identity.revoke(previous_token)
     response.set_cookie(
         key=settings.production_session_cookie_name,
         value=grant.token,

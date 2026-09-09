@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 
 from app.agent_runtime import TeacherAgentRuntime
 from app.core.config import Settings
-from app.modules.account_identity import AccountIdentity
+from app.modules.account_identity import AccountIdentity, AccountLoginProtection
 from app.modules.beta_access import BetaAccess
 from app.modules.beta_operations.schemas import (
     ReadinessComponent,
@@ -22,6 +22,7 @@ class ReadinessProbe:
         account_identity: AccountIdentity,
         beta_access: BetaAccess,
         runtime: TeacherAgentRuntime,
+        login_protection: AccountLoginProtection | None = None,
     ) -> ReadinessSnapshot:
         components = [
             ReadinessComponent(
@@ -56,6 +57,25 @@ class ReadinessProbe:
                         "正式账号会话存储可用。"
                         if identity_ready
                         else "正式账号会话存储不可用。"
+                    ),
+                )
+            )
+            protection_ready = (
+                login_protection is not None and login_protection.store_ready()
+            )
+            components.append(
+                ReadinessComponent(
+                    name="login_protection",
+                    status="ready" if protection_ready else "unavailable",
+                    code=(
+                        "LOGIN_PROTECTION_READY"
+                        if protection_ready
+                        else "LOGIN_PROTECTION_UNAVAILABLE"
+                    ),
+                    message=(
+                        "登录限流与安全事件存储可用。"
+                        if protection_ready
+                        else "登录限流或安全事件存储不可用。"
                     ),
                 )
             )

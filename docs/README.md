@@ -30,6 +30,7 @@
 - [`M13-CLOSED-BETA-VALIDATION.md`](M13-CLOSED-BETA-VALIDATION.md)：已实现但真实样本验证延期的 Beta 指标切片；Gate 未通过。
 - [`M14-COMMERCIAL-FOUNDATION.md`](M14-COMMERCIAL-FOUNDATION.md)：当前商业基础阶段的身份、tenant、owner 和后续存储/商业边界。
 - [`ADR-2026-09-04-OWNER-AGENT-SESSIONS.md`](ADR-2026-09-04-OWNER-AGENT-SESSIONS.md)：教师/模块签名会话、任务 owner 校验及单进程限制。
+- [`ADR-2026-09-09-PRODUCTION-LOGIN-SECURITY.md`](ADR-2026-09-09-PRODUCTION-LOGIN-SECURITY.md)：正式登录限流、代理信任、会话轮换、最小安全事实和 MFA 决策边界。
 - [`TEACHER-TOOL-CONTRACTS.md`](TEACHER-TOOL-CONTRACTS.md)：当前九项受控 Tool 契约。
 - [`REPOSITORY-SYNC.md`](REPOSITORY-SYNC.md)：仓库清理范围、文档分层与本轮复验记录。
 

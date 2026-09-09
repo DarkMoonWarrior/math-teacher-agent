@@ -1,6 +1,6 @@
 # 当前开发状态
 
-更新日期：2026-09-09。M0–M12 已完成。M13 的版本化指标、生命周期、服务端事实、私有运营读数和操作预演切片已完成，但因样本不足，项目所有者明确暂停真实 Beta 并授权进入 M14；M13 Gate 未通过。M14 Commercial Foundation 当前进行中，生产身份基础与账号生命周期第一段已经实现且默认关闭。
+更新日期：2026-09-09。M0–M12 已完成。M13 的版本化指标、生命周期、服务端事实、私有运营读数和操作预演切片已完成，但因样本不足，项目所有者明确暂停真实 Beta 并授权进入 M14；M13 Gate 未通过。M14 Commercial Foundation 当前进行中，生产身份基础、操作者账号生命周期与正式登录防护已经实现且默认关闭。
 
 | 范围 | 当前状态 |
 | --- | --- |
@@ -14,7 +14,7 @@
 | M11 Teacher Memory | 已完成；26 场景、12 类违规为 0；回滚点 `5614fc0` |
 | M12 Closed Beta Readiness | 已完成；五条切片、固定评测与完整 Gate 通过；回滚点 `570cf79` |
 | M13 Closed Beta Validation | 真实验证延期；切片 1–5 已完成；没有真实样本，Gate 未通过 |
-| M14 Commercial Foundation | 进行中；生产身份 Interface、账号/tenant/owner 分离、操作者账号生命周期和失效会话维护已实现 |
+| M14 Commercial Foundation | 进行中；生产身份 Interface、账号/tenant/owner 分离、操作者账号生命周期、登录防护和会话轮换已实现 |
 | M15–M17 | 未开始；依次为 Teacher Pro、教研组、学校 |
 
 ## 当前产品能力
@@ -42,7 +42,7 @@
 
 ## 工程基线与限制
 
-M14 当前固定集 **277 passed、1 skipped**；完整 FastAPI **707 passed、1 skipped**；Teacher Web **105 passed**，Agent **42 passed**，双方类型检查与生产构建通过。本切片的自动测试只使用临时目录、合成账号和 provider 替身，不调用真实模型、不创建真实账号、不迁移或清理真实用户数据。
+M14 当前固定集 **285 passed、1 skipped**；完整 FastAPI **715 passed、1 skipped**；Teacher Web **105 passed**，Agent **42 passed**，双方类型检查与生产构建通过。本切片的自动测试只使用临时目录、合成账号和 provider 替身，不调用真实模型、不创建真实账号、不迁移或清理真实用户数据。
 
 `apps/teacher-web` 是唯一产品 UI；旧 UI 源码、入口和依赖已移除。运行库、私人上传、环境、导出与备份不进入 Git。商业题目目录仍为空，合成 fixture 不具备第三方内容权利。
 
@@ -62,4 +62,6 @@ M14 当前固定集 **277 passed、1 skipped**；完整 FastAPI **707 passed、1
 
 第二条切片的第一段增加了独立 `AccountAdministration` 操作者边界。本机命令可显式确认创建、停用账号和重置密码；停用或重置会原子撤销该账号全部旧会话，交互式密码不会出现在参数或回执中。正式会话清理默认只读预览，确认后只删除已过期或已退出记录；有效会话、异常记录和教师内容均保留。维护工具先只读验证配置库与精确 schema，不接受任意路径，也没有 HTTP、浏览器或 Agent 入口。
 
-正式身份功能仍默认关闭，SQLite 仅是过渡 adapter，尚未创建真实账号或迁移真实内容。账号找回/MFA/登录限流、会话轮换、安全审计、PostgreSQL tenant adapter、对象存储、持久任务、Entitlement、订单、支付与退款仍未实现；详见 [`M14-COMMERCIAL-FOUNDATION.md`](M14-COMMERCIAL-FOUNDATION.md)。
+第二条切片的第二段增加了独立 `AccountLoginProtection` 边界。正式登录在应用层同时限制账号摘要与连接来源摘要，默认 15 分钟内分别允许 5 次与 30 次失败；安全事件只保存 HMAC 摘要、结果和时间，默认保留 168 小时，不保存邮箱、IP、密码、token 或请求正文。成功登录清零该账号此前失败窗口并轮换当前浏览器旧会话；登录防护密钥不足、存储不可用或安全事实无法写入时失败关闭。应用只使用实际连接来源，不信任浏览器可伪造的转发头；生产代理信任与分布式限流仍是部署前置工作。MFA 当前没有假装实现，个人商业账号、未来组织特权角色、恢复码与 step-up 路线已固定在登录安全 ADR 中。
+
+正式身份功能仍默认关闭，SQLite 仅是过渡 adapter，尚未创建真实账号或迁移真实内容。账号找回、MFA 实现、完整操作者审计、密钥轮换、可信生产代理与分布式限流、PostgreSQL tenant adapter、对象存储、持久任务、Entitlement、订单、支付与退款仍未实现；详见 [`M14-COMMERCIAL-FOUNDATION.md`](M14-COMMERCIAL-FOUNDATION.md)。

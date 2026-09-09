@@ -10,7 +10,10 @@ from fastapi.testclient import TestClient
 from app.agent_runtime import TeacherAgentHealth, get_teacher_agent_runtime
 from app.core.config import Settings, get_settings
 from app.main import app
-from app.modules.account_identity import InMemoryAccountIdentity
+from app.modules.account_identity import (
+    InMemoryAccountIdentity,
+    SqliteAccountLoginProtection,
+)
 from app.modules.account_identity.dependencies import get_account_identity
 from app.modules.beta_access import BetaAccess
 from app.modules.beta_access.dependencies import get_beta_access
@@ -159,12 +162,21 @@ def test_readiness_uses_production_identity_store_when_that_mode_is_active(
         question_authoring_agent_enabled=False,
     )
     identity = InMemoryAccountIdentity(session_ttl=timedelta(hours=1))
+    login_protection = SqliteAccountLoginProtection(
+        database_path=tmp_path / "login-security.sqlite3",
+        secret="test-login-security-secret-32-bytes-minimum",
+        window=timedelta(minutes=15),
+        principal_attempts=5,
+        network_attempts=30,
+        retention=timedelta(days=7),
+    )
     snapshot = asyncio.run(
         ReadinessProbe().check(
             settings=settings,
             account_identity=identity,
             beta_access=_access(tmp_path),
             runtime=_HealthyRuntime(),  # type: ignore[arg-type]
+            login_protection=login_protection,
         )
     )
 
@@ -172,6 +184,7 @@ def test_readiness_uses_production_identity_store_when_that_mode_is_active(
     assert {item.code for item in snapshot.components} == {
         "API_READY",
         "PRODUCTION_IDENTITY_READY",
+        "LOGIN_PROTECTION_READY",
         "AGENT_NOT_REQUIRED",
     }
 

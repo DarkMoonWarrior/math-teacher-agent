@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Protocol
+from typing import Literal, Protocol
 
 from app.modules.account_identity.schemas import (
     AccountDisable,
@@ -37,6 +37,22 @@ class AccountAdministration(Protocol):
         self, command: AccountDisable, *, confirmed: bool = False
     ) -> AccountLifecycleReceipt: ...
 
+
+class AccountLoginProtection(Protocol):
+    """Server-only login abuse boundary; raw identifiers never leave this seam."""
+
+    def assess(self, *, email: str, network_origin: str) -> None: ...
+
+    def record(
+        self,
+        *,
+        email: str,
+        network_origin: str,
+        outcome: Literal["succeeded", "failed"],
+    ) -> None: ...
+
+    def store_ready(self) -> bool: ...
+
     def reset_password(
         self, command: AccountPasswordReset, *, confirmed: bool = False
     ) -> AccountLifecycleReceipt: ...
@@ -52,3 +68,15 @@ class AccountIdentityConflict(ValueError):
 
 class AccountAdministrationError(ValueError):
     """Stable operator error code without account or storage details."""
+
+
+class AccountLoginProtectionUnavailable(ValueError):
+    """Login must fail closed when its protection store is unavailable."""
+
+
+class AccountLoginRateLimited(ValueError):
+    """Stable throttling signal without disclosing which limit was reached."""
+
+    def __init__(self, *, retry_after_seconds: int) -> None:
+        super().__init__("LOGIN_RATE_LIMITED")
+        self.retry_after_seconds = max(1, retry_after_seconds)

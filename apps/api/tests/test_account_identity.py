@@ -177,6 +177,8 @@ def test_production_session_http_is_owner_scoped_and_hides_internal_ids(
         production_session_cookie_name="account_test_session",
         production_session_secure_cookie=False,
         production_identity_db=tmp_path / "unused.sqlite3",
+        production_login_security_db=tmp_path / "login-security.sqlite3",
+        production_login_security_secret="test-login-security-secret-32-bytes-minimum",
     )
     app.dependency_overrides[get_settings] = lambda: settings
     app.dependency_overrides[get_account_identity] = lambda: identity
