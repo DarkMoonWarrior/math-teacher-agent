@@ -9,6 +9,7 @@ description = "FastAPI backend for the high-school math teacher workspace"
 requires-python = ">=3.12"
 dependencies = [
   "fastapi==0.141.1",
+  "httpx>=0.28,<1",
   "pillow>=11.3,<12",
   "pypdf==6.14.2",
   "pypdfium2==5.12.1",
@@ -21,7 +22,6 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
-  "httpx>=0.28,<1",
   "pytest>=8.4,<9",
 ]
 math-ocr = [

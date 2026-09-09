@@ -11,9 +11,14 @@ from app.modules.account_identity import (
     AccountLoginProtectionUnavailable,
     AccountLoginRateLimited,
     AccountSessionStatus,
+    LoginNetworkOrigin,
+    LoginNetworkOriginUnavailable,
 )
 from app.modules.account_identity.dependencies import get_account_identity
-from app.modules.account_identity.login_dependencies import get_account_login_protection
+from app.modules.account_identity.login_dependencies import (
+    get_account_login_protection,
+    get_login_network_origin,
+)
 
 
 router = APIRouter(prefix="/account-session", tags=["account-session"])
@@ -67,9 +72,22 @@ def start_session(
     settings: Settings = Depends(get_settings),
     identity: AccountIdentity = Depends(get_account_identity),
     protection: AccountLoginProtection = Depends(get_account_login_protection),
+    network_origin_resolver: LoginNetworkOrigin = Depends(get_login_network_origin),
 ) -> AccountSessionStatus:
     _require_enabled(settings)
-    network_origin = request.client.host if request.client is not None else "unknown"
+    try:
+        network_origin = network_origin_resolver.resolve(
+            peer_host=request.client.host if request.client is not None else None,
+            forwarded_for=request.headers.get("x-forwarded-for"),
+        )
+    except LoginNetworkOriginUnavailable as exc:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "code": "LOGIN_NETWORK_ORIGIN_UNAVAILABLE",
+                "message": "登录来源校验暂不可用。",
+            },
+        ) from exc
     try:
         protection.assess(email=command.email, network_origin=network_origin)
     except AccountLoginRateLimited as exc:

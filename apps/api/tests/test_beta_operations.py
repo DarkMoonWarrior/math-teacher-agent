@@ -11,6 +11,7 @@ from app.agent_runtime import TeacherAgentHealth, get_teacher_agent_runtime
 from app.core.config import Settings, get_settings
 from app.main import app
 from app.modules.account_identity import (
+    DirectLoginNetworkOrigin,
     InMemoryAccountIdentity,
     SqliteAccountLoginProtection,
     VersionedHmacKeyRing,
@@ -181,6 +182,7 @@ def test_readiness_uses_production_identity_store_when_that_mode_is_active(
             beta_access=_access(tmp_path),
             runtime=_HealthyRuntime(),  # type: ignore[arg-type]
             login_protection=login_protection,
+            login_network_origin=DirectLoginNetworkOrigin(),
         )
     )
 
@@ -188,6 +190,7 @@ def test_readiness_uses_production_identity_store_when_that_mode_is_active(
     assert {item.code for item in snapshot.components} == {
         "API_READY",
         "PRODUCTION_IDENTITY_READY",
+        "LOGIN_NETWORK_ORIGIN_READY",
         "LOGIN_PROTECTION_READY",
         "AGENT_NOT_REQUIRED",
     }
