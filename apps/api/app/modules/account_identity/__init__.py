@@ -4,12 +4,18 @@ from app.modules.account_identity.contracts import (
     AccountIdentity,
     AccountIdentityConflict,
     AccountIdentityDenied,
+    AccountLifecycleAudit,
+    AccountLifecycleAuditError,
     AccountLoginProtection,
     AccountLoginProtectionUnavailable,
     AccountLoginRateLimited,
 )
-from app.modules.account_identity.memory_adapter import InMemoryAccountIdentity
+from app.modules.account_identity.lifecycle_audit import (
+    AuditedAccountAdministration,
+    SqliteAccountLifecycleAudit,
+)
 from app.modules.account_identity.login_protection import SqliteAccountLoginProtection
+from app.modules.account_identity.memory_adapter import InMemoryAccountIdentity
 from app.modules.account_identity.maintenance import (
     AccountSessionMaintenance,
     AccountSessionMaintenanceError,
@@ -37,6 +43,8 @@ __all__ = [
     "AccountIdentityConflict",
     "AccountIdentityContext",
     "AccountIdentityDenied",
+    "AccountLifecycleAudit",
+    "AccountLifecycleAuditError",
     "AccountLifecycleReceipt",
     "AccountLogin",
     "AccountLoginProtection",
@@ -49,9 +57,11 @@ __all__ = [
     "AccountSessionMaintenanceError",
     "AccountSessionMaintenanceReport",
     "AccountSessionStatus",
+    "AuditedAccountAdministration",
     "InMemoryAccountIdentity",
     "PersonalAccountProvision",
     "ProvisionedAccount",
     "SqliteAccountIdentity",
+    "SqliteAccountLifecycleAudit",
     "SqliteAccountLoginProtection",
 ]
