@@ -59,6 +59,7 @@ python -m app.modules.account_identity.operator_cli reset-password --email teach
 python -m app.modules.account_identity.operator_cli session-preview
 python -m app.modules.account_identity.operator_cli session-prune --operator local-admin --confirm
 python -m app.modules.account_identity.operator_cli audit-summary
+python -m app.modules.account_identity.operator_cli keyring-status
 ```
 
 命令需从 `apps/api` 可导入的 Python 环境运行。示例中的 `--operator` 标签由部署人员替换，且只作为摘要化审计线索，不等于已认证管理员身份。这里的 SQLite 操作者流程仍是过渡验证，不是面向真实生产环境的账号后台。
@@ -79,11 +80,18 @@ python -m app.modules.account_identity.operator_cli audit-summary
 - 每个写操作先记录 `started`，审计密钥、路径、schema 或存储不可用时失败关闭；随后只记录成功/失败、是否改变与受影响会话数。
 - 操作者和目标账号只保存独立密钥 HMAC，不保存邮箱、标签、密码、token 或任何 account/tenant/owner ID；`audit-summary` 只返回动作与状态计数。
 - 当前两个 SQLite adapter 不具备跨库原子事务。业务成功后异常中断会留下 `started` 供核对，不自动重试、不伪装结论；`--operator` 也只是本机审计线索，不是管理员认证。
-- 当前不自动清理或导出生命周期审计。正式保留、受控调查、密钥轮换和不可抵赖存储必须后续单独实现；详见 [`ADR-2026-09-09-ACCOUNT-LIFECYCLE-AUDIT.md`](ADR-2026-09-09-ACCOUNT-LIFECYCLE-AUDIT.md)。
+- 当前不自动清理或导出生命周期审计。正式保留、受控调查和不可抵赖存储必须后续单独实现；详见 [`ADR-2026-09-09-ACCOUNT-LIFECYCLE-AUDIT.md`](ADR-2026-09-09-ACCOUNT-LIFECYCLE-AUDIT.md)。
+
+### 3.5 摘要密钥版本与轮换
+
+- `VersionedHmacKeyRing` 统一承担版本格式、当前写入、旧密钥候选、旧版无版本摘要兼容与配置校验；登录防护和生命周期审计仍使用互不复用的两套密钥环。
+- 新摘要记录 key ID 和非敏感密钥指纹，不记录密钥。新事件只用当前密钥；既有摘要不批量重写，也不为迁移反查邮箱、IP 或操作者标签。
+- 登录轮换会跨当前/旧密钥统计失败。保留期内若版本化事件所需密钥被提前移除或同一 ID 被错误复用，防护和 `/ready` 失败关闭，不能靠换钥清零限流。
+- 旧密钥配置最多三个。`keyring-status` 只验证配置并输出当前 ID/旧密钥数量，不读取或创建数据库。首次升级、轮换、保留和退出顺序见 [`ADR-2026-09-09-HMAC-KEY-ROTATION.md`](ADR-2026-09-09-HMAC-KEY-ROTATION.md)。
 
 ## 4. 后续切片顺序
 
-1. **账号生命周期加固（进行中）**：操作者创建/停用、密码重置、失效会话预览/确认清理、登录双范围限流、摘要化登录安全事实、当前浏览器会话轮换、MFA 决策和操作者生命周期审计已实现；下一段补密钥轮换与生产代理/分布式 adapter。
+1. **账号生命周期加固（进行中）**：操作者创建/停用、密码重置、失效会话预览/确认清理、登录双范围限流、摘要化登录安全事实、当前浏览器会话轮换、MFA 决策、操作者生命周期审计和摘要密钥轮换已实现；下一段补可信生产代理与分布式限流 adapter。
 2. **PostgreSQL tenant adapter**：在不改变业务 Interface 的前提下替换身份和 owner-aware 存储；提供逐对象盘点、迁移、对账、回滚和 IDOR/tenant isolation 测试。
 3. **对象存储与持久任务**：原文件、导出和后台任务获得明确 owner/tenant key、保留期、幂等和恢复语义。
 4. **Entitlement**：只表达账号可用能力，不替代身份、owner 权利或内容可信门禁。
@@ -93,7 +101,7 @@ python -m app.modules.account_identity.operator_cli audit-summary
 ## 5. 明确未完成
 
 - PostgreSQL、云对象存储、持久队列、多进程会话一致性和生产灾备。
-- 公开注册、邮箱验证、自助找回密码、MFA、设备管理、已认证操作者/RBAC、不可抵赖审计、生产级分布式限流与告警。
+- 公开注册、邮箱验证、自助找回密码、MFA、设备管理、已认证操作者/RBAC、不可抵赖审计、集中式密钥管理、生产级分布式限流与告警。
 - 除 `personal_owner` 外的角色、组织 tenant、成员邀请、学生和学校后台。
 - Entitlement、订单、订阅、支付、Webhook 和退款。
 - M13 的真实教师价值、重复使用、错误率与付费意愿 Gate。

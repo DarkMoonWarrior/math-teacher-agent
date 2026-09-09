@@ -20,12 +20,14 @@ from app.modules.account_identity import (
     PersonalAccountProvision,
     SqliteAccountIdentity,
     SqliteAccountLifecycleAudit,
+    VersionedHmacKeyRing,
 )
 from app.modules.account_identity import operator_cli
 
 
 PASSWORD = "synthetic-password-1234"
 AUDIT_SECRET = "synthetic-account-audit-secret-32-bytes-minimum"
+ROTATED_AUDIT_SECRET = "rotated-account-audit-secret-32-bytes-minimum"
 
 
 def _identity(tmp_path: Path) -> SqliteAccountIdentity:
@@ -38,7 +40,9 @@ def _identity(tmp_path: Path) -> SqliteAccountIdentity:
 def _audit(tmp_path: Path) -> SqliteAccountLifecycleAudit:
     return SqliteAccountLifecycleAudit(
         database_path=tmp_path / "account-audit.sqlite3",
-        secret=AUDIT_SECRET,
+        key_ring=VersionedHmacKeyRing(
+            current_key_id="audit-v1", current_secret=AUDIT_SECRET
+        ),
     )
 
 
@@ -93,7 +97,10 @@ def test_audited_administration_records_success_and_failure_without_raw_identity
         ).fetchall()
     assert rows[1][:2] == ("disable", "succeeded")
     assert rows[1][4:] == (1, 1)
-    assert all(len(row[2]) == len(row[3]) == 64 for row in rows)
+    assert all(row[2].startswith("k1:audit-v1:") for row in rows)
+    assert all(row[3].startswith("k1:audit-v1:") for row in rows)
+    assert all(len(row[2].rsplit(":", 1)[1]) == 64 for row in rows)
+    assert all(len(row[3].rsplit(":", 1)[1]) == 64 for row in rows)
     database_bytes = (tmp_path / "account-audit.sqlite3").read_bytes()
     for forbidden in (
         b"Sensitive.Owner",
@@ -141,7 +148,12 @@ def test_existing_wrong_audit_store_is_rejected_without_mutation(tmp_path: Path)
     with pytest.raises(
         AccountLifecycleAuditError, match="ACCOUNT_AUDIT_SCHEMA_UNEXPECTED"
     ):
-        SqliteAccountLifecycleAudit(database_path=path, secret=AUDIT_SECRET)
+        SqliteAccountLifecycleAudit(
+            database_path=path,
+            key_ring=VersionedHmacKeyRing(
+                current_key_id="audit-v1", current_secret=AUDIT_SECRET
+            ),
+        )
     with sqlite3.connect(path) as connection:
         assert connection.execute("SELECT value FROM unrelated").fetchone()[0] == (
             "preserve-me"
@@ -157,7 +169,12 @@ def test_existing_wrong_audit_store_is_rejected_without_mutation(tmp_path: Path)
 
 def test_existing_audit_store_with_trigger_is_rejected(tmp_path: Path) -> None:
     path = tmp_path / "triggered.sqlite3"
-    SqliteAccountLifecycleAudit(database_path=path, secret=AUDIT_SECRET)
+    SqliteAccountLifecycleAudit(
+        database_path=path,
+        key_ring=VersionedHmacKeyRing(
+            current_key_id="audit-v1", current_secret=AUDIT_SECRET
+        ),
+    )
     with sqlite3.connect(path) as connection:
         connection.execute(
             """CREATE TRIGGER unexpected_audit_trigger
@@ -170,7 +187,12 @@ def test_existing_audit_store_with_trigger_is_rejected(tmp_path: Path) -> None:
     with pytest.raises(
         AccountLifecycleAuditError, match="ACCOUNT_AUDIT_SCHEMA_UNEXPECTED"
     ):
-        SqliteAccountLifecycleAudit(database_path=path, secret=AUDIT_SECRET)
+        SqliteAccountLifecycleAudit(
+            database_path=path,
+            key_ring=VersionedHmacKeyRing(
+                current_key_id="audit-v1", current_secret=AUDIT_SECRET
+            ),
+        )
 
 
 def test_operator_cli_requires_audit_and_exposes_only_aggregate_summary(
@@ -246,6 +268,82 @@ def test_operator_cli_does_not_create_identity_store_without_audit_secret(
     assert json.loads(capsys.readouterr().out) == {
         "error": "ACCOUNT_AUDIT_UNAVAILABLE"
     }
+    assert not settings.production_identity_db.exists()
+    assert not settings.production_account_audit_db.exists()
+
+
+def test_lifecycle_audit_rotation_preserves_old_rows_and_versions_new_rows(
+    tmp_path: Path,
+) -> None:
+    old = _audit(tmp_path)
+    old_event = old.begin(
+        action="provision",
+        operator_label="local-admin",
+        target_hint="old@example.test",
+    )
+    old.succeed(event_id=old_event, changed=True, affected_sessions=0)
+
+    rotated = SqliteAccountLifecycleAudit(
+        database_path=tmp_path / "account-audit.sqlite3",
+        key_ring=VersionedHmacKeyRing(
+            current_key_id="audit-v2",
+            current_secret=ROTATED_AUDIT_SECRET,
+            previous_keys={"audit-v1": AUDIT_SECRET},
+        ),
+    )
+    new_event = rotated.begin(
+        action="disable",
+        operator_label="local-admin",
+        target_hint="new@example.test",
+    )
+    rotated.fail(event_id=new_event)
+
+    with sqlite3.connect(tmp_path / "account-audit.sqlite3") as connection:
+        rows = connection.execute(
+            "SELECT operator_hash, target_hash FROM m14_account_lifecycle_audit "
+            "ORDER BY rowid"
+        ).fetchall()
+    assert rows[0][0].startswith("k1:audit-v1:")
+    assert rows[0][1].startswith("k1:audit-v1:")
+    assert rows[1][0].startswith("k1:audit-v2:")
+    assert rows[1][1].startswith("k1:audit-v2:")
+    assert rotated.summary()["total"] == 2
+    database_bytes = (tmp_path / "account-audit.sqlite3").read_bytes()
+    assert AUDIT_SECRET.encode("utf-8") not in database_bytes
+    assert ROTATED_AUDIT_SECRET.encode("utf-8") not in database_bytes
+
+
+def test_operator_keyring_status_is_read_only_and_never_outputs_secrets(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    settings = Settings(
+        production_identity_enabled=True,
+        beta_access_enabled=False,
+        production_identity_db=tmp_path / "identity.sqlite3",
+        production_login_security_key_id="login-v2",
+        production_login_security_secret=ROTATED_AUDIT_SECRET,
+        production_login_security_previous_keys_json=json.dumps(
+            {"login-v1": AUDIT_SECRET}
+        ),
+        production_account_audit_key_id="audit-v2",
+        production_account_audit_secret=ROTATED_AUDIT_SECRET,
+        production_account_audit_previous_keys_json=json.dumps(
+            {"audit-v1": AUDIT_SECRET}
+        ),
+    )
+    monkeypatch.setattr(operator_cli, "get_settings", lambda: settings)
+
+    assert operator_cli.main(["keyring-status"]) == 0
+    output = capsys.readouterr().out
+    assert json.loads(output) == {
+        "action": "keyring-status",
+        "login": {"current_key_id": "login-v2", "previous_key_count": 1},
+        "account_audit": {"current_key_id": "audit-v2", "previous_key_count": 1},
+    }
+    assert AUDIT_SECRET not in output
+    assert ROTATED_AUDIT_SECRET not in output
     assert not settings.production_identity_db.exists()
     assert not settings.production_account_audit_db.exists()
 

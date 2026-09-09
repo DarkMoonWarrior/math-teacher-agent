@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sqlite3
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -12,22 +13,28 @@ from app.main import app
 from app.modules.account_identity import (
     AccountIdentityDenied,
     AccountLogin,
+    AccountLoginProtectionUnavailable,
     AccountLoginRateLimited,
+    HmacKeyRingConfigurationError,
     InMemoryAccountIdentity,
     PersonalAccountProvision,
     SqliteAccountLoginProtection,
+    VersionedHmacKeyRing,
 )
 from app.modules.account_identity.dependencies import get_account_identity
 
 
 PASSWORD = "synthetic-password-1234"
 SECRET = "test-login-security-secret-32-bytes-minimum"
+ROTATED_SECRET = "rotated-login-security-secret-32-bytes-minimum"
 
 
 def _protection(tmp_path: Path, now: list[datetime], **overrides):
     values = {
         "database_path": tmp_path / "login-security.sqlite3",
-        "secret": SECRET,
+        "key_ring": VersionedHmacKeyRing(
+            current_key_id="login-v1", current_secret=SECRET
+        ),
         "window": timedelta(minutes=15),
         "principal_attempts": 3,
         "network_attempts": 6,
@@ -111,7 +118,10 @@ def test_login_security_store_contains_only_keyed_digests_and_bounded_facts(
                 "PRAGMA table_info(m14_login_security_events)"
             ).fetchall()
         }
-    assert len(row[0]) == len(row[1]) == 64
+    assert row[0].startswith("k1:login-v1:")
+    assert row[1].startswith("k1:login-v1:")
+    assert len(row[0].rsplit(":", 1)[1]) == 64
+    assert len(row[1].rsplit(":", 1)[1]) == 64
     assert row[2] == "failed"
     assert "Sensitive.Owner" not in repr(row)
     assert "203.0.113.42" not in repr(row)
@@ -145,6 +155,144 @@ def test_login_security_retention_removes_only_old_security_events(
         assert connection.execute(
             "SELECT COUNT(*) FROM m14_login_security_events"
         ).fetchone()[0] == 0
+
+
+def test_versioned_hmac_key_ring_validates_bounded_secret_configuration() -> None:
+    ring = VersionedHmacKeyRing.from_config(
+        current_key_id="login-2026-09",
+        current_secret=ROTATED_SECRET,
+        previous_keys_json=json.dumps({"login-2026-08": SECRET}),
+    )
+    digest = ring.digest("login:principal", "owner@example.test")
+    assert digest.startswith("k1:login-2026-09:")
+    assert ring.current_key_id == "login-2026-09"
+    assert ring.previous_key_count == 1
+    assert ring.recognizes(digest) is True
+    assert SECRET not in repr(ring)
+    assert ROTATED_SECRET not in repr(ring)
+
+    with pytest.raises(
+        HmacKeyRingConfigurationError, match="HMAC_PREVIOUS_KEYS_INVALID"
+    ):
+        VersionedHmacKeyRing.from_config(
+            current_key_id="login-v2",
+            current_secret=ROTATED_SECRET,
+            previous_keys_json="[]",
+        )
+    with pytest.raises(
+        HmacKeyRingConfigurationError, match="HMAC_KEY_SECRET_REUSED"
+    ):
+        VersionedHmacKeyRing(
+            current_key_id="login-v2",
+            current_secret=ROTATED_SECRET,
+            previous_keys={"login-v1": ROTATED_SECRET},
+        )
+
+
+def test_login_rotation_counts_previous_key_events_and_writes_current_version(
+    tmp_path: Path,
+) -> None:
+    now = [datetime(2026, 9, 9, 3, 0, tzinfo=timezone.utc)]
+    old = _protection(tmp_path, now)
+    for _ in range(3):
+        old.record(
+            email="owner@example.test",
+            network_origin="192.0.2.10",
+            outcome="failed",
+        )
+
+    rotated = _protection(
+        tmp_path,
+        now,
+        key_ring=VersionedHmacKeyRing(
+            current_key_id="login-v2",
+            current_secret=ROTATED_SECRET,
+            previous_keys={"login-v1": SECRET},
+        ),
+    )
+    with pytest.raises(AccountLoginRateLimited):
+        rotated.assess(
+            email="owner@example.test", network_origin="192.0.2.10"
+        )
+    with sqlite3.connect(tmp_path / "login-security.sqlite3") as connection:
+        last_hash = connection.execute(
+            "SELECT principal_hash FROM m14_login_security_events "
+            "ORDER BY event_id DESC LIMIT 1"
+        ).fetchone()[0]
+    assert last_hash.startswith("k1:login-v2:")
+    database_bytes = (tmp_path / "login-security.sqlite3").read_bytes()
+    assert SECRET.encode("utf-8") not in database_bytes
+    assert ROTATED_SECRET.encode("utf-8") not in database_bytes
+
+
+def test_login_rotation_counts_unversioned_events_from_before_key_ring_upgrade(
+    tmp_path: Path,
+) -> None:
+    now = [datetime(2026, 9, 9, 3, 0, tzinfo=timezone.utc)]
+    legacy_ring = VersionedHmacKeyRing(
+        current_key_id="login-v1", current_secret=SECRET
+    )
+    _protection(tmp_path, now, key_ring=legacy_ring)
+    with sqlite3.connect(tmp_path / "login-security.sqlite3") as connection:
+        for _ in range(3):
+            connection.execute(
+                """INSERT INTO m14_login_security_events
+                   (principal_hash, network_hash, outcome, occurred_at)
+                   VALUES (?, ?, 'failed', ?)""",
+                (
+                    legacy_ring.candidates(
+                        "login:principal", "owner@example.test"
+                    )[1],
+                    legacy_ring.candidates("login:network", "192.0.2.10")[1],
+                    now[0].isoformat(),
+                ),
+            )
+
+    rotated = _protection(
+        tmp_path,
+        now,
+        key_ring=VersionedHmacKeyRing(
+            current_key_id="login-v2",
+            current_secret=ROTATED_SECRET,
+            previous_keys={"login-v1": SECRET},
+        ),
+    )
+    with pytest.raises(AccountLoginRateLimited):
+        rotated.assess(
+            email="owner@example.test", network_origin="192.0.2.10"
+        )
+
+
+def test_login_rotation_fails_closed_until_retained_previous_key_expires(
+    tmp_path: Path,
+) -> None:
+    now = [datetime(2026, 9, 9, 3, 0, tzinfo=timezone.utc)]
+    old = _protection(tmp_path, now)
+    old.record(
+        email="owner@example.test",
+        network_origin="192.0.2.10",
+        outcome="failed",
+    )
+    rotated_without_previous = _protection(
+        tmp_path,
+        now,
+        key_ring=VersionedHmacKeyRing(
+            current_key_id="login-v2", current_secret=ROTATED_SECRET
+        ),
+    )
+    assert rotated_without_previous.store_ready() is False
+    with pytest.raises(
+        AccountLoginProtectionUnavailable, match="LOGIN_PROTECTION_UNAVAILABLE"
+    ):
+        rotated_without_previous.assess(
+            email="owner@example.test", network_origin="192.0.2.10"
+        )
+
+    now[0] += timedelta(days=8)
+    rotated_without_previous.assess(
+        email="owner@example.test", network_origin="192.0.2.10"
+    )
+    assert rotated_without_previous.store_ready() is True
 
 
 def test_http_login_is_rate_limited_without_account_enumeration(
