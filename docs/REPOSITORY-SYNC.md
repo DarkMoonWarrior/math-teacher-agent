@@ -65,6 +65,8 @@
 
 2026-09-10 M14 PostgreSQL 正式身份 adapter：新增与既有 `AccountIdentity`/`AccountRegistration`/`AccountAdministration` Interface 兼容的 PostgreSQL 实现，固定 schema 分别保存 account、personal tenant、membership、稳定 owner 与摘要 session；网页注册的账号、tenant、membership 和首个 session 在同一事务提交。adapter 构造和应用启动不建表；独立本机 schema CLI 先只读预演，再要求相同计划指纹和明确确认，未知目标拒绝写入并以事务 advisory lock 串行部署。生产环境若仍选择 SQLite、缺少 DSN/驱动/连接或版本/列形状不符，身份与 `/ready` 失败关闭；旧 SQLite 运维 CLI 在 PostgreSQL backend 下拒绝执行。本切片未连接真实 PostgreSQL、未迁移任何账号/会话/内容，owner-aware 内容清单、迁移、对账、回滚与 IDOR/tenant isolation 是下一段。M14 固定入口 319 项通过/1 项跳过，完整 API 749 项通过/1 项跳过；Teacher Web 108 项与 Agent 42 项沿用已通过基线。
 
+2026-09-10 M14 owner 数据只读清点：新增仅本机操作者可调用的 `OwnerDataInventory`，以显式目录覆盖私人资料、截图识别、个人题库、PDF 导入、教案、试卷和教师记忆七类 SQLite 存储及四类文件目录。SQLite 只读打开且不初始化；直接 owner、继承 owner 和旧无 owner 表分别清点，未知表/SQL 对象、关键列漂移、路径别名、错误目录 owner 来源、链接、旧无 owner 行和未对账的非空文件目录均失败关闭。输出不含路径、owner、对象 ID 或内容；CLI 以稳定退出码区分可迁移、存在阻塞和不可用。本切片没有迁移、更新、删除或清理真实数据。M14 固定入口 329 项通过/1 项跳过，完整 API 759 项通过/1 项跳过；Teacher Web 108 项与 Agent 42 项沿用已通过基线。下一切片先建立数据库引用到 owner 再到文件的逐文件对账清单。
+
 长期保留 `main`。下列分支在清理前已由 main 包含：
 
 - `codex/lesson-agent-v1`：`fb37d40`
