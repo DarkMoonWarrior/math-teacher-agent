@@ -1,6 +1,8 @@
 import {
   TeacherWorkspace,
   TeacherWorkspaceError,
+  type AccountRegistrationRequest,
+  type AccountSessionStatus,
   type BetaParticipantDeletion,
   type BetaParticipantMetricExport,
   type BetaFactReceipt,
@@ -442,6 +444,48 @@ async function readSolveStream(
 }
 
 export class HttpTeacherWorkspace implements TeacherWorkspace {
+  getAccountSession(signal?: AbortSignal): Promise<AccountSessionStatus> {
+    return libraryJsonRequest(
+      "/api/v1/account-session",
+      { method: "GET", signal },
+      "无法确认账号登录状态。",
+    );
+  }
+
+  startAccountSession(email: string, password: string, signal?: AbortSignal): Promise<AccountSessionStatus> {
+    return libraryJsonRequest(
+      "/api/v1/account-session",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+        signal,
+      },
+      "暂时无法登录教师工作台。",
+    );
+  }
+
+  registerAccount(request: AccountRegistrationRequest, signal?: AbortSignal): Promise<AccountSessionStatus> {
+    return libraryJsonRequest(
+      "/api/v1/account-registration",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(request),
+        signal,
+      },
+      "暂时无法创建教师账号。",
+    );
+  }
+
+  endAccountSession(signal?: AbortSignal): Promise<AccountSessionStatus> {
+    return libraryJsonRequest(
+      "/api/v1/account-session",
+      { method: "DELETE", signal },
+      "暂时无法退出教师账号。",
+    );
+  }
+
   getBetaSession(signal?: AbortSignal): Promise<BetaSessionStatus> {
     return libraryJsonRequest(
       "/api/v1/beta-session",

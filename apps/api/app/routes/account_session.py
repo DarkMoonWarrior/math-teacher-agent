@@ -54,10 +54,15 @@ def session_status(
     try:
         context = identity.resolve(token)
     except AccountIdentityDenied:
-        return AccountSessionStatus(enabled=True, authenticated=False)
+        return AccountSessionStatus(
+            enabled=True,
+            authenticated=False,
+            registration_enabled=settings.production_self_registration_enabled,
+        )
     return AccountSessionStatus(
         enabled=True,
         authenticated=True,
+        registration_enabled=settings.production_self_registration_enabled,
         display_label=context.display_label,
         expires_at=context.expires_at,
         capabilities=context.capabilities,
@@ -155,6 +160,7 @@ def start_session(
     return AccountSessionStatus(
         enabled=True,
         authenticated=True,
+        registration_enabled=settings.production_self_registration_enabled,
         display_label=grant.identity.display_label,
         expires_at=grant.identity.expires_at,
         capabilities=grant.identity.capabilities,
@@ -179,4 +185,8 @@ def end_session(
         samesite="strict",
         path="/",
     )
-    return AccountSessionStatus(enabled=True, authenticated=False)
+    return AccountSessionStatus(
+        enabled=True,
+        authenticated=False,
+        registration_enabled=settings.production_self_registration_enabled,
+    )

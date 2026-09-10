@@ -1571,6 +1571,29 @@ svg { flex: 0 0 auto; }
 }
 .beta-access__card button:disabled { cursor: wait; opacity: .55; }
 .beta-access__error { color: var(--color-danger, #a72515); margin: 0; }
+.account-access__switch {
+  border: 1px solid var(--color-line, #d8cbb9);
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  margin-top: 2rem;
+}
+.beta-access__card .account-access__switch button {
+  background: transparent;
+  color: var(--color-ink, #21160f);
+  min-height: 2.75rem;
+}
+.beta-access__card .account-access__switch button[aria-pressed="true"] {
+  background: var(--color-ink, #21160f);
+  color: var(--color-paper, #fffaf1);
+}
+.account-access__notice {
+  border-top: 1px solid var(--color-line, #d8cbb9);
+  color: var(--color-ink-muted, #6d6259);
+  font-size: .78rem;
+  line-height: 1.6;
+  margin: 1.5rem 0 0;
+  padding-top: 1rem;
+}
 
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }

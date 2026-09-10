@@ -25,6 +25,7 @@ from app.modules.account_identity.schemas import (
     AccountLogin,
     AccountPasswordReset,
     AccountSessionGrant,
+    PersonalAccountRegistration,
     PersonalAccountProvision,
     ProvisionedAccount,
 )
@@ -147,6 +148,21 @@ class SqliteAccountIdentity:
         return AccountSessionGrant(
             token=token,
             identity=self._context(row, expires_at=expires_at),
+        )
+
+    def register_personal_account(
+        self, command: PersonalAccountRegistration
+    ) -> AccountSessionGrant:
+        self.provision_personal_account(
+            PersonalAccountProvision(
+                email=command.email,
+                password=command.password,
+                display_label=command.display_label,
+                owner_id=f"owner_{secrets.token_urlsafe(18)}",
+            )
+        )
+        return self.authenticate(
+            AccountLogin(email=command.email, password=command.password)
         )
 
     def resolve(self, token: str) -> AccountIdentityContext:

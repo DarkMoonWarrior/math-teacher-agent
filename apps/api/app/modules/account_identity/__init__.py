@@ -9,6 +9,7 @@ from app.modules.account_identity.contracts import (
     AccountLoginProtection,
     AccountLoginProtectionUnavailable,
     AccountLoginRateLimited,
+    AccountRegistration,
     LoginNetworkOrigin,
     LoginNetworkOriginUnavailable,
 )
@@ -45,6 +46,7 @@ from app.modules.account_identity.schemas import (
     AccountSessionGrant,
     AccountSessionStatus,
     PersonalAccountProvision,
+    PersonalAccountRegistration,
     ProvisionedAccount,
 )
 from app.modules.account_identity.sqlite_adapter import SqliteAccountIdentity
@@ -64,6 +66,7 @@ __all__ = [
     "AccountLoginProtection",
     "AccountLoginProtectionUnavailable",
     "AccountLoginRateLimited",
+    "AccountRegistration",
     "AccountPasswordReset",
     "AccountRole",
     "AccountSessionGrant",
@@ -78,6 +81,7 @@ __all__ = [
     "LoginNetworkOrigin",
     "LoginNetworkOriginUnavailable",
     "PersonalAccountProvision",
+    "PersonalAccountRegistration",
     "ProvisionedAccount",
     "SqliteAccountIdentity",
     "SqliteAccountLifecycleAudit",

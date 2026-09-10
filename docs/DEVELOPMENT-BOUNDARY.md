@@ -90,9 +90,9 @@ M12 五条切片与完整 Gate 已通过：启用封闭测试时，浏览器以�
 
 M12 各切片、固定评测、功能/可信/隐私权利/工程 Gate 已全部通过并形成可回滚提交。M13 Beta Data Validation 的五条工程切片完成，但没有足够真实样本，因此 Gate A/B/C/Q、Gate P/E 未通过。项目所有者于 2026-09-08 明确接受这项未验证风险并授权进入 M14；该授权只允许建设商业基础，不允许把 M13 标记为完成、扩大营销或宣称真实教师价值已验证。
 
-M14 第一切片只建立生产身份深模块：`AccountIdentity` 创建/验证账号并解析/撤销不透明会话；`account_id`、`tenant_id` 和现有私人内容的 `owner_id` 分别建模。业务模块只接收服务端解析出的 owner，浏览器、Agent、模型、请求正文和查询参数均无权选择。当前仅支持个人 `personal_owner`；没有组织角色或学生。正式身份、M12 Beta 访问和固定本地身份是互斥模式，同时开启正式身份和 Beta 时 fail closed。关闭的身份 adapter 不得创建存储；任何非本地账号模式必须停用缺少安全 owner 契约的旧版单用户接口。正式 HTTP 只开放登录、状态和退出，自助注册/账号创建不向浏览器或 Agent 开放。
+M14 第一切片建立生产身份深模块：`AccountIdentity` 验证账号并解析/撤销不透明会话；`AccountRegistration` 只建立个人账号并返回同一类正式会话；`account_id`、`tenant_id` 和现有私人内容的 `owner_id` 分别建模。项目所有者于 2026-09-10 明确把正式登录页和网页注册纳入本阶段。网页注册是独立、默认关闭的部署能力，只允许浏览器提交邮箱、显示名称、密码和密码确认；owner、tenant、角色与能力全部由服务器生成，Agent 仍无创建账号入口。业务模块只接收服务端解析出的 owner，浏览器、Agent、模型、请求正文和查询参数均无权选择身份。当前仅支持个人 `personal_owner`；没有组织角色或学生。正式身份、M12 Beta 访问和固定本地身份是互斥模式，同时开启正式身份和 Beta 时 fail closed。关闭的身份 adapter 不得创建存储；任何非本地账号模式必须停用缺少安全 owner 契约的旧版单用户接口。
 
-SQLite 与内存实现只证明 Interface 可替换，不代表生产存储。密码和 session token 不得明文保存，登录错误不得泄露账号是否存在，公开响应不得返回 account/tenant/owner 内部标识。功能默认关闭，未创建真实账号、未迁移真实数据。后续必须按账号生命周期加固 → PostgreSQL tenant adapter 与逐对象对账/回滚 → 对象存储/持久任务 → Entitlement → 订单/支付/退款顺序推进；支付不能提前进入。完整边界见 [`M14-COMMERCIAL-FOUNDATION.md`](M14-COMMERCIAL-FOUNDATION.md)。
+SQLite 与内存实现只证明 Interface 可替换，不代表生产存储。密码和 session token 不得明文保存，登录错误不得泄露账号是否存在，公开响应不得返回 account/tenant/owner 内部标识。正式身份与自助注册都默认关闭，尚未创建真实账号或迁移真实数据；当前网页注册也不等于已完成邮箱验证、找回密码、MFA 或生产反滥用部署。后续必须按账号生命周期加固 → PostgreSQL tenant adapter 与逐对象对账/回滚 → 对象存储/持久任务 → Entitlement → 订单/支付/退款顺序推进；支付不能提前进入。完整边界见 [`M14-COMMERCIAL-FOUNDATION.md`](M14-COMMERCIAL-FOUNDATION.md)。
 
 后续顺序以 [`ROADMAP.md`](ROADMAP.md) 为准：Solve → Private Library → 多模态图片解题 → 私有辅助命题 → Paper → Lesson → Memory → Beta 准备 → Beta 验证（真实验证延期） → 商业基础（当前） → Teacher Pro → 教研组 → 学校。
 

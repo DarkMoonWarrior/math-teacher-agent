@@ -12,6 +12,7 @@ from app.core.identity import (
 )
 from app.modules.beta_operations import PrivacySafeOperations, PrivacySafeOperationsMiddleware
 from app.routes.account_session import router as account_session_router
+from app.routes.account_registration import router as account_registration_router
 from app.routes.beta_session import router as beta_session_router
 from app.routes.beta_validation import router as beta_validation_router
 from app.routes.curriculum import router as curriculum_router
@@ -76,6 +77,7 @@ app.include_router(readiness_router)
 
 app.include_router(curriculum_router, prefix="/api/v1")
 app.include_router(account_session_router, prefix="/api/v1")
+app.include_router(account_registration_router, prefix="/api/v1")
 app.include_router(beta_session_router, prefix="/api/v1")
 app.include_router(beta_validation_router, prefix="/api/v1")
 app.include_router(

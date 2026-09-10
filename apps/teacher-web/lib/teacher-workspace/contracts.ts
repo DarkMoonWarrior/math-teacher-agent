@@ -1398,6 +1398,22 @@ export type BetaSessionStatus = {
   capabilities: ProductCapability[];
 };
 
+export type AccountSessionStatus = {
+  enabled: true;
+  authenticated: boolean;
+  registration_enabled: boolean;
+  display_label: string;
+  expires_at: string | null;
+  capabilities: ProductCapability[];
+};
+
+export type AccountRegistrationRequest = {
+  email: string;
+  display_label: string;
+  password: string;
+  password_confirmation: string;
+};
+
 export type BetaMetricValue = {
   value: number | null;
   numerator: number;
@@ -1443,6 +1459,10 @@ export type BetaParticipantDeletion = {
 };
 
 export interface TeacherWorkspace {
+  getAccountSession(signal?: AbortSignal): Promise<AccountSessionStatus>;
+  startAccountSession(email: string, password: string, signal?: AbortSignal): Promise<AccountSessionStatus>;
+  registerAccount(request: AccountRegistrationRequest, signal?: AbortSignal): Promise<AccountSessionStatus>;
+  endAccountSession(signal?: AbortSignal): Promise<AccountSessionStatus>;
   getBetaSession(signal?: AbortSignal): Promise<BetaSessionStatus>;
   startBetaSession(accessCode: string, signal?: AbortSignal): Promise<BetaSessionStatus>;
   endBetaSession(signal?: AbortSignal): Promise<BetaSessionStatus>;

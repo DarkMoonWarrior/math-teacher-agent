@@ -24,6 +24,7 @@ PUBLIC = {
     ("DELETE", "/api/v1/beta-session"),
     ("GET", "/api/v1/account-session"), ("POST", "/api/v1/account-session"),
     ("DELETE", "/api/v1/account-session"),
+    ("POST", "/api/v1/account-registration"),
 }
 
 # Authenticated teachers retain access to the disclosure, export and deletion

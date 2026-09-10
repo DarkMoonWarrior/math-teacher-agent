@@ -61,6 +61,8 @@
 
 2026-09-09 M14 可信登录边缘：新增 `LoginNetworkOrigin`，本地 direct 模式忽略转发头，生产 trusted-proxy 模式只接受 CIDR 白名单 peer 覆盖后的单一规范客户端 IP；缺头、多值链、非法来源或非白名单 peer 全部失败关闭。新增 `HttpDistributedAccountLoginProtection`，邮箱和网络来源在 FastAPI 内完成版本化 HMAC，受控服务只接收摘要候选、非敏感 key tag、策略和有界结果；适配器禁止重定向与环境代理，生产只允许 HTTPS，错误协议/响应/网络全部失败关闭。`environment=production` 继续使用 direct 或 SQLite 时登录与 `/ready` 不可用；仓库只固定外部原子服务契约，不伪称已部署 Redis/云限流。新增 7 项回归，M14 固定入口 306 项通过/1 项跳过，完整 API 736 项通过/1 项跳过；Teacher Web 与 Agent 未改变，既有基线仍为 105 项和 42 项及双方类型检查/构建通过。测试只使用合成摘要、MockTransport 和临时库，没有发送外部请求、读取真实密钥或接触真实账号/网络数据。
 
+2026-09-10 M14 正式登录与网页注册：项目所有者明确把正式登录页和网页个人账号注册纳入 M14。新增独立 `AccountRegistration`、默认关闭的注册开关和 `/api/v1/account-registration`；浏览器只提交邮箱、显示名称、密码与确认，account、tenant、owner、`personal_owner` 角色和能力由服务端生成，注册成功签发正式 HttpOnly 会话。Teacher Web 先探测正式身份，未启用时才回退到 Closed Beta；注册与登录共用可信来源及双范围防护，Agent 无账号创建入口。当前未迁移 `owner_teacher`/Beta 数据，也未完成邮箱验证、找回密码和 MFA；仓库配置保持默认关闭，本机私有 `.env` 已切换为正式身份供网页验收。M14 固定入口 311 项通过/1 项跳过，完整 API 741 项通过/1 项跳过；Teacher Web 108 项、类型检查和生产构建通过，Agent 代码未改变并沿用 42 项既有基线。`pnpm check:repo` 通过：102 个跟踪 Markdown、220 个本地链接，旧 UI 边界无残留。
+
 长期保留 `main`。下列分支在清理前已由 main 包含：
 
 - `codex/lesson-agent-v1`：`fb37d40`

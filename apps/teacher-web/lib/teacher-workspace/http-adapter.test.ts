@@ -335,6 +335,69 @@ afterEach(() => {
 });
 
 describe("HttpTeacherWorkspace", () => {
+  it("uses cookie-backed formal account login, registration, status, and logout endpoints", async () => {
+    const session = {
+      enabled: true as const,
+      authenticated: true,
+      registration_enabled: true,
+      display_label: "王老师",
+      expires_at: "2026-09-10T12:00:00Z",
+      capabilities: ["search", "solve"] as const,
+    };
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify(session), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    const workspace = new HttpTeacherWorkspace();
+
+    await expect(workspace.getAccountSession()).resolves.toEqual(session);
+    await expect(workspace.startAccountSession("teacher@example.test", "password-1234")).resolves.toEqual(session);
+    await expect(workspace.registerAccount({
+      email: "teacher@example.test",
+      display_label: "王老师",
+      password: "password-1234",
+      password_confirmation: "password-1234",
+    })).resolves.toEqual(session);
+    await expect(workspace.endAccountSession()).resolves.toEqual(session);
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      "/api/v1/account-session",
+      expect.objectContaining({ method: "GET", credentials: "include" }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "/api/v1/account-session",
+      expect.objectContaining({
+        method: "POST",
+        credentials: "include",
+        body: JSON.stringify({ email: "teacher@example.test", password: "password-1234" }),
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
+      "/api/v1/account-registration",
+      expect.objectContaining({
+        method: "POST",
+        credentials: "include",
+        body: JSON.stringify({
+          email: "teacher@example.test",
+          display_label: "王老师",
+          password: "password-1234",
+          password_confirmation: "password-1234",
+        }),
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      4,
+      "/api/v1/account-session",
+      expect.objectContaining({ method: "DELETE", credentials: "include" }),
+    );
+    const registrationBody = String(fetchMock.mock.calls[2]?.[1]?.body);
+    expect(registrationBody).not.toMatch(/owner|tenant|role|capabilit/i);
+  });
+
   it("uses an HttpOnly-cookie session contract without persisting access codes in the adapter", async () => {
     const session = {
       mode: "closed_beta" as const,

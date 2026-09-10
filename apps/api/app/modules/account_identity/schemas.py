@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.core.capabilities import WorkbenchCapability
 
@@ -48,6 +48,40 @@ class AccountLogin(BaseModel):
     @classmethod
     def normalize_email(cls, value: str) -> str:
         return value.strip().casefold()
+
+
+class PersonalAccountRegistration(BaseModel):
+    """Browser-safe personal registration input.
+
+    Identity, tenant, owner, role and capabilities remain server-owned and are
+    intentionally absent from this contract.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    email: str = Field(min_length=3, max_length=254)
+    display_label: str = Field(min_length=1, max_length=80)
+    password: str = Field(min_length=12, max_length=256)
+    password_confirmation: str = Field(min_length=12, max_length=256)
+
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, value: str) -> str:
+        return _normalize_email(value)
+
+    @field_validator("display_label")
+    @classmethod
+    def normalize_display_label(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("显示名称不能为空。")
+        return normalized
+
+    @model_validator(mode="after")
+    def passwords_match(self) -> "PersonalAccountRegistration":
+        if self.password != self.password_confirmation:
+            raise ValueError("两次输入的密码不一致。")
+        return self
 
 
 class AccountDisable(BaseModel):
@@ -125,6 +159,7 @@ class AccountSessionStatus(BaseModel):
 
     enabled: bool
     authenticated: bool
+    registration_enabled: bool = False
     display_label: str = ""
     expires_at: datetime | None = None
     capabilities: list[WorkbenchCapability] = Field(default_factory=list)

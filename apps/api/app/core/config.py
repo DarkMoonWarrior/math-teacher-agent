@@ -185,6 +185,9 @@ class Settings(BaseSettings):
     # Mutually exclusive with Closed Beta access. Disabled by default until
     # account provisioning, recovery and deployment hardening are complete.
     production_identity_enabled: bool = False
+    # Public browser registration is a separate deployment decision. Keeping
+    # it off by default prevents enabling identity from silently opening sign-up.
+    production_self_registration_enabled: bool = False
     production_identity_db: Path = Field(
         default=PROJECT_ROOT / "data" / "private-runtime" / "account-identity.sqlite3"
     )

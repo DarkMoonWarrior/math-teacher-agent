@@ -8,6 +8,7 @@ from app.modules.account_identity.schemas import (
     AccountLifecycleReceipt,
     AccountLogin,
     AccountPasswordReset,
+    PersonalAccountRegistration,
     AccountSessionGrant,
     PersonalAccountProvision,
     ProvisionedAccount,
@@ -24,6 +25,14 @@ class AccountIdentity(Protocol):
     def revoke(self, token: str) -> bool: ...
 
     def store_ready(self) -> bool: ...
+
+
+class AccountRegistration(Protocol):
+    """Browser registration Interface with no caller-selected identity fields."""
+
+    def register_personal_account(
+        self, command: PersonalAccountRegistration
+    ) -> AccountSessionGrant: ...
 
 
 class AccountAdministration(Protocol):

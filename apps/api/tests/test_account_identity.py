@@ -4,6 +4,7 @@ import sqlite3
 from collections.abc import Callable
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from typing import cast
 
 import pytest
 from fastapi.testclient import TestClient
@@ -15,10 +16,11 @@ from app.modules.account_identity import (
     AccountIdentityDenied,
     AccountLogin,
     InMemoryAccountIdentity,
+    PersonalAccountRegistration,
     PersonalAccountProvision,
     SqliteAccountIdentity,
 )
-from app.modules.account_identity.contracts import AccountIdentity
+from app.modules.account_identity.contracts import AccountIdentity, AccountRegistration
 from app.modules.account_identity.dependencies import get_account_identity
 from app.modules.teacher_memory import TeacherMemory, TeacherMemoryCommand
 from app.modules.teacher_memory.dependencies import get_teacher_memory
@@ -90,6 +92,29 @@ def test_account_identity_contract_keeps_account_tenant_and_owner_distinct(
         "paper",
         "teacher_memory",
     }
+
+
+def test_registration_contract_generates_owner_identity_in_both_adapters(
+    identity_adapter: tuple[AccountIdentity, list[datetime]],
+) -> None:
+    identity, _ = identity_adapter
+    registration = cast(AccountRegistration, identity)
+
+    grant = registration.register_personal_account(
+        PersonalAccountRegistration(
+            email="new-teacher@example.test",
+            display_label="新教师",
+            password=PASSWORD,
+            password_confirmation=PASSWORD,
+        )
+    )
+    resolved = identity.resolve(grant.token)
+
+    assert resolved.account_id.startswith("acct_")
+    assert resolved.tenant_id.startswith("tenant_")
+    assert resolved.owner_id.startswith("owner_")
+    assert len({resolved.account_id, resolved.tenant_id, resolved.owner_id}) == 3
+    assert resolved.role == "personal_owner"
 
 
 def test_account_identity_rejects_duplicate_email_owner_and_bad_credentials(
@@ -188,6 +213,7 @@ def test_production_session_http_is_owner_scoped_and_hides_internal_ids(
             assert anonymous.get("/api/v1/account-session").json() == {
                 "enabled": True,
                 "authenticated": False,
+                "registration_enabled": False,
                 "display_label": "",
                 "expires_at": None,
                 "capabilities": [],

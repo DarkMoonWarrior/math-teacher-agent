@@ -3,15 +3,22 @@ from __future__ import annotations
 from datetime import timedelta
 from functools import lru_cache
 from pathlib import Path
+from typing import cast
 
 from fastapi import Depends
 
 from app.core.config import Settings, get_settings
-from app.modules.account_identity.contracts import AccountIdentity, AccountIdentityDenied
+
+from app.modules.account_identity.contracts import (
+    AccountIdentity,
+    AccountIdentityDenied,
+    AccountRegistration,
+)
 from app.modules.account_identity.schemas import (
     AccountIdentityContext,
     AccountLogin,
     AccountSessionGrant,
+    PersonalAccountRegistration,
 )
 from app.modules.account_identity.sqlite_adapter import SqliteAccountIdentity
 
@@ -31,6 +38,11 @@ class DisabledAccountIdentity:
 
     def revoke(self, token: str) -> bool:
         return False
+
+    def register_personal_account(
+        self, command: PersonalAccountRegistration
+    ) -> AccountSessionGrant:
+        self._deny()
 
     def store_ready(self) -> bool:
         return False
@@ -56,3 +68,9 @@ def get_account_identity(
         str(settings.production_identity_db),
         settings.production_session_ttl_hours,
     )
+
+
+def get_account_registration(
+    identity: AccountIdentity = Depends(get_account_identity),
+) -> AccountRegistration:
+    return cast(AccountRegistration, identity)

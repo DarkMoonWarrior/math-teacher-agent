@@ -610,7 +610,11 @@ export function AccountSettingsPopover({
   teacherPreferencesAvailable: boolean;
 }) {
   const avatarLabel = session.displayLabel.trim().slice(0, 1) || "教";
-  const sessionLabel = session.mode === "closed_beta" ? "封闭测试用户" : "本地开发用户";
+  const sessionLabel = session.mode === "production_identity"
+    ? "个人教师账号"
+    : session.mode === "closed_beta"
+      ? "封闭测试用户"
+      : "本地开发用户";
 
   return (
     <div className="account-settings-popover" id="account-settings-menu" role="menu" aria-label="设置中的用户项目">

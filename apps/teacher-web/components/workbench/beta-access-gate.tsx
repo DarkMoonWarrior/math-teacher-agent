@@ -34,7 +34,7 @@ export type BetaSessionContextValue = {
   busy: boolean;
   canSignOut: boolean;
   displayLabel: string;
-  mode: BetaSessionStatus["mode"];
+  mode: BetaSessionStatus["mode"] | "production_identity";
   signOut: () => Promise<void>;
 };
 
@@ -65,6 +65,28 @@ export function BetaCapabilityBoundary({
 }) {
   const value = useMemo(() => new Set<ProductCapability>(capabilities), [capabilities]);
   return <BetaCapabilityContext.Provider value={value}>{children}</BetaCapabilityContext.Provider>;
+}
+
+export function AuthenticatedSessionBoundary({
+  capabilities,
+  children,
+  session,
+}: {
+  capabilities: readonly ProductCapability[];
+  children: ReactNode;
+  session: BetaSessionContextValue;
+}) {
+  const capabilitySet = useMemo(
+    () => new Set<ProductCapability>(capabilities),
+    [capabilities],
+  );
+  return (
+    <BetaSessionContext.Provider value={session}>
+      <BetaCapabilityContext.Provider value={capabilitySet}>
+        {children}
+      </BetaCapabilityContext.Provider>
+    </BetaSessionContext.Provider>
+  );
 }
 
 export function BetaAccessScreen({

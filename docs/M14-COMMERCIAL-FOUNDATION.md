@@ -1,6 +1,6 @@
 # M14 Commercial Foundation
 
-更新日期：2026-09-09。
+更新日期：2026-09-10。
 
 项目所有者因暂时缺少足够真实教师样本，明确决定暂停 M13 真实 Beta，不把合成测试误记为产品 Gate 通过，并授权进入 M14。M13 状态因此是“切片 1–5 完成、真实验证延期、Gate 未通过”，不是“验证成功”。M14 当前进行中，只建设商业化前必须成立的生产边界；支付、组织和学校能力不能反向定义身份或数据所有权。
 
@@ -14,7 +14,7 @@
 
 ## 2. 身份 Interface 与运行模式
 
-`AccountIdentity` 是业务与传输层依赖的正式身份深模块 Interface，只负责验证凭据、解析不透明会话和撤销会话。独立的 `AccountAdministration` 只供本机操作者创建、停用账号和重置密码。HTTP 只开放登录、会话状态和退出；没有公开注册或由 Agent 创建账号的入口。
+`AccountIdentity` 是业务与传输层依赖的正式身份深模块 Interface，只负责验证凭据、解析不透明会话和撤销会话。独立的 `AccountRegistration` 只创建个人账号并签发正式会话；独立的 `AccountAdministration` 供本机操作者执行创建、停用账号和重置密码。HTTP 开放登录、会话状态、退出，以及由独立部署开关控制的个人账号注册；Agent 没有创建账号的入口。
 
 运行模式互斥：
 
@@ -40,6 +40,17 @@
 - 现有私人内容仍以 `owner_id` 隔离，正式会话只把服务端解析出的 owner 交给业务模块。
 
 当前 SQLite adapter 只是验证 Interface 和迁移边界，不是生产数据库声明。当前切片没有创建真实账号、迁移真实内容或启用正式登录。
+
+### 3.1.1 网页个人账号注册
+
+- 项目所有者于 2026-09-10 明确将正式登录页与网页注册纳入 M14。Teacher Web 会先探测正式会话；正式身份未启用时才回退到现有封闭测试入口。
+- `AccountRegistration` 的浏览器契约只有邮箱、显示名称、密码与密码确认；额外的 owner、tenant、role、capabilities 字段会被拒绝。
+- 账号、个人 tenant、稳定 owner、`personal_owner` 角色和工作台能力由服务端创建。注册成功自动签发与登录相同的 HttpOnly 会话，公开响应不含内部身份 ID。
+- `production_self_registration_enabled` 与正式身份总开关分离且默认关闭；仅在正式身份开启、Beta 关闭时生效，状态接口只暴露布尔可用性。
+- 注册复用正式登录的可信网络来源和双范围防护；身份或防护存储不可用时失败关闭。Agent、模型与内部 Tool 均无注册入口。
+- 该切片没有静默迁移当前 `owner_teacher` 或 Beta owner 数据。切换运行模式前仍需逐对象映射、预览、对账与回滚，避免已有私人内容在新账号下不可见。
+
+具体决策与未完成条件见 [`ADR-2026-09-10-WEB-ACCOUNT-REGISTRATION.md`](ADR-2026-09-10-WEB-ACCOUNT-REGISTRATION.md)。
 
 ### 3.2 账号生命周期第一段
 
@@ -99,7 +110,7 @@ python -m app.modules.account_identity.operator_cli keyring-status
 
 ## 4. 后续切片顺序
 
-1. **账号生命周期加固（进行中）**：操作者创建/停用、密码重置、失效会话预览/确认清理、登录双范围限流、摘要化登录安全事实、当前浏览器会话轮换、MFA 决策、操作者生命周期审计、摘要密钥轮换、可信生产代理来源与分布式限流 adapter 已实现；外部分布式服务、边缘部署、告警、已认证操作者/RBAC、MFA 与集中式密钥管理仍未完成。下一段进入 PostgreSQL tenant adapter。
+1. **账号生命周期加固（进行中）**：网页个人账号注册、操作者创建/停用、密码重置、失效会话预览/确认清理、登录双范围限流、摘要化登录安全事实、当前浏览器会话轮换、MFA 决策、操作者生命周期审计、摘要密钥轮换、可信生产代理来源与分布式限流 adapter 已实现；邮箱验证、找回密码、外部分布式服务、边缘部署、告警、已认证操作者/RBAC、MFA 与集中式密钥管理仍未完成。下一段进入 PostgreSQL tenant adapter。
 2. **PostgreSQL tenant adapter**：在不改变业务 Interface 的前提下替换身份和 owner-aware 存储；提供逐对象盘点、迁移、对账、回滚和 IDOR/tenant isolation 测试。
 3. **对象存储与持久任务**：原文件、导出和后台任务获得明确 owner/tenant key、保留期、幂等和恢复语义。
 4. **Entitlement**：只表达账号可用能力，不替代身份、owner 权利或内容可信门禁。
@@ -109,7 +120,7 @@ python -m app.modules.account_identity.operator_cli keyring-status
 ## 5. 明确未完成
 
 - PostgreSQL、云对象存储、持久队列、多进程会话一致性和生产灾备。
-- 公开注册、邮箱验证、自助找回密码、MFA、设备管理、已认证操作者/RBAC、不可抵赖审计、集中式密钥管理、生产级分布式限流与告警。
+- 无约束公网注册、邮箱验证、自助找回密码、MFA、设备管理、已认证操作者/RBAC、不可抵赖审计、集中式密钥管理、生产级分布式限流与告警。当前只实现默认关闭的个人账号网页注册工程路径。
 - 除 `personal_owner` 外的角色、组织 tenant、成员邀请、学生和学校后台。
 - Entitlement、订单、订阅、支付、Webhook 和退款。
 - M13 的真实教师价值、重复使用、错误率与付费意愿 Gate。
@@ -120,7 +131,7 @@ python -m app.modules.account_identity.operator_cli keyring-status
 
 - M14 固定回归：`python -m pytest -c apps/api/pytest-m14.ini -q`
 - 完整 API：`python -m pytest apps/api/tests -q`
-- Teacher Web：`npm --prefix apps/teacher-web test`、类型检查与生产构建
-- Agent：`npm --prefix apps/agent test`、类型检查与生产构建
+- Teacher Web：`pnpm test:teacher`、`pnpm typecheck:teacher`、`pnpm build:teacher`
+- Agent：`pnpm test:agent`、`pnpm typecheck:agent`、`pnpm build:agent`
 
 最终测试数字以 `PROJECT-STATUS.md` 和 `REPOSITORY-SYNC.md` 的同一提交快照为准。
