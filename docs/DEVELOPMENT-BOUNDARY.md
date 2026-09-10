@@ -92,7 +92,7 @@ M12 各切片、固定评测、功能/可信/隐私权利/工程 Gate 已全部�
 
 M14 第一切片建立生产身份深模块：`AccountIdentity` 验证账号并解析/撤销不透明会话；`AccountRegistration` 只建立个人账号并返回同一类正式会话；`account_id`、`tenant_id` 和现有私人内容的 `owner_id` 分别建模。项目所有者于 2026-09-10 明确把正式登录页和网页注册纳入本阶段。网页注册是独立、默认关闭的部署能力，只允许浏览器提交邮箱、显示名称、密码和密码确认；owner、tenant、角色与能力全部由服务器生成，Agent 仍无创建账号入口。业务模块只接收服务端解析出的 owner，浏览器、Agent、模型、请求正文和查询参数均无权选择身份。当前仅支持个人 `personal_owner`；没有组织角色或学生。正式身份、M12 Beta 访问和固定本地身份是互斥模式，同时开启正式身份和 Beta 时 fail closed。关闭的身份 adapter 不得创建存储；任何非本地账号模式必须停用缺少安全 owner 契约的旧版单用户接口。
 
-SQLite 与内存实现只证明 Interface 可替换，不代表生产存储。PostgreSQL 正式身份 adapter、显式 schema 预演/确认、owner 数据只读清点和四类文件域引用对账已经实现，但尚未连接真实 PostgreSQL 或迁移 owner-aware 内容；应用启动不得隐式建表，生产选择 SQLite、缺少 PostgreSQL DSN/驱动或 schema 不匹配必须失败关闭。密码和 session token 不得明文保存，登录错误不得泄露账号是否存在，公开响应不得返回 account/tenant/owner 内部标识。正式身份与自助注册在仓库默认关闭；当前网页注册也不等于已完成邮箱验证、找回密码、MFA 或生产反滥用部署。后续必须按不执行写入的逐对象迁移计划 → 迁移执行/对账/回滚 → 对象存储/持久任务 → Entitlement → 订单/支付/退款顺序推进；支付不能提前进入。完整边界见 [`M14-COMMERCIAL-FOUNDATION.md`](M14-COMMERCIAL-FOUNDATION.md)。
+SQLite 与内存实现只证明 Interface 可替换，不代表生产存储。PostgreSQL 正式身份 adapter、显式 schema 预演/确认、owner 数据只读清点、四类文件域引用对账和不执行写入的逐对象迁移计划已经实现，但尚未连接真实 PostgreSQL 或迁移 owner-aware 内容；应用启动不得隐式建表，生产选择 SQLite、缺少 PostgreSQL DSN/驱动或 schema 不匹配必须失败关闭。密码和 session token 不得明文保存，登录错误不得泄露账号是否存在，公开响应不得返回 account/tenant/owner 内部标识。正式身份与自助注册在仓库默认关闭；当前网页注册也不等于已完成邮箱验证、找回密码、MFA 或生产反滥用部署。后续必须按精确计划确认 → 幂等迁移执行/对账/回滚 → 对象存储/持久任务 → Entitlement → 订单/支付/退款顺序推进；支付不能提前进入。完整边界见 [`M14-COMMERCIAL-FOUNDATION.md`](M14-COMMERCIAL-FOUNDATION.md)。
 
 后续顺序以 [`ROADMAP.md`](ROADMAP.md) 为准：Solve → Private Library → 多模态图片解题 → 私有辅助命题 → Paper → Lesson → Memory → Beta 准备 → Beta 验证（真实验证延期） → 商业基础（当前） → Teacher Pro → 教研组 → 学校。
 

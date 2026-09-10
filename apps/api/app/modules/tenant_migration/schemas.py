@@ -61,3 +61,44 @@ class OwnerFileReconciliationReport(BaseModel):
     migration_ready: bool
     report_fingerprint: str = Field(pattern=r"^[0-9a-f]{64}$")
     stores: tuple[OwnerFileStoreReconciliation, ...]
+
+
+class OwnerMigrationObjectPlan(BaseModel):
+    object_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    source_record_fingerprint: str = Field(pattern=r"^[0-9a-f]{64}$")
+    dependency_digests: tuple[str, ...] = ()
+
+
+class OwnerMigrationTablePlan(BaseModel):
+    store_id: str = Field(pattern=r"^[a-z][a-z0-9_]{1,63}$")
+    table_name: str = Field(pattern=r"^[a-z][a-z0-9_]{1,79}$")
+    ownership: Literal["direct", "inherited"]
+    sequence: int = Field(ge=1)
+    object_count: int = Field(ge=0)
+    object_set_fingerprint: str = Field(pattern=r"^[0-9a-f]{64}$")
+    objects: tuple[OwnerMigrationObjectPlan, ...]
+
+
+class OwnerMigrationFilePlan(BaseModel):
+    store_id: str = Field(pattern=r"^[a-z][a-z0-9_]{1,63}$")
+    sequence: int = Field(ge=1)
+    object_count: int = Field(ge=0)
+    object_set_fingerprint: str = Field(pattern=r"^[0-9a-f]{64}$")
+    object_digests: tuple[str, ...]
+
+
+class OwnerMigrationPlanReport(BaseModel):
+    schema_version: Literal[1] = 1
+    scope: Literal["requested_owner"] = "requested_owner"
+    execution_allowed: Literal[False] = False
+    migration_ready: Literal[True] = True
+    source_inventory_fingerprint: str = Field(pattern=r"^[0-9a-f]{64}$")
+    source_file_reconciliation_fingerprint: str = Field(
+        pattern=r"^[0-9a-f]{64}$"
+    )
+    target_binding_fingerprint: str = Field(pattern=r"^[0-9a-f]{64}$")
+    object_count: int = Field(ge=0)
+    file_count: int = Field(ge=0)
+    plan_fingerprint: str = Field(pattern=r"^[0-9a-f]{64}$")
+    tables: tuple[OwnerMigrationTablePlan, ...]
+    files: tuple[OwnerMigrationFilePlan, ...]
