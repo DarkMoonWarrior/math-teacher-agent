@@ -34,6 +34,7 @@
 - [`ADR-2026-09-10-WEB-ACCOUNT-REGISTRATION.md`](ADR-2026-09-10-WEB-ACCOUNT-REGISTRATION.md)：正式登录页、默认关闭的网页个人账号注册、服务端身份生成与迁移边界。
 - [`ADR-2026-09-10-POSTGRES-IDENTITY-ADAPTER.md`](ADR-2026-09-10-POSTGRES-IDENTITY-ADAPTER.md)：PostgreSQL 正式身份 adapter、显式 schema 预演/确认和生产失败关闭边界。
 - [`ADR-2026-09-10-OWNER-DATA-INVENTORY.md`](ADR-2026-09-10-OWNER-DATA-INVENTORY.md)：owner 数据只读清点、未知 schema/旧无 owner 数据/间接文件归属的失败关闭边界。
+- [`ADR-2026-09-10-OWNER-FILE-RECONCILIATION.md`](ADR-2026-09-10-OWNER-FILE-RECONCILIATION.md)：四类私人文件域的 owner 引用、缺失/孤儿/跨 owner 冲突和证据指纹边界。
 - [`ADR-2026-09-09-TRUSTED-LOGIN-EDGE.md`](ADR-2026-09-09-TRUSTED-LOGIN-EDGE.md)：可信代理来源、摘要化分布式限流服务协议和生产失败关闭边界。
 - [`ADR-2026-09-09-ACCOUNT-LIFECYCLE-AUDIT.md`](ADR-2026-09-09-ACCOUNT-LIFECYCLE-AUDIT.md)：操作者账号写操作的摘要化审计、失败关闭与过渡限制。
 - [`ADR-2026-09-09-HMAC-KEY-ROTATION.md`](ADR-2026-09-09-HMAC-KEY-ROTATION.md)：登录防护与生命周期审计的版本化 HMAC、旧摘要兼容和轮换顺序。
