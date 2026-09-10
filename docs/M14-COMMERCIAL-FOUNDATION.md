@@ -108,10 +108,18 @@ python -m app.modules.account_identity.operator_cli keyring-status
 - `environment=production` 若仍配置 `direct` 或 `sqlite`，登录与 `/ready` 明确不可用。本地开发仍可使用两者。
 - 仓库只实现 adapter 和可测试契约，不捆绑或假装实现外部分布式原子服务；部署责任、原子性、TLS、告警与数据最小化见 [`ADR-2026-09-09-TRUSTED-LOGIN-EDGE.md`](ADR-2026-09-09-TRUSTED-LOGIN-EDGE.md)。
 
+### 3.7 PostgreSQL tenant adapter 第一段：正式身份
+
+- `PostgresAccountIdentity` 在不改变登录、注册和账号管理 Interface 的前提下实现账号、personal tenant、membership、稳定 owner 与摘要会话；浏览器和 Agent 仍看不到数据库或内部身份标识。
+- `production_identity_provider` 显式区分本地过渡 SQLite 与 PostgreSQL。生产环境若仍选 SQLite、缺少私有 DSN、驱动/连接不可用或 schema 不符，身份服务与 `/ready` 失败关闭。
+- 应用启动和 adapter 构造不会创建表。独立 schema 工具先只读预演，应用时必须同时提交确认和预演指纹；未知目标拒绝写入，部署由 PostgreSQL 事务 advisory lock 串行化。
+- schema 版本与预期列形状都要通过无数据读取才算就绪。旧 SQLite 生命周期 CLI 在 PostgreSQL backend 下拒绝运行，避免误改过渡库。
+- 本段没有连接真实 PostgreSQL、没有迁移现有账号/会话/私人内容，也没有完成 owner-aware 业务存储；具体决策见 [`ADR-2026-09-10-POSTGRES-IDENTITY-ADAPTER.md`](ADR-2026-09-10-POSTGRES-IDENTITY-ADAPTER.md)。
+
 ## 4. 后续切片顺序
 
 1. **账号生命周期加固（进行中）**：网页个人账号注册、操作者创建/停用、密码重置、失效会话预览/确认清理、登录双范围限流、摘要化登录安全事实、当前浏览器会话轮换、MFA 决策、操作者生命周期审计、摘要密钥轮换、可信生产代理来源与分布式限流 adapter 已实现；邮箱验证、找回密码、外部分布式服务、边缘部署、告警、已认证操作者/RBAC、MFA 与集中式密钥管理仍未完成。下一段进入 PostgreSQL tenant adapter。
-2. **PostgreSQL tenant adapter**：在不改变业务 Interface 的前提下替换身份和 owner-aware 存储；提供逐对象盘点、迁移、对账、回滚和 IDOR/tenant isolation 测试。
+2. **PostgreSQL tenant adapter（进行中）**：正式身份 adapter 与显式 schema 预演/确认已实现；下一段在不改变业务 Interface 的前提下实现 owner-aware 存储清单、逐对象迁移、对账、回滚和 IDOR/tenant isolation 测试。
 3. **对象存储与持久任务**：原文件、导出和后台任务获得明确 owner/tenant key、保留期、幂等和恢复语义。
 4. **Entitlement**：只表达账号可用能力，不替代身份、owner 权利或内容可信门禁。
 5. **订单、订阅、支付与退款**：最后接入；要求幂等、Webhook 验签、状态机、对账和退款恢复全部独立验证。
@@ -119,7 +127,7 @@ python -m app.modules.account_identity.operator_cli keyring-status
 
 ## 5. 明确未完成
 
-- PostgreSQL、云对象存储、持久队列、多进程会话一致性和生产灾备。
+- owner-aware PostgreSQL 数据迁移、真实 PostgreSQL 集成 Gate、云对象存储、持久队列、多进程完整一致性和生产灾备。
 - 无约束公网注册、邮箱验证、自助找回密码、MFA、设备管理、已认证操作者/RBAC、不可抵赖审计、集中式密钥管理、生产级分布式限流与告警。当前只实现默认关闭的个人账号网页注册工程路径。
 - 除 `personal_owner` 外的角色、组织 tenant、成员邀请、学生和学校后台。
 - Entitlement、订单、订阅、支付、Webhook 和退款。

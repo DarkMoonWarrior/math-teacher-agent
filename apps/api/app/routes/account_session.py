@@ -6,6 +6,7 @@ from app.core.config import Settings, get_settings
 from app.modules.account_identity import (
     AccountIdentity,
     AccountIdentityDenied,
+    AccountIdentityUnavailable,
     AccountLogin,
     AccountLoginProtection,
     AccountLoginProtectionUnavailable,
@@ -22,6 +23,16 @@ from app.modules.account_identity.login_dependencies import (
 
 
 router = APIRouter(prefix="/account-session", tags=["account-session"])
+
+
+def _identity_unavailable(exc: AccountIdentityUnavailable) -> HTTPException:
+    return HTTPException(
+        status_code=503,
+        detail={
+            "code": "PRODUCTION_IDENTITY_UNAVAILABLE",
+            "message": "正式账号服务暂不可用。",
+        },
+    )
 
 
 def _require_enabled(settings: Settings) -> None:
@@ -53,6 +64,8 @@ def session_status(
     token = request.cookies.get(settings.production_session_cookie_name, "")
     try:
         context = identity.resolve(token)
+    except AccountIdentityUnavailable as exc:
+        raise _identity_unavailable(exc) from exc
     except AccountIdentityDenied:
         return AccountSessionStatus(
             enabled=True,
@@ -114,6 +127,8 @@ def start_session(
         ) from exc
     try:
         grant = identity.authenticate(command)
+    except AccountIdentityUnavailable as exc:
+        raise _identity_unavailable(exc) from exc
     except AccountIdentityDenied as exc:
         try:
             protection.record(
@@ -177,7 +192,10 @@ def end_session(
     _require_enabled(settings)
     token = request.cookies.get(settings.production_session_cookie_name, "")
     if token:
-        identity.revoke(token)
+        try:
+            identity.revoke(token)
+        except AccountIdentityUnavailable as exc:
+            raise _identity_unavailable(exc) from exc
     response.delete_cookie(
         key=settings.production_session_cookie_name,
         httponly=True,

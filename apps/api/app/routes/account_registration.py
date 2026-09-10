@@ -8,6 +8,7 @@ from app.core.config import Settings, get_settings
 from app.modules.account_identity import (
     AccountIdentity,
     AccountIdentityConflict,
+    AccountIdentityUnavailable,
     AccountLoginProtection,
     AccountLoginProtectionUnavailable,
     AccountLoginRateLimited,
@@ -127,6 +128,14 @@ def register_personal_account(
 
     try:
         grant = registration.register_personal_account(command)
+    except AccountIdentityUnavailable as exc:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "code": "PRODUCTION_IDENTITY_UNAVAILABLE",
+                "message": "正式账号服务暂不可用。",
+            },
+        ) from exc
     except AccountIdentityConflict as exc:
         _record_or_fail(
             protection,

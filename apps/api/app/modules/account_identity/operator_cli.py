@@ -75,6 +75,8 @@ def _settings() -> Settings:
         raise AccountAdministrationError("ACCOUNT_CONFIGURATION_UNAVAILABLE") from None
     if not settings.production_identity_enabled or settings.beta_access_enabled:
         raise AccountAdministrationError("PRODUCTION_IDENTITY_NOT_ACTIVE")
+    if settings.production_identity_provider != "sqlite":
+        raise AccountAdministrationError("ACCOUNT_OPERATOR_BACKEND_UNSUPPORTED")
     return settings
 
 

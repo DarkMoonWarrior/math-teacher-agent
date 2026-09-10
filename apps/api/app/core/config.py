@@ -188,9 +188,13 @@ class Settings(BaseSettings):
     # Public browser registration is a separate deployment decision. Keeping
     # it off by default prevents enabling identity from silently opening sign-up.
     production_self_registration_enabled: bool = False
+    # SQLite remains a local transition adapter. Production deployments must
+    # explicitly select PostgreSQL and provide a secret DSN.
+    production_identity_provider: Literal["sqlite", "postgresql"] = "sqlite"
     production_identity_db: Path = Field(
         default=PROJECT_ROOT / "data" / "private-runtime" / "account-identity.sqlite3"
     )
+    production_identity_postgres_dsn: SecretStr = SecretStr("")
     production_login_security_db: Path = Field(
         default=PROJECT_ROOT / "data" / "private-runtime" / "login-security.sqlite3"
     )

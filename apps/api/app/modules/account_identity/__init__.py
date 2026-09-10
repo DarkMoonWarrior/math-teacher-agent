@@ -4,6 +4,7 @@ from app.modules.account_identity.contracts import (
     AccountIdentity,
     AccountIdentityConflict,
     AccountIdentityDenied,
+    AccountIdentityUnavailable,
     AccountLifecycleAudit,
     AccountLifecycleAuditError,
     AccountLoginProtection,
@@ -31,6 +32,13 @@ from app.modules.account_identity.login_network_origin import (
     UnavailableLoginNetworkOrigin,
 )
 from app.modules.account_identity.memory_adapter import InMemoryAccountIdentity
+from app.modules.account_identity.postgres_adapter import (
+    POSTGRES_IDENTITY_SCHEMA_VERSION,
+    PostgresAccountIdentity,
+    PostgresAccountIdentitySchema,
+    PostgresIdentitySchemaError,
+    PostgresIdentitySchemaPlan,
+)
 from app.modules.account_identity.maintenance import (
     AccountSessionMaintenance,
     AccountSessionMaintenanceError,
@@ -59,6 +67,7 @@ __all__ = [
     "AccountIdentityConflict",
     "AccountIdentityContext",
     "AccountIdentityDenied",
+    "AccountIdentityUnavailable",
     "AccountLifecycleAudit",
     "AccountLifecycleAuditError",
     "AccountLifecycleReceipt",
@@ -82,6 +91,11 @@ __all__ = [
     "LoginNetworkOriginUnavailable",
     "PersonalAccountProvision",
     "PersonalAccountRegistration",
+    "POSTGRES_IDENTITY_SCHEMA_VERSION",
+    "PostgresAccountIdentity",
+    "PostgresAccountIdentitySchema",
+    "PostgresIdentitySchemaError",
+    "PostgresIdentitySchemaPlan",
     "ProvisionedAccount",
     "SqliteAccountIdentity",
     "SqliteAccountLifecycleAudit",

@@ -23,6 +23,7 @@
 | python-multipart | 0.0.32 | Apache-2.0 | VERIFIED |
 | python-docx | 1.2.0 | MIT | VERIFIED |
 | reportlab | 4.5.1 | BSD（见其 license.txt） | VERIFIED |
+| psycopg / psycopg-binary | >=3.2,<4（PostgreSQL 生产 adapter；当前环境未安装） | 待核验 | REVIEW |
 | httpx（测试） | 0.28.1 | BSD-3-Clause | VERIFIED |
 | pytest（测试） | 8.4.2 | MIT | VERIFIED |
 

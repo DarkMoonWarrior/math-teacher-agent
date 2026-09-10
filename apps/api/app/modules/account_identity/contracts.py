@@ -101,6 +101,10 @@ class AccountIdentityConflict(ValueError):
     """Operator provisioning conflicts; never returned by the login route."""
 
 
+class AccountIdentityUnavailable(ValueError):
+    """Identity storage/configuration is unavailable and must fail closed."""
+
+
 class AccountAdministrationError(ValueError):
     """Stable operator error code without account or storage details."""
 

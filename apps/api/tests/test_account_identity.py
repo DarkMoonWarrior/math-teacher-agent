@@ -198,6 +198,7 @@ def test_production_session_http_is_owner_scoped_and_hides_internal_ids(
         )
     settings = Settings(
         production_identity_enabled=True,
+        production_self_registration_enabled=False,
         beta_access_enabled=False,
         production_session_cookie_name="account_test_session",
         production_session_secure_cookie=False,
