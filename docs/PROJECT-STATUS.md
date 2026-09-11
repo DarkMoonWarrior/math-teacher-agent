@@ -42,7 +42,7 @@
 
 ## 工程基线与限制
 
-M14 当前固定集 **368 passed、1 skipped**；完整 FastAPI **798 passed、1 skipped**；Teacher Web **108 passed**，Agent **42 passed**，双方类型检查与生产构建沿用上一切片通过结果。本切片的自动测试只使用临时目录、合成 owner、数据库、文件、连接和事务 adapter，不调用真实模型、不连接真实 PostgreSQL、不创建真实账号、不迁移或清理真实用户数据。
+M14 当前固定集 **369 passed、1 skipped**；完整 FastAPI **799 passed、1 skipped**；Teacher Web **108 passed**，Agent **42 passed**，双方类型检查与生产构建沿用上一切片通过结果。本切片的自动测试只使用临时目录、合成 owner、数据库、文件、连接和事务 adapter，不调用真实模型、不连接真实 PostgreSQL、不创建真实账号、不迁移或清理真实用户数据。
 
 `apps/teacher-web` 是唯一产品 UI；旧 UI 源码、入口和依赖已移除。运行库、私人上传、环境、导出与备份不进入 Git。商业题目目录仍为空，合成 fixture 不具备第三方内容权利。
 
@@ -78,7 +78,7 @@ PostgreSQL tenant adapter 第二段先新增 `OwnerDataInventory`，以固定目
 
 随后新增 `OwnerFileReconciliation`，对私人资料、题图、PDF 导入和试卷资源四个文件域执行只读引用对账。平面目录按数据库保存名核对，试卷目录按 paper owner 与全部不可变版本 asset ID 核对；缺失、孤儿、跨 owner 冲突、悬空引用、路径穿越、链接和 schema 异常都失败关闭。报告只含数量、问题码与证据指纹，不读取文件正文，也不迁移或修改数据。
 
-第三段新增独立 `OwnerMigrationPlanner`。它要求操作者提交前两份只读报告的精确指纹，并把源 owner、目标 owner/tenant、33 张非旧版表中的对象、完整源记录指纹、父对象依赖和四类文件引用绑定为仅摘要计划。对象扫描后会再次执行清点、文件对账和完整对象图扫描，证据或记录内容漂移、悬空或跨 owner 父子关系、计划依赖不闭合、对象重复和文件数量不一致都会失败关闭。输出不含 owner、tenant、路径、主键、文件名或正文，且固定 `execution_allowed=false`；没有 HTTP、浏览器、Agent 或模型入口，也没有连接目标 PostgreSQL、写入、复制、删除或保存计划。
+第三段新增独立 `OwnerMigrationPlanner`。它要求操作者提交前两份只读报告的精确指纹，并把源 owner、目标 owner/tenant、33 张非旧版表中的对象、完整源记录指纹、父对象依赖和四类文件引用绑定为仅摘要计划。计划 schema v2 进一步记录每个文件的内容 SHA-256 与字节长度，使同名内容替换也会改变确认指纹。扫描后会再次执行清点、文件对账和完整对象/文件计划扫描，证据、记录内容、文件字节漂移、悬空或跨 owner 父子关系、计划依赖不闭合、对象重复和文件数量不一致都会失败关闭。输出不含 owner、tenant、路径、主键、文件名或正文，且固定 `execution_allowed=false`；没有 HTTP、浏览器、Agent 或模型入口，也没有连接目标 PostgreSQL、写入、复制、删除或保存计划。
 
 第四段新增独立 `OwnerMigrationExecutor`。它在打开目标事务前要求布尔确认、确认计划指纹与预期计划指纹一致，并重新生成实时计划；任何变化都拒绝执行。注入的事务 adapter 必须提供目标状态、应用、摘要对账与完成标记；同一计划已完成时只在对账一致后幂等返回，首次执行则必须在同一事务内应用、核对计划/对象/文件摘要与数量后才能标记完成，对账失败由 adapter 回滚。当前只完成合成事务验证，没有具体 PostgreSQL 内容写入或文件复制 adapter，也没有迁移真实数据。
 

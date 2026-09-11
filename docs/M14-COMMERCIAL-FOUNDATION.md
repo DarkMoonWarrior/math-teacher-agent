@@ -134,10 +134,10 @@ python -m app.modules.account_identity.operator_cli keyring-status
 ### 3.10 PostgreSQL tenant adapter 第二段：owner 逐对象迁移计划
 
 - 新增不接 HTTP/浏览器/Agent/模型的 `OwnerMigrationPlanner`，要求同时提交清点与文件对账的精确指纹，任一证据变化即拒绝生成计划。
-- 固定 ownership 查询图覆盖 33 张非旧版表，按父对象先于子对象的顺序输出对象摘要、完整源记录指纹与依赖摘要；四个文件域也输出逐文件摘要并与对账数量复核。
+- 固定 ownership 查询图覆盖 33 张非旧版表，按父对象先于子对象的顺序输出对象摘要、完整源记录指纹与依赖摘要；四个文件域输出逐文件摘要、内容 SHA-256 与字节长度并与对账数量复核。计划 schema v2 将文件字节纳入确认指纹。
 - 子记录 owner 无法解析、多条 owner 路径不一致、依赖对象未进入同一计划、对象重复、旧无 owner 行或文件异常全部失败关闭。
 - 源/目标 owner、tenant、路径、主键、文件名和正文均不出现在报告；输出固定 `execution_allowed=false`，计划指纹也不是写入确认令牌。
-- 对象扫描后再次执行两份只读证据并重建完整对象图，防止扫描期间的对象、记录内容、依赖或文件引用漂移。本切片没有连接目标 PostgreSQL，也没有写入、复制、移动、删除或持久化计划。完整边界见 [`ADR-2026-09-11-OWNER-MIGRATION-PLANNING.md`](ADR-2026-09-11-OWNER-MIGRATION-PLANNING.md)。
+- 对象扫描后再次执行两份只读证据并重建完整对象/文件计划，防止扫描期间的对象、记录内容、依赖、文件引用或文件字节漂移。本切片没有连接目标 PostgreSQL，也没有写入、复制、移动、删除或持久化计划。完整边界见 [`ADR-2026-09-11-OWNER-MIGRATION-PLANNING.md`](ADR-2026-09-11-OWNER-MIGRATION-PLANNING.md)。
 
 ### 3.11 PostgreSQL tenant adapter 第二段：迁移执行控制器
 

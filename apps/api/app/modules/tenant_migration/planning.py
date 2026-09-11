@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import math
 import re
@@ -32,6 +33,7 @@ from app.modules.tenant_migration.schemas import (
     OwnerDataInventoryReport,
     OwnerFileReconciliationReport,
     OwnerMigrationFilePlan,
+    OwnerMigrationFileObjectPlan,
     OwnerMigrationObjectPlan,
     OwnerMigrationPlanReport,
     OwnerMigrationTablePlan,
@@ -447,7 +449,7 @@ class OwnerMigrationPlanner:
             target_owner_id, target_tenant_id
         )
         canonical = {
-            "schema_version": 1,
+            "schema_version": 2,
             "source_inventory_fingerprint": inventory.report_fingerprint,
             "source_file_reconciliation_fingerprint": files.report_fingerprint,
             "target_binding_fingerprint": target_binding,
@@ -583,23 +585,85 @@ class OwnerMigrationPlanner:
             expected = stores_by_id[spec.store_id].referenced_files
             if len(references) != expected:
                 raise OwnerMigrationPlanningError("MIGRATION_FILE_EVIDENCE_MISMATCH")
-            digests = tuple(
+            objects = tuple(
                 sorted(
-                    owner_file_digest(binding, spec.store_id, reference)
-                    for reference in references
+                    (
+                        self._file_object_plan(spec, binding, reference)
+                        for reference in references
+                    ),
+                    key=lambda item: item.object_digest,
                 )
             )
             result.append(
                 OwnerMigrationFilePlan(
                     store_id=spec.store_id,
                     sequence=sequence,
-                    object_count=len(digests),
-                    object_set_fingerprint=self._digest(digests),
-                    object_digests=digests,
+                    object_count=len(objects),
+                    object_set_fingerprint=self._digest(
+                        [item.model_dump(mode="json") for item in objects]
+                    ),
+                    objects=objects,
                 )
             )
             sequence += 1
         return tuple(result)
+
+    def _file_object_plan(
+        self,
+        spec: OwnerFileStoreSpec,
+        binding: tuple[str, str, str],
+        reference: str,
+    ) -> OwnerMigrationFileObjectPlan:
+        try:
+            path = self._file_path(spec, reference)
+            OwnerFileReconciliation._reject_links(path)
+            digest = hashlib.sha256()
+            length = 0
+            with path.open("rb") as source:
+                while chunk := source.read(1024 * 1024):
+                    digest.update(chunk)
+                    length += len(chunk)
+        except (OSError, ValueError) as error:
+            raise OwnerMigrationPlanningError(
+                "MIGRATION_FILE_CONTENT_UNAVAILABLE"
+            ) from error
+        return OwnerMigrationFileObjectPlan(
+            object_digest=owner_file_digest(binding, spec.store_id, reference),
+            source_checksum=digest.hexdigest(),
+            byte_length=length,
+        )
+
+    @staticmethod
+    def _file_path(spec: OwnerFileStoreSpec, reference: str) -> Path:
+        if spec.layout == "private_library":
+            prefix = "library:"
+        elif spec.layout == "question_capture":
+            prefix = "capture:"
+        elif spec.layout == "pdf_imports":
+            prefix = "pdf:"
+        else:
+            prefix = ""
+        if prefix:
+            if not reference.startswith(prefix):
+                raise ValueError("reference")
+            name = reference[len(prefix) :]
+            if not OwnerFileReconciliation._safe_name(name):
+                raise ValueError("reference")
+            return spec.files.path / name
+
+        parts = reference.split(":")
+        if len(parts) != 3 or parts[0] != "paper":
+            raise ValueError("reference")
+        paper_id, asset_id = parts[1:]
+        directory = spec.files.path / paper_id
+        matches = [
+            entry
+            for entry in directory.iterdir()
+            if entry.is_file() and entry.stem == asset_id
+        ]
+        if len(matches) != 1:
+            raise ValueError("reference")
+        return matches[0]
 
     def _file_references(
         self, spec: OwnerFileStoreSpec, source_owner_id: str

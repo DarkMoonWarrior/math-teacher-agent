@@ -79,16 +79,26 @@ class OwnerMigrationTablePlan(BaseModel):
     objects: tuple[OwnerMigrationObjectPlan, ...]
 
 
+class OwnerMigrationFileObjectPlan(BaseModel):
+    object_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    source_checksum: str = Field(pattern=r"^[0-9a-f]{64}$")
+    byte_length: int = Field(ge=0)
+
+
 class OwnerMigrationFilePlan(BaseModel):
     store_id: str = Field(pattern=r"^[a-z][a-z0-9_]{1,63}$")
     sequence: int = Field(ge=1)
     object_count: int = Field(ge=0)
     object_set_fingerprint: str = Field(pattern=r"^[0-9a-f]{64}$")
-    object_digests: tuple[str, ...]
+    objects: tuple[OwnerMigrationFileObjectPlan, ...]
+
+    @property
+    def object_digests(self) -> tuple[str, ...]:
+        return tuple(item.object_digest for item in self.objects)
 
 
 class OwnerMigrationPlanReport(BaseModel):
-    schema_version: Literal[1] = 1
+    schema_version: Literal[2] = 2
     scope: Literal["requested_owner"] = "requested_owner"
     execution_allowed: Literal[False] = False
     migration_ready: Literal[True] = True

@@ -196,6 +196,28 @@ def test_plan_fingerprint_binds_source_record_content(tmp_path: Path) -> None:
     )
 
 
+def test_plan_fingerprint_binds_source_file_content(tmp_path: Path) -> None:
+    planner = _prepare(tmp_path)
+    first = _plan(planner)
+    files = planner._data_specs[1]
+    assert isinstance(files, OwnerDirectoryStoreSpec)
+    (files.path / "alpha.pdf").write_bytes(b"changed-private")
+
+    second = _plan(planner)
+
+    assert (
+        first.source_file_reconciliation_fingerprint
+        == second.source_file_reconciliation_fingerprint
+    )
+    assert first.plan_fingerprint != second.plan_fingerprint
+    assert (
+        first.files[0].objects[0].source_checksum
+        != second.files[0].objects[0].source_checksum
+    )
+    assert first.files[0].objects[0].byte_length == len(b"alpha-private")
+    assert second.files[0].objects[0].byte_length == len(b"changed-private")
+
+
 def test_stale_evidence_and_unchanged_binding_are_rejected(tmp_path: Path) -> None:
     planner = _prepare(tmp_path)
     inventory, files = _evidence(planner)

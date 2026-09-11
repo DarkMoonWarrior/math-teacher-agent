@@ -77,6 +77,8 @@
 
 2026-09-11 M14 owner 数据库对象只读物化：新增内部 `OwnerMigrationObjectMaterializer` 与共享摘要 seam。物化器在读取源库前验证完整计划和目标绑定，随后以只读 SQLite 连接逐表重建当前源 owner 的对象集合、依赖与完整行指纹；计划后新增、删除或修改对象、错误 owner/tenant、重复对象和目录偏差全部失败关闭。私密载荷只在内存中交给未来目标 adapter，owner/tenant 列改绑到目标，BLOB 明确编码；其他 owner 内容不进入载荷，报告、错误与对象表示不输出正文或身份。本切片没有 HTTP/Agent/CLI、文件物化、PostgreSQL 写入或真实数据迁移。M14 固定入口 368 项通过/1 项跳过，完整 API 798 项通过/1 项跳过；Teacher Web 108 项与 Agent 42 项沿用已通过基线。下一切片实现文件物化，再接入具体 PostgreSQL 目标事务 adapter。
 
+2026-09-11 M14 迁移文件内容绑定：`OwnerMigrationPlanReport` 升级为 schema v2，每个文件对象除目标绑定摘要外同时记录源内容 SHA-256 与字节长度，并把这些事实纳入对象集合和总计划指纹。Planner 以流式只读方式扫描文件并在最终证据复核时再次重建文件计划；引用名不变但字节被替换也会改变计划并阻止旧确认继续执行。报告仍不含路径、文件名、owner、tenant 或正文，本切片没有复制、暂存、发布、删除文件，也没有连接真实 PostgreSQL。M14 固定入口 369 项通过/1 项跳过，完整 API 799 项通过/1 项跳过；Teacher Web 108 项与 Agent 42 项沿用已通过基线。下一切片在 v2 内容指纹上实现可复核的流式文件物化。
+
 长期保留 `main`。下列分支在清理前已由 main 包含：
 
 - `codex/lesson-agent-v1`：`fb37d40`

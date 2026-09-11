@@ -10,6 +10,7 @@ from app.modules.tenant_migration.execution import (
 )
 from app.modules.tenant_migration.schemas import (
     OwnerMigrationFilePlan,
+    OwnerMigrationFileObjectPlan,
     OwnerMigrationObjectPlan,
     OwnerMigrationPlanReport,
     OwnerMigrationTablePlan,
@@ -48,7 +49,13 @@ def _plan() -> OwnerMigrationPlanReport:
                 sequence=2,
                 object_count=1,
                 object_set_fingerprint="f" * 64,
-                object_digests=("3" * 64,),
+                objects=(
+                    OwnerMigrationFileObjectPlan(
+                        object_digest="3" * 64,
+                        source_checksum="4" * 64,
+                        byte_length=12,
+                    ),
+                ),
             ),
         ),
     )
