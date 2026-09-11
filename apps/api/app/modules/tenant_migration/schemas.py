@@ -102,3 +102,29 @@ class OwnerMigrationPlanReport(BaseModel):
     plan_fingerprint: str = Field(pattern=r"^[0-9a-f]{64}$")
     tables: tuple[OwnerMigrationTablePlan, ...]
     files: tuple[OwnerMigrationFilePlan, ...]
+
+
+class OwnerMigrationTargetState(BaseModel):
+    state: Literal["empty", "in_progress", "complete", "unexpected"]
+    target_binding_fingerprint: str = Field(pattern=r"^[0-9a-f]{64}$")
+    plan_fingerprint: str | None = Field(
+        default=None, pattern=r"^[0-9a-f]{64}$"
+    )
+
+
+class OwnerMigrationTargetReconciliation(BaseModel):
+    plan_fingerprint: str = Field(pattern=r"^[0-9a-f]{64}$")
+    object_count: int = Field(ge=0)
+    file_count: int = Field(ge=0)
+    object_set_fingerprint: str = Field(pattern=r"^[0-9a-f]{64}$")
+    file_set_fingerprint: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class OwnerMigrationExecutionReceipt(BaseModel):
+    schema_version: Literal[1] = 1
+    outcome: Literal["applied", "already_applied"]
+    plan_fingerprint: str = Field(pattern=r"^[0-9a-f]{64}$")
+    target_binding_fingerprint: str = Field(pattern=r"^[0-9a-f]{64}$")
+    object_count: int = Field(ge=0)
+    file_count: int = Field(ge=0)
+    reconciled: Literal[True] = True

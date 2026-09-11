@@ -1,6 +1,6 @@
 # 当前开发状态
 
-更新日期：2026-09-11。M0–M12 已完成。M13 的版本化指标、生命周期、服务端事实、私有运营读数和操作预演切片已完成，但因样本不足，项目所有者明确暂停真实 Beta 并授权进入 M14；M13 Gate 未通过。M14 Commercial Foundation 当前进行中，生产身份基础、默认关闭的网页个人账号注册、操作者账号生命周期、正式登录防护、生命周期审计、摘要密钥轮换、可信代理来源、分布式限流服务 adapter、PostgreSQL 正式身份 adapter 与显式 schema 部署边界、owner 数据只读清点、文件引用只读对账和逐对象迁移计划已经实现。
+更新日期：2026-09-11。M0–M12 已完成。M13 的版本化指标、生命周期、服务端事实、私有运营读数和操作预演切片已完成，但因样本不足，项目所有者明确暂停真实 Beta 并授权进入 M14；M13 Gate 未通过。M14 Commercial Foundation 当前进行中，生产身份基础、默认关闭的网页个人账号注册、操作者账号生命周期、正式登录防护、生命周期审计、摘要密钥轮换、可信代理来源、分布式限流服务 adapter、PostgreSQL 正式身份 adapter 与显式 schema 部署边界、owner 数据只读清点、文件引用只读对账、逐对象迁移计划和执行控制器已经实现。
 
 | 范围 | 当前状态 |
 | --- | --- |
@@ -14,7 +14,7 @@
 | M11 Teacher Memory | 已完成；26 场景、12 类违规为 0；回滚点 `5614fc0` |
 | M12 Closed Beta Readiness | 已完成；五条切片、固定评测与完整 Gate 通过；回滚点 `570cf79` |
 | M13 Closed Beta Validation | 真实验证延期；切片 1–5 已完成；没有真实样本，Gate 未通过 |
-| M14 Commercial Foundation | 进行中；生产身份 Interface、账号/tenant/owner 分离、正式登录/注册、账号生命周期与登录安全、PostgreSQL 正式身份 adapter、schema 预演/确认、owner 数据清点、文件引用对账和只读逐对象迁移计划已实现；内容迁移执行未开始 |
+| M14 Commercial Foundation | 进行中；生产身份 Interface、账号/tenant/owner 分离、正式登录/注册、账号生命周期与登录安全、PostgreSQL 正式身份 adapter、schema 预演/确认、owner 数据清点、文件引用对账、只读逐对象计划和迁移执行控制器已实现；具体 PostgreSQL 内容 adapter 未开始 |
 | M15–M17 | 未开始；依次为 Teacher Pro、教研组、学校 |
 
 ## 当前产品能力
@@ -42,7 +42,7 @@
 
 ## 工程基线与限制
 
-M14 当前固定集 **345 passed、1 skipped**；完整 FastAPI **775 passed、1 skipped**；Teacher Web **108 passed**，Agent **42 passed**，双方类型检查与生产构建沿用上一切片通过结果。本切片的自动测试只使用临时目录、合成 owner、数据库和文件，不调用真实模型、不连接真实 PostgreSQL、不创建真实账号、不迁移或清理真实用户数据。
+M14 当前固定集 **355 passed、1 skipped**；完整 FastAPI **785 passed、1 skipped**；Teacher Web **108 passed**，Agent **42 passed**，双方类型检查与生产构建沿用上一切片通过结果。本切片的自动测试只使用临时目录、合成 owner、数据库、文件和事务 adapter，不调用真实模型、不连接真实 PostgreSQL、不创建真实账号、不迁移或清理真实用户数据。
 
 `apps/teacher-web` 是唯一产品 UI；旧 UI 源码、入口和依赖已移除。运行库、私人上传、环境、导出与备份不进入 Git。商业题目目录仍为空，合成 fixture 不具备第三方内容权利。
 
@@ -80,4 +80,6 @@ PostgreSQL tenant adapter 第二段先新增 `OwnerDataInventory`，以固定目
 
 第三段新增独立 `OwnerMigrationPlanner`。它要求操作者提交前两份只读报告的精确指纹，并把源 owner、目标 owner/tenant、33 张非旧版表中的对象、完整源记录指纹、父对象依赖和四类文件引用绑定为仅摘要计划。对象扫描后会再次执行清点、文件对账和完整对象图扫描，证据或记录内容漂移、悬空或跨 owner 父子关系、计划依赖不闭合、对象重复和文件数量不一致都会失败关闭。输出不含 owner、tenant、路径、主键、文件名或正文，且固定 `execution_allowed=false`；没有 HTTP、浏览器、Agent 或模型入口，也没有连接目标 PostgreSQL、写入、复制、删除或保存计划。
 
-正式身份与网页注册功能在仓库默认关闭；本地 SQLite 仍是过渡 adapter。邮箱验证、账号找回、MFA 实现、已认证操作者/RBAC、不可抵赖审计、集中式密钥管理、外部可信边缘/原子限流部署、真实 PostgreSQL 集成 Gate、owner-aware 迁移执行/对账/回滚、对象存储、持久任务、Entitlement、订单、支付与退款仍未实现；详见 [`M14-COMMERCIAL-FOUNDATION.md`](M14-COMMERCIAL-FOUNDATION.md)。
+第四段新增独立 `OwnerMigrationExecutor`。它在打开目标事务前要求布尔确认、确认计划指纹与预期计划指纹一致，并重新生成实时计划；任何变化都拒绝执行。注入的事务 adapter 必须提供目标状态、应用、摘要对账与完成标记；同一计划已完成时只在对账一致后幂等返回，首次执行则必须在同一事务内应用、核对计划/对象/文件摘要与数量后才能标记完成，对账失败由 adapter 回滚。当前只完成合成事务验证，没有具体 PostgreSQL 内容写入或文件复制 adapter，也没有迁移真实数据。
+
+正式身份与网页注册功能在仓库默认关闭；本地 SQLite 仍是过渡 adapter。邮箱验证、账号找回、MFA 实现、已认证操作者/RBAC、不可抵赖审计、集中式密钥管理、外部可信边缘/原子限流部署、具体 PostgreSQL 内容 schema/迁移 adapter、已提交迁移补偿恢复、真实 PostgreSQL 集成与 IDOR/tenant isolation Gate、对象存储、持久任务、Entitlement、订单、支付与退款仍未实现；详见 [`M14-COMMERCIAL-FOUNDATION.md`](M14-COMMERCIAL-FOUNDATION.md)。
