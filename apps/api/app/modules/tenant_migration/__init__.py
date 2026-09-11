@@ -24,6 +24,10 @@ from app.modules.tenant_migration.postgres_schema import (
     PostgresOwnerMigrationSchemaError,
     PostgresOwnerMigrationSchemaPlan,
 )
+from app.modules.tenant_migration.postgres_adapter import (
+    PostgresOwnerMigrationAdapter,
+    PostgresOwnerMigrationAdapterError,
+)
 from app.modules.tenant_migration.schemas import (
     OwnerDataInventoryReport,
     OwnerDataStoreInventory,
@@ -63,6 +67,8 @@ __all__ = [
     "OwnerMigrationTargetReconciliation",
     "OwnerMigrationTargetState",
     "POSTGRES_OWNER_MIGRATION_SCHEMA_VERSION",
+    "PostgresOwnerMigrationAdapter",
+    "PostgresOwnerMigrationAdapterError",
     "PostgresOwnerMigrationSchema",
     "PostgresOwnerMigrationSchemaError",
     "PostgresOwnerMigrationSchemaPlan",

@@ -81,6 +81,8 @@
 
 2026-09-11 M14 owner 文件流式物化：新增内部 `OwnerMigrationSourceFiles`，统一固定数据库引用、source owner 过滤、安全路径解析及流式 SHA-256/长度，Planner 和 `OwnerMigrationFileMaterializer` 复用同一 Interface。物化器先核对完整计划、目标绑定、文件域、对象集合与内容指纹；每次写入未来事务拥有的 staging sink 时重新拒绝链接并在 EOF 再次复核内容，计划后或物化后替换文件、短写及 I/O 失败都不能进入发布状态。批次表示、错误和公开报告不含 owner、tenant、路径、文件名或正文。测试只使用临时 SQLite、临时文件和内存 sink，没有连接 PostgreSQL、复制/发布真实文件或迁移真实数据。M14 固定入口 374 项通过/1 项跳过，完整 API 804 项通过/1 项跳过；Teacher Web 108 项与 Agent 42 项沿用已通过基线。下一切片把数据库载荷与文件流接入具体 PostgreSQL 目标事务 adapter。
 
+2026-09-11 M14 PostgreSQL owner 迁移目标事务 adapter：新增 `PostgresOwnerMigrationAdapter`，通过 Executor 已固定的小型 Interface 封装目标状态、对象/文件物化、SQL 暂存、实际目标摘要重算、可逆文件发布和完成标记。目标绑定或计划不符会在连接数据库与打开 staging 前拒绝；同一已完成计划只有重算对账一致才幂等返回。合成 PostgreSQL 连接与可逆文件事务覆盖成功、幂等、目标对账失败、发布集合缺失和数据库提交失败，普通失败均恢复两侧状态；未连接真实 PostgreSQL、未复制真实文件、未迁移真实用户数据。M14 固定入口 379 项通过/1 项跳过，完整 API 809 项通过/1 项跳过；Teacher Web 108 项与 Agent 42 项沿用已通过基线。下一切片实现已提交迁移的补偿恢复，再验证 IDOR/tenant isolation；生产文件 staging 与真实 PostgreSQL Gate 仍未完成。
+
 长期保留 `main`。下列分支在清理前已由 main 包含：
 
 - `codex/lesson-agent-v1`：`fb37d40`

@@ -236,12 +236,7 @@ class OwnerMigrationExecutor:
 
     @staticmethod
     def _set_fingerprint(namespace: str, digests: tuple[str, ...]) -> str:
-        payload = json.dumps(
-            (namespace, *sorted(digests)),
-            separators=(",", ":"),
-            ensure_ascii=True,
-        ).encode("utf-8")
-        return hashlib.sha256(payload).hexdigest()
+        return migration_set_fingerprint(namespace, digests)
 
     @staticmethod
     def _receipt(
@@ -255,3 +250,12 @@ class OwnerMigrationExecutor:
             object_count=plan.object_count,
             file_count=plan.file_count,
         )
+
+
+def migration_set_fingerprint(namespace: str, digests: tuple[str, ...]) -> str:
+    payload = json.dumps(
+        (namespace, *sorted(digests)),
+        separators=(",", ":"),
+        ensure_ascii=True,
+    ).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()

@@ -2,7 +2,7 @@
 
 日期：2026-09-11
 
-状态：M14 PostgreSQL tenant adapter 第二段的第四切片；执行控制器和合成事务验证已实现，后续落地区域及数据库对象/文件流只读物化已建立，具体 PostgreSQL 目标事务 adapter 尚未实现。
+状态：M14 PostgreSQL tenant adapter 第二段的第四切片；执行控制器已实现，后续落地区域、数据库对象/文件流物化及合成验证的具体 PostgreSQL 目标事务 adapter 已建立。
 
 ## 决策
 
@@ -26,9 +26,9 @@
 
 ## 明确未完成
 
-- 尚无具体 PostgreSQL owner 内容 schema、SQL 写入或对象文件复制 adapter；
+- 尚无正式 owner-aware 运行时内容 schema 或生产文件 staging Adapter；具体 SQL 目标 adapter 目前只通过合成连接与文件事务验证；
 - 尚未迁移、移动、更新或删除任何真实用户数据；
 - 尚未实现已提交迁移的人工补偿回滚；当前回滚只指事务提交前的自动回滚；
 - 尚未通过真实 PostgreSQL、IDOR、tenant isolation、故障注入或恢复 Gate。
 
-后续切片已经实现固定迁移落地区域的预演/确认，以及计划内数据库对象和文件流的只读物化。下一步只能先完成具体 PostgreSQL 目标事务 adapter，再基于合成故障注入证明逐表写入、文件暂存、原子发布、目标复核与补偿恢复；不得把本控制器描述为真实迁移已经完成。
+后续切片已经实现固定迁移落地区域的预演/确认、计划内数据库对象和文件流的只读物化，以及具体 PostgreSQL 目标事务 adapter 的合成故障注入。下一步必须建立已提交迁移的补偿恢复，再验证真实 PostgreSQL、IDOR 与 tenant isolation；不得把普通异常回滚描述为真实迁移或跨系统崩溃恢复已经完成。

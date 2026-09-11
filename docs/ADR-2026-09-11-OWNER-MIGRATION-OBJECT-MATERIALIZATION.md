@@ -40,6 +40,7 @@ Agent、模型或 CLI 入口。错误只返回稳定代码，不拼接 owner、�
 
 ## 结果与限制
 
-该 Interface 把“只读源对象解释”从 PostgreSQL 写入实现中分离出来，使后续 adapter
-只需消费已经逐对象核对、目标绑定的载荷。当前仍没有具体 PostgreSQL 写入 adapter、
-文件复制、已提交迁移补偿恢复、真实 PostgreSQL 集成 Gate 或真实数据迁移。
+该 Interface 把“只读源对象解释”从 PostgreSQL 写入实现中分离出来，使目标 adapter
+只需消费已经逐对象核对、目标绑定的载荷。后续具体 SQL adapter 已在合成连接中消费
+这些载荷；当前仍没有生产文件 staging、已提交迁移补偿恢复、真实 PostgreSQL 集成
+Gate 或真实数据迁移。
