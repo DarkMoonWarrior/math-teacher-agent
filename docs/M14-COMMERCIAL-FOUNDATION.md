@@ -160,10 +160,17 @@ python -m app.modules.account_identity.operator_cli keyring-status
 - 只选择明确源 owner 的对象；载荷中的 `owner_id` 和已有 `tenant_id` 改绑到目标，BLOB 使用明确 Base64 表达。其他 owner 的内容不会进入载荷，私密载荷不会出现在报告、错误或 `repr`。
 - 源库以 SQLite 只读模式和 `query_only` 打开，测试验证文件字节不变。当前不连接 PostgreSQL、不物化文件、不写入、复制、移动或删除真实数据；完整边界见 [`ADR-2026-09-11-OWNER-MIGRATION-OBJECT-MATERIALIZATION.md`](ADR-2026-09-11-OWNER-MIGRATION-OBJECT-MATERIALIZATION.md)。
 
+### 3.14 PostgreSQL tenant adapter 第二段：owner 文件流式物化
+
+- 新增内部 `OwnerMigrationSourceFiles`，把固定数据库引用、owner 过滤、安全路径解析和内容指纹收口为同一只读 Interface；Planner 与文件物化器复用它，不各自解释文件引用。
+- `OwnerMigrationFileMaterializer` 在读取前核对完整计划、目标绑定、文件域和逐文件 SHA-256/长度。物化完成后的每次流式复制仍会重新拒绝链接并在 EOF 复核内容，计划后或物化后的替换都失败关闭。
+- 文件流只能交给未来目标事务 adapter 所拥有、失败可丢弃的 staging sink；成功复核前不得记录暂存完成，更不得发布。批次表示、错误与公开报告不含 owner、tenant、路径、引用名或正文。
+- 当前测试只使用临时文件和内存 staging sink；没有连接 PostgreSQL，没有复制/发布真实文件，也没有 HTTP、Agent、模型或 CLI 入口。完整边界见 [`ADR-2026-09-11-OWNER-MIGRATION-FILE-MATERIALIZATION.md`](ADR-2026-09-11-OWNER-MIGRATION-FILE-MATERIALIZATION.md)。
+
 ## 4. 后续切片顺序
 
 1. **账号生命周期加固（进行中）**：网页个人账号注册、操作者创建/停用、密码重置、失效会话预览/确认清理、登录双范围限流、摘要化登录安全事实、当前浏览器会话轮换、MFA 决策、操作者生命周期审计、摘要密钥轮换、可信生产代理来源与分布式限流 adapter 已实现；邮箱验证、找回密码、外部分布式服务、边缘部署、告警、已认证操作者/RBAC、MFA 与集中式密钥管理仍未完成。下一段进入 PostgreSQL tenant adapter。
-2. **PostgreSQL tenant adapter（进行中）**：正式身份 adapter、显式 schema 预演/确认、owner-aware 只读存储清单、四类文件域引用对账、逐对象迁移计划、明确确认/幂等/对账/事务回滚控制器、固定迁移落地区域和数据库对象只读物化已实现；下一段实现文件物化与具体 PostgreSQL 目标事务 adapter，再验证已提交迁移的补偿恢复和 IDOR/tenant isolation。
+2. **PostgreSQL tenant adapter（进行中）**：正式身份 adapter、显式 schema 预演/确认、owner-aware 只读存储清单、四类文件域引用对账、逐对象迁移计划、明确确认/幂等/对账/事务回滚控制器、固定迁移落地区域，以及数据库对象和文件流的只读物化已实现；下一段实现具体 PostgreSQL 目标事务 adapter，再验证已提交迁移的补偿恢复和 IDOR/tenant isolation。
 3. **对象存储与持久任务**：原文件、导出和后台任务获得明确 owner/tenant key、保留期、幂等和恢复语义。
 4. **Entitlement**：只表达账号可用能力，不替代身份、owner 权利或内容可信门禁。
 5. **订单、订阅、支付与退款**：最后接入；要求幂等、Webhook 验签、状态机、对账和退款恢复全部独立验证。
@@ -171,7 +178,7 @@ python -m app.modules.account_identity.operator_cli keyring-status
 
 ## 5. 明确未完成
 
-- 正式 owner-aware PostgreSQL 业务内容 schema、文件物化与具体 PostgreSQL 目标事务 adapter、已提交迁移的补偿恢复、真实 PostgreSQL 集成 Gate、云对象存储、持久队列、多进程完整一致性和生产灾备。已实现的只读对象物化与迁移落地区域都不等同于真实迁移或业务内容 schema。
+- 正式 owner-aware PostgreSQL 业务内容 schema、具体 PostgreSQL 目标事务 adapter、已提交迁移的补偿恢复、真实 PostgreSQL 集成 Gate、云对象存储、持久队列、多进程完整一致性和生产灾备。已实现的只读对象/文件物化与迁移落地区域都不等同于真实迁移或业务内容 schema。
 - 无约束公网注册、邮箱验证、自助找回密码、MFA、设备管理、已认证操作者/RBAC、不可抵赖审计、集中式密钥管理、生产级分布式限流与告警。当前只实现默认关闭的个人账号网页注册工程路径。
 - 除 `personal_owner` 外的角色、组织 tenant、成员邀请、学生和学校后台。
 - Entitlement、订单、订阅、支付、Webhook 和退款。

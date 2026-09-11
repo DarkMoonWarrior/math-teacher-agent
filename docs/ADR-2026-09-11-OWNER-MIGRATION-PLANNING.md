@@ -1,7 +1,7 @@
 # ADR：M14 owner 逐对象迁移计划
 
 日期：2026-09-11
-状态：M14 PostgreSQL tenant adapter 第二段的第三切片；只读计划已实现，后续执行控制、落地区域和数据库对象只读物化已建立。
+状态：M14 PostgreSQL tenant adapter 第二段的第三切片；只读计划已实现，后续执行控制、落地区域及数据库对象/文件流只读物化已建立。
 
 ## 决策
 
@@ -51,4 +51,4 @@ python -m app.modules.tenant_migration.planning_cli `
 - 没有实现幂等执行、双写冻结、目标逐对象对账、失败补偿或回滚；
 - 没有通过真实 PostgreSQL、IDOR 和 tenant isolation Gate。
 
-后续实现已在本计划边界之上建立精确确认、幂等执行控制、目标摘要对账、迁移落地区域和数据库对象只读物化。尚未完成的文件物化、具体 PostgreSQL 目标事务 adapter 与补偿恢复仍不能让浏览器或 Agent 获得迁移能力。
+后续实现已在本计划边界之上建立精确确认、幂等执行控制、目标摘要对账、迁移落地区域，以及数据库对象和文件流只读物化。尚未完成的具体 PostgreSQL 目标事务 adapter 与补偿恢复仍不能让浏览器或 Agent 获得迁移能力。

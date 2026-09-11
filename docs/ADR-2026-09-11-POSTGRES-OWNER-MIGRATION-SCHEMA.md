@@ -33,4 +33,4 @@ python -m app.modules.tenant_migration.postgres_schema_cli apply --expected-fing
 - 尚未建立运行时业务表的 RLS、RBAC/IDOR 和 tenant isolation Gate。该迁移 schema 是操作者专用区域，不能被业务 API 当作内容查询来源。
 - 尚未实现提交后补偿恢复、真实 PostgreSQL 故障注入和生产灾备。
 
-数据库对象只读物化已经实现；下一切片先补文件物化，再实现具体 PostgreSQL 目标事务 adapter。它必须复用既有 `OwnerMigrationExecutor`，并证明对象暂存、文件暂存、目标摘要对账、原子完成标记和失败回滚。完成这些 adapter 仍不等于真实迁移 Gate 通过；真实 PostgreSQL、IDOR、tenant isolation 与补偿恢复必须单独验证。
+数据库对象和文件流只读物化已经实现；下一切片实现具体 PostgreSQL 目标事务 adapter。它必须复用既有 `OwnerMigrationExecutor`，并证明对象暂存、文件暂存、目标摘要对账、原子完成标记和失败回滚。完成该 adapter 仍不等于真实迁移 Gate 通过；真实 PostgreSQL、IDOR、tenant isolation 与补偿恢复必须单独验证。

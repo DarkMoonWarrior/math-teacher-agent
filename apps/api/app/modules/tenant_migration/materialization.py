@@ -14,6 +14,7 @@ from urllib.parse import quote
 
 from app.modules.tenant_migration.fingerprints import (
     canonical_digest,
+    migration_plan_fingerprint,
     owner_object_digest,
     source_record_fingerprint,
     target_binding_fingerprint,
@@ -267,19 +268,9 @@ class OwnerMigrationObjectMaterializer:
         return tuple(result)
 
     def _validate_plan(self, plan: OwnerMigrationPlanReport) -> None:
-        canonical = {
-            "schema_version": plan.schema_version,
-            "source_inventory_fingerprint": plan.source_inventory_fingerprint,
-            "source_file_reconciliation_fingerprint": (
-                plan.source_file_reconciliation_fingerprint
-            ),
-            "target_binding_fingerprint": plan.target_binding_fingerprint,
-            "tables": [table.model_dump(mode="json") for table in plan.tables],
-            "files": [item.model_dump(mode="json") for item in plan.files],
-        }
         if not secrets.compare_digest(
             plan.plan_fingerprint,
-            canonical_digest(canonical),
+            migration_plan_fingerprint(plan),
         ):
             raise OwnerMigrationMaterializationError(
                 "MIGRATION_MATERIALIZATION_PLAN_INVALID"

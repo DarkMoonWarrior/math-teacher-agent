@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import hashlib
-import json
 import math
 import re
 import sqlite3
@@ -18,7 +16,6 @@ from app.modules.tenant_migration.fingerprints import (
     OwnerMigrationFingerprintError,
     canonical_digest,
     canonical_sqlite_value,
-    owner_file_digest,
     owner_object_digest,
     source_record_fingerprint,
     target_binding_fingerprint,
@@ -37,6 +34,10 @@ from app.modules.tenant_migration.schemas import (
     OwnerMigrationObjectPlan,
     OwnerMigrationPlanReport,
     OwnerMigrationTablePlan,
+)
+from app.modules.tenant_migration.source_files import (
+    OwnerMigrationSourceFileError,
+    OwnerMigrationSourceFiles,
 )
 
 
@@ -400,6 +401,7 @@ class OwnerMigrationPlanner:
         self._validate_catalog()
         self._inventory = OwnerDataInventory(data_specs)
         self._reconciliation = OwnerFileReconciliation(file_specs)
+        self._source_files = OwnerMigrationSourceFiles(file_specs)
 
     def plan(
         self,
@@ -578,21 +580,32 @@ class OwnerMigrationPlanner:
         reconciliation: OwnerFileReconciliationReport,
     ) -> tuple[OwnerMigrationFilePlan, ...]:
         stores_by_id = {item.store_id: item for item in reconciliation.stores}
+        try:
+            source_stores = self._source_files.inspect(
+                source_owner_id=source_owner_id,
+                binding=binding,
+            )
+        except OwnerMigrationSourceFileError as error:
+            raise OwnerMigrationPlanningError(
+                "MIGRATION_FILE_CONTENT_UNAVAILABLE"
+            ) from error
+        sources_by_id = {item.store_id: item for item in source_stores}
         result: list[OwnerMigrationFilePlan] = []
         sequence = len(self._query_specs) + 1
         for spec in self._file_specs:
-            references = self._file_references(spec, source_owner_id)
+            source = sources_by_id.get(spec.store_id)
+            if source is None:
+                raise OwnerMigrationPlanningError("MIGRATION_FILE_EVIDENCE_MISMATCH")
             expected = stores_by_id[spec.store_id].referenced_files
-            if len(references) != expected:
+            if len(source.objects) != expected:
                 raise OwnerMigrationPlanningError("MIGRATION_FILE_EVIDENCE_MISMATCH")
             objects = tuple(
-                sorted(
-                    (
-                        self._file_object_plan(spec, binding, reference)
-                        for reference in references
-                    ),
-                    key=lambda item: item.object_digest,
+                OwnerMigrationFileObjectPlan(
+                    object_digest=item.object_digest,
+                    source_checksum=item.source_checksum,
+                    byte_length=item.byte_length,
                 )
+                for item in source.objects
             )
             result.append(
                 OwnerMigrationFilePlan(
@@ -607,160 +620,6 @@ class OwnerMigrationPlanner:
             )
             sequence += 1
         return tuple(result)
-
-    def _file_object_plan(
-        self,
-        spec: OwnerFileStoreSpec,
-        binding: tuple[str, str, str],
-        reference: str,
-    ) -> OwnerMigrationFileObjectPlan:
-        try:
-            path = self._file_path(spec, reference)
-            OwnerFileReconciliation._reject_links(path)
-            digest = hashlib.sha256()
-            length = 0
-            with path.open("rb") as source:
-                while chunk := source.read(1024 * 1024):
-                    digest.update(chunk)
-                    length += len(chunk)
-        except (OSError, ValueError) as error:
-            raise OwnerMigrationPlanningError(
-                "MIGRATION_FILE_CONTENT_UNAVAILABLE"
-            ) from error
-        return OwnerMigrationFileObjectPlan(
-            object_digest=owner_file_digest(binding, spec.store_id, reference),
-            source_checksum=digest.hexdigest(),
-            byte_length=length,
-        )
-
-    @staticmethod
-    def _file_path(spec: OwnerFileStoreSpec, reference: str) -> Path:
-        if spec.layout == "private_library":
-            prefix = "library:"
-        elif spec.layout == "question_capture":
-            prefix = "capture:"
-        elif spec.layout == "pdf_imports":
-            prefix = "pdf:"
-        else:
-            prefix = ""
-        if prefix:
-            if not reference.startswith(prefix):
-                raise ValueError("reference")
-            name = reference[len(prefix) :]
-            if not OwnerFileReconciliation._safe_name(name):
-                raise ValueError("reference")
-            return spec.files.path / name
-
-        parts = reference.split(":")
-        if len(parts) != 3 or parts[0] != "paper":
-            raise ValueError("reference")
-        paper_id, asset_id = parts[1:]
-        directory = spec.files.path / paper_id
-        matches = [
-            entry
-            for entry in directory.iterdir()
-            if entry.is_file() and entry.stem == asset_id
-        ]
-        if len(matches) != 1:
-            raise ValueError("reference")
-        return matches[0]
-
-    def _file_references(
-        self, spec: OwnerFileStoreSpec, source_owner_id: str
-    ) -> set[str]:
-        if not spec.database.path.exists():
-            return set()
-        with self._connect(spec.database.path) as connection:
-            if spec.layout == "private_library":
-                rows = connection.execute(
-                    "SELECT stored_name, owner_id FROM library_items"
-                ).fetchall()
-                return self._owned_file_rows(rows, source_owner_id, "library")
-            if spec.layout == "question_capture":
-                rows = connection.execute(
-                    "SELECT r.stored_name, a.owner_id "
-                    "FROM question_capture_revisions r "
-                    "LEFT JOIN question_capture_assets a "
-                    "ON a.asset_id = r.asset_id"
-                ).fetchall()
-                return self._owned_file_rows(rows, source_owner_id, "capture")
-            if spec.layout == "pdf_imports":
-                files = connection.execute(
-                    "SELECT f.stored_name, b.owner_id FROM import_files f "
-                    "LEFT JOIN import_batches b ON b.batch_id = f.batch_id"
-                ).fetchall()
-                crops = connection.execute(
-                    "SELECT c.stored_name, b.owner_id "
-                    "FROM import_structured_media_crops c "
-                    "LEFT JOIN import_files f ON f.file_id = c.file_id "
-                    "LEFT JOIN import_batches b ON b.batch_id = f.batch_id"
-                ).fetchall()
-                return self._owned_file_rows(
-                    (*files, *crops), source_owner_id, "pdf"
-                )
-            if spec.layout == "exam_papers":
-                return self._exam_file_references(connection, source_owner_id)
-        raise OwnerMigrationPlanningError("MIGRATION_FILE_LAYOUT_INVALID")
-
-    def _owned_file_rows(
-        self,
-        rows: list[tuple[object, object]] | tuple[tuple[object, object], ...],
-        source_owner_id: str,
-        namespace: str,
-    ) -> set[str]:
-        result: set[str] = set()
-        for name, owner in rows:
-            if not isinstance(owner, str) or not owner:
-                raise OwnerMigrationPlanningError(
-                    "MIGRATION_OWNER_RELATIONSHIP_UNRESOLVED"
-                )
-            if owner == source_owner_id:
-                result.add(f"{namespace}:{name}")
-        return result
-
-    def _exam_file_references(
-        self, connection: sqlite3.Connection, source_owner_id: str
-    ) -> set[str]:
-        owners: dict[tuple[str, str], set[str]] = {}
-        for table in ("exam_papers", "exam_paper_revisions"):
-            if not self._table_exists(connection, table):
-                continue
-            rows = connection.execute(
-                f'SELECT owner_id, exam_paper_id, raw_json FROM "{table}"'
-            ).fetchall()
-            for owner, paper_id, raw_json in rows:
-                if not isinstance(owner, str) or not owner:
-                    raise OwnerMigrationPlanningError(
-                        "MIGRATION_OWNER_RELATIONSHIP_UNRESOLVED"
-                    )
-                try:
-                    payload = json.loads(str(raw_json))
-                    items = payload["items"]
-                    if not isinstance(items, list):
-                        raise TypeError
-                    for item in items:
-                        question = item.get("question", {})
-                        images = question.get("images", [])
-                        if not isinstance(images, list):
-                            raise TypeError
-                        for image in images:
-                            asset_id = image["asset_id"]
-                            if not isinstance(asset_id, str) or not asset_id:
-                                raise TypeError
-                            owners.setdefault(
-                                (str(paper_id), asset_id), set()
-                            ).add(owner)
-                except (KeyError, TypeError, json.JSONDecodeError) as error:
-                    raise OwnerMigrationPlanningError(
-                        "MIGRATION_FILE_EVIDENCE_MISMATCH"
-                    ) from error
-        if any(len(values) != 1 for values in owners.values()):
-            raise OwnerMigrationPlanningError("MIGRATION_OWNER_RELATIONSHIP_UNRESOLVED")
-        return {
-            f"paper:{paper_id}:{asset_id}"
-            for (paper_id, asset_id), values in owners.items()
-            if source_owner_id in values
-        }
 
     def _require_ready_evidence(
         self,

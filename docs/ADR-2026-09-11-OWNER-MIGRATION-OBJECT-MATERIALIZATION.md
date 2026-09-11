@@ -34,8 +34,9 @@ Agent、模型或 CLI 入口。错误只返回稳定代码，不拼接 owner、�
 - 其他 owner 的行用于验证 owner 关系，但绝不进入载荷；继承对象必须保持计划中的
   父依赖摘要。
 - 私密载荷只允许交给后续受控目标事务 adapter，不能写入日志、操作回执或计划报告。
-- 当前切片不物化文件。数据库对象与文件的提交/发布必须由后续事务 adapter 和文件
-  adapter 明确定义，不能在此处假装跨系统原子性。
+- 文件流由后续 `OwnerMigrationSourceFiles` / `OwnerMigrationFileMaterializer`
+  独立物化。数据库对象与文件的提交/发布仍必须由后续具体事务 adapter 明确定义，
+  不能在此处假装跨系统原子性。
 
 ## 结果与限制
 

@@ -4,6 +4,8 @@ import hashlib
 import json
 import math
 
+from app.modules.tenant_migration.schemas import OwnerMigrationPlanReport
+
 
 class OwnerMigrationFingerprintError(ValueError):
     """A migration fingerprint input cannot be represented canonically."""
@@ -17,6 +19,22 @@ def canonical_digest(value: object) -> str:
         ensure_ascii=True,
     ).encode("utf-8")
     return hashlib.sha256(payload).hexdigest()
+
+
+def migration_plan_fingerprint(plan: OwnerMigrationPlanReport) -> str:
+    """Recompute the digest-covered portion of an immutable migration plan."""
+    return canonical_digest(
+        {
+            "schema_version": plan.schema_version,
+            "source_inventory_fingerprint": plan.source_inventory_fingerprint,
+            "source_file_reconciliation_fingerprint": (
+                plan.source_file_reconciliation_fingerprint
+            ),
+            "target_binding_fingerprint": plan.target_binding_fingerprint,
+            "tables": [table.model_dump(mode="json") for table in plan.tables],
+            "files": [item.model_dump(mode="json") for item in plan.files],
+        }
+    )
 
 
 def target_binding_fingerprint(
