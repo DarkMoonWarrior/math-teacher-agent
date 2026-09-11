@@ -7,11 +7,20 @@
 ## 决策
 
 1. owner 内容迁移使用独立的 `math_teacher_content_migration` schema。它只保存一次迁移的目标绑定、状态、对象暂存记录和文件发布记录，不是面向业务请求的正式内容 schema。
-2. schema 版本固定为 `m14.owner_migration.v1`。部署入口只接受注入连接或私有 DSN，不接 HTTP、浏览器、Agent 或模型；构造对象和应用启动均不得连接数据库或建表。
+2. schema 版本固定为 `m14.owner_migration.v1`。部署入口只接受注入连接或独立的 `production_owner_migration_postgres_dsn`，不得复用运行时身份 DSN；它不接 HTTP、浏览器、Agent 或模型，构造对象和应用启动均不得连接数据库或建表。
 3. 操作者必须先只读 `preview`，再把返回的完整计划指纹和明确布尔确认提交给 `apply`。确认缺失、代码中的 SQL 计划变化、未知既有 schema、连接失败或列形状异常全部失败关闭。
 4. 部署在 PostgreSQL 事务 advisory lock 内串行执行；同一版本和预期形状已经存在时幂等返回，不重复写入。
 5. 迁移 run 明确绑定目标 tenant、目标 owner 和执行器的目标绑定指纹。对象记录保存依赖摘要、源记录指纹和待写入 JSON；文件记录保存源校验和、长度、暂存 key 与发布 key。落地区域不保存 `source_owner_id`，避免把旧身份作为新的授权事实。
 6. 对外错误只有稳定代码，不回显 DSN、凭据、SQL 异常、owner、tenant、路径、主键、文件名或正文。
+
+操作者从可导入 `apps/api` 的 Python 环境运行：
+
+```powershell
+python -m app.modules.tenant_migration.postgres_schema_cli preview
+python -m app.modules.tenant_migration.postgres_schema_cli apply --expected-fingerprint <preview-fingerprint> --confirm
+```
+
+`apply` 未明确确认时在读取私密配置前直接拒绝。命令只输出动作、状态、schema 版本、语句数量、计划指纹和是否改变，不输出 DSN 或身份信息。
 
 ## 为什么单独建落地区域
 

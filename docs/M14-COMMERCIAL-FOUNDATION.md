@@ -148,10 +148,10 @@ python -m app.modules.account_identity.operator_cli keyring-status
 
 ### 3.12 PostgreSQL tenant adapter 第二段：迁移落地区域
 
-- 新增不接 HTTP/浏览器/Agent/模型的 `PostgresOwnerMigrationSchema`，固定保存目标绑定 run、对象暂存和文件发布记录；它不是运行时业务内容库。
+- 新增不接 HTTP/浏览器/Agent/模型的 `PostgresOwnerMigrationSchema`，固定保存目标绑定 run、对象暂存和文件发布记录；它使用独立私密目标 DSN，不复用运行时身份连接，也不是运行时业务内容库。
 - 构造对象和应用启动不连接数据库或建表。操作者必须先只读预演，再提交完全一致的 SQL 计划指纹和明确确认；未知既有结构、指纹变化、连接失败或列形状异常全部失败关闭。
 - 部署在 PostgreSQL 事务 advisory lock 中串行化；同一版本和预期形状已存在时幂等返回。目标记录不保存 `source_owner_id`，旧身份不能成为新系统授权事实。
-- 当前只以合成连接验证 schema 门禁，没有连接真实 PostgreSQL，没有创建 schema，没有写入、复制、移动或删除任何真实数据。完整边界见 [`ADR-2026-09-11-POSTGRES-OWNER-MIGRATION-SCHEMA.md`](ADR-2026-09-11-POSTGRES-OWNER-MIGRATION-SCHEMA.md)。
+- 独立本机 CLI 提供 `preview` 与 `apply`；未确认的 apply 在读取私密配置前拒绝，输出不含 DSN 或身份。当前只以合成连接验证 schema 门禁，没有连接真实 PostgreSQL，没有创建 schema，没有写入、复制、移动或删除任何真实数据。完整边界见 [`ADR-2026-09-11-POSTGRES-OWNER-MIGRATION-SCHEMA.md`](ADR-2026-09-11-POSTGRES-OWNER-MIGRATION-SCHEMA.md)。
 
 ## 4. 后续切片顺序
 

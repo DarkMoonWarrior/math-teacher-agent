@@ -42,7 +42,7 @@
 
 ## 工程基线与限制
 
-M14 当前固定集 **359 passed、1 skipped**；完整 FastAPI **789 passed、1 skipped**；Teacher Web **108 passed**，Agent **42 passed**，双方类型检查与生产构建沿用上一切片通过结果。本切片的自动测试只使用临时目录、合成 owner、数据库、文件、连接和事务 adapter，不调用真实模型、不连接真实 PostgreSQL、不创建真实账号、不迁移或清理真实用户数据。
+M14 当前固定集 **363 passed、1 skipped**；完整 FastAPI **793 passed、1 skipped**；Teacher Web **108 passed**，Agent **42 passed**，双方类型检查与生产构建沿用上一切片通过结果。本切片的自动测试只使用临时目录、合成 owner、数据库、文件、连接和事务 adapter，不调用真实模型、不连接真实 PostgreSQL、不创建真实账号、不迁移或清理真实用户数据。
 
 `apps/teacher-web` 是唯一产品 UI；旧 UI 源码、入口和依赖已移除。运行库、私人上传、环境、导出与备份不进入 Git。商业题目目录仍为空，合成 fixture 不具备第三方内容权利。
 
@@ -82,6 +82,6 @@ PostgreSQL tenant adapter 第二段先新增 `OwnerDataInventory`，以固定目
 
 第四段新增独立 `OwnerMigrationExecutor`。它在打开目标事务前要求布尔确认、确认计划指纹与预期计划指纹一致，并重新生成实时计划；任何变化都拒绝执行。注入的事务 adapter 必须提供目标状态、应用、摘要对账与完成标记；同一计划已完成时只在对账一致后幂等返回，首次执行则必须在同一事务内应用、核对计划/对象/文件摘要与数量后才能标记完成，对账失败由 adapter 回滚。当前只完成合成事务验证，没有具体 PostgreSQL 内容写入或文件复制 adapter，也没有迁移真实数据。
 
-第五段新增 `PostgresOwnerMigrationSchema`，把目标绑定 run、对象暂存记录和文件发布记录收口到固定、操作者专用的 PostgreSQL 迁移落地区域。部署只允许“只读预演 → 相同计划指纹 → 明确确认”，并由事务 advisory lock 串行化；未知既有结构、版本或列形状漂移、连接失败和计划变化都失败关闭。构造和应用启动不连接目标或建表，同版结构幂等返回。当前测试只使用合成连接，没有连接真实 PostgreSQL、创建真实 schema 或迁移任何真实数据；该区域也不是运行时业务内容库。
+第五段新增 `PostgresOwnerMigrationSchema`，把目标绑定 run、对象暂存记录和文件发布记录收口到固定、操作者专用的 PostgreSQL 迁移落地区域。迁移目标使用独立私密 DSN，不复用运行时身份连接；部署只允许“只读预演 → 相同计划指纹 → 明确确认”，并由事务 advisory lock 串行化。独立本机 CLI 在未确认 apply 时不读取私密配置；未知既有结构、版本或列形状漂移、连接失败和计划变化都失败关闭。构造和应用启动不连接目标或建表，同版结构幂等返回。当前测试只使用合成连接，没有连接真实 PostgreSQL、创建真实 schema 或迁移任何真实数据；该区域也不是运行时业务内容库。
 
 正式身份与网页注册功能在仓库默认关闭；本地 SQLite 仍是过渡 adapter。邮箱验证、账号找回、MFA 实现、已认证操作者/RBAC、不可抵赖审计、集中式密钥管理、外部可信边缘/原子限流部署、正式 PostgreSQL 业务内容 schema 与具体迁移 adapter、已提交迁移补偿恢复、真实 PostgreSQL 集成与 IDOR/tenant isolation Gate、对象存储、持久任务、Entitlement、订单、支付与退款仍未实现；详见 [`M14-COMMERCIAL-FOUNDATION.md`](M14-COMMERCIAL-FOUNDATION.md)。

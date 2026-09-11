@@ -195,6 +195,9 @@ class Settings(BaseSettings):
         default=PROJECT_ROOT / "data" / "private-runtime" / "account-identity.sqlite3"
     )
     production_identity_postgres_dsn: SecretStr = SecretStr("")
+    # Separate operator-only target prevents content migration privileges from
+    # being inherited by the runtime identity connection.
+    production_owner_migration_postgres_dsn: SecretStr = SecretStr("")
     production_login_security_db: Path = Field(
         default=PROJECT_ROOT / "data" / "private-runtime" / "login-security.sqlite3"
     )
