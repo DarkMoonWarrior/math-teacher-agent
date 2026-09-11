@@ -75,6 +75,8 @@
 
 2026-09-11 M14 PostgreSQL owner 迁移落地区域：新增 `PostgresOwnerMigrationSchema`，固定保存目标绑定 run、对象暂存和文件发布记录；该 schema 只供操作者迁移流程使用，不是运行时业务内容库。迁移目标使用与运行时身份连接分离的私密 DSN；独立本机 CLI 必须先只读预演，再提交一致计划指纹和明确确认，未确认 apply 不读取私密配置。部署通过事务 advisory lock 串行化；未知既有结构、版本/列形状漂移、连接错误和计划变化全部失败关闭，同版本结构幂等返回。对象记录不保存源 owner，CLI 不输出 DSN 或身份。测试只使用合成连接，没有连接真实 PostgreSQL、创建真实 schema、迁移或修改真实数据。M14 固定入口 363 项通过/1 项跳过，完整 API 793 项通过/1 项跳过；Teacher Web 108 项与 Agent 42 项沿用已通过基线。下一切片实现具体源/目标事务 adapter，再验证补偿恢复和 IDOR/tenant isolation。
 
+2026-09-11 M14 owner 数据库对象只读物化：新增内部 `OwnerMigrationObjectMaterializer` 与共享摘要 seam。物化器在读取源库前验证完整计划和目标绑定，随后以只读 SQLite 连接逐表重建当前源 owner 的对象集合、依赖与完整行指纹；计划后新增、删除或修改对象、错误 owner/tenant、重复对象和目录偏差全部失败关闭。私密载荷只在内存中交给未来目标 adapter，owner/tenant 列改绑到目标，BLOB 明确编码；其他 owner 内容不进入载荷，报告、错误与对象表示不输出正文或身份。本切片没有 HTTP/Agent/CLI、文件物化、PostgreSQL 写入或真实数据迁移。M14 固定入口 368 项通过/1 项跳过，完整 API 798 项通过/1 项跳过；Teacher Web 108 项与 Agent 42 项沿用已通过基线。下一切片实现文件物化，再接入具体 PostgreSQL 目标事务 adapter。
+
 长期保留 `main`。下列分支在清理前已由 main 包含：
 
 - `codex/lesson-agent-v1`：`fb37d40`

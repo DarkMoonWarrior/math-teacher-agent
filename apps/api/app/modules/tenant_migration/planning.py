@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import json
 import math
 import re
@@ -13,6 +12,15 @@ from urllib.parse import quote
 from app.modules.tenant_migration.file_reconciliation import (
     OwnerFileReconciliation,
     OwnerFileStoreSpec,
+)
+from app.modules.tenant_migration.fingerprints import (
+    OwnerMigrationFingerprintError,
+    canonical_digest,
+    canonical_sqlite_value,
+    owner_file_digest,
+    owner_object_digest,
+    source_record_fingerprint,
+    target_binding_fingerprint,
 )
 from app.modules.tenant_migration.inventory import (
     OwnerDataInventory,
@@ -435,8 +443,8 @@ class OwnerMigrationPlanner:
         final_file_plans = self._file_plans(source_owner_id, binding, final_files)
         if table_plans != final_table_plans or file_plans != final_file_plans:
             raise OwnerMigrationPlanningError("MIGRATION_OBJECTS_CHANGED")
-        target_binding = self._digest(
-            ("m14-target-binding-v1", target_owner_id, target_tenant_id)
+        target_binding = target_binding_fingerprint(
+            target_owner_id, target_tenant_id
         )
         canonical = {
             "schema_version": 1,
@@ -577,14 +585,7 @@ class OwnerMigrationPlanner:
                 raise OwnerMigrationPlanningError("MIGRATION_FILE_EVIDENCE_MISMATCH")
             digests = tuple(
                 sorted(
-                    self._digest(
-                        (
-                            "m14-owner-file-v1",
-                            *binding,
-                            spec.store_id,
-                            reference,
-                        )
-                    )
+                    owner_file_digest(binding, spec.store_id, reference)
                     for reference in references
                 )
             )
@@ -830,15 +831,7 @@ class OwnerMigrationPlanner:
         table_name: str,
         key: tuple[object, ...],
     ) -> str:
-        return cls._digest(
-            (
-                "m14-owner-object-v1",
-                *binding,
-                store_id,
-                table_name,
-                key,
-            )
-        )
+        return owner_object_digest(binding, store_id, table_name, key)
 
     @classmethod
     def _record_fingerprint(
@@ -862,30 +855,27 @@ class OwnerMigrationPlanner:
                 f'PRAGMA table_info("{spec.table_name}")'
             )
         )
-        record = tuple(cls._canonical_sqlite_value(value) for value in rows[0])
-        return cls._digest(
-            (
-                "m14-source-record-v1",
-                *binding,
+        try:
+            return source_record_fingerprint(
+                binding,
                 spec.store_id,
                 spec.table_name,
                 columns,
-                record,
+                tuple(rows[0]),
             )
-        )
+        except OwnerMigrationFingerprintError as error:
+            raise OwnerMigrationPlanningError(
+                "MIGRATION_RECORD_VALUE_INVALID"
+            ) from error
 
     @staticmethod
     def _canonical_sqlite_value(value: object) -> object:
-        if isinstance(value, bytes):
-            return {
-                "blob_sha256": hashlib.sha256(value).hexdigest(),
-                "byte_length": len(value),
-            }
-        if value is None or isinstance(value, (str, int)):
-            return value
-        if isinstance(value, float) and math.isfinite(value):
-            return value
-        raise OwnerMigrationPlanningError("MIGRATION_RECORD_VALUE_INVALID")
+        try:
+            return canonical_sqlite_value(value)
+        except OwnerMigrationFingerprintError as error:
+            raise OwnerMigrationPlanningError(
+                "MIGRATION_RECORD_VALUE_INVALID"
+            ) from error
 
     @staticmethod
     def _validate_key(key: tuple[object, ...]) -> None:
@@ -899,10 +889,7 @@ class OwnerMigrationPlanner:
 
     @staticmethod
     def _digest(value: object) -> str:
-        payload = json.dumps(
-            value, sort_keys=True, separators=(",", ":"), ensure_ascii=True
-        ).encode("utf-8")
-        return hashlib.sha256(payload).hexdigest()
+        return canonical_digest(value)
 
     @staticmethod
     def _connect(path: Path) -> sqlite3.Connection:
