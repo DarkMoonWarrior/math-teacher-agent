@@ -138,3 +138,27 @@ class OwnerMigrationExecutionReceipt(BaseModel):
     object_count: int = Field(ge=0)
     file_count: int = Field(ge=0)
     reconciled: Literal[True] = True
+
+
+class OwnerMigrationRecoveryPlan(BaseModel):
+    schema_version: Literal[1] = 1
+    state: Literal["healthy", "repairable", "blocked"]
+    execution_allowed: Literal[False] = False
+    plan_fingerprint: str = Field(pattern=r"^[0-9a-f]{64}$")
+    target_binding_fingerprint: str = Field(pattern=r"^[0-9a-f]{64}$")
+    file_count: int = Field(ge=0)
+    healthy_file_count: int = Field(ge=0)
+    repairable_file_count: int = Field(ge=0)
+    blocked_file_count: int = Field(ge=0)
+    issues: tuple[str, ...] = ()
+    recovery_fingerprint: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class OwnerMigrationRecoveryReceipt(BaseModel):
+    schema_version: Literal[1] = 1
+    outcome: Literal["repaired", "already_healthy"]
+    plan_fingerprint: str = Field(pattern=r"^[0-9a-f]{64}$")
+    target_binding_fingerprint: str = Field(pattern=r"^[0-9a-f]{64}$")
+    repaired_file_count: int = Field(ge=0)
+    recovery_fingerprint: str = Field(pattern=r"^[0-9a-f]{64}$")
+    reconciled: Literal[True] = True

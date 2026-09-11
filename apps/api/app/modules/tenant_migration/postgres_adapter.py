@@ -16,7 +16,10 @@ from app.modules.tenant_migration.file_materialization import (
     MaterializedMigrationFile,
     OwnerMigrationFileBatch,
 )
-from app.modules.tenant_migration.fingerprints import target_binding_fingerprint
+from app.modules.tenant_migration.fingerprints import (
+    target_advisory_lock_key,
+    target_binding_fingerprint,
+)
 from app.modules.tenant_migration.materialization import OwnerMigrationObjectBatch
 from app.modules.tenant_migration.postgres_schema import (
     POSTGRES_OWNER_MIGRATION_SCHEMA,
@@ -164,7 +167,7 @@ class PostgresOwnerMigrationAdapter:
                 with self._connect() as connection:
                     connection.execute(
                         "SELECT pg_advisory_xact_lock(%s)",
-                        (_target_lock_key(target_binding_fingerprint),),
+                        (target_advisory_lock_key(target_binding_fingerprint),),
                     )
                     yield _PostgresOwnerMigrationTransaction(
                         connection=connection,
@@ -390,8 +393,3 @@ class _PostgresOwnerMigrationTransaction:
         if value in {"in_progress", "complete"}:
             return str(value)
         return "unexpected"
-
-
-def _target_lock_key(binding_fingerprint: str) -> int:
-    unsigned = int(binding_fingerprint[:16], 16)
-    return unsigned if unsigned < (1 << 63) else unsigned - (1 << 64)

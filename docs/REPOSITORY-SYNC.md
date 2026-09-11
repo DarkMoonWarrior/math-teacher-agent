@@ -83,6 +83,8 @@
 
 2026-09-11 M14 PostgreSQL owner 迁移目标事务 adapter：新增 `PostgresOwnerMigrationAdapter`，通过 Executor 已固定的小型 Interface 封装目标状态、对象/文件物化、SQL 暂存、实际目标摘要重算、可逆文件发布和完成标记。目标绑定或计划不符会在连接数据库与打开 staging 前拒绝；同一已完成计划只有重算对账一致才幂等返回。合成 PostgreSQL 连接与可逆文件事务覆盖成功、幂等、目标对账失败、发布集合缺失和数据库提交失败，普通失败均恢复两侧状态；未连接真实 PostgreSQL、未复制真实文件、未迁移真实用户数据。M14 固定入口 379 项通过/1 项跳过，完整 API 809 项通过/1 项跳过；Teacher Web 108 项与 Agent 42 项沿用已通过基线。下一切片实现已提交迁移的补偿恢复，再验证 IDOR/tenant isolation；生产文件 staging 与真实 PostgreSQL Gate 仍未完成。
 
+2026-09-11 M14 已提交 owner 迁移前向补偿：新增操作者专用 `PostgresOwnerMigrationRecovery`，只用 `preview()` / `recover()` Interface 解释已提交 run、文件记录与外部存储状态。预演和恢复按 target binding advisory lock 串行化；恢复指纹同时绑定计划、内容、状态和私密 storage key 摘要，固定确认前后任一变化都会失效。只有 published 缺失且 staged 内容 SHA-256/长度匹配时可幂等前向修复；published 冲突、staged 缺失/冲突及数据库证据异常全部阻断，不覆盖、不删除、不回滚数据库记录。多文件部分成功会保留已完成的原子发布，并要求以新预演只修剩余对象。测试只使用合成 PostgreSQL 与内存文件 Adapter，没有真实数据库、对象存储、CLI 或真实数据操作。M14 固定入口 390 项通过/1 项跳过，完整 API 820 项通过/1 项跳过；Teacher Web 108 项与 Agent 42 项沿用已通过基线。下一切片进入 IDOR/tenant isolation 合成 Gate；生产 staging/recovery Adapter 与真实 PostgreSQL Gate 仍未完成。
+
 长期保留 `main`。下列分支在清理前已由 main 包含：
 
 - `codex/lesson-agent-v1`：`fb37d40`

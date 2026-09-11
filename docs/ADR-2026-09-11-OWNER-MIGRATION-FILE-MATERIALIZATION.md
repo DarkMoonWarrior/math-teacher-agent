@@ -33,5 +33,5 @@ Planner 和 `OwnerMigrationFileMaterializer` 通过同一 Interface 使用它，
 本切片本身没有复制或发布真实文件，没有连接真实 PostgreSQL，也没有 HTTP、浏览器、
 Agent、模型或 CLI 入口。自动测试只使用临时 SQLite、临时文件和内存 staging sink。
 后续具体 PostgreSQL 目标事务 adapter 已复用该 Interface，并通过合成 staging 证明
-“暂存、对账、可逆发布、数据库提交”的普通失败回滚；生产 staging 和跨系统崩溃补偿
-仍未实现。
+“暂存、对账、可逆发布、数据库提交”的普通失败回滚；后续已完成 matching staged
+内容的合成前向补偿，生产 staging/recovery 仍未实现。

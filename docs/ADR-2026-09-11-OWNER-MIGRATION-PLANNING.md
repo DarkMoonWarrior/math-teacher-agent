@@ -51,4 +51,4 @@ python -m app.modules.tenant_migration.planning_cli `
 - 没有实现幂等执行、双写冻结、目标逐对象对账、失败补偿或回滚；
 - 没有通过真实 PostgreSQL、IDOR 和 tenant isolation Gate。
 
-后续实现已在本计划边界之上建立精确确认、幂等执行控制、目标摘要对账、迁移落地区域、数据库对象和文件流只读物化，以及具体 PostgreSQL 目标事务 adapter 的合成验证。尚未完成的生产文件 staging、跨系统崩溃补偿和真实 PostgreSQL Gate 仍不能让浏览器或 Agent 获得迁移能力。
+后续实现已在本计划边界之上建立精确确认、幂等执行控制、目标摘要对账、迁移落地区域、数据库对象和文件流只读物化、具体 PostgreSQL 目标事务 adapter，以及已提交文件发布缺失的合成前向补偿。尚未完成的生产文件 staging/recovery 和真实 PostgreSQL Gate 仍不能让浏览器或 Agent 获得迁移能力。

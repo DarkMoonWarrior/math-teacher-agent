@@ -172,12 +172,19 @@ python -m app.modules.account_identity.operator_cli keyring-status
 - 新增 `PostgresOwnerMigrationAdapter`，直接满足 Executor 的小型事务 Interface；目标状态、两类物化、PostgreSQL INSERT/UPDATE、实际摘要重算和完成标记均封装在 adapter 内。
 - source owner、target owner 和 tenant 在构造时固定，目标绑定或计划不符会在连接 PostgreSQL、打开 staging 事务前拒绝。进入数据库事务后按目标绑定摘要获取 advisory lock，使不同计划不能并发观察同一目标为空；SQL adapter 不能自行选择源表、文件路径、owner 或正文。
 - 文件 staging 的可逆事务包住 PostgreSQL 事务：物化/暂存、数据库写入、目标对账、可逆发布和完成标记后才提交数据库；对账、发布、SQL 或提交失败会让两侧合成 adapter 回滚。
-- 当前只用合成 PostgreSQL 连接和文件 staging Adapter 验证普通异常，没有真实数据库、生产对象存储或真实迁移。发布与数据库提交之间的进程崩溃仍需下一切片补偿恢复；详见 [`ADR-2026-09-11-POSTGRES-OWNER-MIGRATION-ADAPTER.md`](ADR-2026-09-11-POSTGRES-OWNER-MIGRATION-ADAPTER.md)。
+- 当前只用合成 PostgreSQL 连接和文件 staging Adapter 验证普通异常，没有真实数据库、生产对象存储或真实迁移。后续切片已为数据库提交后 published 内容缺失且 matching staged 内容仍存在的窗口增加前向补偿；详见 [`ADR-2026-09-11-POSTGRES-OWNER-MIGRATION-ADAPTER.md`](ADR-2026-09-11-POSTGRES-OWNER-MIGRATION-ADAPTER.md)。
+
+### 3.16 PostgreSQL tenant adapter 第二段：已提交迁移补偿恢复
+
+- 新增操作者专用 `PostgresOwnerMigrationRecovery`，以 `preview()` / `recover()` 小型 Interface 封装已提交 run、文件记录和外部存储状态解释；没有 HTTP、浏览器、Agent、模型或应用启动入口。
+- 预演与恢复按目标绑定获取同一 transaction advisory lock。published 内容匹配为健康；published 缺失且 staged 内容匹配才可修复；任一内容冲突、staged 缺失、数据库数量或状态异常都失败关闭。
+- 恢复指纹绑定计划、目标、文件内容和 storage key 摘要，但公开计划不返回 owner、tenant、路径、key、文件名或正文。恢复要求固定短语、布尔确认与最新预演指纹，变化后旧确认失效。
+- 恢复只做幂等前向补偿并在完成后重新核对全部 published 内容；不覆盖冲突对象、不删除文件、不回滚数据库记录、不猜测缺失内容。当前只通过合成 PostgreSQL 和文件存储验证，尚无生产文件 Adapter 或 CLI；详见 [`ADR-2026-09-11-COMMITTED-OWNER-MIGRATION-RECOVERY.md`](ADR-2026-09-11-COMMITTED-OWNER-MIGRATION-RECOVERY.md)。
 
 ## 4. 后续切片顺序
 
 1. **账号生命周期加固（进行中）**：网页个人账号注册、操作者创建/停用、密码重置、失效会话预览/确认清理、登录双范围限流、摘要化登录安全事实、当前浏览器会话轮换、MFA 决策、操作者生命周期审计、摘要密钥轮换、可信生产代理来源与分布式限流 adapter 已实现；邮箱验证、找回密码、外部分布式服务、边缘部署、告警、已认证操作者/RBAC、MFA 与集中式密钥管理仍未完成。下一段进入 PostgreSQL tenant adapter。
-2. **PostgreSQL tenant adapter（进行中）**：正式身份 adapter、显式 schema 预演/确认、owner-aware 只读存储清单、四类文件域引用对账、逐对象迁移计划、明确确认/幂等/对账/事务回滚控制器、固定迁移落地区域、数据库对象/文件流只读物化，以及具体 PostgreSQL 目标事务 adapter 的合成验证已实现；下一段验证已提交迁移的补偿恢复和 IDOR/tenant isolation。
+2. **PostgreSQL tenant adapter（进行中）**：正式身份 adapter、显式 schema 预演/确认、owner-aware 只读存储清单、四类文件域引用对账、逐对象迁移计划、明确确认/幂等/对账/事务回滚控制器、固定迁移落地区域、数据库对象/文件流只读物化、具体 PostgreSQL 目标事务 adapter 和已提交文件发布前向补偿的合成验证已实现；下一段验证 IDOR/tenant isolation。
 3. **对象存储与持久任务**：原文件、导出和后台任务获得明确 owner/tenant key、保留期、幂等和恢复语义。
 4. **Entitlement**：只表达账号可用能力，不替代身份、owner 权利或内容可信门禁。
 5. **订单、订阅、支付与退款**：最后接入；要求幂等、Webhook 验签、状态机、对账和退款恢复全部独立验证。
@@ -185,7 +192,7 @@ python -m app.modules.account_identity.operator_cli keyring-status
 
 ## 5. 明确未完成
 
-- 正式 owner-aware PostgreSQL 业务内容 schema、生产文件 staging Adapter、已提交迁移的补偿恢复、真实 PostgreSQL 集成 Gate、云对象存储、持久队列、多进程完整一致性和生产灾备。已实现的合成目标 adapter、只读对象/文件物化与迁移落地区域都不等同于真实迁移或业务内容 schema。
+- 正式 owner-aware PostgreSQL 业务内容 schema、生产文件 staging/recovery Adapter、恢复 CLI、无 staging 或内容冲突时的人工处置、真实 PostgreSQL 集成 Gate、云对象存储、持久队列、多进程完整一致性和生产灾备。已实现的合成目标 adapter、前向补偿、只读对象/文件物化与迁移落地区域都不等同于真实迁移或业务内容 schema。
 - 无约束公网注册、邮箱验证、自助找回密码、MFA、设备管理、已认证操作者/RBAC、不可抵赖审计、集中式密钥管理、生产级分布式限流与告警。当前只实现默认关闭的个人账号网页注册工程路径。
 - 除 `personal_owner` 外的角色、组织 tenant、成员邀请、学生和学校后台。
 - Entitlement、订单、订阅、支付、Webhook 和退款。

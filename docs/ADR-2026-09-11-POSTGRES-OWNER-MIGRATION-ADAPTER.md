@@ -35,9 +35,10 @@ adapter 在构造时固定 source owner、target owner 与 target tenant；执�
 
 - 当前 PostgreSQL 行为只通过合成连接验证，没有连接、建表或写入真实 PostgreSQL。
 - 文件 staging 只有合成测试 Adapter；生产对象存储 Adapter 尚未实现。
-- 普通异常路径的提交前回滚已验证，但进程在文件发布与数据库提交之间崩溃时仍需
-  后续恢复器根据 `in_progress`、staged/published key 和内容摘要完成补偿。
+- 普通异常路径的提交前回滚已验证；后续恢复模块已经覆盖数据库提交后 published
+  内容缺失但 matching staged 内容仍存在的前向补偿。无 staged、内容冲突和生产灾备
+  仍未完成。
 - 没有 HTTP、浏览器、Agent、模型或自动运行入口；没有迁移任何真实用户数据。
 
 因此本切片证明具体 PostgreSQL SQL adapter 与既有 Executor Interface 可以组合，
-不代表真实迁移、跨系统崩溃恢复、IDOR/tenant isolation 或 M14 Gate 已通过。
+不代表真实迁移、生产跨系统恢复、IDOR/tenant isolation 或 M14 Gate 已通过。

@@ -31,6 +31,6 @@ python -m app.modules.tenant_migration.postgres_schema_cli apply --expected-fing
 - 本切片没有连接真实 PostgreSQL，没有创建 schema，也没有读取、迁移、复制、更新或删除任何真实用户数据。
 - 尚无把 33 张源表映射到正式 tenant-aware 业务表的具体 adapter，也没有文件复制或对象存储发布实现。
 - 尚未建立运行时业务表的 RLS、RBAC/IDOR 和 tenant isolation Gate。该迁移 schema 是操作者专用区域，不能被业务 API 当作内容查询来源。
-- 尚未实现提交后补偿恢复、真实 PostgreSQL 故障注入和生产灾备。
+- 已提交文件发布缺失的前向补偿已有合成验证；生产文件 Adapter、真实 PostgreSQL 故障注入和生产灾备尚未实现。
 
-数据库对象和文件流只读物化及具体 PostgreSQL 目标事务 adapter 的合成验证已经实现；它复用既有 `OwnerMigrationExecutor`，并证明对象暂存、文件暂存、目标摘要对账、完成标记、幂等和普通失败回滚。完成该 adapter 仍不等于真实迁移 Gate 通过；生产文件 staging、跨系统崩溃补偿、真实 PostgreSQL、IDOR 与 tenant isolation 必须单独验证。
+数据库对象和文件流只读物化、具体 PostgreSQL 目标事务 adapter 及已提交文件发布前向补偿的合成验证已经实现。完成这些模块仍不等于真实迁移 Gate 通过；生产文件 staging/recovery、真实 PostgreSQL、IDOR 与 tenant isolation 必须单独验证。

@@ -46,6 +46,12 @@ def target_binding_fingerprint(
     )
 
 
+def target_advisory_lock_key(binding_fingerprint: str) -> int:
+    """Map a validated SHA-256 binding to PostgreSQL's signed bigint lock key."""
+    unsigned = int(binding_fingerprint[:16], 16)
+    return unsigned if unsigned < (1 << 63) else unsigned - (1 << 64)
+
+
 def owner_object_digest(
     binding: tuple[str, str, str],
     store_id: str,
