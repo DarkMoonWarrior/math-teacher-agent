@@ -73,6 +73,8 @@
 
 2026-09-11 M14 owner 迁移执行控制器：新增独立 `OwnerMigrationExecutor`，要求固定确认短语、布尔确认、预期计划指纹和实时重建计划全部通过后才打开目标事务。目标 adapter 只暴露状态、应用、摘要对账和完成标记；同一计划完成后幂等返回，进行中/未知/其他绑定或计划全部失败关闭；首次应用只有在计划、对象和文件摘要及数量全部对账后才能标记完成，异常离开事务并回滚。回执不含 owner、tenant、对象 ID、文件名、路径或正文。当前只以合成 adapter 验证事务语义，没有具体 PostgreSQL 内容 schema/写入、文件复制或真实数据迁移。M14 固定入口 355 项通过/1 项跳过，完整 API 785 项通过/1 项跳过；Teacher Web 108 项与 Agent 42 项沿用已通过基线。下一切片实现固定 PostgreSQL 内容 schema 与具体事务 adapter，再验证补偿恢复和 IDOR/tenant isolation。
 
+2026-09-11 M14 PostgreSQL owner 迁移落地区域：新增 `PostgresOwnerMigrationSchema`，固定保存目标绑定 run、对象暂存和文件发布记录；该 schema 只供操作者迁移流程使用，不是运行时业务内容库。部署必须先只读预演，再提交一致计划指纹和明确确认，并通过事务 advisory lock 串行化；未知既有结构、版本/列形状漂移、连接错误和计划变化全部失败关闭，同版本结构幂等返回。对象记录不保存源 owner。测试只使用合成连接，没有连接真实 PostgreSQL、创建真实 schema、迁移或修改真实数据。M14 固定入口 359 项通过/1 项跳过，完整 API 789 项通过/1 项跳过；Teacher Web 108 项与 Agent 42 项沿用已通过基线。下一切片实现具体源/目标事务 adapter，再验证补偿恢复和 IDOR/tenant isolation。
+
 长期保留 `main`。下列分支在清理前已由 main 包含：
 
 - `codex/lesson-agent-v1`：`fb37d40`

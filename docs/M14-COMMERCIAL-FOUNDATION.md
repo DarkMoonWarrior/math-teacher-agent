@@ -146,10 +146,17 @@ python -m app.modules.account_identity.operator_cli keyring-status
 - 首次执行在同一事务内按“应用 → 逐集合摘要对账 → 标记完成”推进。对象/文件数量、计划指纹或摘要集合任一不符即抛错，由 adapter 在提交前回滚；回执不返回 owner、tenant、主键、文件名、路径或正文。
 - 当前只以合成事务 adapter 验证控制语义，尚无具体 PostgreSQL 内容 schema、SQL 写入或文件复制 adapter，也没有迁移任何真实数据。完整边界见 [`ADR-2026-09-11-OWNER-MIGRATION-EXECUTION-CONTROLLER.md`](ADR-2026-09-11-OWNER-MIGRATION-EXECUTION-CONTROLLER.md)。
 
+### 3.12 PostgreSQL tenant adapter 第二段：迁移落地区域
+
+- 新增不接 HTTP/浏览器/Agent/模型的 `PostgresOwnerMigrationSchema`，固定保存目标绑定 run、对象暂存和文件发布记录；它不是运行时业务内容库。
+- 构造对象和应用启动不连接数据库或建表。操作者必须先只读预演，再提交完全一致的 SQL 计划指纹和明确确认；未知既有结构、指纹变化、连接失败或列形状异常全部失败关闭。
+- 部署在 PostgreSQL 事务 advisory lock 中串行化；同一版本和预期形状已存在时幂等返回。目标记录不保存 `source_owner_id`，旧身份不能成为新系统授权事实。
+- 当前只以合成连接验证 schema 门禁，没有连接真实 PostgreSQL，没有创建 schema，没有写入、复制、移动或删除任何真实数据。完整边界见 [`ADR-2026-09-11-POSTGRES-OWNER-MIGRATION-SCHEMA.md`](ADR-2026-09-11-POSTGRES-OWNER-MIGRATION-SCHEMA.md)。
+
 ## 4. 后续切片顺序
 
 1. **账号生命周期加固（进行中）**：网页个人账号注册、操作者创建/停用、密码重置、失效会话预览/确认清理、登录双范围限流、摘要化登录安全事实、当前浏览器会话轮换、MFA 决策、操作者生命周期审计、摘要密钥轮换、可信生产代理来源与分布式限流 adapter 已实现；邮箱验证、找回密码、外部分布式服务、边缘部署、告警、已认证操作者/RBAC、MFA 与集中式密钥管理仍未完成。下一段进入 PostgreSQL tenant adapter。
-2. **PostgreSQL tenant adapter（进行中）**：正式身份 adapter、显式 schema 预演/确认、owner-aware 只读存储清单、四类文件域引用对账、逐对象迁移计划及明确确认/幂等/对账/事务回滚控制器已实现；下一段实现固定 PostgreSQL 内容 schema 与具体事务 adapter，再验证已提交迁移的补偿恢复和 IDOR/tenant isolation。
+2. **PostgreSQL tenant adapter（进行中）**：正式身份 adapter、显式 schema 预演/确认、owner-aware 只读存储清单、四类文件域引用对账、逐对象迁移计划、明确确认/幂等/对账/事务回滚控制器和固定迁移落地区域已实现；下一段实现具体源/目标事务 adapter，再验证已提交迁移的补偿恢复和 IDOR/tenant isolation。
 3. **对象存储与持久任务**：原文件、导出和后台任务获得明确 owner/tenant key、保留期、幂等和恢复语义。
 4. **Entitlement**：只表达账号可用能力，不替代身份、owner 权利或内容可信门禁。
 5. **订单、订阅、支付与退款**：最后接入；要求幂等、Webhook 验签、状态机、对账和退款恢复全部独立验证。
@@ -157,7 +164,7 @@ python -m app.modules.account_identity.operator_cli keyring-status
 
 ## 5. 明确未完成
 
-- owner-aware PostgreSQL 内容 schema、具体数据/文件迁移 adapter、已提交迁移的补偿恢复、真实 PostgreSQL 集成 Gate、云对象存储、持久队列、多进程完整一致性和生产灾备。
+- 正式 owner-aware PostgreSQL 业务内容 schema、具体数据/文件迁移 adapter、已提交迁移的补偿恢复、真实 PostgreSQL 集成 Gate、云对象存储、持久队列、多进程完整一致性和生产灾备。已实现的迁移落地区域不等同于业务内容 schema。
 - 无约束公网注册、邮箱验证、自助找回密码、MFA、设备管理、已认证操作者/RBAC、不可抵赖审计、集中式密钥管理、生产级分布式限流与告警。当前只实现默认关闭的个人账号网页注册工程路径。
 - 除 `personal_owner` 外的角色、组织 tenant、成员邀请、学生和学校后台。
 - Entitlement、订单、订阅、支付、Webhook 和退款。

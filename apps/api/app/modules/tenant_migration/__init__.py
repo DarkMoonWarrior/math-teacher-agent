@@ -18,6 +18,12 @@ from app.modules.tenant_migration.planning import (
     OwnerMigrationPlanner,
     OwnerMigrationPlanningError,
 )
+from app.modules.tenant_migration.postgres_schema import (
+    POSTGRES_OWNER_MIGRATION_SCHEMA_VERSION,
+    PostgresOwnerMigrationSchema,
+    PostgresOwnerMigrationSchemaError,
+    PostgresOwnerMigrationSchemaPlan,
+)
 from app.modules.tenant_migration.schemas import (
     OwnerDataInventoryReport,
     OwnerDataStoreInventory,
@@ -54,6 +60,10 @@ __all__ = [
     "OwnerMigrationTablePlan",
     "OwnerMigrationTargetReconciliation",
     "OwnerMigrationTargetState",
+    "POSTGRES_OWNER_MIGRATION_SCHEMA_VERSION",
+    "PostgresOwnerMigrationSchema",
+    "PostgresOwnerMigrationSchemaError",
+    "PostgresOwnerMigrationSchemaPlan",
     "owner_data_store_specs",
     "owner_file_store_specs",
 ]
