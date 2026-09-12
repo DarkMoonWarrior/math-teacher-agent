@@ -1,6 +1,6 @@
 # M14 Commercial Foundation
 
-更新日期：2026-09-11。
+更新日期：2026-09-12。
 
 项目所有者因暂时缺少足够真实教师样本，明确决定暂停 M13 真实 Beta，不把合成测试误记为产品 Gate 通过，并授权进入 M14。M13 状态因此是“切片 1–5 完成、真实验证延期、Gate 未通过”，不是“验证成功”。M14 当前进行中，只建设商业化前必须成立的生产边界；支付、组织和学校能力不能反向定义身份或数据所有权。
 
@@ -181,11 +181,18 @@ python -m app.modules.account_identity.operator_cli keyring-status
 - 恢复指纹绑定计划、目标、文件内容和 storage key 摘要，但公开计划不返回 owner、tenant、路径、key、文件名或正文。恢复要求固定短语、布尔确认与最新预演指纹，变化后旧确认失效。
 - 恢复只做幂等前向补偿并在完成后重新核对全部 published 内容；不覆盖冲突对象、不删除文件、不回滚数据库记录、不猜测缺失内容。当前只通过合成 PostgreSQL 和文件存储验证，尚无生产文件 Adapter 或 CLI；详见 [`ADR-2026-09-11-COMMITTED-OWNER-MIGRATION-RECOVERY.md`](ADR-2026-09-11-COMMITTED-OWNER-MIGRATION-RECOVERY.md)。
 
+### 3.17 正式会话 IDOR 与 tenant 隔离合成 Gate
+
+- 固定 Gate 枚举当前工作台有效路由，要求服务端身份依赖存在，且任何当前工作台路由都不能把 `account_id`、`tenant_id` 或 `owner_id` 暴露为可选请求参数。
+- 两个独立正式账号通过真实会话 Cookie 访问同一组合成教师记忆、私有资料和个人题库分类；列表只返回当前 owner，另一 owner 的已知对象 ID 返回 404，匿名返回 401，伪造 owner 写入在存储变化前返回 422。
+- 路由身份门禁和业务查询 owner 条件分别验证，不能相互替代；公开响应不返回内部身份标识。
+- 当前只使用内存身份和临时 SQLite 私有存储，不连接真实 PostgreSQL，不含组织/RBAC、渗透测试或真实数据，因此不是生产 tenant Gate；详见 [`ADR-2026-09-12-PRODUCTION-SESSION-TENANT-ISOLATION-GATE.md`](ADR-2026-09-12-PRODUCTION-SESSION-TENANT-ISOLATION-GATE.md)。
+
 ## 4. 后续切片顺序
 
 1. **账号生命周期加固（进行中）**：网页个人账号注册、操作者创建/停用、密码重置、失效会话预览/确认清理、登录双范围限流、摘要化登录安全事实、当前浏览器会话轮换、MFA 决策、操作者生命周期审计、摘要密钥轮换、可信生产代理来源与分布式限流 adapter 已实现；邮箱验证、找回密码、外部分布式服务、边缘部署、告警、已认证操作者/RBAC、MFA 与集中式密钥管理仍未完成。下一段进入 PostgreSQL tenant adapter。
-2. **PostgreSQL tenant adapter（进行中）**：正式身份 adapter、显式 schema 预演/确认、owner-aware 只读存储清单、四类文件域引用对账、逐对象迁移计划、明确确认/幂等/对账/事务回滚控制器、固定迁移落地区域、数据库对象/文件流只读物化、具体 PostgreSQL 目标事务 adapter 和已提交文件发布前向补偿的合成验证已实现；下一段验证 IDOR/tenant isolation。
-3. **对象存储与持久任务**：原文件、导出和后台任务获得明确 owner/tenant key、保留期、幂等和恢复语义。
+2. **PostgreSQL tenant adapter（进行中）**：正式身份 adapter、显式 schema 预演/确认、owner-aware 清点/迁移/补偿，以及正式会话 IDOR/tenant isolation 合成 Gate 已实现；生产 storage adapter、真实 PostgreSQL 与真实数据 Gate 仍未完成。
+3. **对象存储与持久任务（下一切片）**：原文件、导出和后台任务获得明确 owner/tenant key、保留期、幂等和恢复语义，并复用同一跨 owner Gate。
 4. **Entitlement**：只表达账号可用能力，不替代身份、owner 权利或内容可信门禁。
 5. **订单、订阅、支付与退款**：最后接入；要求幂等、Webhook 验签、状态机、对账和退款恢复全部独立验证。
 6. **M14 Gate**：认证、RBAC/IDOR、tenant 隔离、私题永久隔离、恢复与商业状态机证据齐全后才可进入 M15。

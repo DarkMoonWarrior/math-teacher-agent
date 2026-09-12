@@ -94,6 +94,8 @@ M14 第一切片建立生产身份深模块：`AccountIdentity` 验证账号并�
 
 SQLite 与内存实现只证明 Interface 可替换，不代表生产存储。PostgreSQL 正式身份 adapter、显式 schema 预演/确认、owner 数据只读清点、四类文件域引用对账、不执行写入的逐对象迁移计划、精确确认/幂等/目标摘要对账/提交前回滚的执行控制器、独立 PostgreSQL 迁移落地区域，以及计划内数据库对象和文件流的只读物化 Interface 已经实现。具体 `PostgresOwnerMigrationAdapter` 已在合成环境中把两类物化、SQL 暂存、实际目标摘要重算、可逆文件发布和完成标记接入 Executor 的事务 Interface；目标绑定不符会在连接或打开 staging 前失败关闭，对账、发布、SQL 或提交异常会回滚合成数据库与文件状态。`PostgresOwnerMigrationRecovery` 只对已提交 run 提供摘要化预演与精确确认后的前向补偿：published 缺失且 staged 内容匹配才可幂等恢复，内容冲突、staged 缺失、数据库证据异常一律阻断；它不覆盖、不删除、不回滚数据库记录。对象物化必须在任何写入前核对计划、绑定、对象集合、依赖和完整行指纹，只能改绑载荷中的 owner/tenant；文件物化必须复用固定引用解析并在物化和目标暂存时复核 SHA-256/长度，不能暴露或迁移其他 owner。落地区域只保存目标绑定 run、对象暂存和文件发布记录，必须先预演再凭相同指纹确认部署；它不是运行时业务内容 schema。当前尚无生产文件 staging/recovery Adapter 或恢复 CLI，也未连接真实 PostgreSQL 或迁移 owner-aware 内容；应用启动不得隐式建表，生产选择 SQLite、缺少 PostgreSQL DSN/驱动或 schema 不匹配必须失败关闭。密码和 session token 不得明文保存，登录错误不得泄露账号是否存在，公开响应不得返回 account/tenant/owner 内部标识。正式身份与自助注册在仓库默认关闭；当前网页注册也不等于已完成邮箱验证、找回密码、MFA 或生产反滥用部署。后续必须按 IDOR/tenant isolation → 对象存储/持久任务 → Entitlement → 订单/支付/退款顺序推进；支付不能提前进入。完整边界见 [`M14-COMMERCIAL-FOUNDATION.md`](M14-COMMERCIAL-FOUNDATION.md)。
 
+M14 已新增正式会话 IDOR/tenant isolation 合成 Gate：当前工作台路由不得暴露 account/tenant/owner 身份选择器；代表性私人业务 Interface 通过两个正式 Cookie 验证列表、已知 ID、匿名访问和伪造写入隔离。该 Gate 只使用内存身份与临时 SQLite，不得表述为真实 PostgreSQL、组织多租户、生产 RBAC、渗透测试或 M14 总 Gate。下一切片按顺序进入对象存储与持久任务，所有对象 key、任务 ID、下载和恢复入口都必须继续由服务端 owner/tenant 绑定。
+
 后续顺序以 [`ROADMAP.md`](ROADMAP.md) 为准：Solve → Private Library → 多模态图片解题 → 私有辅助命题 → Paper → Lesson → Memory → Beta 准备 → Beta 验证（真实验证延期） → 商业基础（当前） → Teacher Pro → 教研组 → 学校。
 
 ## 7. 内容、权利、私人资料、私题与发布

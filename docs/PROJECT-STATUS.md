@@ -1,6 +1,6 @@
 # 当前开发状态
 
-更新日期：2026-09-11。M0–M12 已完成。M13 的版本化指标、生命周期、服务端事实、私有运营读数和操作预演切片已完成，但因样本不足，项目所有者明确暂停真实 Beta 并授权进入 M14；M13 Gate 未通过。M14 Commercial Foundation 当前进行中，生产身份基础、默认关闭的网页个人账号注册、操作者账号生命周期、正式登录防护、生命周期审计、摘要密钥轮换、可信代理来源、分布式限流服务 adapter、PostgreSQL 正式身份 adapter 与显式 schema 部署边界、owner 数据只读清点、文件引用只读对账、逐对象迁移计划、数据库对象与文件流只读物化、执行控制器、固定迁移落地区域、具体 PostgreSQL 目标事务 adapter 和已提交文件发布前向补偿的合成验证已经实现。
+更新日期：2026-09-12。M0–M12 已完成。M13 的版本化指标、生命周期、服务端事实、私有运营读数和操作预演切片已完成，但因样本不足，项目所有者明确暂停真实 Beta 并授权进入 M14；M13 Gate 未通过。M14 Commercial Foundation 当前进行中，生产身份与账号边界、PostgreSQL owner 清点/迁移/补偿基础，以及正式会话 IDOR/tenant isolation 合成 Gate 已实现；真实 PostgreSQL、多租户和 M14 总 Gate 仍未完成。
 
 | 范围 | 当前状态 |
 | --- | --- |
@@ -14,7 +14,7 @@
 | M11 Teacher Memory | 已完成；26 场景、12 类违规为 0；回滚点 `5614fc0` |
 | M12 Closed Beta Readiness | 已完成；五条切片、固定评测与完整 Gate 通过；回滚点 `570cf79` |
 | M13 Closed Beta Validation | 真实验证延期；切片 1–5 已完成；没有真实样本，Gate 未通过 |
-| M14 Commercial Foundation | 进行中；生产身份 Interface、账号/tenant/owner 分离、正式登录/注册、账号生命周期与登录安全、PostgreSQL 正式身份 adapter、schema 预演/确认、owner 数据清点、文件引用对账、只读逐对象计划、数据库对象与文件流只读物化、迁移执行控制器、迁移落地区域、具体目标事务 adapter 和已提交文件发布前向补偿的合成验证已实现；隔离 Gate 未开始 |
+| M14 Commercial Foundation | 进行中；生产身份 Interface、账号/tenant/owner 分离、PostgreSQL owner 清点/迁移/补偿和正式会话 IDOR/tenant isolation 合成 Gate 已实现；生产对象存储/持久任务、真实 PostgreSQL 与总 Gate 未完成 |
 | M15–M17 | 未开始；依次为 Teacher Pro、教研组、学校 |
 
 ## 当前产品能力
@@ -42,7 +42,7 @@
 
 ## 工程基线与限制
 
-M14 当前固定集 **390 passed、1 skipped**；完整 FastAPI **820 passed、1 skipped**；Teacher Web **108 passed**，Agent **42 passed**，双方类型检查与生产构建沿用上一切片通过结果。本切片的自动测试只使用临时目录、合成 owner、数据库、文件、连接、内存 staging/recovery Adapter 和事务 adapter，不调用真实模型、不连接真实 PostgreSQL、不创建真实账号、不迁移或清理真实用户数据。
+M14 当前固定集 **394 passed、1 skipped**；完整 FastAPI **824 passed、1 skipped**；Teacher Web **108 passed**，Agent **42 passed**，双方类型检查与生产构建沿用上一切片通过结果。本切片的自动测试只使用临时目录、合成 owner、内存正式身份、临时 SQLite、数据库、文件、连接、内存 staging/recovery Adapter 和事务 adapter，不调用真实模型、不连接真实 PostgreSQL、不创建真实账号、不迁移或清理真实用户数据。
 
 `apps/teacher-web` 是唯一产品 UI；旧 UI 源码、入口和依赖已移除。运行库、私人上传、环境、导出与备份不进入 Git。商业题目目录仍为空，合成 fixture 不具备第三方内容权利。
 
@@ -91,5 +91,7 @@ PostgreSQL tenant adapter 第二段先新增 `OwnerDataInventory`，以固定目
 第八段新增 `PostgresOwnerMigrationAdapter`。它把目标状态读取、两类物化、SQL 暂存、数据库实际摘要重算、可逆文件发布映射和 run 完成标记封装在 Executor 的小型事务 Interface 后；source owner、target owner/tenant 与计划指纹必须在连接和 staging 前精确匹配，同一目标绑定由 PostgreSQL transaction advisory lock 串行化。合成 PostgreSQL 连接和可逆文件事务验证了成功、幂等、目标对账失败、发布不完整和数据库提交失败；所有普通失败都恢复到执行前状态。当前没有生产文件 staging Adapter，也未验证发布与数据库提交之间的进程崩溃补偿、真实 PostgreSQL、IDOR/tenant isolation 或真实数据迁移。
 
 第九段新增 `PostgresOwnerMigrationRecovery`。它只接受已提交为 `complete` 的精确 plan/target binding，并用与迁移执行相同的 advisory lock 串行化预演和恢复。公开预演仅返回健康、可修复、阻断数量、稳定问题码和同时绑定内容与 storage key 摘要的恢复指纹；固定确认后只把摘要一致的 staged 内容幂等前向恢复到缺失的 published key，并重新核对全部目标。published 冲突、staged 缺失/冲突、数据库数量或状态异常全部阻断，不覆盖、不删除、不回滚数据库记录、不猜测内容。当前只有合成文件 Adapter，没有生产恢复 Adapter、CLI、真实 PostgreSQL 或真实数据操作。
+
+第十段固定正式会话 IDOR/tenant isolation 合成 Gate：有效工作台路由不得暴露内部身份选择器；两个独立正式 Cookie 对教师记忆、私有资料和个人题库分类的列表、已知 ID 与写入归属均保持跨 owner 失败关闭。该证据只覆盖内存身份与临时 SQLite 个人工作台，不代表真实 PostgreSQL、多角色或生产渗透 Gate。
 
 正式身份与网页注册功能在仓库默认关闭；本地 SQLite 仍是过渡 adapter。邮箱验证、账号找回、MFA 实现、已认证操作者/RBAC、不可抵赖审计、集中式密钥管理、外部可信边缘/原子限流部署、正式 PostgreSQL 业务内容 schema、生产文件 staging/recovery Adapter、恢复 CLI、真实 PostgreSQL 集成与 IDOR/tenant isolation Gate、对象存储、持久任务、Entitlement、订单、支付与退款仍未实现；详见 [`M14-COMMERCIAL-FOUNDATION.md`](M14-COMMERCIAL-FOUNDATION.md)。

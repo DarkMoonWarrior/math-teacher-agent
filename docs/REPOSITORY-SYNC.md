@@ -85,6 +85,8 @@
 
 2026-09-11 M14 已提交 owner 迁移前向补偿：新增操作者专用 `PostgresOwnerMigrationRecovery`，只用 `preview()` / `recover()` Interface 解释已提交 run、文件记录与外部存储状态。预演和恢复按 target binding advisory lock 串行化；恢复指纹同时绑定计划、内容、状态和私密 storage key 摘要，固定确认前后任一变化都会失效。只有 published 缺失且 staged 内容 SHA-256/长度匹配时可幂等前向修复；published 冲突、staged 缺失/冲突及数据库证据异常全部阻断，不覆盖、不删除、不回滚数据库记录。多文件部分成功会保留已完成的原子发布，并要求以新预演只修剩余对象。测试只使用合成 PostgreSQL 与内存文件 Adapter，没有真实数据库、对象存储、CLI 或真实数据操作。M14 固定入口 390 项通过/1 项跳过，完整 API 820 项通过/1 项跳过；Teacher Web 108 项与 Agent 42 项沿用已通过基线。下一切片进入 IDOR/tenant isolation 合成 Gate；生产 staging/recovery Adapter 与真实 PostgreSQL Gate 仍未完成。
 
+2026-09-12 M14 正式会话 IDOR/tenant isolation 合成 Gate：新增固定路由身份选择器检查，并以两个独立正式账号及真实会话 Cookie 组合验证教师记忆、私有资料与个人题库分类。当前工作台路由不能接受 account/tenant/owner 选择器；列表只返回当前 owner，另一 owner 的已知 ID 返回 404，匿名返回 401，伪造归属写入返回 422 且存储不变，公开响应不含内部身份标识。测试只使用内存身份和临时 SQLite，不连接真实 PostgreSQL、不操作真实用户数据，也不代表生产多租户/RBAC/渗透 Gate。M14 固定入口 394 项通过/1 项跳过，完整 API 824 项通过/1 项跳过；下一切片进入对象存储与持久任务边界。
+
 长期保留 `main`。下列分支在清理前已由 main 包含：
 
 - `codex/lesson-agent-v1`：`fb37d40`
