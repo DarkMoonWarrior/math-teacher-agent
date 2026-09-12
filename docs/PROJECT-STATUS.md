@@ -14,7 +14,7 @@
 | M11 Teacher Memory | 已完成；26 场景、12 类违规为 0；回滚点 `5614fc0` |
 | M12 Closed Beta Readiness | 已完成；五条切片、固定评测与完整 Gate 通过；回滚点 `570cf79` |
 | M13 Closed Beta Validation | 真实验证延期；切片 1–5 已完成；没有真实样本，Gate 未通过 |
-| M14 Commercial Foundation | 进行中；生产身份 Interface、账号/tenant/owner 分离、PostgreSQL owner 清点/迁移/补偿、正式会话 IDOR/tenant isolation 合成 Gate，以及私有对象命名空间已实现；生产字节存储/持久任务、真实 PostgreSQL 与总 Gate 未完成 |
+| M14 Commercial Foundation | 进行中；生产身份 Interface、账号/tenant/owner 分离、PostgreSQL owner 清点/迁移/补偿、正式会话 IDOR/tenant isolation 合成 Gate、私有对象命名空间和本地原子字节 Adapter 已实现；云对象存储/持久任务、真实 PostgreSQL 与总 Gate 未完成 |
 | M15–M17 | 未开始；依次为 Teacher Pro、教研组、学校 |
 
 ## 当前产品能力
@@ -42,7 +42,7 @@
 
 ## 工程基线与限制
 
-M14 当前固定集 **412 passed、1 skipped**；完整 FastAPI **842 passed、1 skipped**；Teacher Web **108 passed**，Agent **42 passed**，双方类型检查与生产构建沿用上一切片通过结果。本切片的自动测试只使用临时目录、合成 owner、内存正式身份、临时 SQLite、数据库、文件、连接、内存 staging/recovery Adapter、事务 adapter 和私有对象命名计算，不调用真实模型、不连接真实 PostgreSQL、不创建真实账号、不迁移或清理真实用户数据。
+M14 当前固定集 **425 passed、2 skipped**；完整 FastAPI **855 passed、2 skipped**；Teacher Web **108 passed**，Agent **42 passed**，双方类型检查与生产构建沿用上一切片通过结果。本切片的自动测试只使用临时目录、合成 owner、内存正式身份、临时 SQLite、数据库、文件、连接、内存 staging/recovery Adapter、事务 adapter、私有对象命名计算和临时私有对象根，不调用真实模型、不连接真实 PostgreSQL、不创建真实账号、不迁移或清理真实用户数据。新增的第二个 skip 是当前 Windows 权限不允许创建目录符号链接；链接拒绝代码路径仍由平台无关检查和其他链接/硬链接用例覆盖。
 
 `apps/teacher-web` 是唯一产品 UI；旧 UI 源码、入口和依赖已移除。运行库、私人上传、环境、导出与备份不进入 Git。商业题目目录仍为空，合成 fixture 不具备第三方内容权利。
 
@@ -96,4 +96,6 @@ PostgreSQL tenant adapter 第二段先新增 `OwnerDataInventory`，以固定目
 
 第十一段进入对象存储与持久任务切片，先新增 `PrivateObjectNamespace`。服务端 tenant/owner、固定对象域和逻辑对象 ID 经版本化 HMAC 生成确定性对象键，键中不含原始身份、文件名或正文；tenant、owner、对象域和逻辑对象任一变化都不能复用绑定。当前会话必须重新授权，篡改 schema、键或保留策略统一失败关闭。长期私人对象、响应期导出和 24 小时终态任务由对象域固定保留策略，浏览器与 Agent 无法选择。当前尚未迁移现有文件，也没有云字节存储 Adapter 或持久队列。
 
-正式身份与网页注册功能在仓库默认关闭；本地 SQLite 仍是过渡 adapter。邮箱验证、账号找回、MFA 实现、已认证操作者/RBAC、不可抵赖审计、集中式密钥管理、外部可信边缘/原子限流部署、正式 PostgreSQL 业务内容 schema、生产文件 staging/recovery Adapter、恢复 CLI、真实 PostgreSQL 集成与 IDOR/tenant isolation Gate、云字节存储、现有文件迁移、持久任务、Entitlement、订单、支付与退款仍未实现；详见 [`M14-COMMERCIAL-FOUNDATION.md`](M14-COMMERCIAL-FOUNDATION.md)。
+第十二段增加 `FilesystemPrivateObjectStore`。Adapter 只在 namespace 授权后访问专用 marker 根目录；未标记非空目录、marker 篡改、链接/reparse、非普通文件和多硬链接均失败关闭。对象以包含 schema、长度与 SHA-256 的单一 envelope 原子发布，相同内容重试幂等、不同内容不覆盖；删除再次授权并要求精确预期校验和。当前只在临时目录验证，没有接入或迁移现有业务文件，也不是云对象存储或生产高可用声明。
+
+正式身份与网页注册功能在仓库默认关闭；本地 SQLite 仍是过渡 adapter。邮箱验证、账号找回、MFA 实现、已认证操作者/RBAC、不可抵赖审计、集中式密钥管理、外部可信边缘/原子限流部署、正式 PostgreSQL 业务内容 schema、生产文件 staging/recovery Adapter、恢复 CLI、真实 PostgreSQL 集成与 IDOR/tenant isolation Gate、云字节存储、现有业务文件接入、持久任务、Entitlement、订单、支付与退款仍未实现；详见 [`M14-COMMERCIAL-FOUNDATION.md`](M14-COMMERCIAL-FOUNDATION.md)。

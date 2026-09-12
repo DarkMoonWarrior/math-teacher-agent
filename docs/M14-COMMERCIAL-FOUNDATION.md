@@ -195,18 +195,25 @@ python -m app.modules.account_identity.operator_cli keyring-status
 - 新写入使用当前版本 HMAC，旧绑定在最多三个旧密钥的轮换窗口内仍可校验。对象域固定保留语义：私人原稿和不可变版本随 owner 生命周期，临时导出到响应完成，终态任务结果为 24 小时。
 - 当前只固定命名与授权 Interface，没有迁移现有文件、接入云对象存储、持久队列或真实 PostgreSQL；详见 [`ADR-2026-09-12-PRIVATE-OBJECT-NAMESPACE.md`](ADR-2026-09-12-PRIVATE-OBJECT-NAMESPACE.md)。
 
+### 3.19 本地私有对象字节存储 Adapter
+
+- 新增 `FilesystemPrivateObjectStore`，任何文件 IO 之前都必须通过当前 tenant/owner scope 对 binding 重新授权；跨 owner 请求不会先探测对象是否存在。
+- 私有根必须明确确认并由固定 marker 接管；非空未标记目录、marker 篡改、链接/reparse、非普通文件和多硬链接均失败关闭。对象路径只能来自 namespace，调用方不能传任意路径。
+- 字节与 schema/长度/SHA-256 放在同一 envelope 中，以同目录 pending + `fsync` + 原子 hard-link 无覆盖发布；相同内容重试幂等，不同内容冲突且保留原对象。
+- 删除需精确预期校验和且再次授权，目标缺失幂等返回。当前只使用临时目录测试，没有接入现有业务文件、云存储或持久任务；详见 [`ADR-2026-09-12-FILESYSTEM-PRIVATE-OBJECT-STORE.md`](ADR-2026-09-12-FILESYSTEM-PRIVATE-OBJECT-STORE.md)。
+
 ## 4. 后续切片顺序
 
 1. **账号生命周期加固（进行中）**：网页个人账号注册、操作者创建/停用、密码重置、失效会话预览/确认清理、登录双范围限流、摘要化登录安全事实、当前浏览器会话轮换、MFA 决策、操作者生命周期审计、摘要密钥轮换、可信生产代理来源与分布式限流 adapter 已实现；邮箱验证、找回密码、外部分布式服务、边缘部署、告警、已认证操作者/RBAC、MFA 与集中式密钥管理仍未完成。下一段进入 PostgreSQL tenant adapter。
 2. **PostgreSQL tenant adapter（进行中）**：正式身份 adapter、显式 schema 预演/确认、owner-aware 清点/迁移/补偿，以及正式会话 IDOR/tenant isolation 合成 Gate 已实现；生产 storage adapter、真实 PostgreSQL 与真实数据 Gate 仍未完成。
-3. **对象存储与持久任务（进行中）**：owner/tenant 对象键、固定对象域、保留策略、轮换兼容和授权失败关闭已实现；下一段接字节存储 Adapter，并逐类迁入原文件、导出和后台任务结果，再建立持久队列和恢复 Gate。
+3. **对象存储与持久任务（进行中）**：owner/tenant 对象键、固定对象域、保留策略、轮换兼容、授权失败关闭和本地原子字节 Adapter 已实现；下一段先接临时导出与后台任务结果，再建立持久队列、云 Adapter 和恢复 Gate。
 4. **Entitlement**：只表达账号可用能力，不替代身份、owner 权利或内容可信门禁。
 5. **订单、订阅、支付与退款**：最后接入；要求幂等、Webhook 验签、状态机、对账和退款恢复全部独立验证。
 6. **M14 Gate**：认证、RBAC/IDOR、tenant 隔离、私题永久隔离、恢复与商业状态机证据齐全后才可进入 M15。
 
 ## 5. 明确未完成
 
-- 正式 owner-aware PostgreSQL 业务内容 schema、生产文件 staging/recovery Adapter、恢复 CLI、无 staging 或内容冲突时的人工处置、真实 PostgreSQL 集成 Gate、云对象存储、现有文件向私有对象命名空间的迁移、持久队列、多进程完整一致性和生产灾备。已实现的私有对象键、合成目标 adapter、前向补偿、只读对象/文件物化与迁移落地区域都不等同于真实存储迁移或业务内容 schema。
+- 正式 owner-aware PostgreSQL 业务内容 schema、生产文件 staging/recovery Adapter、恢复 CLI、无 staging 或内容冲突时的人工处置、真实 PostgreSQL 集成 Gate、云对象存储、现有业务文件向私有对象命名空间/本地 Adapter 的迁移、持久队列、多进程完整一致性和生产灾备。已实现的私有对象键、本地原子字节 Adapter、合成目标 adapter、前向补偿、只读对象/文件物化与迁移落地区域都不等同于生产存储迁移或业务内容 schema。
 - 无约束公网注册、邮箱验证、自助找回密码、MFA、设备管理、已认证操作者/RBAC、不可抵赖审计、集中式密钥管理、生产级分布式限流与告警。当前只实现默认关闭的个人账号网页注册工程路径。
 - 除 `personal_owner` 外的角色、组织 tenant、成员邀请、学生和学校后台。
 - Entitlement、订单、订阅、支付、Webhook 和退款。
