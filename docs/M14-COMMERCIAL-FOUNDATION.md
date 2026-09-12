@@ -188,18 +188,25 @@ python -m app.modules.account_identity.operator_cli keyring-status
 - 路由身份门禁和业务查询 owner 条件分别验证，不能相互替代；公开响应不返回内部身份标识。
 - 当前只使用内存身份和临时 SQLite 私有存储，不连接真实 PostgreSQL，不含组织/RBAC、渗透测试或真实数据，因此不是生产 tenant Gate；详见 [`ADR-2026-09-12-PRODUCTION-SESSION-TENANT-ISOLATION-GATE.md`](ADR-2026-09-12-PRODUCTION-SESSION-TENANT-ISOLATION-GATE.md)。
 
+### 3.18 私有对象命名空间与保留策略
+
+- 新增 `PrivateObjectNamespace`，把服务端 tenant/owner 作用域、固定对象域和逻辑对象 ID 绑定为不含原始身份、文件名或正文的确定性对象键；路由和未来存储 Adapter 不再各自拼路径。
+- 授权必须以当前正式会话作用域重新计算绑定。tenant、owner、对象域、逻辑 ID、schema、保留策略或对象键任一不符都使用相同的失败关闭错误，不泄露不匹配维度。
+- 新写入使用当前版本 HMAC，旧绑定在最多三个旧密钥的轮换窗口内仍可校验。对象域固定保留语义：私人原稿和不可变版本随 owner 生命周期，临时导出到响应完成，终态任务结果为 24 小时。
+- 当前只固定命名与授权 Interface，没有迁移现有文件、接入云对象存储、持久队列或真实 PostgreSQL；详见 [`ADR-2026-09-12-PRIVATE-OBJECT-NAMESPACE.md`](ADR-2026-09-12-PRIVATE-OBJECT-NAMESPACE.md)。
+
 ## 4. 后续切片顺序
 
 1. **账号生命周期加固（进行中）**：网页个人账号注册、操作者创建/停用、密码重置、失效会话预览/确认清理、登录双范围限流、摘要化登录安全事实、当前浏览器会话轮换、MFA 决策、操作者生命周期审计、摘要密钥轮换、可信生产代理来源与分布式限流 adapter 已实现；邮箱验证、找回密码、外部分布式服务、边缘部署、告警、已认证操作者/RBAC、MFA 与集中式密钥管理仍未完成。下一段进入 PostgreSQL tenant adapter。
 2. **PostgreSQL tenant adapter（进行中）**：正式身份 adapter、显式 schema 预演/确认、owner-aware 清点/迁移/补偿，以及正式会话 IDOR/tenant isolation 合成 Gate 已实现；生产 storage adapter、真实 PostgreSQL 与真实数据 Gate 仍未完成。
-3. **对象存储与持久任务（下一切片）**：原文件、导出和后台任务获得明确 owner/tenant key、保留期、幂等和恢复语义，并复用同一跨 owner Gate。
+3. **对象存储与持久任务（进行中）**：owner/tenant 对象键、固定对象域、保留策略、轮换兼容和授权失败关闭已实现；下一段接字节存储 Adapter，并逐类迁入原文件、导出和后台任务结果，再建立持久队列和恢复 Gate。
 4. **Entitlement**：只表达账号可用能力，不替代身份、owner 权利或内容可信门禁。
 5. **订单、订阅、支付与退款**：最后接入；要求幂等、Webhook 验签、状态机、对账和退款恢复全部独立验证。
 6. **M14 Gate**：认证、RBAC/IDOR、tenant 隔离、私题永久隔离、恢复与商业状态机证据齐全后才可进入 M15。
 
 ## 5. 明确未完成
 
-- 正式 owner-aware PostgreSQL 业务内容 schema、生产文件 staging/recovery Adapter、恢复 CLI、无 staging 或内容冲突时的人工处置、真实 PostgreSQL 集成 Gate、云对象存储、持久队列、多进程完整一致性和生产灾备。已实现的合成目标 adapter、前向补偿、只读对象/文件物化与迁移落地区域都不等同于真实迁移或业务内容 schema。
+- 正式 owner-aware PostgreSQL 业务内容 schema、生产文件 staging/recovery Adapter、恢复 CLI、无 staging 或内容冲突时的人工处置、真实 PostgreSQL 集成 Gate、云对象存储、现有文件向私有对象命名空间的迁移、持久队列、多进程完整一致性和生产灾备。已实现的私有对象键、合成目标 adapter、前向补偿、只读对象/文件物化与迁移落地区域都不等同于真实存储迁移或业务内容 schema。
 - 无约束公网注册、邮箱验证、自助找回密码、MFA、设备管理、已认证操作者/RBAC、不可抵赖审计、集中式密钥管理、生产级分布式限流与告警。当前只实现默认关闭的个人账号网页注册工程路径。
 - 除 `personal_owner` 外的角色、组织 tenant、成员邀请、学生和学校后台。
 - Entitlement、订单、订阅、支付、Webhook 和退款。
