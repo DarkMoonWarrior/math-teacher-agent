@@ -202,18 +202,26 @@ python -m app.modules.account_identity.operator_cli keyring-status
 - 字节与 schema/长度/SHA-256 放在同一 envelope 中，以同目录 pending + `fsync` + 原子 hard-link 无覆盖发布；相同内容重试幂等，不同内容冲突且保留原对象。
 - 删除需精确预期校验和且再次授权，目标缺失幂等返回。当前只使用临时目录测试，没有接入现有业务文件、云存储或持久任务；详见 [`ADR-2026-09-12-FILESYSTEM-PRIVATE-OBJECT-STORE.md`](ADR-2026-09-12-FILESYSTEM-PRIVATE-OBJECT-STORE.md)。
 
+### 3.20 tenant/owner 绑定的本地持久任务队列
+
+- 新增 `SqlitePersistentTaskQueue`；服务端 scope、idempotency 与 subject 通过版本化 HMAC 固定，SQLite 不保存原始 tenant、owner、subject、命令或结果，只保存摘要化归属、状态与不透明私有对象 binding。
+- 私密 subject、命令和结果写入 `PrivateObjectDomain.BACKGROUND_JOB_RESULT`，复用 namespace 授权、原子无覆盖 envelope 和终态 24 小时保留。相同 idempotency 请求只执行一次，subject 或命令变化失败关闭。
+- worker 首次领取任务时建立 attempt，显式恢复则在重新入队时立即递增 attempt；进度、失败和成功提交必须匹配当前 attempt。结果先登记预期 binding 与校验和并保持未就绪，原子对象发布完成后才标记 ready；读取端不会展示未发布结果，重启、恢复和过期清理仍能定位并校验残留对象。API 重启后的 queued/running 记录变为 `interrupted`，只有当前会话重新绑定同一 scope、重新提供受信 runner 并显式恢复才会运行；旧 worker 不能覆盖恢复结果。
+- 终态过期后先从读接口隐藏，再按 binding 与校验和删除命令、结果和元数据；清理受阻会返回非识别性计数。runner 异常不把私密异常正文写入 SQLite 或公开视图。
+- 当前是本地单进程 Adapter，尚未迁移现有命题/OCR 路由，也没有云队列、多 worker lease、自动重试、dead-letter、exactly-once 或真实用户任务迁移；详见 [`ADR-2026-09-12-PERSISTENT-TASK-QUEUE.md`](ADR-2026-09-12-PERSISTENT-TASK-QUEUE.md)。
+
 ## 4. 后续切片顺序
 
 1. **账号生命周期加固（进行中）**：网页个人账号注册、操作者创建/停用、密码重置、失效会话预览/确认清理、登录双范围限流、摘要化登录安全事实、当前浏览器会话轮换、MFA 决策、操作者生命周期审计、摘要密钥轮换、可信生产代理来源与分布式限流 adapter 已实现；邮箱验证、找回密码、外部分布式服务、边缘部署、告警、已认证操作者/RBAC、MFA 与集中式密钥管理仍未完成。下一段进入 PostgreSQL tenant adapter。
 2. **PostgreSQL tenant adapter（进行中）**：正式身份 adapter、显式 schema 预演/确认、owner-aware 清点/迁移/补偿，以及正式会话 IDOR/tenant isolation 合成 Gate 已实现；生产 storage adapter、真实 PostgreSQL 与真实数据 Gate 仍未完成。
-3. **对象存储与持久任务（进行中）**：owner/tenant 对象键、固定对象域、保留策略、轮换兼容、授权失败关闭和本地原子字节 Adapter 已实现；下一段先接临时导出与后台任务结果，再建立持久队列、云 Adapter 和恢复 Gate。
+3. **对象存储与持久任务（进行中）**：owner/tenant 对象键、固定对象域、保留策略、轮换兼容、本地原子字节 Adapter 和本地持久任务队列 seam 已实现；下一段把临时导出与一个可幂等恢复的现有后台任务逐条接入，再建立云 Adapter、多 worker lease 与恢复 Gate。
 4. **Entitlement**：只表达账号可用能力，不替代身份、owner 权利或内容可信门禁。
 5. **订单、订阅、支付与退款**：最后接入；要求幂等、Webhook 验签、状态机、对账和退款恢复全部独立验证。
 6. **M14 Gate**：认证、RBAC/IDOR、tenant 隔离、私题永久隔离、恢复与商业状态机证据齐全后才可进入 M15。
 
 ## 5. 明确未完成
 
-- 正式 owner-aware PostgreSQL 业务内容 schema、生产文件 staging/recovery Adapter、恢复 CLI、无 staging 或内容冲突时的人工处置、真实 PostgreSQL 集成 Gate、云对象存储、现有业务文件向私有对象命名空间/本地 Adapter 的迁移、持久队列、多进程完整一致性和生产灾备。已实现的私有对象键、本地原子字节 Adapter、合成目标 adapter、前向补偿、只读对象/文件物化与迁移落地区域都不等同于生产存储迁移或业务内容 schema。
+- 正式 owner-aware PostgreSQL 业务内容 schema、生产文件 staging/recovery Adapter、恢复 CLI、无 staging 或内容冲突时的人工处置、真实 PostgreSQL 集成 Gate、云对象存储、现有业务文件向私有对象命名空间/本地 Adapter 的迁移、现有后台任务接入、分布式队列、多进程 lease/exactly-once 和生产灾备。已实现的私有对象键、本地原子字节 Adapter、本地持久任务 seam、合成目标 adapter、前向补偿、只读对象/文件物化与迁移落地区域都不等同于生产存储迁移或业务内容 schema。
 - 无约束公网注册、邮箱验证、自助找回密码、MFA、设备管理、已认证操作者/RBAC、不可抵赖审计、集中式密钥管理、生产级分布式限流与告警。当前只实现默认关闭的个人账号网页注册工程路径。
 - 除 `personal_owner` 外的角色、组织 tenant、成员邀请、学生和学校后台。
 - Entitlement、订单、订阅、支付、Webhook 和退款。

@@ -87,6 +87,10 @@
 
 2026-09-12 M14 正式会话 IDOR/tenant isolation 合成 Gate：新增固定路由身份选择器检查，并以两个独立正式账号及真实会话 Cookie 组合验证教师记忆、私有资料与个人题库分类。当前工作台路由不能接受 account/tenant/owner 选择器；列表只返回当前 owner，另一 owner 的已知 ID 返回 404，匿名返回 401，伪造归属写入返回 422 且存储不变，公开响应不含内部身份标识。测试只使用内存身份和临时 SQLite，不连接真实 PostgreSQL、不操作真实用户数据，也不代表生产多租户/RBAC/渗透 Gate。M14 固定入口 394 项通过/1 项跳过，完整 API 824 项通过/1 项跳过；下一切片进入对象存储与持久任务边界。
 
+2026-09-12 M14 私有对象命名与本地字节 Adapter：新增 `PrivateObjectNamespace` 与 `FilesystemPrivateObjectStore`。服务端 tenant/owner、固定对象域和逻辑 ID 经版本化 HMAC 形成不含原始身份/文件名/正文的确定性键；授权、保留策略和密钥轮换由 namespace 固定。专用 marker 根下的字节使用 schema/长度/SHA-256 envelope 和原子无覆盖发布，相同内容重试幂等、不同内容冲突，链接/reparse、非普通文件、多硬链接、marker 篡改和校验失败均失败关闭。没有迁移或接入真实业务文件，也不是云对象存储。M14 固定入口 425 项通过/2 项跳过，完整 API 855 项通过/2 项跳过。
+
+2026-09-12 M14 本地持久任务队列 seam：新增 `SqlitePersistentTaskQueue`。状态库只保存版本化 HMAC scope/idempotency/subject、状态和不透明对象 binding，原始 tenant/owner/subject 与私密命令/结果不落 SQLite；payload 复用私有对象 namespace、完整性 envelope 和 24 小时终态保留。相同请求幂等，subject 或命令变化冲突；结果 intent 先登记 binding/校验和并保持未就绪，原子对象发布完成后才可读取，崩溃残留仍可恢复或过期清理。重启遗留 active 任务变为 interrupted，当前 scope 显式恢复入队时立即递增 attempt，旧 worker 不能覆盖新结果；跨 owner/tenant 已知 ID、取消竞态、密钥轮换、对象篡改、未知 schema、隐私错误及发布后状态提交前的崩溃窗口均由固定合成测试覆盖。现有命题/OCR 路由尚未迁移，没有云队列、多 worker lease、自动重试、exactly-once 或真实任务迁移。M14 固定入口 437 项通过/2 项跳过，完整 API 867 项通过/2 项跳过；Teacher Web 108 项与 Agent 42 项沿用已通过基线。
+
 长期保留 `main`。下列分支在清理前已由 main 包含：
 
 - `codex/lesson-agent-v1`：`fb37d40`

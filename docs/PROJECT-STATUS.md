@@ -1,6 +1,6 @@
 # 当前开发状态
 
-更新日期：2026-09-12。M0–M12 已完成。M13 的版本化指标、生命周期、服务端事实、私有运营读数和操作预演切片已完成，但因样本不足，项目所有者明确暂停真实 Beta 并授权进入 M14；M13 Gate 未通过。M14 Commercial Foundation 当前进行中，生产身份与账号边界、PostgreSQL owner 清点/迁移/补偿基础，以及正式会话 IDOR/tenant isolation 合成 Gate 已实现；真实 PostgreSQL、多租户和 M14 总 Gate 仍未完成。
+更新日期：2026-09-12。M0–M12 已完成。M13 的版本化指标、生命周期、服务端事实、私有运营读数和操作预演切片已完成，但因样本不足，项目所有者明确暂停真实 Beta 并授权进入 M14；M13 Gate 未通过。M14 Commercial Foundation 当前进行中，生产身份与账号边界、PostgreSQL owner 清点/迁移/补偿基础、正式会话 IDOR/tenant isolation 合成 Gate、私有对象和本地持久任务 seam 已实现；真实 PostgreSQL、多租户、云对象/队列和 M14 总 Gate 仍未完成。
 
 | 范围 | 当前状态 |
 | --- | --- |
@@ -14,7 +14,7 @@
 | M11 Teacher Memory | 已完成；26 场景、12 类违规为 0；回滚点 `5614fc0` |
 | M12 Closed Beta Readiness | 已完成；五条切片、固定评测与完整 Gate 通过；回滚点 `570cf79` |
 | M13 Closed Beta Validation | 真实验证延期；切片 1–5 已完成；没有真实样本，Gate 未通过 |
-| M14 Commercial Foundation | 进行中；生产身份 Interface、账号/tenant/owner 分离、PostgreSQL owner 清点/迁移/补偿、正式会话 IDOR/tenant isolation 合成 Gate、私有对象命名空间和本地原子字节 Adapter 已实现；云对象存储/持久任务、真实 PostgreSQL 与总 Gate 未完成 |
+| M14 Commercial Foundation | 进行中；生产身份 Interface、账号/tenant/owner 分离、PostgreSQL owner 清点/迁移/补偿、正式会话 IDOR/tenant isolation 合成 Gate、私有对象命名空间、本地原子字节 Adapter 和本地持久任务队列 seam 已实现；现有业务接入、云对象/队列、真实 PostgreSQL 与总 Gate 未完成 |
 | M15–M17 | 未开始；依次为 Teacher Pro、教研组、学校 |
 
 ## 当前产品能力
@@ -42,7 +42,7 @@
 
 ## 工程基线与限制
 
-M14 当前固定集 **425 passed、2 skipped**；完整 FastAPI **855 passed、2 skipped**；Teacher Web **108 passed**，Agent **42 passed**，双方类型检查与生产构建沿用上一切片通过结果。本切片的自动测试只使用临时目录、合成 owner、内存正式身份、临时 SQLite、数据库、文件、连接、内存 staging/recovery Adapter、事务 adapter、私有对象命名计算和临时私有对象根，不调用真实模型、不连接真实 PostgreSQL、不创建真实账号、不迁移或清理真实用户数据。新增的第二个 skip 是当前 Windows 权限不允许创建目录符号链接；链接拒绝代码路径仍由平台无关检查和其他链接/硬链接用例覆盖。
+M14 当前固定集 **437 passed、2 skipped**；完整 FastAPI **867 passed、2 skipped**；Teacher Web **108 passed**，Agent **42 passed**，双方类型检查与生产构建沿用上一切片通过结果。本切片的自动测试只使用临时目录、合成 owner、内存正式身份、临时 SQLite、数据库、文件、连接、内存 staging/recovery Adapter、事务 adapter、私有对象命名计算、临时私有对象根和本地持久任务队列，不调用真实模型、不连接真实 PostgreSQL、不创建真实账号、不迁移或清理真实用户数据。第二个 skip 是当前 Windows 权限不允许创建目录符号链接；链接拒绝代码路径仍由平台无关检查和其他链接/硬链接用例覆盖。
 
 `apps/teacher-web` 是唯一产品 UI；旧 UI 源码、入口和依赖已移除。运行库、私人上传、环境、导出与备份不进入 Git。商业题目目录仍为空，合成 fixture 不具备第三方内容权利。
 
@@ -98,4 +98,6 @@ PostgreSQL tenant adapter 第二段先新增 `OwnerDataInventory`，以固定目
 
 第十二段增加 `FilesystemPrivateObjectStore`。Adapter 只在 namespace 授权后访问专用 marker 根目录；未标记非空目录、marker 篡改、链接/reparse、非普通文件和多硬链接均失败关闭。对象以包含 schema、长度与 SHA-256 的单一 envelope 原子发布，相同内容重试幂等、不同内容不覆盖；删除再次授权并要求精确预期校验和。当前只在临时目录验证，没有接入或迁移现有业务文件，也不是云对象存储或生产高可用声明。
 
-正式身份与网页注册功能在仓库默认关闭；本地 SQLite 仍是过渡 adapter。邮箱验证、账号找回、MFA 实现、已认证操作者/RBAC、不可抵赖审计、集中式密钥管理、外部可信边缘/原子限流部署、正式 PostgreSQL 业务内容 schema、生产文件 staging/recovery Adapter、恢复 CLI、真实 PostgreSQL 集成与 IDOR/tenant isolation Gate、云字节存储、现有业务文件接入、持久任务、Entitlement、订单、支付与退款仍未实现；详见 [`M14-COMMERCIAL-FOUNDATION.md`](M14-COMMERCIAL-FOUNDATION.md)。
+第十三段增加 `SqlitePersistentTaskQueue`。任务的 tenant/owner、idempotency 与 subject 由版本化 HMAC 绑定，SQLite 只保存摘要、状态和不透明对象 binding；私密 subject、命令与结果进入前述私有对象 Adapter。相同命令重试返回同一任务，subject 或命令变化失败关闭；结果 intent 先以未就绪状态登记，原子写入后才可读取，崩溃残留可由恢复或过期清理按校验和删除。恢复入队会立即递增 attempt，重启前旧 worker 即使处在新 worker 尚未领取的间隙也不能覆盖结果。遗留 queued/running 状态变为 `interrupted`，只有当前会话重新绑定同一 scope 并重新提供受信 runner 才能恢复；终态 24 小时后从读取隐藏并按校验和删除对象与元数据。runner 异常不落私人正文。当前未接管现有命题/OCR 路由，也没有云队列、多 worker lease、自动重试、exactly-once 或真实数据迁移。
+
+正式身份与网页注册功能在仓库默认关闭；本地 SQLite 仍是过渡 adapter。邮箱验证、账号找回、MFA 实现、已认证操作者/RBAC、不可抵赖审计、集中式密钥管理、外部可信边缘/原子限流部署、正式 PostgreSQL 业务内容 schema、生产文件 staging/recovery Adapter、恢复 CLI、真实 PostgreSQL 集成与 IDOR/tenant isolation Gate、云字节存储、现有业务文件/任务接入、分布式持久队列、Entitlement、订单、支付与退款仍未实现；详见 [`M14-COMMERCIAL-FOUNDATION.md`](M14-COMMERCIAL-FOUNDATION.md)。
